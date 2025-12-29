@@ -1,0 +1,1 @@
+"""Hotkey detection and handling."""
