@@ -1,3 +1,3 @@
 """claude-mic: Voice-to-text for Claude Code CLI."""
 
-__version__ = "0.3.5"
+__version__ = "0.4.0"
