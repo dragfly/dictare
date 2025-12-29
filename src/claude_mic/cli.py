@@ -59,6 +59,10 @@ def run(
         bool,
         typer.Option("--enter", "-e", help="Auto-press Enter after typing"),
     ] = False,
+    clipboard: Annotated[
+        bool,
+        typer.Option("--clipboard", "-C", help="Use clipboard instead of typing (for accented chars)"),
+    ] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -79,6 +83,8 @@ def run(
         config.stt.language = language
     if enter:
         config.injection.auto_enter = True
+    if clipboard:
+        config.injection.backend = "clipboard"
     if verbose:
         config.verbose = verbose
 
@@ -87,12 +93,14 @@ def run(
 
     mic_app = ClaudeMicApp(config)
 
+    mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
     console.print(
         Panel(
             f"[bold green]claude-mic[/] v{__version__}\n\n"
             f"Push-to-talk key: [cyan]{config.hotkey.key}[/]\n"
             f"STT model: [cyan]{config.stt.model_size}[/]\n"
-            f"Language: [cyan]{config.stt.language}[/]\n\n"
+            f"Language: [cyan]{config.stt.language}[/]\n"
+            f"Output mode: {mode_str}\n\n"
             f"Press [bold]Ctrl+C[/] to exit",
             title="Ready",
             border_style="green",
