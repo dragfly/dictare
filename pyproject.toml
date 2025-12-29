@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Voice-to-text for Claude Code CLI"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.12"
 authors = [
     { name = "Your Name", email = "you@example.com" }
 ]

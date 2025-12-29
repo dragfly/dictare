@@ -48,4 +48,5 @@ Thumbs.db
 # Build artifacts (not the scripts)
 build/ydotool
 build/ydotoold
-build/*.whl
+build/evdev-*.whl
+build/evdev.whl

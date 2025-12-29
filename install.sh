@@ -45,8 +45,9 @@ info "Built ydotool v1.0.4"
 
 # 2. Build evdev
 step 2 "Building evdev wheel..."
+rm -f build/evdev-*.whl build/evdev.whl
 docker build -q -f build/Dockerfile.evdev -t evdev-builder build/ >/dev/null
-docker run --rm evdev-builder > build/evdev.whl
+docker run --rm -v "$SCRIPT_DIR/build:/output" evdev-builder
 info "Built evdev wheel"
 
 # 3. Install binaries
@@ -98,7 +99,7 @@ fi
 # 5. Install Python dependencies
 step 5 "Installing Python dependencies..."
 uv sync >/dev/null
-uv pip install build/evdev.whl >/dev/null
+uv pip install build/evdev-*.whl >/dev/null
 info "Installed Python packages"
 
 # Check system dependencies
