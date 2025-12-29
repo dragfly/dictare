@@ -98,6 +98,10 @@ fi
 
 # 5. Install Python dependencies
 step 5 "Installing Python dependencies..."
+# Remove old venv if Python version is wrong
+if [ -d .venv ] && ! .venv/bin/python --version 2>/dev/null | grep -q "3\.11"; then
+    rm -rf .venv
+fi
 uv sync >/dev/null
 uv pip install build/evdev-*.whl >/dev/null
 info "Installed Python packages"
