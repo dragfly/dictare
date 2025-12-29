@@ -49,14 +49,13 @@ class ClipboardInjector(TextInjector):
         self._copy_cmd = self._detect_copy_command()
         return self._copy_cmd is not None
 
-    def type_text(self, text: str, delay_ms: int = 0) -> bool:
-        """Copy text to clipboard.
-
-        Note: delay_ms is ignored for clipboard operations.
+    def type_text(self, text: str, delay_ms: int = 0, auto_paste: bool = False) -> bool:
+        """Copy text to clipboard and optionally paste.
 
         Args:
             text: Text to copy to clipboard.
-            delay_ms: Ignored.
+            delay_ms: Ignored for clipboard operations.
+            auto_paste: If True, automatically send Ctrl+V after copying.
 
         Returns:
             True if successful.
@@ -74,12 +73,55 @@ class ClipboardInjector(TextInjector):
                 stderr=subprocess.DEVNULL,
             )
             proc.communicate(input=text.encode("utf-8"), timeout=10)
-            return proc.returncode == 0
+            if proc.returncode != 0:
+                return False
+
+            # Auto-paste with Ctrl+V
+            if auto_paste:
+                self._send_paste_shortcut()
+
+            return True
         except subprocess.TimeoutExpired:
             proc.kill()
             return False
         except Exception:
             return False
+
+    def _send_paste_shortcut(self) -> None:
+        """Send Ctrl+V (or Cmd+V on macOS) to paste."""
+        import sys
+        import time
+
+        # Small delay to ensure clipboard is ready
+        time.sleep(0.05)
+
+        try:
+            if sys.platform == "darwin":
+                # macOS: Cmd+V
+                subprocess.run(
+                    ["osascript", "-e", 'tell application "System Events" to keystroke "v" using command down'],
+                    capture_output=True,
+                    timeout=5,
+                )
+            else:
+                # Linux: try ydotool first, then xdotool
+                ydotool = shutil.which("ydotool")
+                if ydotool:
+                    subprocess.run(
+                        [ydotool, "key", "29:1", "47:1", "47:0", "29:0"],  # Ctrl down, V down, V up, Ctrl up
+                        capture_output=True,
+                        timeout=5,
+                    )
+                else:
+                    xdotool = shutil.which("xdotool")
+                    if xdotool:
+                        subprocess.run(
+                            [xdotool, "key", "ctrl+v"],
+                            capture_output=True,
+                            timeout=5,
+                        )
+        except Exception:
+            pass  # Best effort, don't fail if paste doesn't work
 
     def get_name(self) -> str:
         """Get injector name."""
