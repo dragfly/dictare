@@ -29,19 +29,19 @@ class ClipboardInjector(TextInjector):
                 return ["pbcopy"]
             return None
 
-        # Linux
-        if os.environ.get("WAYLAND_DISPLAY"):
+        # Linux - detect session type
+        session_type = os.environ.get("XDG_SESSION_TYPE", "")
+        is_wayland = os.environ.get("WAYLAND_DISPLAY") or session_type == "wayland"
+
+        if is_wayland:
             if shutil.which("wl-copy"):
                 return ["wl-copy"]
         else:
+            # X11 or unknown
             if shutil.which("xclip"):
                 return ["xclip", "-selection", "clipboard"]
             if shutil.which("xsel"):
                 return ["xsel", "--clipboard", "--input"]
-
-        # Fallback: try wl-copy anyway (might work in some setups)
-        if shutil.which("wl-copy"):
-            return ["wl-copy"]
 
         return None
 
