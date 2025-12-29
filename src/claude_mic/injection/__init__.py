@@ -1,0 +1,1 @@
+"""Text injection into terminal."""
