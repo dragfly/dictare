@@ -53,8 +53,9 @@ class YdotoolInjector(TextInjector):
 
         try:
             cmd = [self._ydotool_path, "type"]
-            if delay_ms > 0:
-                cmd.extend(["--delay", str(delay_ms)])
+            # Override ydotool's slow defaults (20ms each)
+            cmd.extend(["--key-delay", str(delay_ms) if delay_ms > 0 else "1"])
+            cmd.extend(["--key-hold", "1"])
             cmd.append("--")
             cmd.append(text)
 
