@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 
@@ -49,10 +50,17 @@ class MacOSInjector(TextInjector):
         script = f'tell application "System Events" to keystroke "{escaped}"'
 
         try:
+            # Ensure UTF-8 locale for proper accent handling
+            env = os.environ.copy()
+            env["LANG"] = "en_US.UTF-8"
+            env["LC_ALL"] = "en_US.UTF-8"
+
             result = subprocess.run(
                 ["osascript", "-e", script],
                 capture_output=True,
                 timeout=30,
+                encoding="utf-8",
+                env=env,
             )
             return result.returncode == 0
         except subprocess.TimeoutExpired:
