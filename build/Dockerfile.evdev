@@ -1,10 +1,10 @@
 # Build evdev wheel
 # Usage:
 #   docker build -f build/Dockerfile.evdev -t evdev-builder build/
-#   docker run --rm evdev-builder > evdev.whl
-#   uv pip install evdev.whl
+#   docker run --rm -v $(pwd):/output evdev-builder
+#   uv pip install evdev-*.whl
 
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.11-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -12,9 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     linux-headers-generic \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip wheel evdev --no-deps -w /wheels
+WORKDIR /wheels
+RUN pip wheel evdev --no-deps -w .
 
-# Output the wheel
-FROM debian:bookworm-slim
-COPY --from=builder /wheels/*.whl /evdev.whl
-CMD cat /evdev.whl
+# Copy wheel to mounted /output
+CMD cp /wheels/*.whl /output/
