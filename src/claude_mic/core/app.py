@@ -132,21 +132,34 @@ class ClaudeMicApp:
 
     def _create_injector(self) -> TextInjector:
         """Create text injector with auto-detection."""
+        import sys
+
         from claude_mic.injection.clipboard import ClipboardInjector
-        from claude_mic.injection.wtype import WtypeInjector
-        from claude_mic.injection.xdotool import XdotoolInjector
-        from claude_mic.injection.ydotool import YdotoolInjector
+
+        # Platform-specific imports
+        if sys.platform == "darwin":
+            from claude_mic.injection.macos import MacOSInjector
+        else:
+            from claude_mic.injection.wtype import WtypeInjector
+            from claude_mic.injection.xdotool import XdotoolInjector
+            from claude_mic.injection.ydotool import YdotoolInjector
 
         backend = self.config.injection.backend
 
         if backend != "auto":
             # Use specific backend
-            injectors = {
-                "ydotool": YdotoolInjector,
-                "wtype": WtypeInjector,
-                "xdotool": XdotoolInjector,
-                "clipboard": ClipboardInjector,
-            }
+            if sys.platform == "darwin":
+                injectors = {
+                    "macos": MacOSInjector,
+                    "clipboard": ClipboardInjector,
+                }
+            else:
+                injectors = {
+                    "ydotool": YdotoolInjector,
+                    "wtype": WtypeInjector,
+                    "xdotool": XdotoolInjector,
+                    "clipboard": ClipboardInjector,
+                }
             if backend in injectors:
                 injector = injectors[backend]()
                 if injector.is_available():
@@ -154,12 +167,18 @@ class ClaudeMicApp:
                 self._console.print(f"[yellow]{backend} not available[/]")
 
         # Auto-detect best available injector
-        candidates = [
-            YdotoolInjector(),
-            WtypeInjector(),
-            XdotoolInjector(),
-            ClipboardInjector(),
-        ]
+        if sys.platform == "darwin":
+            candidates = [
+                MacOSInjector(),
+                ClipboardInjector(),
+            ]
+        else:
+            candidates = [
+                YdotoolInjector(),
+                WtypeInjector(),
+                XdotoolInjector(),
+                ClipboardInjector(),
+            ]
 
         for injector in candidates:
             if injector.is_available():
