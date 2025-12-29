@@ -2,24 +2,42 @@
 
 Voice-to-text for Claude Code CLI. Speak into your microphone and have your words typed into the terminal.
 
-## Quick Start (Linux)
+## Quick Start
+
+### Linux
 
 ```bash
 git clone https://github.com/dragfly/claude-mic
 cd claude-mic
 ./install.sh              # No sudo, builds via Docker
-./setup-permissions.sh    # One-time sudo (4 lines, easy to review)
+./setup-permissions.sh    # One-time sudo
 # Log out and back in
 systemctl --user start ydotoold
 uv run claude-mic run
 ```
 
-Hold **ScrollLock**, speak, release. Text appears in your terminal.
+### macOS
+
+```bash
+git clone https://github.com/dragfly/claude-mic
+cd claude-mic
+./install-macos.sh
+# Grant Accessibility permissions (see installer output)
+uv run claude-mic run
+```
+
+Hold **ScrollLock** (or **F13**), speak, release. Text appears in your terminal.
 
 ## Requirements
 
+**Linux:**
 - Docker (for building dependencies)
 - [uv](https://github.com/astral-sh/uv) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+
+**macOS:**
+- [Homebrew](https://brew.sh) (for portaudio)
+- [uv](https://github.com/astral-sh/uv) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- Accessibility permissions for Terminal
 
 ## What Does `setup-permissions.sh` Do?
 
