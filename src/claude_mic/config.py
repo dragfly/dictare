@@ -55,10 +55,6 @@ class InjectionConfig(BaseModel):
         default="auto",
         description="Text injection backend to use",
     )
-    keyboard_layout: str = Field(
-        default="us",
-        description="Keyboard layout for ydotool (us, it, de, fr, es)",
-    )
     typing_delay_ms: int = Field(
         default=0,
         description="Delay between characters in milliseconds",
