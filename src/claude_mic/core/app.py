@@ -266,10 +266,27 @@ class ClaudeMicApp:
                     inject_text = text + "\n" if self.config.injection.auto_enter else text
 
                     if self._injector:
-                        success = self._injector.type_text(
-                            inject_text,
-                            delay_ms=self.config.injection.typing_delay_ms,
-                        )
+                        # Check if text contains non-ASCII (accents, etc.)
+                        # ydotool can't handle these, so use clipboard directly
+                        has_non_ascii = not inject_text.isascii()
+                        use_clipboard = has_non_ascii and self._injector.get_name() == "ydotool"
+
+                        if use_clipboard:
+                            from claude_mic.injection.clipboard import ClipboardInjector
+
+                            clipboard = ClipboardInjector()
+                            if clipboard.is_available():
+                                clipboard.type_text(inject_text)
+                                self._console.print(
+                                    "[yellow]Copied to clipboard (Ctrl+V to paste) "
+                                    "[dim]- accented chars not supported by ydotool[/][/]"
+                                )
+                            success = True
+                        else:
+                            success = self._injector.type_text(
+                                inject_text,
+                                delay_ms=self.config.injection.typing_delay_ms,
+                            )
 
                         if not success:
                             if self.config.injection.fallback_to_clipboard:
