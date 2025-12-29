@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 
@@ -57,10 +58,17 @@ class YdotoolInjector(TextInjector):
             cmd.append("--")
             cmd.append(text)
 
+            # Ensure UTF-8 locale for proper accent handling
+            env = os.environ.copy()
+            env["LANG"] = "en_US.UTF-8"
+            env["LC_ALL"] = "en_US.UTF-8"
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 timeout=30,
+                encoding="utf-8",
+                env=env,
             )
             return result.returncode == 0
         except subprocess.TimeoutExpired:
