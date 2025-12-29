@@ -32,6 +32,8 @@ class PynputHotkeyListener(HotkeyListener):
         "KEY_F12": "f12",
         "KEY_RIGHTMETA": "cmd_r",
         "KEY_LEFTMETA": "cmd_l",
+        "KEY_RIGHTALT": "alt_r",   # Right Option on Mac
+        "KEY_LEFTALT": "alt_l",    # Left Option on Mac
         "KEY_MENU": "menu",
     }
 
