@@ -56,7 +56,7 @@ class ClipboardInjector(TextInjector):
         Args:
             text: Text to copy to clipboard.
             delay_ms: Ignored for clipboard operations.
-            auto_paste: If True, automatically send Ctrl+V after copying.
+            auto_paste: If True, automatically send Ctrl+Shift+V after copying.
 
         Returns:
             True if successful.
@@ -65,6 +65,11 @@ class ClipboardInjector(TextInjector):
             self._copy_cmd = self._detect_copy_command()
             if not self._copy_cmd:
                 return False
+
+        # Handle Enter separately - pasting \n doesn't trigger Enter
+        send_enter = text.endswith("\n")
+        if send_enter:
+            text = text[:-1]
 
         try:
             proc = subprocess.Popen(
@@ -77,9 +82,12 @@ class ClipboardInjector(TextInjector):
             if proc.returncode != 0:
                 return False
 
-            # Auto-paste with Ctrl+V
+            # Auto-paste with Ctrl+Shift+V
             if auto_paste:
                 self._send_paste_shortcut()
+                # Send Enter separately if needed
+                if send_enter:
+                    self._send_enter_key()
 
             return True
         except subprocess.TimeoutExpired:
@@ -125,6 +133,39 @@ class ClipboardInjector(TextInjector):
                         )
         except Exception:
             pass  # Best effort, don't fail if paste doesn't work
+
+    def _send_enter_key(self) -> None:
+        """Send Enter key."""
+        import sys
+        import time
+
+        time.sleep(0.05)
+
+        try:
+            if sys.platform == "darwin":
+                subprocess.run(
+                    ["osascript", "-e", 'tell application "System Events" to keystroke return'],
+                    capture_output=True,
+                    timeout=5,
+                )
+            else:
+                ydotool = shutil.which("ydotool")
+                if ydotool:
+                    subprocess.run(
+                        [ydotool, "key", "28:1", "28:0"],  # KEY_ENTER
+                        capture_output=True,
+                        timeout=5,
+                    )
+                else:
+                    xdotool = shutil.which("xdotool")
+                    if xdotool:
+                        subprocess.run(
+                            [xdotool, "key", "Return"],
+                            capture_output=True,
+                            timeout=5,
+                        )
+        except Exception:
+            pass
 
     def get_name(self) -> str:
         """Get injector name."""
