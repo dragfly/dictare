@@ -265,10 +265,19 @@ class ClaudeMicApp:
                     inject_text = text + "\n" if self.config.injection.auto_enter else text
 
                     if self._injector:
-                        success = self._injector.type_text(
-                            inject_text,
-                            delay_ms=self.config.injection.typing_delay_ms,
-                        )
+                        # Pass auto_paste for clipboard mode
+                        if self._injector.get_name() == "clipboard":
+                            from claude_mic.injection.clipboard import ClipboardInjector
+                            success = self._injector.type_text(
+                                inject_text,
+                                delay_ms=self.config.injection.typing_delay_ms,
+                                auto_paste=self.config.injection.auto_paste,
+                            )
+                        else:
+                            success = self._injector.type_text(
+                                inject_text,
+                                delay_ms=self.config.injection.typing_delay_ms,
+                            )
 
                         if not success:
                             if self.config.injection.fallback_to_clipboard:
