@@ -55,6 +55,10 @@ def run(
         Optional[str],
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
+    enter: Annotated[
+        bool,
+        typer.Option("--enter", "-e", help="Auto-press Enter after typing"),
+    ] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -73,6 +77,8 @@ def run(
         config.hotkey.key = key
     if language:
         config.stt.language = language
+    if enter:
+        config.injection.auto_enter = True
     if verbose:
         config.verbose = verbose
 

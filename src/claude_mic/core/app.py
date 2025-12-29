@@ -242,9 +242,12 @@ class ClaudeMicApp:
                     display_text = text[:60] + "..." if len(text) > 60 else text
                     self._console.print(f"[green]Transcribed:[/] {display_text}        ")
 
+                    # Add Enter if configured
+                    inject_text = text + "\n" if self.config.injection.auto_enter else text
+
                     if self._injector:
                         success = self._injector.type_text(
-                            text,
+                            inject_text,
                             delay_ms=self.config.injection.typing_delay_ms,
                         )
 
