@@ -116,6 +116,12 @@ class ClipboardInjector(TextInjector):
                 # Linux: try ydotool first, then xdotool
                 # Use Ctrl+Shift+V (terminal paste) instead of Ctrl+V (image paste in some apps)
                 ydotool = shutil.which("ydotool")
+                if not ydotool:
+                    import os
+                    home_ydotool = os.path.expanduser("~/.local/bin/ydotool")
+                    if os.path.exists(home_ydotool):
+                        ydotool = home_ydotool
+
                 if ydotool:
                     subprocess.run(
                         # Ctrl+Shift+V: Ctrl(29) down, Shift(42) down, V(47) down/up, Shift up, Ctrl up
@@ -139,7 +145,8 @@ class ClipboardInjector(TextInjector):
         import sys
         import time
 
-        time.sleep(0.05)
+        # Wait for paste to complete before sending Enter
+        time.sleep(0.2)
 
         try:
             if sys.platform == "darwin":
@@ -149,7 +156,14 @@ class ClipboardInjector(TextInjector):
                     timeout=5,
                 )
             else:
+                # Try common ydotool locations
                 ydotool = shutil.which("ydotool")
+                if not ydotool:
+                    import os
+                    home_ydotool = os.path.expanduser("~/.local/bin/ydotool")
+                    if os.path.exists(home_ydotool):
+                        ydotool = home_ydotool
+
                 if ydotool:
                     subprocess.run(
                         [ydotool, "key", "28:1", "28:0"],  # KEY_ENTER
