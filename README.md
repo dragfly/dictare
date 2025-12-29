@@ -23,10 +23,12 @@ git clone https://github.com/dragfly/claude-mic
 cd claude-mic
 ./install-macos.sh
 # Grant Accessibility permissions (see installer output)
-uv run claude-mic run
+uv run claude-mic run --key KEY_RIGHTMETA  # Use Right Command (⌘)
 ```
 
-Hold **ScrollLock** (or **F13**), speak, release. Text appears in your terminal.
+Hold **Right Command** (or **Right Option**), speak, release. Text appears in your terminal.
+
+**Note:** Don't use F1-F12 on Mac - they produce escape sequences in terminal.
 
 ## Requirements
 
@@ -53,11 +55,34 @@ Separate script so you can review it easily.
 
 ```bash
 uv run claude-mic run                  # Start push-to-talk
-uv run claude-mic run --model small    # Larger model, more accurate
+uv run claude-mic run --model medium   # Larger model, better for non-English
 uv run claude-mic run --language it    # Force Italian
 uv run claude-mic run --enter          # Auto-press Enter after typing
+uv run claude-mic run --clipboard      # Use clipboard (for accented chars)
+uv run claude-mic run --key KEY_F5     # Use F5 instead of ScrollLock
 uv run claude-mic check                # Verify setup
 ```
+
+### CLI Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--model` | `-m` | Whisper model (tiny/base/small/medium/large-v3) |
+| `--language` | `-l` | Language code (it, en, es, fr...) or "auto" |
+| `--key` | `-k` | Push-to-talk key (KEY_SCROLLLOCK, KEY_F5, etc.) |
+| `--enter` | `-e` | Auto-press Enter after typing |
+| `--clipboard` | `-C` | Copy to clipboard instead of typing |
+| `--verbose` | `-v` | Show debug output |
+
+### Accented Characters (Italian, etc.)
+
+ydotool doesn't support accented characters (è, à, ù, ì, ò). Use clipboard mode:
+
+```bash
+uv run claude-mic run --language it --clipboard
+```
+
+Then press **Ctrl+V** to paste after speaking.
 
 ## Configuration
 
