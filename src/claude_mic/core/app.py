@@ -267,12 +267,17 @@ class ClaudeMicApp:
                     if self._injector:
                         # Pass auto_paste for clipboard mode
                         if self._injector.get_name() == "clipboard":
-                            from claude_mic.injection.clipboard import ClipboardInjector
                             success = self._injector.type_text(
                                 inject_text,
                                 delay_ms=self.config.injection.typing_delay_ms,
                                 auto_paste=self.config.injection.auto_paste,
                             )
+                            if success and self.config.injection.auto_paste:
+                                pass  # Auto-pasted, no message needed
+                            elif success:
+                                self._console.print(
+                                    "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
+                                )
                         else:
                             success = self._injector.type_text(
                                 inject_text,
