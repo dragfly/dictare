@@ -37,6 +37,7 @@ Separate script so you can review it easily.
 uv run claude-mic run                  # Start push-to-talk
 uv run claude-mic run --model small    # Larger model, more accurate
 uv run claude-mic run --language it    # Force Italian
+uv run claude-mic run --enter          # Auto-press Enter after typing
 uv run claude-mic check                # Verify setup
 ```
 
@@ -45,6 +46,19 @@ uv run claude-mic check                # Verify setup
 ```bash
 uv run claude-mic init    # Create ~/.config/claude-mic/config.toml
 uv run claude-mic config  # Show current config
+```
+
+Example `~/.config/claude-mic/config.toml`:
+```toml
+[stt]
+model_size = "medium"    # Better accuracy (see table below)
+language = "it"          # Force Italian (or "auto" to detect)
+
+[injection]
+auto_enter = true        # Press Enter after typing
+
+[hotkey]
+key = "KEY_SCROLLLOCK"   # Change push-to-talk key
 ```
 
 ### Models
