@@ -187,6 +187,8 @@ class ClaudeMicApp:
             self._console.print(f"[dim]Hotkey: {self._hotkey.get_key_name()}[/]")
             self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
 
+        self._console.print(f"[green]Ready![/] Press {self.config.hotkey.key} to record.")
+
     def _on_hotkey_press(self) -> None:
         """Handle hotkey press - start recording."""
         with self._lock:

@@ -45,16 +45,22 @@ class EvdevHotkeyListener(HotkeyListener):
 
         devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
 
+        # Filter out virtual devices (like ydotool)
+        real_devices = [
+            d for d in devices
+            if "virtual" not in d.name.lower() and "ydotool" not in d.name.lower()
+        ]
+
         # First, try to find a device that explicitly has the target key
-        for device in devices:
+        for device in real_devices:
             capabilities = device.capabilities()
             if evdev.ecodes.EV_KEY in capabilities:
                 key_caps = capabilities[evdev.ecodes.EV_KEY]
                 if target_key in key_caps:
                     return device
 
-        # Fallback: return first device with EV_KEY capability
-        for device in devices:
+        # Fallback: return first real device with EV_KEY capability
+        for device in real_devices:
             if evdev.ecodes.EV_KEY in device.capabilities():
                 return device
 
