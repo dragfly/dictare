@@ -71,6 +71,10 @@ class InjectionConfig(BaseModel):
         default=False,
         description="Automatically press Enter after typing text",
     )
+    auto_paste: bool = Field(
+        default=True,
+        description="Auto Ctrl+V after clipboard copy (when using clipboard mode)",
+    )
 
 
 class CloudConfig(BaseModel):
