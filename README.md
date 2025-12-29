@@ -17,22 +17,51 @@ Voice-to-text for Claude Code CLI. Speak into your microphone and have your word
 ```bash
 # Audio library
 sudo apt install libportaudio2
-
-# Python headers (for evdev compilation)
-sudo apt install python3-dev
-
-# Text injection - install ONE of these:
-sudo apt install ydotool    # Recommended (X11/Wayland/console)
-# OR
-sudo apt install wtype      # Wayland only
-# OR
-sudo apt install xdotool    # X11 only
 ```
 
-### 2. Start ydotool Daemon (if using ydotool)
+### 2. Build ydotool from Source (Recommended)
+
+The Ubuntu/Debian package is too old. Build from source using Docker:
 
 ```bash
+cd build
+./build-ydotool.sh
+sudo mv ydotool ydotoold /usr/local/bin/
+```
+
+Start the daemon:
+```bash
+sudo ydotoold &
+# Or create a systemd service (see below)
+```
+
+<details>
+<summary>Create systemd service for ydotoold</summary>
+
+```bash
+sudo tee /etc/systemd/system/ydotoold.service > /dev/null << 'EOF'
+[Unit]
+Description=ydotool daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ydotoold
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
 sudo systemctl enable --now ydotoold
+```
+</details>
+
+**Alternatives** (if you prefer not to use Docker):
+```bash
+sudo apt install wtype      # Wayland only
+sudo apt install xdotool    # X11 only
 ```
 
 ### 3. Grant Input Device Access
@@ -45,13 +74,22 @@ sudo usermod -aG input $USER
 ### 4. Install claude-mic
 
 ```bash
-# With uv (recommended)
+# Clone
 git clone https://github.com/dragfly/claude-mic
 cd claude-mic
-uv sync --extra linux   # Creates venv and installs deps including evdev
 
-# Or with pip
-pip install claude-mic
+# Install with uv
+uv sync
+
+# Build and install evdev (requires Docker, avoids system python3-dev)
+./build/build-evdev.sh
+uv pip install build/evdev.whl
+```
+
+**Alternative**: Install evdev with system python3-dev (installs ~30MB of packages):
+```bash
+sudo apt install python3-dev
+uv pip install evdev
 ```
 
 ### 5. Verify Setup
@@ -122,10 +160,10 @@ device = null              # null = default microphone
 
 ### "No hotkey backend available"
 
-Install evdev (requires python3-dev):
+Build and install evdev using Docker (no python3-dev needed):
 ```bash
-sudo apt install python3-dev
-pip install evdev
+./build/build-evdev.sh
+uv pip install build/evdev.whl
 ```
 
 Or use pynput on X11:
@@ -135,9 +173,14 @@ pip install python-xlib pynput
 
 ### "ydotool daemon not running"
 
+If you built from source:
+```bash
+sudo ydotoold &
+```
+
+Or if you created the systemd service:
 ```bash
 sudo systemctl start ydotoold
-sudo systemctl enable ydotoold  # Auto-start on boot
 ```
 
 ### "Cannot access input devices"

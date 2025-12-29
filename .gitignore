@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
@@ -45,3 +44,8 @@ htmlcov/
 *.log
 .DS_Store
 Thumbs.db
+
+# Build artifacts (not the scripts)
+build/ydotool
+build/ydotoold
+build/*.whl
