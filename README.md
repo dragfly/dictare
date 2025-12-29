@@ -24,11 +24,12 @@ Hold **ScrollLock**, speak, release. Text appears in your terminal.
 ## What Does `setup-permissions.sh` Do?
 
 ```bash
-sudo apt-get install -y libportaudio2   # Audio capture library
-sudo usermod -aG input $USER            # Access to input devices
+sudo apt-get install -y libportaudio2 xclip  # Audio + clipboard
+sudo usermod -aG input $USER                  # Access to input devices
+# + udev rule for /dev/uinput (ydotool needs this)
 ```
 
-That's it. Separate script so you can review it easily.
+Separate script so you can review it easily.
 
 ## Usage
 
