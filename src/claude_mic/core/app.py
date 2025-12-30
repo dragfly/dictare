@@ -62,11 +62,13 @@ class ClaudeMicApp:
         else:
             raise ValueError(f"Unknown STT backend: {self.config.stt.backend}")
 
+        device_str = "GPU (CUDA)" if self.config.stt.device == "cuda" else "CPU"
         if self.config.verbose:
-            self._console.print(f"[dim]Loading {self.config.stt.model_size} model...[/]")
+            self._console.print(f"[dim]Loading {self.config.stt.model_size} model on {device_str}...[/]")
 
         engine.load_model(
             self.config.stt.model_size,
+            device=self.config.stt.device,
             compute_type=self.config.stt.compute_type,
         )
 
