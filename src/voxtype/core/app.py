@@ -92,10 +92,21 @@ class ClaudeMicApp:
             from voxtype.stt.faster_whisper import FasterWhisperEngine
 
             engine = FasterWhisperEngine()
+        elif self.config.stt.backend == "mlx-whisper":
+            from voxtype.stt.mlx_whisper import MLXWhisperEngine
+
+            engine = MLXWhisperEngine()
         else:
             raise ValueError(f"Unknown STT backend: {self.config.stt.backend}")
 
-        device_str = "GPU (CUDA)" if self.config.stt.device == "cuda" else "CPU"
+        # Determine device string for display
+        if self.config.stt.backend == "mlx-whisper":
+            device_str = "GPU (MLX/Metal)"
+        elif self.config.stt.device == "cuda":
+            device_str = "GPU (CUDA)"
+        else:
+            device_str = "CPU"
+
         if self.config.verbose:
             self._console.print(f"[dim]Loading {self.config.stt.model_size} model on {device_str}...[/]")
 

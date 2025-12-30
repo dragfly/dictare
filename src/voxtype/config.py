@@ -25,9 +25,9 @@ class AudioConfig(BaseModel):
 class STTConfig(BaseModel):
     """Speech-to-text configuration."""
 
-    backend: Literal["faster-whisper", "openai"] = Field(
+    backend: Literal["faster-whisper", "mlx-whisper", "openai"] = Field(
         default="faster-whisper",
-        description="STT backend to use",
+        description="STT backend to use (faster-whisper, mlx-whisper for Apple Silicon, openai)",
     )
     model_size: str = Field(
         default="base",
