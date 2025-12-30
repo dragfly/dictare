@@ -23,7 +23,8 @@ console = Console()
 
 
 def _setup_cuda_library_path() -> None:
-    """Set up LD_LIBRARY_PATH for CUDA libraries installed via pip."""
+    """Set up CUDA libraries by preloading them before ctranslate2."""
+    import ctypes
     import os
     import sys
 
@@ -31,7 +32,23 @@ def _setup_cuda_library_path() -> None:
     for path in sys.path:
         nvidia_path = Path(path) / "nvidia"
         if nvidia_path.exists():
-            # Add cudnn and cublas lib paths
+            # Preload cudnn and cublas libraries
+            lib_files = [
+                ("cudnn", "libcudnn.so.9"),
+                ("cudnn", "libcudnn_ops.so.9"),
+                ("cudnn", "libcudnn_cnn.so.9"),
+                ("cublas", "libcublas.so.12"),
+                ("cublas", "libcublasLt.so.12"),
+            ]
+            for subdir, libname in lib_files:
+                lib_path = nvidia_path / subdir / "lib" / libname
+                if lib_path.exists():
+                    try:
+                        ctypes.CDLL(str(lib_path), mode=ctypes.RTLD_GLOBAL)
+                    except OSError:
+                        pass  # Library already loaded or not needed
+
+            # Also set LD_LIBRARY_PATH for any remaining libs
             lib_paths = []
             for subdir in ["cudnn", "cublas", "cuda_runtime"]:
                 lib_dir = nvidia_path / subdir / "lib"
@@ -45,7 +62,7 @@ def _setup_cuda_library_path() -> None:
                     os.environ["LD_LIBRARY_PATH"] = f"{new_paths}:{current}"
                 else:
                     os.environ["LD_LIBRARY_PATH"] = new_paths
-                break
+            break
 
 
 def version_callback(value: bool) -> None:
