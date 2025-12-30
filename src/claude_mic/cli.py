@@ -63,6 +63,10 @@ def run(
         bool,
         typer.Option("--clipboard", "-C", help="Use clipboard instead of typing (for accented chars)"),
     ] = False,
+    gpu: Annotated[
+        bool,
+        typer.Option("--gpu", "-g", help="Use GPU (CUDA) for faster transcription"),
+    ] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -85,6 +89,9 @@ def run(
         config.injection.auto_enter = True
     if clipboard:
         config.injection.backend = "clipboard"
+    if gpu:
+        config.stt.device = "cuda"
+        config.stt.compute_type = "float16"  # Better for GPU
     if verbose:
         config.verbose = verbose
 
@@ -94,11 +101,12 @@ def run(
     mic_app = ClaudeMicApp(config)
 
     mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
+    device_str = "[magenta]GPU (CUDA)[/]" if config.stt.device == "cuda" else "CPU"
     console.print(
         Panel(
             f"[bold green]claude-mic[/] v{__version__}\n\n"
             f"Push-to-talk key: [cyan]{config.hotkey.key}[/]\n"
-            f"STT model: [cyan]{config.stt.model_size}[/]\n"
+            f"STT model: [cyan]{config.stt.model_size}[/] on {device_str}\n"
             f"Language: [cyan]{config.stt.language}[/]\n"
             f"Output mode: {mode_str}\n\n"
             f"Press [bold]Ctrl+C[/] to exit",

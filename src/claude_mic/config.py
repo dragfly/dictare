@@ -34,6 +34,10 @@ class STTConfig(BaseModel):
         default="int8",
         description="Compute type for faster-whisper (int8/float16/float32)",
     )
+    device: str = Field(
+        default="cpu",
+        description="Device to use (cpu/cuda)",
+    )
     beam_size: int = Field(default=5, description="Beam size for decoding")
 
 class HotkeyConfig(BaseModel):
