@@ -16,6 +16,10 @@ class AudioConfig(BaseModel):
     channels: int = Field(default=1, description="Number of audio channels")
     device: str | None = Field(default=None, description="Audio device name (None = default)")
     max_duration: int = Field(default=60, description="Max recording duration in seconds")
+    audio_feedback: bool = Field(
+        default=True,
+        description="Play beep when entering/exiting LISTENING mode",
+    )
 
 
 class STTConfig(BaseModel):
@@ -178,6 +182,7 @@ def create_default_config() -> Path:
 sample_rate = 16000
 channels = 1
 # device = "default"  # Uncomment to specify audio device
+audio_feedback = true  # Play beep on listening mode toggle
 
 [stt]
 backend = "faster-whisper"
