@@ -40,7 +40,7 @@ class YdotoolInjector(TextInjector):
         """Type text using ydotool.
 
         Args:
-            text: Text to type.
+            text: Text to type. If ends with newline, sends Enter key.
             delay_ms: Delay between characters in milliseconds.
 
         Returns:
@@ -51,7 +51,13 @@ class YdotoolInjector(TextInjector):
             if not self._ydotool_path:
                 return False
 
+        # Check if we need to send Enter at the end
+        send_enter = text.endswith("\n")
+        if send_enter:
+            text = text.rstrip("\n")
+
         try:
+            # Type the text
             cmd = [self._ydotool_path, "type"]
             # Override ydotool's slow defaults (20ms each)
             cmd.extend(["--key-delay", str(delay_ms) if delay_ms > 0 else "1"])
@@ -64,7 +70,20 @@ class YdotoolInjector(TextInjector):
                 capture_output=True,
                 timeout=30,
             )
-            return result.returncode == 0
+
+            if result.returncode != 0:
+                return False
+
+            # Send Enter key if needed (ydotool type doesn't interpret \n)
+            if send_enter:
+                enter_result = subprocess.run(
+                    [self._ydotool_path, "key", "enter"],
+                    capture_output=True,
+                    timeout=5,
+                )
+                return enter_result.returncode == 0
+
+            return True
         except subprocess.TimeoutExpired:
             return False
         except Exception:
