@@ -113,14 +113,19 @@ def run(
         Optional[int],
         typer.Option("--max-duration", "-d", help="Max recording duration in seconds (default 60)"),
     ] = None,
+    vad: Annotated[
+        bool,
+        typer.Option("--vad", help="Use VAD (Voice Activity Detection) instead of push-to-talk"),
+    ] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
     ] = False,
 ) -> None:
-    """Start claude-mic in push-to-talk mode.
+    """Start claude-mic in push-to-talk or VAD mode.
 
-    Hold the configured key while speaking, release to transcribe and inject.
+    Push-to-talk: Hold the configured key while speaking, release to transcribe.
+    VAD mode: Automatically detects when you speak, no key needed.
     """
     config = load_config(config_file)
 
@@ -147,14 +152,15 @@ def run(
     # Lazy import to speed up CLI
     from claude_mic.core.app import ClaudeMicApp
 
-    mic_app = ClaudeMicApp(config)
+    mic_app = ClaudeMicApp(config, use_vad=vad)
 
     mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
     device_str = "[magenta]GPU (CUDA)[/]" if config.stt.device == "cuda" else "CPU"
+    input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
     console.print(
         Panel(
             f"[bold green]claude-mic[/] v{__version__}\n\n"
-            f"Push-to-talk key: [cyan]{config.hotkey.key}[/]\n"
+            f"Input mode: {input_mode}\n"
             f"STT model: [cyan]{config.stt.model_size}[/] on {device_str}\n"
             f"Language: [cyan]{config.stt.language}[/]\n"
             f"Output mode: {mode_str}\n\n"
