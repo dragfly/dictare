@@ -17,8 +17,9 @@ from claude_mic.stt.base import STTEngine
 
 if TYPE_CHECKING:
     from claude_mic.audio.vad import SileroVAD, StreamingVAD
-    from claude_mic.command.processor import CommandProcessor
     from claude_mic.config import Config
+    from claude_mic.llm import LLMProcessor, LLMResponse
+    from claude_mic.llm.models import AppState as LLMAppState
     from claude_mic.logging.jsonl import JSONLLogger
     from claude_mic.window.base import WindowManager
 
@@ -26,7 +27,8 @@ class ClaudeMicApp:
     """Main application orchestrator.
 
     Coordinates audio capture, STT, hotkey detection, and text injection.
-    Supports both push-to-talk and VAD (voice activity detection) modes.
+    Uses LLM-first architecture: ALL transcribed text goes through the LLM
+    which decides what action to take.
     """
 
     # Minimum recording duration in seconds
@@ -47,14 +49,14 @@ class ClaudeMicApp:
             config: Application configuration.
             use_vad: If True, use VAD mode instead of push-to-talk.
             vad_silence_ms: Silence duration in ms to end speech (default 1200).
-            wake_word: Optional wake word to activate (e.g., "Joshua").
-            debug: If True, show all transcriptions but only paste with wake word.
+            wake_word: Trigger phrase to activate (e.g., "Joshua").
+            debug: If True, show all transcriptions.
             logger: Optional JSONL logger for structured logging.
         """
         self.config = config
         self.use_vad = use_vad
         self.vad_silence_ms = vad_silence_ms or 1200
-        self.wake_word = wake_word.lower() if wake_word else None
+        self.trigger_phrase = wake_word  # Renamed: wake_word -> trigger_phrase
         self.debug = debug
         self.state = AppState.IDLE
         self._running = False
@@ -73,10 +75,9 @@ class ClaudeMicApp:
         self._vad: SileroVAD | None = None
         self._streaming_vad: StreamingVAD | None = None
 
-        # Command processing
-        self._command_processor: CommandProcessor | None = None
+        # LLM-first processor (replaces old command processor)
+        self._llm_processor: LLMProcessor | None = None
         self._window_manager: WindowManager | None = None
-        self._listening_mode = False  # Continuous transcription without wake word
 
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
@@ -268,9 +269,8 @@ class ClaudeMicApp:
             on_speech_end=self._on_vad_speech_end,
         )
 
-        # Create command processor if enabled
-        if self.config.command.enabled and self.wake_word:
-            self._init_command_processor()
+        # Create LLM processor (replaces old command processor)
+        self._init_llm_processor()
 
         # Create window manager if enabled
         if self.config.window.enabled:
@@ -280,6 +280,40 @@ class ClaudeMicApp:
             self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
 
         self._console.print("[green]Ready![/] Start speaking...")
+
+    def _init_llm_processor(self) -> None:
+        """Initialize the LLM-first processor."""
+        from claude_mic.llm import LLMProcessor
+
+        self._llm_processor = LLMProcessor(
+            trigger_phrase=self.trigger_phrase,
+            ollama_model=self.config.command.ollama_model,
+            ollama_timeout=self.config.command.ollama_timeout,
+            console=self._console if self.debug else None,
+        )
+
+        # Show which backend is being used
+        if self._llm_processor._is_ollama_available():
+            self._console.print(f"[dim]LLM processor: ollama ({self.config.command.ollama_model})[/]")
+        else:
+            self._console.print("[dim]LLM processor: keyword fallback[/]")
+
+    def _init_window_manager(self) -> None:
+        """Initialize window manager for target window selection."""
+        from claude_mic.window.xdotool import XdotoolWindowManager
+
+        manager = XdotoolWindowManager()
+        if manager.is_available():
+            self._window_manager = manager
+            if self.config.verbose:
+                self._console.print(f"[dim]Window manager: {manager.get_name()}[/]")
+
+            # Set default target if configured
+            if self.config.window.default_target:
+                windows = manager.find_windows(self.config.window.default_target)
+                if windows:
+                    manager.set_target(windows[0])
+                    self._console.print(f"[dim]Target window: {windows[0].name}[/]")
 
     def _on_hotkey_press(self) -> None:
         """Handle hotkey press - start recording."""
@@ -414,8 +448,6 @@ class ClaudeMicApp:
 
     def _on_vad_speech_end(self, audio_data) -> None:
         """Handle VAD speech end detection."""
-        import numpy as np
-
         with self._lock:
             if self.state != AppState.RECORDING:
                 return
@@ -436,119 +468,11 @@ class ClaudeMicApp:
 
         self._console.print("[bold yellow]Transcribing...[/]", end="\r")
 
-        # Transcribe and inject
-        self._transcribe_and_inject(audio_data)
+        # Transcribe and process with LLM
+        self._transcribe_and_process(audio_data)
 
-    def _check_wake_word(self, text: str) -> tuple[bool, str]:
-        """Check if text starts with wake word and return filtered text.
-
-        Args:
-            text: Transcribed text.
-
-        Returns:
-            Tuple of (wake_word_found, filtered_text).
-        """
-        # In LISTENING mode, bypass wake word check
-        if self._listening_mode:
-            return True, text
-
-        if not self.wake_word:
-            return True, text
-
-        text_lower = text.lower().strip()
-
-        if self.debug:
-            self._console.print(f"[blue][DEBUG] Wake check: text_lower='{text_lower}'[/]")
-            self._console.print(f"[blue][DEBUG] Wake word='{self.wake_word}'[/]")
-
-        # Check various formats: "Joshua, ...", "Joshua ...", "Joshua:", "Joshua.", "Joshua?"
-        for sep in [",", ":", ".", "?", " "]:
-            pattern = self.wake_word + sep
-            if text_lower.startswith(pattern):
-                # Remove wake word and separator
-                filtered = text[len(self.wake_word) + 1:].strip()
-                if self.debug:
-                    self._console.print(f"[blue][DEBUG] Match with '{sep}' -> filtered='{filtered}'[/]")
-                return True, filtered
-
-        # Check if it starts exactly with wake word (might be all they said)
-        if text_lower.startswith(self.wake_word):
-            filtered = text[len(self.wake_word):].strip()
-            if self.debug:
-                self._console.print(f"[blue][DEBUG] Exact match -> filtered='{filtered}'[/]")
-            if filtered:
-                return True, filtered
-
-        if self.debug:
-            self._console.print(f"[blue][DEBUG] No match found[/]")
-        return False, text
-
-    def _init_command_processor(self) -> None:
-        """Initialize command processor for voice commands."""
-        from claude_mic.command.processor import CommandProcessor
-
-        self._command_processor = CommandProcessor(
-            injector=self._injector,
-            window_manager=self._window_manager,
-            on_enter_listening=self._enter_listening_mode,
-            on_exit_listening=self._exit_listening_mode,
-            console=self._console,
-            ollama_model=self.config.command.ollama_model,
-            ollama_timeout=self.config.command.ollama_timeout,
-            format_text=self.config.command.format_text,
-        )
-
-    def _init_window_manager(self) -> None:
-        """Initialize window manager for target window selection."""
-        from claude_mic.window.xdotool import XdotoolWindowManager
-
-        manager = XdotoolWindowManager()
-        if manager.is_available():
-            self._window_manager = manager
-            if self.config.verbose:
-                self._console.print(f"[dim]Window manager: {manager.get_name()}[/]")
-
-            # Set default target if configured
-            if self.config.window.default_target:
-                windows = manager.find_windows(self.config.window.default_target)
-                if windows:
-                    manager.set_target(windows[0])
-                    self._console.print(f"[dim]Target window: {windows[0].name}[/]")
-
-    def _enter_listening_mode(self) -> None:
-        """Enter LISTENING mode (continuous transcription without wake word)."""
-        from claude_mic.audio.beep import play_beep_start
-
-        self._listening_mode = True
-        self._console.print("[bold green]>>> LISTENING MODE[/]")
-
-        if self._logger:
-            self._logger.log_state_change(
-                old_state="IDLE",
-                new_state="LISTENING",
-                trigger="ascolta_command",
-            )
-
-        play_beep_start()
-
-    def _exit_listening_mode(self) -> None:
-        """Exit LISTENING mode."""
-        from claude_mic.audio.beep import play_beep_stop
-
-        self._listening_mode = False
-        self._console.print("[bold yellow]<<< LISTENING MODE OFF[/]")
-
-        if self._logger:
-            self._logger.log_state_change(
-                old_state="LISTENING",
-                new_state="IDLE",
-                trigger="smetti_command",
-            )
-
-        play_beep_stop()
-
-    def _transcribe_and_inject(self, audio_data) -> None:
-        """Transcribe audio and inject text."""
+    def _transcribe_and_process(self, audio_data) -> None:
+        """Transcribe audio and process with LLM-first architecture."""
         def do_transcribe():
             try:
                 if not self._stt:
@@ -573,132 +497,184 @@ class ClaudeMicApp:
                     if self.debug:
                         self._console.print(f"[blue][DEBUG][/] {text}")
 
-                    # Check wake word
-                    wake_found, filtered_text = self._check_wake_word(text)
-
-                    # Log wake word check
-                    if self._logger and self.wake_word:
-                        self._logger.log_wake_word_check(
-                            text=text,
-                            wake_word=self.wake_word,
-                            found=wake_found,
-                            filtered_text=filtered_text if wake_found else None,
-                        )
-
-                    if not wake_found:
-                        # Show what was heard (so user understands)
-                        if not self.debug:  # Already shown in debug mode
-                            display = text[:50] + "..." if len(text) > 50 else text
-                            self._console.print(f"[dim]No wake word:[/] {display}")
-                        self.state = AppState.IDLE
-                        return
-
-                    text = filtered_text
-                    if not text:
-                        self._console.print("[dim]Wake word only, no command.[/]")
-                        self.state = AppState.IDLE
-                        return
-
-                    # Process commands if enabled (only when wake word was used, not in listening mode)
-                    if self._command_processor and not self._listening_mode:
-                        was_command, formatted_text = self._command_processor.process(text)
-                        if was_command:
-                            self.state = AppState.IDLE
-                            return
-                        # Use formatted text if available
-                        if formatted_text:
-                            text = formatted_text
-
-                    # In listening mode, check for exit command
-                    if self._listening_mode:
-                        text_lower = text.lower().strip()
-                        # Exit words (handle punctuation and Whisper transcription errors)
-                        # Whisper often transcribes "smetti" as "zmetti", "zmeti", "smetty", etc.
-                        exit_words = [
-                            "smetti", "stop", "basta", "fermati",
-                            "zmetti", "zmeti", "smetty", "smetty", "smety",
-                        ]
-                        for word in exit_words:
-                            # Match: "smetti", "smetti!", "Smetti.", etc.
-                            if text_lower == word or text_lower.startswith(word + "!") or text_lower.startswith(word + "."):
-                                self._exit_listening_mode()
-                                self.state = AppState.IDLE
-                                return
-                        # Check for "Joshua smetti", "Joshua basta", etc.
-                        if self.wake_word and self.wake_word in text_lower:
-                            for word in exit_words:
-                                if word in text_lower:
-                                    self._exit_listening_mode()
-                                    self.state = AppState.IDLE
-                                    return
-
-                    with self._lock:
-                        self.state = AppState.INJECTING
-
-                    # Truncate display if too long
-                    display_text = text[:60] + "..." if len(text) > 60 else text
-                    self._console.print(f"[green]Transcribed:[/] {display_text}        ")
-
-                    # Record injection for repeat
-                    if self._command_processor:
-                        self._command_processor.record_injection(text)
-
-                    # Add Enter if configured
-                    inject_text = text + "\n" if self.config.injection.auto_enter else text
-
-                    if self._injector:
-                        # Pass auto_paste for clipboard mode
-                        method = self._injector.get_name()
-                        if method == "clipboard":
-                            success = self._injector.type_text(
-                                inject_text,
-                                delay_ms=self.config.injection.typing_delay_ms,
-                                auto_paste=self.config.injection.auto_paste,
-                            )
-                            if success and self.config.injection.auto_paste:
-                                pass  # Auto-pasted, no message needed
-                            elif success:
-                                self._console.print(
-                                    "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
-                                )
-                        else:
-                            success = self._injector.type_text(
-                                inject_text,
-                                delay_ms=self.config.injection.typing_delay_ms,
-                            )
-
-                        # Log injection
-                        if self._logger:
-                            self._logger.log_injection(
-                                text=text,
-                                method=method,
-                                success=success,
-                            )
-
-                        if not success:
-                            if self.config.injection.fallback_to_clipboard:
-                                from claude_mic.injection.clipboard import ClipboardInjector
-
-                                clipboard = ClipboardInjector()
-                                if clipboard.is_available():
-                                    clipboard.type_text(text)
-                                    self._console.print(
-                                        "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
-                                    )
-                            else:
-                                self._console.print("[red]Failed to inject text[/]")
+                    # LLM-first: ALL text goes through LLM processor
+                    if self._llm_processor:
+                        response = self._llm_processor.process(text)
+                        self._execute_llm_response(response, text)
+                    else:
+                        # Fallback: just inject the text
+                        self._inject_text(text)
                 else:
                     self._console.print("[dim]No speech detected.                    [/]")
             except Exception as e:
                 # Log error
                 if self._logger:
-                    self._logger.log_error(str(e), context="transcribe_and_inject")
+                    self._logger.log_error(str(e), context="transcribe_and_process")
                 self._console.print(f"[red]Error: {e}[/]")
             finally:
                 self.state = AppState.IDLE
 
         thread = threading.Thread(target=do_transcribe, daemon=True)
         thread.start()
+
+    def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
+        """Execute the action decided by the LLM.
+
+        Args:
+            response: LLM response with action to take.
+            original_text: Original transcribed text (for logging).
+        """
+        from claude_mic.llm.models import Action, AppState as LLMAppState, Command
+
+        # Log the LLM decision
+        if self._logger:
+            self._logger.log(
+                "llm_decision",
+                text=original_text,
+                action=response.action.value,
+                new_state=response.new_state.value if response.new_state else None,
+                command=response.command.value if response.command else None,
+                confidence=response.confidence,
+            )
+
+        if response.action == Action.IGNORE:
+            if self.debug or response.user_feedback:
+                display = original_text[:50] + "..." if len(original_text) > 50 else original_text
+                feedback = response.user_feedback or "No trigger phrase"
+                self._console.print(f"[dim]{feedback}:[/] {display}")
+            return
+
+        if response.action == Action.CHANGE_STATE:
+            if response.new_state == LLMAppState.LISTENING:
+                self._enter_listening_mode()
+            elif response.new_state == LLMAppState.IDLE:
+                self._exit_listening_mode()
+            return
+
+        if response.action == Action.EXECUTE:
+            self._execute_command(response.command, response.command_args)
+            return
+
+        if response.action == Action.INJECT:
+            if response.text_to_inject:
+                with self._lock:
+                    self.state = AppState.INJECTING
+                self._inject_text(response.text_to_inject)
+
+    def _enter_listening_mode(self) -> None:
+        """Enter LISTENING mode (continuous transcription without trigger phrase)."""
+        from claude_mic.audio.beep import play_beep_start
+
+        self._console.print("[bold green]>>> LISTENING MODE[/]")
+
+        if self._logger:
+            self._logger.log_state_change(
+                old_state="IDLE",
+                new_state="LISTENING",
+                trigger="ascolta_command",
+            )
+
+        play_beep_start()
+
+    def _exit_listening_mode(self) -> None:
+        """Exit LISTENING mode."""
+        from claude_mic.audio.beep import play_beep_stop
+
+        self._console.print("[bold yellow]<<< LISTENING MODE OFF[/]")
+
+        if self._logger:
+            self._logger.log_state_change(
+                old_state="LISTENING",
+                new_state="IDLE",
+                trigger="smetti_command",
+            )
+
+        play_beep_stop()
+
+    def _execute_command(self, command: Command | None, args: dict | None) -> None:
+        """Execute a voice command.
+
+        Args:
+            command: Command to execute.
+            args: Optional command arguments.
+        """
+        from claude_mic.llm.models import Command
+
+        if command == Command.PASTE:
+            self._console.print("[cyan]Comando: incolla[/]")
+            # TODO: Implement paste from clipboard
+        elif command == Command.UNDO:
+            self._console.print("[cyan]Comando: annulla[/]")
+            # TODO: Implement undo
+        elif command == Command.REPEAT:
+            if self._llm_processor and self._llm_processor.last_injection:
+                self._console.print("[cyan]Comando: ripeti[/]")
+                self._inject_text(self._llm_processor.last_injection)
+            else:
+                self._console.print("[yellow]Niente da ripetere[/]")
+        elif command == Command.TARGET_WINDOW:
+            target = args.get("target") if args else None
+            if target and self._window_manager:
+                windows = self._window_manager.find_windows(target)
+                if windows:
+                    self._window_manager.set_target(windows[0])
+                    self._console.print(f"[cyan]Target: {windows[0].name}[/]")
+                else:
+                    self._console.print(f"[yellow]Finestra non trovata: {target}[/]")
+
+    def _inject_text(self, text: str) -> None:
+        """Inject text into the terminal.
+
+        Args:
+            text: Text to inject.
+        """
+        # Truncate display if too long
+        display_text = text[:60] + "..." if len(text) > 60 else text
+        self._console.print(f"[green]Transcribed:[/] {display_text}        ")
+
+        # Add Enter if configured
+        inject_text = text + "\n" if self.config.injection.auto_enter else text
+
+        if self._injector:
+            method = self._injector.get_name()
+            if method == "clipboard":
+                success = self._injector.type_text(
+                    inject_text,
+                    delay_ms=self.config.injection.typing_delay_ms,
+                    auto_paste=self.config.injection.auto_paste,
+                )
+                if success and self.config.injection.auto_paste:
+                    pass  # Auto-pasted, no message needed
+                elif success:
+                    self._console.print(
+                        "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
+                    )
+            else:
+                success = self._injector.type_text(
+                    inject_text,
+                    delay_ms=self.config.injection.typing_delay_ms,
+                )
+
+            # Log injection
+            if self._logger:
+                self._logger.log_injection(
+                    text=text,
+                    method=method,
+                    success=success,
+                )
+
+            if not success:
+                if self.config.injection.fallback_to_clipboard:
+                    from claude_mic.injection.clipboard import ClipboardInjector
+
+                    clipboard = ClipboardInjector()
+                    if clipboard.is_available():
+                        clipboard.type_text(text)
+                        self._console.print(
+                            "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
+                        )
+                else:
+                    self._console.print("[red]Failed to inject text[/]")
 
     def _on_vad_audio_chunk(self, chunk) -> None:
         """Process audio chunk through VAD."""
