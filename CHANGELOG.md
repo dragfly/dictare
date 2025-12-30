@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-12-30
+
+### Removed
+- **Window manager feature removed**: The `target window` feature was too brittle and caused issues
+  - Removed `window/` directory entirely (xdotool window manager)
+  - Removed `WindowConfig` from configuration
+  - Removed `TARGET_ACTIVE` and `TARGET_WINDOW` commands
+  - Removed `target_active` from LLM prompt
+  - This fixes the Enter key bug introduced in v0.8.16
+- **Legacy command/ directory removed**: Cleanup of old command processor (replaced by llm/)
+
+### Changed
+- **Simplified LLM processor**: Reduced sanity check overrides from 8 to 3
+  - Kept: Block invalid LISTENING→LISTENING transitions
+  - Kept: Short exit word detection (≤4 words)
+  - Kept: Inject all text in LISTENING mode if LLM says ignore
+  - Removed: Multiple keyword-based overrides that didn't trust the LLM
+- Architecture is now simpler and more reliable: `Audio → STT → LLM → Injector`
+
 ## [0.8.16] - 2025-12-30
 
 ### Fixed

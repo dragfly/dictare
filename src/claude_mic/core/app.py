@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from claude_mic.llm import LLMProcessor, LLMResponse
     from claude_mic.llm.models import AppState as LLMAppState
     from claude_mic.logging.jsonl import JSONLLogger
-    from claude_mic.window.base import WindowManager
 
 class ClaudeMicApp:
     """Main application orchestrator.
@@ -77,7 +76,6 @@ class ClaudeMicApp:
 
         # LLM-first processor (replaces old command processor)
         self._llm_processor: LLMProcessor | None = None
-        self._window_manager: WindowManager | None = None
 
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
@@ -272,10 +270,6 @@ class ClaudeMicApp:
         # Create LLM processor (replaces old command processor)
         self._init_llm_processor()
 
-        # Create window manager if enabled
-        if self.config.window.enabled:
-            self._init_window_manager()
-
         if self.config.verbose:
             self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
 
@@ -297,23 +291,6 @@ class ClaudeMicApp:
             self._console.print(f"[dim]LLM processor: ollama ({self.config.command.ollama_model})[/]")
         else:
             self._console.print("[dim]LLM processor: keyword fallback[/]")
-
-    def _init_window_manager(self) -> None:
-        """Initialize window manager for target window selection."""
-        from claude_mic.window.xdotool import XdotoolWindowManager
-
-        manager = XdotoolWindowManager()
-        if manager.is_available():
-            self._window_manager = manager
-            if self.config.verbose:
-                self._console.print(f"[dim]Window manager: {manager.get_name()}[/]")
-
-            # Set default target if configured
-            if self.config.window.default_target:
-                windows = manager.find_windows(self.config.window.default_target)
-                if windows:
-                    manager.set_target(windows[0])
-                    self._console.print(f"[dim]Target window: {windows[0].name}[/]")
 
     def _on_hotkey_press(self) -> None:
         """Handle hotkey press - start recording."""
@@ -619,26 +596,6 @@ class ClaudeMicApp:
                 self._inject_text(self._llm_processor.last_injection)
             else:
                 self._console.print("[yellow]Niente da ripetere[/]")
-        elif command == Command.TARGET_WINDOW:
-            target = args.get("target") if args else None
-            if target and self._window_manager:
-                windows = self._window_manager.find_windows(target)
-                if windows:
-                    self._window_manager.set_target(windows[0])
-                    self._console.print(f"[cyan]Target: {windows[0].name}[/]")
-                else:
-                    self._console.print(f"[yellow]Finestra non trovata: {target}[/]")
-        elif command == Command.TARGET_ACTIVE:
-            # Set currently focused window as target
-            if self._window_manager:
-                active = self._window_manager.get_active_window()
-                if active:
-                    self._window_manager.set_target(active)
-                    self._console.print(f"[cyan]Target impostato: {active.name}[/]")
-                else:
-                    self._console.print("[yellow]Nessuna finestra attiva trovata[/]")
-            else:
-                self._console.print("[yellow]Window manager non disponibile (solo X11)[/]")
 
     def _inject_text(self, text: str) -> None:
         """Inject text into the terminal.
@@ -652,21 +609,6 @@ class ClaudeMicApp:
 
         # Add Enter if configured
         inject_text = text + "\n" if self.config.injection.auto_enter else text
-
-        # Use window manager if target window is set (X11 only)
-        target_window = self._window_manager.get_target() if self._window_manager else None
-        if target_window:
-            success = self._window_manager.send_text(inject_text)
-            if self._logger:
-                self._logger.log_injection(
-                    text=text,
-                    method=f"xdotool:window:{target_window.name[:30]}",
-                    success=success,
-                )
-            if success:
-                return
-            else:
-                self._console.print("[yellow]Target window injection failed, using default[/]")
 
         if self._injector:
             method = self._injector.get_name()

@@ -12,7 +12,6 @@ from claude_mic.llm.prompts import (
     FALLBACK_EXIT_KEYWORDS,
     FALLBACK_PASTE_KEYWORDS,
     FALLBACK_REPEAT_KEYWORDS,
-    FALLBACK_TARGET_ACTIVE_KEYWORDS,
     FALLBACK_UNDO_KEYWORDS,
     build_system_prompt,
     build_user_prompt,
@@ -206,17 +205,6 @@ class LLMProcessor:
                                 self._console.print(f"[yellow]LISTENING: short exit command '{keyword}' detected[/]")
                             return LLMResponse.exit_listening(backend="ollama")
 
-                # Check for commands even in LISTENING mode (with trigger phrase)
-                if request.trigger_phrase:
-                    trigger_lower = request.trigger_phrase.lower()
-                    if trigger_lower in text_lower:
-                        # Target active command
-                        for keyword in FALLBACK_TARGET_ACTIVE_KEYWORDS:
-                            if keyword in text_lower:
-                                if self._console:
-                                    self._console.print(f"[yellow]LISTENING: target command '{keyword}' detected[/]")
-                                return LLMResponse.execute(Command.TARGET_ACTIVE, backend="ollama")
-
                 # If LLM says IGNORE on longer text, inject anyway
                 if action == Action.IGNORE:
                     if self._console:
@@ -237,31 +225,6 @@ class LLMProcessor:
                     if self._console:
                         self._console.print("[yellow]IDLE: LLM tried to change state without trigger phrase, ignoring[/]")
                     return LLMResponse.ignore("No trigger phrase for state change", backend="ollama")
-
-                if trigger_found:
-                    # Check for exit words - in IDLE mode, these should be ignored (can't exit what you're not in)
-                    has_exit_word = any(kw in text_lower for kw in FALLBACK_EXIT_KEYWORDS)
-                    has_enter_word = any(kw in text_lower for kw in FALLBACK_ENTER_KEYWORDS)
-
-                    # If LLM says enter listening but text has exit words (not enter words) - override to ignore
-                    if action == Action.CHANGE_STATE and new_state == AppState.LISTENING and has_exit_word and not has_enter_word:
-                        if self._console:
-                            self._console.print("[yellow]IDLE: LLM tried to enter LISTENING on exit word, ignoring[/]")
-                        return LLMResponse.ignore("Exit word in IDLE mode", backend="ollama")
-
-                    # If LLM says ignore but text has trigger + ascolta, override to enter
-                    if action == Action.IGNORE and has_enter_word:
-                        if self._console:
-                            self._console.print(f"[yellow]LLM ignored trigger+enter word, overriding[/]")
-                        return LLMResponse.enter_listening(backend="ollama")
-
-                    # If LLM says ignore but text has trigger + target keywords, execute TARGET_ACTIVE
-                    if action == Action.IGNORE:
-                        for keyword in FALLBACK_TARGET_ACTIVE_KEYWORDS:
-                            if keyword in text_lower:
-                                if self._console:
-                                    self._console.print(f"[yellow]LLM ignored trigger+'{keyword}', executing TARGET_ACTIVE[/]")
-                                return LLMResponse.execute(Command.TARGET_ACTIVE, backend="ollama")
 
             return LLMResponse(
                 action=action,
@@ -294,15 +257,6 @@ class LLMProcessor:
                     if keyword in text_lower:
                         return LLMResponse.exit_listening()
 
-            # Check for commands even in LISTENING mode (with trigger phrase)
-            if request.trigger_phrase:
-                trigger_lower = request.trigger_phrase.lower()
-                if trigger_lower in text_lower:
-                    # Target active command
-                    for keyword in FALLBACK_TARGET_ACTIVE_KEYWORDS:
-                        if keyword in text_lower:
-                            return LLMResponse.execute(Command.TARGET_ACTIVE, backend="keyword")
-
             # Otherwise inject the text
             return LLMResponse.inject(request.text)
 
@@ -334,10 +288,6 @@ class LLMProcessor:
             for keyword in FALLBACK_REPEAT_KEYWORDS:
                 if keyword in text_after:
                     return LLMResponse.execute(Command.REPEAT)
-
-            for keyword in FALLBACK_TARGET_ACTIVE_KEYWORDS:
-                if keyword in text_lower:  # Check full text, not just after trigger
-                    return LLMResponse.execute(Command.TARGET_ACTIVE, backend="keyword")
 
             # Extract text to inject (text after trigger phrase)
             inject_text = self._extract_text_after_trigger(request)
