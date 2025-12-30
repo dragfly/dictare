@@ -53,36 +53,42 @@ class LLMResponse:
     command_args: dict[str, Any] | None = None
     user_feedback: str | None = None
     confidence: float = 1.0
+    # Debug info for structured logging
+    backend: str = "unknown"  # "ollama" or "keyword"
+    override_reason: str | None = None  # Why LLM decision was overridden
+    raw_llm_response: str | None = None  # Raw LLM JSON for debugging
 
     @classmethod
-    def ignore(cls, reason: str = "") -> LLMResponse:
+    def ignore(cls, reason: str = "", backend: str = "keyword") -> LLMResponse:
         """Create an IGNORE response."""
-        return cls(action=Action.IGNORE, user_feedback=reason)
+        return cls(action=Action.IGNORE, user_feedback=reason, backend=backend)
 
     @classmethod
-    def inject(cls, text: str) -> LLMResponse:
+    def inject(cls, text: str, backend: str = "keyword", override: str | None = None) -> LLMResponse:
         """Create an INJECT response."""
-        return cls(action=Action.INJECT, text_to_inject=text)
+        return cls(action=Action.INJECT, text_to_inject=text, backend=backend, override_reason=override)
 
     @classmethod
-    def enter_listening(cls) -> LLMResponse:
+    def enter_listening(cls, backend: str = "keyword") -> LLMResponse:
         """Create a response to enter LISTENING mode."""
         return cls(
             action=Action.CHANGE_STATE,
             new_state=AppState.LISTENING,
             user_feedback="Modalita ascolto attivata",
+            backend=backend,
         )
 
     @classmethod
-    def exit_listening(cls) -> LLMResponse:
+    def exit_listening(cls, backend: str = "keyword") -> LLMResponse:
         """Create a response to exit LISTENING mode."""
         return cls(
             action=Action.CHANGE_STATE,
             new_state=AppState.IDLE,
             user_feedback="Modalita ascolto disattivata",
+            backend=backend,
         )
 
     @classmethod
-    def execute(cls, command: Command, args: dict[str, Any] | None = None) -> LLMResponse:
+    def execute(cls, command: Command, args: dict[str, Any] | None = None, backend: str = "keyword") -> LLMResponse:
         """Create an EXECUTE response."""
-        return cls(action=Action.EXECUTE, command=command, command_args=args)
+        return cls(action=Action.EXECUTE, command=command, command_args=args, backend=backend)
