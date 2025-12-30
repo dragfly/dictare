@@ -587,8 +587,8 @@ class ClaudeMicApp:
         from voxtype.llm.models import AppState as LLMAppState
 
         if self._llm_processor and self._llm_processor.state == LLMAppState.LISTENING:
-            # Small delay to ensure VAD is truly ready
-            time.sleep(0.3)
+            # Delay to ensure VAD is truly ready before signaling
+            time.sleep(0.75)
             self._console.print("[green]Ready to listen[/]")
             if self.config.audio.audio_feedback:
                 from voxtype.audio.beep import play_beep_start
