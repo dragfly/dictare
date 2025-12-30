@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from claude_mic.audio.vad import SileroVAD, StreamingVAD
     from claude_mic.command.processor import CommandProcessor
     from claude_mic.config import Config
+    from claude_mic.logging.jsonl import JSONLLogger
     from claude_mic.window.base import WindowManager
 
 class ClaudeMicApp:
@@ -38,6 +39,7 @@ class ClaudeMicApp:
         vad_silence_ms: int | None = None,
         wake_word: str | None = None,
         debug: bool = False,
+        logger: JSONLLogger | None = None,
     ) -> None:
         """Initialize the application.
 
@@ -47,6 +49,7 @@ class ClaudeMicApp:
             vad_silence_ms: Silence duration in ms to end speech (default 1200).
             wake_word: Optional wake word to activate (e.g., "Joshua").
             debug: If True, show all transcriptions but only paste with wake word.
+            logger: Optional JSONL logger for structured logging.
         """
         self.config = config
         self.use_vad = use_vad
@@ -57,6 +60,7 @@ class ClaudeMicApp:
         self._running = False
         self._console = Console()
         self._lock = threading.Lock()
+        self._logger = logger
 
         # Initialize components
         self._audio: AudioCapture | None = None
@@ -403,6 +407,9 @@ class ClaudeMicApp:
                 return
             self.state = AppState.RECORDING
 
+        if self._logger:
+            self._logger.log_vad_event("speech_start")
+
         self._console.print("[bold cyan]Listening...[/]", end="\r")
 
     def _on_vad_speech_end(self, audio_data) -> None:
@@ -413,6 +420,12 @@ class ClaudeMicApp:
             if self.state != AppState.RECORDING:
                 return
             self.state = AppState.TRANSCRIBING
+
+        # Calculate duration
+        duration_ms = len(audio_data) / self.config.audio.sample_rate * 1000
+
+        if self._logger:
+            self._logger.log_vad_event("speech_end", duration_ms=duration_ms)
 
         # Check minimum duration
         min_samples = int(self.config.audio.sample_rate * self.MIN_RECORDING_DURATION)
@@ -504,14 +517,35 @@ class ClaudeMicApp:
 
     def _enter_listening_mode(self) -> None:
         """Enter LISTENING mode (continuous transcription without wake word)."""
+        from claude_mic.audio.beep import play_beep_start
+
         self._listening_mode = True
         self._console.print("[bold green]>>> LISTENING MODE[/]")
-        # TODO: Play beep sound
+
+        if self._logger:
+            self._logger.log_state_change(
+                old_state="IDLE",
+                new_state="LISTENING",
+                trigger="ascolta_command",
+            )
+
+        play_beep_start()
 
     def _exit_listening_mode(self) -> None:
         """Exit LISTENING mode."""
+        from claude_mic.audio.beep import play_beep_stop
+
         self._listening_mode = False
         self._console.print("[bold yellow]<<< LISTENING MODE OFF[/]")
+
+        if self._logger:
+            self._logger.log_state_change(
+                old_state="LISTENING",
+                new_state="IDLE",
+                trigger="smetti_command",
+            )
+
+        play_beep_stop()
 
     def _transcribe_and_inject(self, audio_data) -> None:
         """Transcribe audio and inject text."""
@@ -526,12 +560,31 @@ class ClaudeMicApp:
                 )
 
                 if text:
+                    # Log transcription
+                    if self._logger:
+                        duration_ms = len(audio_data) / self.config.audio.sample_rate * 1000
+                        self._logger.log_transcription(
+                            text=text,
+                            duration_ms=duration_ms,
+                            language=self.config.stt.language,
+                        )
+
                     # Debug mode: always show full transcription
                     if self.debug:
                         self._console.print(f"[blue][DEBUG][/] {text}")
 
                     # Check wake word
                     wake_found, filtered_text = self._check_wake_word(text)
+
+                    # Log wake word check
+                    if self._logger and self.wake_word:
+                        self._logger.log_wake_word_check(
+                            text=text,
+                            wake_word=self.wake_word,
+                            found=wake_found,
+                            filtered_text=filtered_text if wake_found else None,
+                        )
+
                     if not wake_found:
                         # Show what was heard (so user understands)
                         if not self.debug:  # Already shown in debug mode
@@ -595,7 +648,8 @@ class ClaudeMicApp:
 
                     if self._injector:
                         # Pass auto_paste for clipboard mode
-                        if self._injector.get_name() == "clipboard":
+                        method = self._injector.get_name()
+                        if method == "clipboard":
                             success = self._injector.type_text(
                                 inject_text,
                                 delay_ms=self.config.injection.typing_delay_ms,
@@ -613,6 +667,14 @@ class ClaudeMicApp:
                                 delay_ms=self.config.injection.typing_delay_ms,
                             )
 
+                        # Log injection
+                        if self._logger:
+                            self._logger.log_injection(
+                                text=text,
+                                method=method,
+                                success=success,
+                            )
+
                         if not success:
                             if self.config.injection.fallback_to_clipboard:
                                 from claude_mic.injection.clipboard import ClipboardInjector
@@ -628,6 +690,9 @@ class ClaudeMicApp:
                 else:
                     self._console.print("[dim]No speech detected.                    [/]")
             except Exception as e:
+                # Log error
+                if self._logger:
+                    self._logger.log_error(str(e), context="transcribe_and_inject")
                 self._console.print(f"[red]Error: {e}[/]")
             finally:
                 self.state = AppState.IDLE
