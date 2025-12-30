@@ -358,3 +358,15 @@ class LLMProcessor:
         self._state = AppState.IDLE
         self._history.clear()
         self._last_injection = None
+
+    def toggle_listening(self) -> AppState:
+        """Toggle between IDLE and LISTENING states.
+
+        Returns:
+            The new state after toggling.
+        """
+        if self._state == AppState.IDLE:
+            self._state = AppState.LISTENING
+        else:
+            self._state = AppState.IDLE
+        return self._state
