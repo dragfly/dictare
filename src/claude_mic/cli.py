@@ -22,6 +22,32 @@ app = typer.Typer(
 console = Console()
 
 
+def _setup_cuda_library_path() -> None:
+    """Set up LD_LIBRARY_PATH for CUDA libraries installed via pip."""
+    import os
+    import sys
+
+    # Find nvidia packages in site-packages
+    for path in sys.path:
+        nvidia_path = Path(path) / "nvidia"
+        if nvidia_path.exists():
+            # Add cudnn and cublas lib paths
+            lib_paths = []
+            for subdir in ["cudnn", "cublas", "cuda_runtime"]:
+                lib_dir = nvidia_path / subdir / "lib"
+                if lib_dir.exists():
+                    lib_paths.append(str(lib_dir))
+
+            if lib_paths:
+                current = os.environ.get("LD_LIBRARY_PATH", "")
+                new_paths = ":".join(lib_paths)
+                if current:
+                    os.environ["LD_LIBRARY_PATH"] = f"{new_paths}:{current}"
+                else:
+                    os.environ["LD_LIBRARY_PATH"] = new_paths
+                break
+
+
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
@@ -70,6 +96,10 @@ def run(
         bool,
         typer.Option("--gpu", "-g", help="Use GPU (CUDA) for faster transcription"),
     ] = False,
+    max_duration: Annotated[
+        Optional[int],
+        typer.Option("--max-duration", "-d", help="Max recording duration in seconds (default 60)"),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -95,6 +125,9 @@ def run(
     if gpu:
         config.stt.device = "cuda"
         config.stt.compute_type = "float16"  # Better for GPU
+        _setup_cuda_library_path()
+    if max_duration:
+        config.audio.max_duration = max_duration
     if verbose:
         config.verbose = verbose
 

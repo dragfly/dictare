@@ -45,6 +45,7 @@ class ClaudeMicApp:
         self._stt: STTEngine | None = None
         self._hotkey: HotkeyListener | None = None
         self._injector: TextInjector | None = None
+        self._recording_timer: threading.Timer | None = None
 
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
@@ -220,10 +221,26 @@ class ClaudeMicApp:
             if self._audio:
                 self._audio.start_recording()
 
+            # Start max duration timer
+            max_dur = self.config.audio.max_duration
+            if max_dur > 0:
+                self._recording_timer = threading.Timer(max_dur, self._on_max_duration)
+                self._recording_timer.start()
+
             self._console.print("[bold cyan]Recording...[/]", end="\r")
+
+    def _on_max_duration(self) -> None:
+        """Handle max recording duration reached."""
+        self._console.print(f"[yellow]Max duration ({self.config.audio.max_duration}s) reached[/]")
+        self._on_hotkey_release()
 
     def _on_hotkey_release(self) -> None:
         """Handle hotkey release - stop recording and transcribe."""
+        # Cancel max duration timer
+        if self._recording_timer:
+            self._recording_timer.cancel()
+            self._recording_timer = None
+
         with self._lock:
             if self.state != AppState.RECORDING:
                 return
