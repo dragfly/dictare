@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -175,6 +176,53 @@ class ClaudeMicApp:
             f"Install pynput (macOS/X11): pip install pynput"
         )
 
+    def _check_linux_dependencies(self) -> None:
+        """Check Linux-specific dependencies and warn if missing."""
+        import shutil
+        import subprocess
+
+        warnings = []
+
+        # Check if ydotoold is running (needed for clipboard paste and keyboard mode)
+        ydotool_installed = shutil.which("ydotool") is not None
+        if ydotool_installed:
+            try:
+                result = subprocess.run(
+                    ["pgrep", "-x", "ydotoold"],
+                    capture_output=True,
+                    timeout=5,
+                )
+                if result.returncode != 0:
+                    warnings.append(
+                        "[red]ydotoold daemon is not running![/]\n"
+                        "  Start it with: [bold]systemctl --user start ydotoold[/]"
+                    )
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+
+        # Check for clipboard tools
+        session_type = os.environ.get("XDG_SESSION_TYPE", "")
+        is_wayland = os.environ.get("WAYLAND_DISPLAY") or session_type == "wayland"
+
+        if is_wayland:
+            if not shutil.which("wl-copy"):
+                warnings.append(
+                    "[yellow]wl-copy not found (needed for clipboard on Wayland)[/]\n"
+                    "  Install: [bold]sudo apt install wl-clipboard[/]"
+                )
+        else:
+            if not shutil.which("xclip") and not shutil.which("xsel"):
+                warnings.append(
+                    "[yellow]xclip/xsel not found (needed for clipboard on X11)[/]\n"
+                    "  Install: [bold]sudo apt install xclip[/]"
+                )
+
+        for warning in warnings:
+            self._console.print(warning)
+
+        if any("[red]" in w for w in warnings):
+            self._console.print("")  # Extra line for readability
+
     def _create_injector(self) -> TextInjector:
         """Create text injector with auto-detection."""
         import sys
@@ -188,6 +236,8 @@ class ClaudeMicApp:
             from voxtype.injection.wtype import WtypeInjector
             from voxtype.injection.xdotool import XdotoolInjector
             from voxtype.injection.ydotool import YdotoolInjector
+            # Check Linux dependencies
+            self._check_linux_dependencies()
 
         backend = self.config.injection.backend
 
