@@ -35,8 +35,6 @@ RULES:
    - PASTE: User wants to paste from clipboard → command="paste"
    - UNDO: User wants to undo last action → command="undo"
    - REPEAT: User wants to repeat last injection → command="repeat"
-   - SET TARGET WINDOW: User wants to set the currently focused window as target → command="target_active"
-     (phrases like "this window", "use this window", "send here", "target this", etc.)
 
 4. Text formatting for injection:
    - Remove trigger phrase and everything before it
@@ -56,7 +54,7 @@ RESPOND WITH VALID JSON ONLY. Schema:
   "action": "ignore" | "inject" | "change_state" | "execute",
   "new_state": "idle" | "listening" | null,
   "text_to_inject": "formatted text" | null,
-  "command": "paste" | "undo" | "repeat" | "target_active" | null,
+  "command": "paste" | "undo" | "repeat" | null,
   "user_feedback": "message for user" | null,
   "confidence": 0.0-1.0
 }}"""
@@ -88,7 +86,3 @@ FALLBACK_EXIT_KEYWORDS = [
 FALLBACK_PASTE_KEYWORDS = ["incolla", "paste"]
 FALLBACK_UNDO_KEYWORDS = ["annulla", "undo"]
 FALLBACK_REPEAT_KEYWORDS = ["ripeti", "repeat"]
-FALLBACK_TARGET_ACTIVE_KEYWORDS = [
-    "questa finestra", "this window", "target", "qui",
-    "finestra attiva", "active window", "use this",
-]
