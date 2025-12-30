@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2025-12-30
+
+### Fixed
+- **First beep not playing**: Pre-initialize audio output at startup
+  - Plays silent buffer during initialization to wake up audio system
+  - Fixes issue where first LISTENING ON beep was silent
+- **Beep timing**: Play beep before console output for more responsive feedback
+- **Ready-to-listen beep**: Only plays after speech was ignored (not after every transcription)
+
 ## [1.0.4] - 2025-12-30
 
 ### Added
