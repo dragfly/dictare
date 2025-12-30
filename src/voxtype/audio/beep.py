@@ -44,7 +44,7 @@ def warmup_audio() -> None:
     """Pre-initialize audio output to avoid delay on first beep."""
     try:
         import sounddevice as sd
-        sd.play(np.zeros(8000, dtype=np.float32), _SAMPLE_RATE, blocking=True)
+        sd.play(np.zeros(100, dtype=np.float32), _SAMPLE_RATE, blocking=True)
     except Exception:
         pass
 
