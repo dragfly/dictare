@@ -631,17 +631,17 @@ class ClaudeMicApp:
         from voxtype.llm.models import Command
 
         if command == Command.PASTE:
-            self._console.print("[cyan]Comando: incolla[/]")
+            self._console.print("[cyan]Command: paste[/]")
             # TODO: Implement paste from clipboard
         elif command == Command.UNDO:
-            self._console.print("[cyan]Comando: annulla[/]")
+            self._console.print("[cyan]Command: undo[/]")
             # TODO: Implement undo
         elif command == Command.REPEAT:
             if self._llm_processor and self._llm_processor.last_injection:
-                self._console.print("[cyan]Comando: ripeti[/]")
+                self._console.print("[cyan]Command: repeat[/]")
                 self._inject_text(self._llm_processor.last_injection)
             else:
-                self._console.print("[yellow]Niente da ripetere[/]")
+                self._console.print("[yellow]Nothing to repeat[/]")
 
     def _inject_text(self, text: str) -> None:
         """Inject text into the terminal.
