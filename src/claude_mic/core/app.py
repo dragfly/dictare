@@ -29,15 +29,17 @@ class ClaudeMicApp:
     # Minimum recording duration in seconds
     MIN_RECORDING_DURATION = 0.3
 
-    def __init__(self, config: Config, use_vad: bool = False) -> None:
+    def __init__(self, config: Config, use_vad: bool = False, vad_silence_ms: int | None = None) -> None:
         """Initialize the application.
 
         Args:
             config: Application configuration.
             use_vad: If True, use VAD mode instead of push-to-talk.
+            vad_silence_ms: Silence duration in ms to end speech (default 700).
         """
         self.config = config
         self.use_vad = use_vad
+        self.vad_silence_ms = vad_silence_ms or 1200
         self.state = AppState.IDLE
         self._running = False
         self._console = Console()
@@ -232,7 +234,7 @@ class ClaudeMicApp:
         self._vad = SileroVAD(
             threshold=0.5,
             neg_threshold=0.35,
-            min_silence_ms=700,  # End speech after 700ms silence
+            min_silence_ms=self.vad_silence_ms,  # End speech after silence
             min_speech_ms=250,   # Need 250ms speech to trigger
             sample_rate=self.config.audio.sample_rate,
         )
