@@ -576,9 +576,21 @@ class ClaudeMicApp:
                 self._console.print(f"[red]Error: {e}[/]")
             finally:
                 self.state = AppState.IDLE
+                # If still in LISTENING mode, signal ready to listen again
+                self._signal_ready_to_listen()
 
         thread = threading.Thread(target=do_transcribe, daemon=True)
         thread.start()
+
+    def _signal_ready_to_listen(self) -> None:
+        """Signal that system is ready to listen again (after transcription)."""
+        from voxtype.llm.models import AppState as LLMAppState
+
+        if self._llm_processor and self._llm_processor.state == LLMAppState.LISTENING:
+            self._console.print("[green]Ready to listen[/]")
+            if self.config.audio.audio_feedback:
+                from voxtype.audio.beep import play_beep_start
+                play_beep_start()
 
     def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
         """Execute the action decided by the LLM.
