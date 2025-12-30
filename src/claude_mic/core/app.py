@@ -541,7 +541,7 @@ class ClaudeMicApp:
                 backend=response.backend,
                 override_reason=response.override_reason,
                 raw_llm_response=response.raw_llm_response,
-                text_to_inject=response.text_to_inject[:100] if response.text_to_inject else None,
+                text_to_inject=response.text_to_inject,  # Full text for debugging
             )
 
         if response.action == Action.IGNORE:

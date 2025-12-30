@@ -14,7 +14,6 @@ from claude_mic.llm.prompts import (
     FALLBACK_REPEAT_KEYWORDS,
     FALLBACK_TARGET_ACTIVE_KEYWORDS,
     FALLBACK_UNDO_KEYWORDS,
-    TRIGGER_PHRASE_VARIANTS,
     build_system_prompt,
     build_user_prompt,
 )
@@ -331,7 +330,10 @@ class LLMProcessor:
         return LLMResponse.inject(request.text)
 
     def _find_trigger_phrase(self, text_lower: str, trigger: str) -> tuple[bool, str]:
-        """Find trigger phrase anywhere in text.
+        """Find trigger phrase anywhere in text (fallback mode - exact match only).
+
+        Note: This is used for keyword fallback only. The LLM handles phonetic
+        variations intelligently. For fallback, we only match the exact trigger.
 
         Args:
             text_lower: Lowercase text to search.
@@ -340,48 +342,44 @@ class LLMProcessor:
         Returns:
             Tuple of (found, text_after_trigger).
         """
-        # Get all variants of the trigger phrase
-        variants = TRIGGER_PHRASE_VARIANTS.get(trigger.lower(), [trigger.lower()])
-
-        for variant in variants:
-            if variant in text_lower:
-                # Find position and extract text after
-                pos = text_lower.find(variant)
-                text_after = text_lower[pos + len(variant):].strip()
-                # Remove leading punctuation/separators
-                text_after = text_after.lstrip(",:;.?! ")
-                return True, text_after
+        trigger_lower = trigger.lower()
+        if trigger_lower in text_lower:
+            pos = text_lower.find(trigger_lower)
+            text_after = text_lower[pos + len(trigger_lower):].strip()
+            # Remove leading punctuation/separators
+            text_after = text_after.lstrip(",:;.?! ")
+            return True, text_after
 
         return False, ""
 
     def _extract_text_after_trigger(self, request: LLMRequest) -> str | None:
-        """Extract and format text after trigger phrase."""
+        """Extract and format text after trigger phrase (fallback mode - exact match only).
+
+        Note: This is used for keyword fallback only. The LLM handles text
+        extraction and formatting more intelligently.
+        """
         if not request.trigger_phrase:
             return request.text
 
         text_lower = request.text.lower()
-        variants = TRIGGER_PHRASE_VARIANTS.get(
-            request.trigger_phrase.lower(),
-            [request.trigger_phrase.lower()]
-        )
+        trigger_lower = request.trigger_phrase.lower()
 
-        for variant in variants:
-            if variant in text_lower:
-                pos = text_lower.find(variant)
-                # Get original case text after trigger
-                text_after = request.text[pos + len(variant):].strip()
-                # Remove leading punctuation
-                text_after = text_after.lstrip(",:;.?! ")
+        if trigger_lower in text_lower:
+            pos = text_lower.find(trigger_lower)
+            # Get original case text after trigger
+            text_after = request.text[pos + len(trigger_lower):].strip()
+            # Remove leading punctuation
+            text_after = text_after.lstrip(",:;.?! ")
 
-                # Remove command keywords if present
-                text_after_lower = text_after.lower()
-                for kw in FALLBACK_ENTER_KEYWORDS + FALLBACK_EXIT_KEYWORDS:
-                    if text_after_lower.startswith(kw):
-                        text_after = text_after[len(kw):].strip()
-                        text_after = text_after.lstrip(",:;.?! ")
-                        break
+            # Remove command keywords if present
+            text_after_lower = text_after.lower()
+            for kw in FALLBACK_ENTER_KEYWORDS + FALLBACK_EXIT_KEYWORDS:
+                if text_after_lower.startswith(kw):
+                    text_after = text_after[len(kw):].strip()
+                    text_after = text_after.lstrip(",:;.?! ")
+                    break
 
-                return text_after if text_after else None
+            return text_after if text_after else None
 
         return None
 
