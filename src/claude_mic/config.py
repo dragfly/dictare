@@ -106,22 +106,6 @@ class CommandConfig(BaseModel):
         description="Use LLM to format/clean transcribed text",
     )
 
-class WindowConfig(BaseModel):
-    """Target window configuration."""
-
-    enabled: bool = Field(
-        default=True,
-        description="Enable target window selection (auto-detects xdotool)",
-    )
-    default_target: str | None = Field(
-        default=None,
-        description="Default target window name/class",
-    )
-    backend: Literal["xdotool", "auto"] = Field(
-        default="auto",
-        description="Window management backend",
-    )
-
 class Config(BaseModel):
     """Main configuration."""
 
@@ -131,7 +115,6 @@ class Config(BaseModel):
     injection: InjectionConfig = Field(default_factory=InjectionConfig)
     cloud: CloudConfig = Field(default_factory=CloudConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
-    window: WindowConfig = Field(default_factory=WindowConfig)
 
     # UI settings
     show_notification: bool = Field(default=True, description="Show desktop notifications")
@@ -211,11 +194,6 @@ classifier_backend = "auto"  # auto, ollama, keyword
 ollama_model = "llama3.2:1b"
 ollama_timeout = 5.0
 format_text = true
-
-[window]
-enabled = false
-# default_target = "Kitty"  # Default window for text injection
-backend = "auto"  # xdotool (X11 only)
 
 # UI settings
 show_notification = true
