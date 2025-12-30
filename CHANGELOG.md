@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-12-30
+
+### Added
+- **Startup dependency check on Linux**: Checks if ydotoold is running before starting
+  - Shows clear error message with instructions if not running
+  - Also warns about missing clipboard tools (wl-copy, xclip)
+- **Text injection modes documentation**: Added explanation of clipboard vs keyboard modes to README
+
+### Fixed
+- **LISTENING MODE OFF bug**: Now properly stops injecting text after exiting listening mode
+- **MLX dependencies**: Fixed numba/tiktoken missing on macOS
+- **Clipboard as default**: Both Linux and macOS now default to clipboard mode for reliability
+
+### Changed
+- **Code cleanup**: Prepared codebase for open source release
+
 ## [1.0.2] - 2025-12-30
 
 ### Added
