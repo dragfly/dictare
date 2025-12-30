@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voxtype"
-version = "1.0.1"
+version = "1.0.2"
 description = "Voice-to-text for your terminal"
 readme = "README.md"
 license = "MIT"
@@ -54,6 +54,9 @@ cloud = [
 ]
 gpu = [
     "nvidia-cudnn-cu12>=9.0.0",
+]
+mlx = [
+    "mlx-whisper>=0.4.0",
 ]
 
 [project.scripts]

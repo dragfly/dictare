@@ -109,6 +109,10 @@ def run(
         bool,
         typer.Option("--gpu", "-g", help="Use GPU (CUDA) for faster transcription"),
     ] = False,
+    mlx: Annotated[
+        bool,
+        typer.Option("--mlx", help="Use MLX (Apple Silicon) for faster transcription"),
+    ] = False,
     max_duration: Annotated[
         Optional[int],
         typer.Option("--max-duration", "-d", help="Max recording duration in seconds (default 60)"),
@@ -164,7 +168,9 @@ def run(
         config.injection.auto_enter = True
     if clipboard:
         config.injection.backend = "clipboard"
-    if gpu:
+    if mlx:
+        config.stt.backend = "mlx-whisper"
+    elif gpu:
         config.stt.device = "cuda"
         config.stt.compute_type = "float16"  # Better for GPU
         _setup_cuda_library_path()
@@ -211,7 +217,12 @@ def run(
     )
 
     mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
-    device_str = "[magenta]GPU (CUDA)[/]" if config.stt.device == "cuda" else "CPU"
+    if config.stt.backend == "mlx-whisper":
+        device_str = "[magenta]GPU (MLX/Metal)[/]"
+    elif config.stt.device == "cuda":
+        device_str = "[magenta]GPU (CUDA)[/]"
+    else:
+        device_str = "CPU"
     input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
     wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
     console.print(

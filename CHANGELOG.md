@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2025-12-30
+
+### Added
+- **MLX support for Apple Silicon**: `./install-macos.sh --mlx` for M1/M2/M3 Macs
+  - New `mlx-whisper` backend using Metal GPU acceleration
+  - 3x faster than CPU on Apple Silicon
+  - New `--mlx` CLI flag to enable MLX backend
+  - Updated README with macOS Quick Start section
+
 ## [1.0.1] - 2025-12-30
 
 ### Added
