@@ -137,6 +137,10 @@ def run(
         Optional[str],
         typer.Option("--target-window", "-t", help="Target window for text injection (X11 only)"),
     ] = None,
+    log_file: Annotated[
+        Optional[Path],
+        typer.Option("--log-file", "-L", help="JSONL log file for structured logging"),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -177,7 +181,21 @@ def run(
     # Lazy import to speed up CLI
     from claude_mic.core.app import ClaudeMicApp
 
-    mic_app = ClaudeMicApp(config, use_vad=vad, vad_silence_ms=silence_ms, wake_word=wake_word, debug=debug)
+    # Create JSONL logger if requested
+    logger = None
+    if log_file:
+        from claude_mic.logging import JSONLLogger
+        logger = JSONLLogger(log_file, __version__)
+        console.print(f"[dim]Logging to: {log_file}[/]")
+
+    mic_app = ClaudeMicApp(
+        config,
+        use_vad=vad,
+        vad_silence_ms=silence_ms,
+        wake_word=wake_word,
+        debug=debug,
+        logger=logger,
+    )
 
     mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
     device_str = "[magenta]GPU (CUDA)[/]" if config.stt.device == "cuda" else "CPU"
@@ -202,6 +220,9 @@ def run(
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down...[/]")
         mic_app.stop()
+    finally:
+        if logger:
+            logger.close()
 
 @app.command()
 def check() -> None:
