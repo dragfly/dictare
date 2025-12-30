@@ -14,6 +14,7 @@ class AudioConfig(BaseModel):
     sample_rate: int = Field(default=16000, description="Sample rate in Hz")
     channels: int = Field(default=1, description="Number of audio channels")
     device: str | None = Field(default=None, description="Audio device name (None = default)")
+    max_duration: int = Field(default=60, description="Max recording duration in seconds")
 
 class STTConfig(BaseModel):
     """Speech-to-text configuration."""
