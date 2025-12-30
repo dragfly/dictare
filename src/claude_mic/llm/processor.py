@@ -178,6 +178,32 @@ class LLMProcessor:
                     self._console.print("[yellow]LLM returned execute without command, using keywords[/]")
                 return self._process_with_keywords(request)
 
+            # Sanity check: in LISTENING mode, override LLM decisions
+            if request.current_state == AppState.LISTENING:
+                text_lower = request.text.lower()
+                # Check for exit words first
+                for keyword in FALLBACK_EXIT_KEYWORDS:
+                    if keyword in text_lower:
+                        if self._console:
+                            self._console.print(f"[yellow]LISTENING: exit word '{keyword}' found[/]")
+                        return LLMResponse.exit_listening()
+                # In LISTENING mode, always inject if no exit word (ignore LLM decision)
+                if action == Action.IGNORE:
+                    if self._console:
+                        self._console.print("[yellow]LISTENING: LLM said ignore, but injecting anyway[/]")
+                    return LLMResponse.inject(request.text)
+
+            # Sanity check: in IDLE mode, if LLM says ignore but text has trigger phrase + ascolta, override
+            if request.current_state == AppState.IDLE and action == Action.IGNORE and request.trigger_phrase:
+                text_lower = request.text.lower()
+                trigger_found, _ = self._find_trigger_phrase(text_lower, request.trigger_phrase)
+                if trigger_found:
+                    for keyword in FALLBACK_ENTER_KEYWORDS:
+                        if keyword in text_lower:
+                            if self._console:
+                                self._console.print(f"[yellow]LLM ignored trigger+'{keyword}', overriding[/]")
+                            return LLMResponse.enter_listening()
+
             return LLMResponse(
                 action=action,
                 new_state=new_state,
