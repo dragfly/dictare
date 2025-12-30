@@ -45,7 +45,7 @@ def play_beep_start() -> None:
     try:
         import sounddevice as sd
 
-        sd.play(_BEEP_START, _SAMPLE_RATE, blocking=True)
+        sd.play(_BEEP_START, _SAMPLE_RATE, blocking=False)
     except Exception:
         pass  # Don't fail on audio errors
 
@@ -54,7 +54,7 @@ def play_beep_stop() -> None:
     try:
         import sounddevice as sd
 
-        sd.play(_BEEP_STOP, _SAMPLE_RATE, blocking=True)
+        sd.play(_BEEP_STOP, _SAMPLE_RATE, blocking=False)
     except Exception:
         pass  # Don't fail on audio errors
 
@@ -63,6 +63,6 @@ def play_beep_busy() -> None:
     try:
         import sounddevice as sd
 
-        sd.play(_BEEP_BUSY, _SAMPLE_RATE, blocking=True)
+        sd.play(_BEEP_BUSY, _SAMPLE_RATE, blocking=False)
     except Exception:
         pass  # Don't fail on audio errors
