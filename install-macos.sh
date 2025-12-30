@@ -1,5 +1,6 @@
 #!/bin/bash
 # voxtype installer for macOS
+# Usage: ./install-macos.sh [--gpu]
 
 set -e
 
@@ -13,12 +14,21 @@ warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 fail() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 step() { echo -e "\n${GREEN}[$1/$TOTAL]${NC} $2"; }
 
-TOTAL=3
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Parse args
+WITH_GPU=0
+for arg in "$@"; do
+    case $arg in
+        --gpu) WITH_GPU=1 ;;
+    esac
+done
+
+TOTAL=3
 echo "voxtype installer (macOS)"
 echo "============================"
+[ $WITH_GPU -eq 1 ] && echo "GPU support: enabled"
 
 # Check prerequisites
 command -v uv >/dev/null || fail "uv not found. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
@@ -43,8 +53,14 @@ step 2 "Installing Python dependencies..."
 if [ -d .venv ] && ! .venv/bin/python --version 2>/dev/null | grep -q "3\.11"; then
     rm -rf .venv
 fi
-uv sync --extra macos >/dev/null
-info "Installed Python packages (with pynput for hotkey detection)"
+EXTRAS="--extra macos"
+[ $WITH_GPU -eq 1 ] && EXTRAS="$EXTRAS --extra gpu"
+uv sync $EXTRAS >/dev/null
+if [ $WITH_GPU -eq 1 ]; then
+    info "Installed Python packages (with GPU/CUDA support)"
+else
+    info "Installed Python packages (with pynput for hotkey detection)"
+fi
 
 # 3. Grant Accessibility permissions
 step 3 "Checking permissions..."
