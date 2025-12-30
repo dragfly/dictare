@@ -662,6 +662,11 @@ class ClaudeMicApp:
         Args:
             trigger: What triggered the state change (voice_command, hotkey_toggle).
         """
+        # Play beep FIRST before any console output
+        if self.config.audio.audio_feedback:
+            from voxtype.audio.beep import play_beep_start
+            play_beep_start()
+
         self._console.print("[bold green]>>> LISTENING MODE[/]")
 
         if self._logger:
@@ -671,19 +676,17 @@ class ClaudeMicApp:
                 trigger=trigger,
             )
 
-        self._console.print(f"[dim]DEBUG: audio_feedback={self.config.audio.audio_feedback}[/]")
-        if self.config.audio.audio_feedback:
-            self._console.print("[dim]DEBUG: playing beep_start...[/]")
-            from voxtype.audio.beep import play_beep_start
-            play_beep_start()
-            self._console.print("[dim]DEBUG: beep_start done[/]")
-
     def _exit_listening_mode(self, trigger: str = "voice_command") -> None:
         """Exit LISTENING mode.
 
         Args:
             trigger: What triggered the state change (voice_command, hotkey_toggle).
         """
+        # Play beep FIRST before any console output
+        if self.config.audio.audio_feedback:
+            from voxtype.audio.beep import play_beep_stop
+            play_beep_stop()
+
         self._console.print("[bold yellow]<<< LISTENING MODE OFF[/]")
 
         if self._logger:
@@ -692,13 +695,6 @@ class ClaudeMicApp:
                 new_state="IDLE",
                 trigger=trigger,
             )
-
-        self._console.print(f"[dim]DEBUG: audio_feedback={self.config.audio.audio_feedback}[/]")
-        if self.config.audio.audio_feedback:
-            self._console.print("[dim]DEBUG: playing beep_stop...[/]")
-            from voxtype.audio.beep import play_beep_stop
-            play_beep_stop()
-            self._console.print("[dim]DEBUG: beep_stop done[/]")
 
     def _on_hotkey_toggle(self) -> None:
         """Handle hotkey press in VAD mode - toggle LISTENING state."""
