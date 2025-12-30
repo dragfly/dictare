@@ -53,10 +53,15 @@ step 2 "Installing Python dependencies..."
 if [ -d .venv ] && ! .venv/bin/python --version 2>/dev/null | grep -q "3\.11"; then
     rm -rf .venv
 fi
-EXTRAS="--extra macos"
-[ $WITH_MLX -eq 1 ] && EXTRAS="$EXTRAS --extra mlx"
-uv sync $EXTRAS >/dev/null
+
+# Install base + macos deps
+uv sync --extra macos >/dev/null
+
 if [ $WITH_MLX -eq 1 ]; then
+    # Install mlx-whisper with --no-deps to avoid numba/llvmlite conflict
+    # Then install only the deps it actually needs
+    uv pip install --no-deps mlx-whisper >/dev/null 2>&1
+    uv pip install mlx mlx-audio huggingface-hub tqdm >/dev/null 2>&1
     info "Installed Python packages (with MLX for Apple Silicon GPU)"
 else
     info "Installed Python packages (with pynput for hotkey detection)"
