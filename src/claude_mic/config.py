@@ -110,8 +110,8 @@ class WindowConfig(BaseModel):
     """Target window configuration."""
 
     enabled: bool = Field(
-        default=False,
-        description="Enable target window selection",
+        default=True,
+        description="Enable target window selection (auto-detects xdotool)",
     )
     default_target: str | None = Field(
         default=None,
