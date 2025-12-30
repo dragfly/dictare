@@ -179,19 +179,12 @@ class LLMProcessor:
                     self._console.print("[yellow]LLM returned execute without command, using keywords[/]")
                 return self._process_with_keywords(request)
 
-            # Sanity check: in LISTENING mode, override LLM decisions
+            # In LISTENING mode: trust LLM decision, but override IGNORE
+            # (LLM should never ignore in LISTENING mode - always inject or exit)
             if request.current_state == AppState.LISTENING:
-                text_lower = request.text.lower()
-                # Check for exit words first
-                for keyword in FALLBACK_EXIT_KEYWORDS:
-                    if keyword in text_lower:
-                        if self._console:
-                            self._console.print(f"[yellow]LISTENING: exit word '{keyword}' found[/]")
-                        return LLMResponse.exit_listening()
-                # In LISTENING mode, always inject if no exit word (ignore LLM decision)
                 if action == Action.IGNORE:
                     if self._console:
-                        self._console.print("[yellow]LISTENING: LLM said ignore, but injecting anyway[/]")
+                        self._console.print("[yellow]LISTENING: LLM said ignore, injecting anyway[/]")
                     return LLMResponse.inject(request.text)
 
             # Sanity check: in IDLE mode, if LLM says ignore but text has trigger phrase + ascolta, override
@@ -226,10 +219,13 @@ class LLMProcessor:
 
         # In LISTENING mode
         if request.current_state == AppState.LISTENING:
-            # Check for exit commands
-            for keyword in FALLBACK_EXIT_KEYWORDS:
-                if keyword in text_lower:
-                    return LLMResponse.exit_listening()
+            # Only exit if it's a SHORT, explicit command (not embedded in a sentence)
+            # This prevents "stop world" or "ho detto smetti" from triggering exit
+            words = text_lower.split()
+            if len(words) <= 3:  # Short phrase like "smetti", "ok stop", "Joshua smetti"
+                for keyword in FALLBACK_EXIT_KEYWORDS:
+                    if keyword in text_lower:
+                        return LLMResponse.exit_listening()
 
             # Otherwise inject the text
             return LLMResponse.inject(request.text)
