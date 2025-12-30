@@ -53,3 +53,8 @@ build/evdev.whl
 
 # Debug session logs
 debug-session*.jsonl
+
+# Claude Code
+.claude/
+CLAUDE.md
+WORKFLOW.md
