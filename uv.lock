@@ -73,58 +73,6 @@ wheels = [
 ]
 
 [[package]]
-name = "claude-mic"
-version = "0.9.4"
-source = { editable = "." }
-dependencies = [
-    { name = "faster-whisper" },
-    { name = "numpy" },
-    { name = "pydantic" },
-    { name = "rich" },
-    { name = "sounddevice" },
-    { name = "typer" },
-]
-
-[package.optional-dependencies]
-cloud = [
-    { name = "openai" },
-]
-dev = [
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-gpu = [
-    { name = "nvidia-cudnn-cu12" },
-]
-linux = [
-    { name = "evdev" },
-]
-macos = [
-    { name = "pynput" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "evdev", marker = "extra == 'linux'", specifier = ">=1.7.0" },
-    { name = "faster-whisper", specifier = ">=1.0.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "numpy", specifier = ">=1.24.0" },
-    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.0.0" },
-    { name = "openai", marker = "extra == 'cloud'", specifier = ">=1.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pynput", marker = "extra == 'macos'", specifier = ">=1.7.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "rich", specifier = ">=13.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
-    { name = "sounddevice", specifier = ">=0.5.0" },
-    { name = "typer", specifier = ">=0.12.0" },
-]
-provides-extras = ["linux", "dev", "macos", "cloud", "gpu"]
-
-[[package]]
 name = "click"
 version = "8.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1016,3 +964,55 @@ sdist = { url = "https://files.pythonhosted.org/packages/55/e3/70399cb7dd41c10ac
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl", hash = "sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7", size = 14611, upload-time = "2025-10-01T02:14:40.154Z" },
 ]
+
+[[package]]
+name = "voxtype"
+version = "1.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "faster-whisper" },
+    { name = "numpy" },
+    { name = "pydantic" },
+    { name = "rich" },
+    { name = "sounddevice" },
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+cloud = [
+    { name = "openai" },
+]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+gpu = [
+    { name = "nvidia-cudnn-cu12" },
+]
+linux = [
+    { name = "evdev" },
+]
+macos = [
+    { name = "pynput" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "evdev", marker = "extra == 'linux'", specifier = ">=1.7.0" },
+    { name = "faster-whisper", specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "numpy", specifier = ">=1.24.0" },
+    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.0.0" },
+    { name = "openai", marker = "extra == 'cloud'", specifier = ">=1.0.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pynput", marker = "extra == 'macos'", specifier = ">=1.7.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
+    { name = "sounddevice", specifier = ">=0.5.0" },
+    { name = "typer", specifier = ">=0.12.0" },
+]
+provides-extras = ["linux", "dev", "macos", "cloud", "gpu"]
