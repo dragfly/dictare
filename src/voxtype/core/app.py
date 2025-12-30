@@ -361,11 +361,8 @@ class ClaudeMicApp:
 
         # Pre-initialize audio output for beeps (avoids delay on first beep)
         if self.config.audio.audio_feedback:
-            from voxtype.audio.beep import play_beep_start  # noqa: F401
-            import sounddevice as sd
-            # Play longer silent buffer to fully initialize output
-            import numpy as np
-            sd.play(np.zeros(8000, dtype=np.float32), 16000, blocking=True)  # 500ms silence
+            from voxtype.audio.beep import warmup_audio
+            warmup_audio()
 
         self._console.print(f"[green]Ready![/] Start speaking...{hotkey_msg}")
 
