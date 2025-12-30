@@ -207,6 +207,17 @@ class LLMProcessor:
                                 self._console.print(f"[yellow]LISTENING: short exit command '{keyword}' detected[/]")
                             return LLMResponse.exit_listening(backend="ollama")
 
+                # Check for commands even in LISTENING mode (with trigger phrase)
+                if request.trigger_phrase:
+                    trigger_lower = request.trigger_phrase.lower()
+                    if trigger_lower in text_lower:
+                        # Target active command
+                        for keyword in FALLBACK_TARGET_ACTIVE_KEYWORDS:
+                            if keyword in text_lower:
+                                if self._console:
+                                    self._console.print(f"[yellow]LISTENING: target command '{keyword}' detected[/]")
+                                return LLMResponse.execute(Command.TARGET_ACTIVE, backend="ollama")
+
                 # If LLM says IGNORE on longer text, inject anyway
                 if action == Action.IGNORE:
                     if self._console:
