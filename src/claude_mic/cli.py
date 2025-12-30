@@ -282,6 +282,38 @@ def config() -> None:
     console.print(table)
 
 
+@app.command()
+def speak(
+    text: Annotated[
+        str,
+        typer.Argument(help="Text to speak"),
+    ],
+    language: Annotated[
+        str,
+        typer.Option("--language", "-l", help="Language code (it, en, de, etc.)"),
+    ] = "it",
+    speed: Annotated[
+        int,
+        typer.Option("--speed", "-s", help="Speech speed in words per minute"),
+    ] = 160,
+) -> None:
+    """Speak text using text-to-speech.
+
+    Example: claude-mic speak "Ciao Paola!"
+    """
+    from claude_mic.tts.espeak import EspeakTTS
+
+    tts = EspeakTTS(language=language, speed=speed)
+
+    if not tts.is_available():
+        console.print("[red]espeak not found. Install with:[/]")
+        console.print("  sudo apt install espeak-ng")
+        raise typer.Exit(1)
+
+    console.print(f"[dim]Speaking: {text[:50]}{'...' if len(text) > 50 else ''}[/]")
+    tts.speak(text)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     app()
