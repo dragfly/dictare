@@ -58,10 +58,10 @@ fi
 uv sync --extra macos >/dev/null
 
 if [ $WITH_MLX -eq 1 ]; then
-    # Install mlx-whisper with --no-deps to avoid numba/llvmlite conflict
-    # Then install only the deps it actually needs
+    # Install mlx-whisper with --no-deps to avoid old numba/llvmlite conflict
+    # Then install deps manually with modern versions
     uv pip install --no-deps mlx-whisper >/dev/null 2>&1
-    uv pip install mlx mlx-audio huggingface-hub tqdm tiktoken >/dev/null 2>&1
+    uv pip install mlx mlx-audio huggingface-hub tqdm tiktoken "numba>=0.57" >/dev/null 2>&1
     info "Installed Python packages (with MLX for Apple Silicon GPU)"
 else
     info "Installed Python packages (with pynput for hotkey detection)"
