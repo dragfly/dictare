@@ -109,14 +109,20 @@ step 5 "Installing Python dependencies..."
 if [ -d .venv ] && ! .venv/bin/python --version 2>/dev/null | grep -q "3\.11"; then
     rm -rf .venv
 fi
+# Always include linux extras on Linux (for evdev from PyPI as fallback)
+EXTRAS="--extra linux"
+[ $WITH_GPU -eq 1 ] && EXTRAS="$EXTRAS --extra gpu"
+
+uv sync $EXTRAS >/dev/null
+
+# Prefer our pre-built evdev wheel (compatible with Python 3.11)
+uv pip install --reinstall build/evdev-*.whl >/dev/null 2>&1 || true
+
 if [ $WITH_GPU -eq 1 ]; then
-    uv sync --extra gpu >/dev/null
     info "Installed Python packages (with GPU/CUDA support)"
 else
-    uv sync >/dev/null
     info "Installed Python packages"
 fi
-uv pip install build/evdev-*.whl >/dev/null
 
 # Check system dependencies
 echo ""
