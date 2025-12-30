@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.4] - 2025-12-30
 
 ### Added
-- **Busy beep feedback**: When speaking while system is transcribing, plays double beep (bip-bip)
-  - Lets user know speech was ignored and to retry
+- **Busy beep feedback**: When speaking while system is transcribing, plays 5 loud beeps (900Hz)
+  - Very noticeable audio feedback that speech was ignored
+  - Lets user know to wait and retry
   - Respects `audio.audio_feedback` config setting
+- **Ready to listen feedback**: After transcription completes in LISTENING mode
+  - Plays the listening mode beep + shows "Ready to listen" in console
+  - 750ms delay ensures system is truly ready before signaling
 
 ## [1.0.3] - 2025-12-30
 
