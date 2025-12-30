@@ -189,6 +189,16 @@ class LLMProcessor:
                 text_lower = request.text.lower()
                 words = text_lower.split()
 
+                # Block invalid transition: can't enter LISTENING when already in LISTENING
+                if action == Action.CHANGE_STATE and new_state == AppState.LISTENING:
+                    if self._console:
+                        self._console.print("[yellow]LISTENING: LLM tried to re-enter LISTENING, injecting instead[/]")
+                    return LLMResponse.inject(
+                        request.text,
+                        backend="ollama",
+                        override="Invalid state transition: already in LISTENING",
+                    )
+
                 # Check for SHORT exit commands (≤4 words) - these should always exit
                 # Examples: "smetti", "stop", "Joshua smetti", "ok basta"
                 if len(words) <= 4:

@@ -74,7 +74,7 @@ wheels = [
 
 [[package]]
 name = "claude-mic"
-version = "0.8.4"
+version = "0.8.8"
 source = { editable = "." }
 dependencies = [
     { name = "faster-whisper" },
