@@ -1,6 +1,6 @@
 #!/bin/bash
 # voxtype installer (no sudo required)
-# Usage: ./install.sh [--system]
+# Usage: ./install.sh [--system] [--gpu]
 
 set -e
 
@@ -19,16 +19,23 @@ cd "$SCRIPT_DIR"
 
 # Parse args
 SYSTEM_WIDE=0
-if [ "$1" = "--system" ]; then
-    SYSTEM_WIDE=1
-    TOTAL=5
+WITH_GPU=0
+for arg in "$@"; do
+    case $arg in
+        --system) SYSTEM_WIDE=1 ;;
+        --gpu) WITH_GPU=1 ;;
+    esac
+done
+
+TOTAL=5
+if [ $SYSTEM_WIDE -eq 1 ]; then
     echo "voxtype installer (system-wide, requires sudo)"
     BIN_DIR="/usr/local/bin"
 else
-    TOTAL=5
     echo "voxtype installer (user-level, no sudo)"
     BIN_DIR="$HOME/.local/bin"
 fi
+[ $WITH_GPU -eq 1 ] && echo "GPU support: enabled"
 echo "===================="
 
 # Check prerequisites
@@ -102,9 +109,14 @@ step 5 "Installing Python dependencies..."
 if [ -d .venv ] && ! .venv/bin/python --version 2>/dev/null | grep -q "3\.11"; then
     rm -rf .venv
 fi
-uv sync >/dev/null
+if [ $WITH_GPU -eq 1 ]; then
+    uv sync --extra gpu >/dev/null
+    info "Installed Python packages (with GPU/CUDA support)"
+else
+    uv sync >/dev/null
+    info "Installed Python packages"
+fi
 uv pip install build/evdev-*.whl >/dev/null
-info "Installed Python packages"
 
 # Check system dependencies
 echo ""
