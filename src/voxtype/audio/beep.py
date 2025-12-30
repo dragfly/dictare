@@ -40,26 +40,12 @@ _BEEP_BUSY = np.concatenate([
     _generate_beep(900, 0.12),  # Beep 5
 ])
 
-def _warmup_audio() -> None:
-    """Pre-warm audio output to avoid delay on first beep."""
-    try:
-        import sounddevice as sd
-
-        # Play silent buffer to initialize audio output
-        silent = np.zeros(int(_SAMPLE_RATE * 0.05), dtype=np.float32)
-        sd.play(silent, _SAMPLE_RATE, blocking=True)
-    except Exception:
-        pass
-
-# Pre-warm audio at module load
-_warmup_audio()
-
 def play_beep_start() -> None:
     """Play a beep indicating listening mode started."""
     try:
         import sounddevice as sd
 
-        sd.play(_BEEP_START, _SAMPLE_RATE, blocking=False)
+        sd.play(_BEEP_START, _SAMPLE_RATE, blocking=True)
     except Exception:
         pass  # Don't fail on audio errors
 
@@ -68,7 +54,7 @@ def play_beep_stop() -> None:
     try:
         import sounddevice as sd
 
-        sd.play(_BEEP_STOP, _SAMPLE_RATE, blocking=False)
+        sd.play(_BEEP_STOP, _SAMPLE_RATE, blocking=True)
     except Exception:
         pass  # Don't fail on audio errors
 
@@ -77,6 +63,6 @@ def play_beep_busy() -> None:
     try:
         import sounddevice as sd
 
-        sd.play(_BEEP_BUSY, _SAMPLE_RATE, blocking=False)
+        sd.play(_BEEP_BUSY, _SAMPLE_RATE, blocking=True)
     except Exception:
         pass  # Don't fail on audio errors
