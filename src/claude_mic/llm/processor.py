@@ -184,7 +184,11 @@ class LLMProcessor:
                 if action == Action.IGNORE:
                     if self._console:
                         self._console.print("[yellow]LISTENING: LLM said ignore, injecting anyway[/]")
-                    return LLMResponse.inject(request.text)
+                    return LLMResponse.inject(
+                        request.text,
+                        backend="ollama",
+                        override="LLM said ignore in LISTENING mode",
+                    )
 
             # Sanity check: in IDLE mode, if LLM says ignore but text has trigger phrase + ascolta, override
             if request.current_state == AppState.IDLE and action == Action.IGNORE and request.trigger_phrase:
@@ -205,6 +209,8 @@ class LLMProcessor:
                 command_args=data.get("command_args"),
                 user_feedback=data.get("user_feedback"),
                 confidence=data.get("confidence", 1.0),
+                backend="ollama",
+                raw_llm_response=response_text[:500],  # Truncate for log size
             )
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             if self._console:
