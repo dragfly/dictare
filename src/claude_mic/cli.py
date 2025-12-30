@@ -129,6 +129,10 @@ def run(
         Optional[str],
         typer.Option("--wake-word", "-w", help="Wake word to activate (e.g., 'Joshua')"),
     ] = None,
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", help="Debug mode: show all transcriptions but only paste with wake word"),
+    ] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -164,7 +168,7 @@ def run(
     # Lazy import to speed up CLI
     from claude_mic.core.app import ClaudeMicApp
 
-    mic_app = ClaudeMicApp(config, use_vad=vad, vad_silence_ms=silence_ms, wake_word=wake_word)
+    mic_app = ClaudeMicApp(config, use_vad=vad, vad_silence_ms=silence_ms, wake_word=wake_word, debug=debug)
 
     mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
     device_str = "[magenta]GPU (CUDA)[/]" if config.stt.device == "cuda" else "CPU"
