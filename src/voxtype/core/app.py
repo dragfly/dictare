@@ -78,6 +78,9 @@ class ClaudeMicApp:
         # LLM-first processor (replaces old command processor)
         self._llm_processor: LLMProcessor | None = None
 
+        # Flag to track if speech was ignored (for ready-to-listen feedback)
+        self._speech_was_ignored = False
+
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
         return AudioCapture(
@@ -500,6 +503,7 @@ class ClaudeMicApp:
                 if self.config.audio.audio_feedback:
                     from voxtype.audio.beep import play_beep_busy
                     play_beep_busy()
+                self._speech_was_ignored = True
                 return
             self.state = AppState.RECORDING
 
@@ -582,8 +586,12 @@ class ClaudeMicApp:
         thread.start()
 
     def _signal_ready_to_listen(self) -> None:
-        """Signal that system is ready to listen again (after transcription)."""
+        """Signal that system is ready to listen again (only if speech was ignored)."""
         from voxtype.llm.models import AppState as LLMAppState
+
+        # Only signal if speech was ignored during this transcription cycle
+        if not self._speech_was_ignored:
+            return
 
         if self._llm_processor and self._llm_processor.state == LLMAppState.LISTENING:
             # Delay to ensure VAD is truly ready before signaling
@@ -592,6 +600,9 @@ class ClaudeMicApp:
             if self.config.audio.audio_feedback:
                 from voxtype.audio.beep import play_beep_start
                 play_beep_start()
+
+        # Reset the flag
+        self._speech_was_ignored = False
 
     def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
         """Execute the action decided by the LLM.
