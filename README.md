@@ -137,6 +137,24 @@ Audio → Whisper (STT) → LLM (commands) → ydotool (typing)
 3. **Command processing**: Ollama LLM interprets commands (with keyword fallback)
 4. **Text injection**: ydotool/wtype types text into the active window
 
+### Text Injection Modes
+
+voxtype can inject text in two ways:
+
+| Mode | How it works | Pros | Cons |
+|------|--------------|------|------|
+| **Clipboard** (default) | Copy to clipboard, simulate Ctrl+V | Fast, reliable, handles unicode | Overwrites clipboard |
+| **Keyboard** (`--keyboard`) | Simulate each keystroke | Doesn't touch clipboard | Slower, may crash some apps |
+
+On Linux, both modes use **ydotool** - a virtual keyboard that sends input via `/dev/uinput`. The `ydotoold` daemon must be running:
+
+```bash
+systemctl --user start ydotoold   # Start now
+systemctl --user enable ydotoold  # Auto-start on login
+```
+
+On macOS, text injection uses **osascript** (AppleScript) which requires Accessibility permissions.
+
 ## Platform Notes
 
 ### macOS
