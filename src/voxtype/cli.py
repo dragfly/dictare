@@ -1,4 +1,4 @@
-"""CLI interface for claude-mic."""
+"""CLI interface for voxtype."""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from claude_mic import __version__
-from claude_mic.config import create_default_config, get_config_path, load_config
+from voxtype import __version__
+from voxtype.config import create_default_config, get_config_path, load_config
 
 app = typer.Typer(
-    name="claude-mic",
+    name="voxtype",
     help="Voice-to-text for Claude Code CLI",
     add_completion=False,
     no_args_is_help=True,
@@ -68,7 +68,7 @@ def _setup_cuda_library_path() -> None:
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
-        console.print(f"claude-mic version {__version__}")
+        console.print(f"voxtype version {__version__}")
         raise typer.Exit()
 
 
@@ -79,7 +79,7 @@ def main_callback(
         typer.Option("--version", "-V", callback=version_callback, is_eager=True),
     ] = None,
 ) -> None:
-    """claude-mic: Voice-to-text for Claude Code CLI."""
+    """voxtype: Voice-to-text for Claude Code CLI."""
     pass
 
 
@@ -150,7 +150,7 @@ def run(
         typer.Option("--verbose", "-v", help="Enable verbose output"),
     ] = False,
 ) -> None:
-    """Start claude-mic in push-to-talk or VAD mode.
+    """Start voxtype in push-to-talk or VAD mode.
 
     Push-to-talk: Hold the configured key while speaking, release to transcribe.
     VAD mode: Automatically detects when you speak, no key needed.
@@ -183,12 +183,12 @@ def run(
         config.window.default_target = target_window
 
     # Lazy import to speed up CLI
-    from claude_mic.core.app import ClaudeMicApp
+    from voxtype.core.app import ClaudeMicApp
 
     # Create JSONL logger if requested
     logger = None
     if log_file:
-        from claude_mic.logging import JSONLLogger
+        from voxtype.logging import JSONLLogger
 
         # Collect startup parameters for logging
         log_params = {
@@ -220,7 +220,7 @@ def run(
     wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
     console.print(
         Panel(
-            f"[bold green]claude-mic[/] v{__version__}\n\n"
+            f"[bold green]voxtype[/] v{__version__}\n\n"
             f"Input mode: {input_mode}\n"
             f"{wake_str}"
             f"STT model: [cyan]{config.stt.model_size}[/] on {device_str}\n"
@@ -245,7 +245,7 @@ def run(
 @app.command()
 def check() -> None:
     """Check system dependencies and configuration."""
-    from claude_mic.utils.platform import check_dependencies
+    from voxtype.utils.platform import check_dependencies
 
     console.print(Panel("[bold]Checking dependencies...[/]", border_style="blue"))
     console.print()
@@ -319,7 +319,7 @@ def config() -> None:
 
     if not config_path.exists():
         console.print(f"[yellow]No config file found at {config_path}[/]")
-        console.print("Run [cyan]claude-mic init[/] to create one.")
+        console.print("Run [cyan]voxtype init[/] to create one.")
         return
 
     cfg = load_config()
@@ -356,9 +356,9 @@ def speak(
 ) -> None:
     """Speak text using text-to-speech.
 
-    Example: claude-mic speak "Ciao Paola!"
+    Example: voxtype speak "Ciao Paola!"
     """
-    from claude_mic.tts.espeak import EspeakTTS
+    from voxtype.tts.espeak import EspeakTTS
 
     tts = EspeakTTS(language=language, speed=speed)
 

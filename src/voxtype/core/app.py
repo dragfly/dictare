@@ -9,18 +9,18 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from claude_mic.audio.capture import AudioCapture
-from claude_mic.core.state import AppState
-from claude_mic.hotkey.base import HotkeyListener
-from claude_mic.injection.base import TextInjector
-from claude_mic.stt.base import STTEngine
+from voxtype.audio.capture import AudioCapture
+from voxtype.core.state import AppState
+from voxtype.hotkey.base import HotkeyListener
+from voxtype.injection.base import TextInjector
+from voxtype.stt.base import STTEngine
 
 if TYPE_CHECKING:
-    from claude_mic.audio.vad import SileroVAD, StreamingVAD
-    from claude_mic.config import Config
-    from claude_mic.llm import LLMProcessor, LLMResponse
-    from claude_mic.llm.models import AppState as LLMAppState
-    from claude_mic.logging.jsonl import JSONLLogger
+    from voxtype.audio.vad import SileroVAD, StreamingVAD
+    from voxtype.config import Config
+    from voxtype.llm import LLMProcessor, LLMResponse
+    from voxtype.llm.models import AppState as LLMAppState
+    from voxtype.logging.jsonl import JSONLLogger
 
 
 class ClaudeMicApp:
@@ -89,7 +89,7 @@ class ClaudeMicApp:
     def _create_stt_engine(self) -> STTEngine:
         """Create and load STT engine."""
         if self.config.stt.backend == "faster-whisper":
-            from claude_mic.stt.faster_whisper import FasterWhisperEngine
+            from voxtype.stt.faster_whisper import FasterWhisperEngine
 
             engine = FasterWhisperEngine()
         else:
@@ -118,7 +118,7 @@ class ClaudeMicApp:
         # Try evdev first on Linux
         if backend in ("auto", "evdev") and sys.platform == "linux":
             try:
-                from claude_mic.hotkey.evdev_listener import EvdevHotkeyListener
+                from voxtype.hotkey.evdev_listener import EvdevHotkeyListener
 
                 listener = EvdevHotkeyListener(self.config.hotkey.key)
 
@@ -141,7 +141,7 @@ class ClaudeMicApp:
         # Fallback to pynput
         if backend in ("auto", "pynput"):
             try:
-                from claude_mic.hotkey.pynput_listener import PynputHotkeyListener
+                from voxtype.hotkey.pynput_listener import PynputHotkeyListener
 
                 listener = PynputHotkeyListener(self.config.hotkey.key)
                 if listener.is_key_available():
@@ -168,15 +168,15 @@ class ClaudeMicApp:
         """Create text injector with auto-detection."""
         import sys
 
-        from claude_mic.injection.clipboard import ClipboardInjector
+        from voxtype.injection.clipboard import ClipboardInjector
 
         # Platform-specific imports
         if sys.platform == "darwin":
-            from claude_mic.injection.macos import MacOSInjector
+            from voxtype.injection.macos import MacOSInjector
         else:
-            from claude_mic.injection.wtype import WtypeInjector
-            from claude_mic.injection.xdotool import XdotoolInjector
-            from claude_mic.injection.ydotool import YdotoolInjector
+            from voxtype.injection.wtype import WtypeInjector
+            from voxtype.injection.xdotool import XdotoolInjector
+            from voxtype.injection.ydotool import YdotoolInjector
 
         backend = self.config.injection.backend
 
@@ -251,7 +251,7 @@ class ClaudeMicApp:
         self._injector = self._create_injector()
 
         # Create VAD
-        from claude_mic.audio.vad import SileroVAD, StreamingVAD
+        from voxtype.audio.vad import SileroVAD, StreamingVAD
 
         self._vad = SileroVAD(
             threshold=0.5,
@@ -289,7 +289,7 @@ class ClaudeMicApp:
 
     def _init_llm_processor(self) -> None:
         """Initialize the LLM-first processor."""
-        from claude_mic.llm import LLMProcessor
+        from voxtype.llm import LLMProcessor
 
         self._llm_processor = LLMProcessor(
             trigger_phrase=self.trigger_phrase,
@@ -400,7 +400,7 @@ class ClaudeMicApp:
                         if not success:
                             if self.config.injection.fallback_to_clipboard:
                                 # Try clipboard fallback
-                                from claude_mic.injection.clipboard import ClipboardInjector
+                                from voxtype.injection.clipboard import ClipboardInjector
 
                                 clipboard = ClipboardInjector()
                                 if clipboard.is_available():
@@ -513,7 +513,7 @@ class ClaudeMicApp:
             response: LLM response with action to take.
             original_text: Original transcribed text (for logging).
         """
-        from claude_mic.llm.models import Action, AppState as LLMAppState, Command
+        from voxtype.llm.models import Action, AppState as LLMAppState, Command
 
         # Log the LLM decision with full debug info
         if self._logger:
@@ -573,7 +573,7 @@ class ClaudeMicApp:
             )
 
         if self.config.audio.audio_feedback:
-            from claude_mic.audio.beep import play_beep_start
+            from voxtype.audio.beep import play_beep_start
             play_beep_start()
 
     def _exit_listening_mode(self, trigger: str = "voice_command") -> None:
@@ -592,7 +592,7 @@ class ClaudeMicApp:
             )
 
         if self.config.audio.audio_feedback:
-            from claude_mic.audio.beep import play_beep_stop
+            from voxtype.audio.beep import play_beep_stop
             play_beep_stop()
 
     def _on_hotkey_toggle(self) -> None:
@@ -600,7 +600,7 @@ class ClaudeMicApp:
         if not self._llm_processor:
             return
 
-        from claude_mic.llm.models import AppState as LLMAppState
+        from voxtype.llm.models import AppState as LLMAppState
 
         # Toggle the state
         new_state = self._llm_processor.toggle_listening()
@@ -617,7 +617,7 @@ class ClaudeMicApp:
             command: Command to execute.
             args: Optional command arguments.
         """
-        from claude_mic.llm.models import Command
+        from voxtype.llm.models import Command
 
         if command == Command.PASTE:
             self._console.print("[cyan]Comando: incolla[/]")
@@ -678,7 +678,7 @@ class ClaudeMicApp:
 
             if not success:
                 if self.config.injection.fallback_to_clipboard:
-                    from claude_mic.injection.clipboard import ClipboardInjector
+                    from voxtype.injection.clipboard import ClipboardInjector
 
                     clipboard = ClipboardInjector()
                     if clipboard.is_available():

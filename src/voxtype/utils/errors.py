@@ -1,8 +1,8 @@
-"""Custom exceptions for claude-mic."""
+"""Custom exceptions for voxtype."""
 
 
 class ClaudeMicError(Exception):
-    """Base exception for claude-mic."""
+    """Base exception for voxtype."""
 
     pass
 

@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 
-from claude_mic.injection.base import TextInjector
+from voxtype.injection.base import TextInjector
 
 
 class MacOSInjector(TextInjector):

@@ -7,8 +7,8 @@ All transcribed text goes through the LLM, which decides:
 - Should be ignored? (no trigger phrase, noise, etc.)
 """
 
-from claude_mic.llm.models import Action, AppState, Command, LLMRequest, LLMResponse
-from claude_mic.llm.processor import LLMProcessor
+from voxtype.llm.models import Action, AppState, Command, LLMRequest, LLMResponse
+from voxtype.llm.processor import LLMProcessor
 
 __all__ = [
     "Action",
