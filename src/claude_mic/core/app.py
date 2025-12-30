@@ -643,6 +643,21 @@ class ClaudeMicApp:
         # Add Enter if configured
         inject_text = text + "\n" if self.config.injection.auto_enter else text
 
+        # Use window manager if target window is set (X11 only)
+        target_window = self._window_manager.get_target() if self._window_manager else None
+        if target_window:
+            success = self._window_manager.send_text(inject_text)
+            if self._logger:
+                self._logger.log_injection(
+                    text=text,
+                    method=f"xdotool:window:{target_window.name[:30]}",
+                    success=success,
+                )
+            if success:
+                return
+            else:
+                self._console.print("[yellow]Target window injection failed, using default[/]")
+
         if self._injector:
             method = self._injector.get_name()
             if method == "clipboard":
