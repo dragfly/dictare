@@ -178,16 +178,32 @@ class ClaudeMicApp:
     def _check_linux_dependencies(self) -> None:
         """Check Linux-specific dependencies and exit if critical ones missing."""
         import shutil
-        from pathlib import Path
+        import subprocess
 
         # Check if ydotoold is running (required for text injection)
         if shutil.which("ydotool"):
-            # Check socket file (more reliable than pgrep)
-            socket_paths = [
-                Path(f"/run/user/{os.getuid()}/.ydotool_socket"),
-                Path("/tmp/.ydotool_socket"),
-            ]
-            if not any(p.exists() for p in socket_paths):
+            # Check if ydotoold process is running
+            ydotoold_running = False
+            try:
+                result = subprocess.run(
+                    ["pgrep", "-x", "ydotoold"],
+                    capture_output=True,
+                    timeout=5,
+                )
+                ydotoold_running = result.returncode == 0
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                # pgrep not available, try pidof
+                try:
+                    result = subprocess.run(
+                        ["pidof", "ydotoold"],
+                        capture_output=True,
+                        timeout=5,
+                    )
+                    ydotoold_running = result.returncode == 0
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    pass
+
+            if not ydotoold_running:
                 self._console.print("\n[red bold]ERROR: ydotoold is not running[/]\n")
                 self._console.print("ydotoold is required for text injection on Linux.")
                 self._console.print("It handles keyboard simulation for both typing and clipboard paste.\n")
