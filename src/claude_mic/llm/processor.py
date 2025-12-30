@@ -263,12 +263,13 @@ class LLMProcessor:
             trigger_found, text_after = self._find_trigger_phrase(text_lower, request.trigger_phrase)
 
             if not trigger_found:
-                return LLMResponse.ignore("No trigger phrase found")
+                return LLMResponse.ignore("No trigger phrase found", backend="keyword")
 
-            # Check for commands after trigger phrase
+            # Check for enter keywords ANYWHERE in text (not just after trigger)
+            # This handles both "Joshua ascolta" and "ascolta Joshua"
             for keyword in FALLBACK_ENTER_KEYWORDS:
-                if keyword in text_after:
-                    return LLMResponse.enter_listening()
+                if keyword in text_lower:
+                    return LLMResponse.enter_listening(backend="keyword")
 
             for keyword in FALLBACK_EXIT_KEYWORDS:
                 if keyword in text_after:
