@@ -6,8 +6,8 @@ import json
 import subprocess
 from typing import TYPE_CHECKING
 
-from claude_mic.llm.models import Action, AppState, Command, LLMRequest, LLMResponse
-from claude_mic.llm.prompts import (
+from voxtype.llm.models import Action, AppState, Command, LLMRequest, LLMResponse
+from voxtype.llm.prompts import (
     FALLBACK_ENTER_KEYWORDS,
     FALLBACK_EXIT_KEYWORDS,
     FALLBACK_PASTE_KEYWORDS,

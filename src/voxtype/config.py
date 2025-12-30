@@ -1,4 +1,4 @@
-"""Configuration management for claude-mic."""
+"""Configuration management for voxtype."""
 
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ class Config(BaseModel):
 
 def get_config_dir() -> Path:
     """Get the configuration directory path."""
-    config_dir = Path.home() / ".config" / "claude-mic"
+    config_dir = Path.home() / ".config" / "voxtype"
     return config_dir
 
 def get_config_path() -> Path:
@@ -165,7 +165,7 @@ def create_default_config() -> Path:
     config_path = config_dir / "config.toml"
 
     default_config = """\
-# claude-mic configuration
+# voxtype configuration
 
 [audio]
 sample_rate = 16000

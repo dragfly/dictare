@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from claude_mic.stt.base import STTEngine
+from voxtype.stt.base import STTEngine
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray

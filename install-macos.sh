@@ -1,5 +1,5 @@
 #!/bin/bash
-# claude-mic installer for macOS
+# voxtype installer for macOS
 
 set -e
 
@@ -17,7 +17,7 @@ TOTAL=3
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "claude-mic installer (macOS)"
+echo "voxtype installer (macOS)"
 echo "============================"
 
 # Check prerequisites
@@ -81,4 +81,4 @@ echo ""
 echo "NOTA: Non usare F1-F12, producono sequenze escape nel terminale."
 echo ""
 echo "Esempio:"
-echo "  uv run claude-mic run --key KEY_RIGHTMETA --model medium --language it --enter"
+echo "  uv run voxtype run --key KEY_RIGHTMETA --model medium --language it --enter"

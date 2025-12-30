@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 
-from claude_mic.injection.base import TextInjector
+from voxtype.injection.base import TextInjector
 
 class XdotoolInjector(TextInjector):
     """Text injection using xdotool.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# claude-mic uninstaller
+# voxtype uninstaller
 # Usage: ./uninstall.sh [--system]
 
 set -e
@@ -22,10 +22,10 @@ if [ "$1" = "--system" ]; then
 fi
 
 if [ $SYSTEM_WIDE -eq 1 ]; then
-    echo "claude-mic uninstaller (system-wide)"
+    echo "voxtype uninstaller (system-wide)"
     BIN_DIR="/usr/local/bin"
 else
-    echo "claude-mic uninstaller (user)"
+    echo "voxtype uninstaller (user)"
     BIN_DIR="$HOME/.local/bin"
 fi
 echo "===================="

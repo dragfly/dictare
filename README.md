@@ -1,130 +1,80 @@
-# claude-mic
+# voxtype
 
-Voice-to-text for Claude Code CLI. Speak into your microphone and have your words typed into the terminal.
+Voice-to-text for your terminal. Speak into your microphone and have your words typed anywhere.
 
-## Quick Start
+**Linux-first** | Push-to-talk or VAD | Wake word support | Works with any app
 
-### Linux
+## Features
+
+- **Push-to-talk**: Hold a key, speak, release → text appears
+- **VAD mode**: Hands-free, automatic speech detection
+- **Wake word**: Say "Hey voxtype" to start listening
+- **Universal**: Works with any terminal, editor, browser (via ydotool/wtype)
+- **Offline**: Local Whisper model, no cloud required
+- **Fast**: ~2 second latency with base model
+
+## Quick Start (Linux)
 
 ```bash
-git clone https://github.com/dragfly/claude-mic
-cd claude-mic
+git clone https://github.com/dragfly/voxtype
+cd voxtype
 ./install.sh              # No sudo, builds via Docker
 ./setup-permissions.sh    # One-time sudo
 # Log out and back in
 systemctl --user start ydotoold
-uv run claude-mic run
+voxtype run
 ```
 
-### macOS
-
-```bash
-git clone https://github.com/dragfly/claude-mic
-cd claude-mic
-./install-macos.sh
-# Grant Accessibility permissions (see installer output)
-uv run claude-mic run --key KEY_RIGHTMETA  # Use Right Command (⌘)
-```
-
-Hold **Right Command** (or **Right Option**), speak, release. Text appears in your terminal.
-
-**Note:** Don't use F1-F12 on Mac - they produce escape sequences in terminal.
-
-## Requirements
-
-**Linux:**
-- Docker (for building dependencies)
-- [uv](https://github.com/astral-sh/uv) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-
-**macOS:**
-- [Homebrew](https://brew.sh) (for portaudio)
-- [uv](https://github.com/astral-sh/uv) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- Accessibility permissions for Terminal
-
-## What Does `setup-permissions.sh` Do?
-
-```bash
-sudo apt-get install -y libportaudio2 xclip  # Audio + clipboard
-sudo usermod -aG input $USER                  # Access to input devices
-# + udev rule for /dev/uinput (ydotool needs this)
-```
-
-Separate script so you can review it easily.
+Hold **ScrollLock**, speak, release. Text appears where your cursor is.
 
 ## Usage
 
 ```bash
-uv run claude-mic run                  # Start push-to-talk
-uv run claude-mic run --model medium   # Larger model, better for non-English
-uv run claude-mic run --language it    # Force Italian
-uv run claude-mic run --enter          # Auto-press Enter after typing
-uv run claude-mic run --clipboard      # Use clipboard (for accented chars)
-uv run claude-mic run --key KEY_F5     # Use F5 instead of ScrollLock
-uv run claude-mic check                # Verify setup
+voxtype run                       # Push-to-talk mode
+voxtype run --vad                 # VAD mode (hands-free)
+voxtype run --vad --wake-word Hey # Wake word mode
+voxtype run --model medium        # Larger model, better accuracy
+voxtype run --language it         # Force Italian
+voxtype run --enter               # Auto-press Enter after typing
+voxtype run --clipboard           # Use clipboard (for accented chars)
+voxtype check                     # Verify setup
 ```
 
-### CLI Options
+## Options
 
 | Option | Short | Description |
 |--------|-------|-------------|
+| `--vad` | | Voice Activity Detection (hands-free) |
+| `--wake-word` | `-w` | Trigger phrase (e.g., "Hey") |
 | `--model` | `-m` | Whisper model (tiny/base/small/medium/large-v3) |
 | `--language` | `-l` | Language code (it, en, es, fr...) or "auto" |
 | `--key` | `-k` | Push-to-talk key (KEY_SCROLLLOCK, KEY_F5, etc.) |
 | `--enter` | `-e` | Auto-press Enter after typing |
 | `--clipboard` | `-C` | Copy to clipboard instead of typing |
-| `--verbose` | `-v` | Show debug output |
-
-### Accented Characters (Italian, etc.)
-
-ydotool doesn't support accented characters (è, à, ù, ì, ò). Use clipboard mode:
-
-```bash
-uv run claude-mic run --language it --clipboard
-```
-
-Then press **Ctrl+V** to paste after speaking.
 
 ## Configuration
 
 ```bash
-uv run claude-mic init    # Create ~/.config/claude-mic/config.toml
-uv run claude-mic config  # Show current config
+voxtype init    # Create ~/.config/voxtype/config.toml
+voxtype config  # Show current config
 ```
 
-Example `~/.config/claude-mic/config.toml`:
-```toml
-[stt]
-model_size = "medium"    # Better accuracy (see table below)
-language = "it"          # Force Italian (or "auto" to detect)
+## Requirements
 
-[injection]
-auto_enter = true        # Press Enter after typing
+- Linux (X11 or Wayland)
+- Docker (for building dependencies)
+- [uv](https://github.com/astral-sh/uv) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 
-[hotkey]
-key = "KEY_SCROLLLOCK"   # Change push-to-talk key
+## How It Works
+
+```
+Audio → Whisper (STT) → LLM (commands) → ydotool (typing)
 ```
 
-### Models
-
-| Model | Size | Latency | Quality |
-|-------|------|---------|---------|
-| tiny | ~75MB | ~1s | Good |
-| base | ~150MB | ~2s | Better (default) |
-| small | ~500MB | ~4s | Best for most |
-| large-v3 | ~3GB | ~10s | Maximum |
-
-## System-wide Install
-
-```bash
-./install.sh --system     # Requires sudo
-```
-
-## Uninstall
-
-```bash
-./uninstall.sh            # User install
-./uninstall.sh --system   # System-wide
-```
+1. **Audio capture**: sounddevice records from your microphone
+2. **Speech-to-text**: faster-whisper transcribes locally
+3. **Command processing**: Ollama LLM interprets commands (with keyword fallback)
+4. **Text injection**: ydotool/wtype types text into the active window
 
 ## License
 
