@@ -17,7 +17,9 @@ from claude_mic.stt.base import STTEngine
 
 if TYPE_CHECKING:
     from claude_mic.audio.vad import SileroVAD, StreamingVAD
+    from claude_mic.command.processor import CommandProcessor
     from claude_mic.config import Config
+    from claude_mic.window.base import WindowManager
 
 
 class ClaudeMicApp:
@@ -67,6 +69,11 @@ class ClaudeMicApp:
         # VAD components
         self._vad: SileroVAD | None = None
         self._streaming_vad: StreamingVAD | None = None
+
+        # Command processing
+        self._command_processor: CommandProcessor | None = None
+        self._window_manager: WindowManager | None = None
+        self._listening_mode = False  # Continuous transcription without wake word
 
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
@@ -258,6 +265,14 @@ class ClaudeMicApp:
             on_speech_end=self._on_vad_speech_end,
         )
 
+        # Create command processor if enabled
+        if self.config.command.enabled and self.wake_word:
+            self._init_command_processor()
+
+        # Create window manager if enabled
+        if self.config.window.enabled:
+            self._init_window_manager()
+
         if self.config.verbose:
             self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
 
@@ -421,6 +436,10 @@ class ClaudeMicApp:
         Returns:
             Tuple of (wake_word_found, filtered_text).
         """
+        # In LISTENING mode, bypass wake word check
+        if self._listening_mode:
+            return True, text
+
         if not self.wake_word:
             return True, text
 
@@ -430,8 +449,8 @@ class ClaudeMicApp:
             self._console.print(f"[blue][DEBUG] Wake check: text_lower='{text_lower}'[/]")
             self._console.print(f"[blue][DEBUG] Wake word='{self.wake_word}'[/]")
 
-        # Check various formats: "Joshua, ...", "Joshua ...", "Joshua:", "Joshua."
-        for sep in [",", ":", ".", " "]:
+        # Check various formats: "Joshua, ...", "Joshua ...", "Joshua:", "Joshua.", "Joshua?"
+        for sep in [",", ":", ".", "?", " "]:
             pattern = self.wake_word + sep
             if text_lower.startswith(pattern):
                 # Remove wake word and separator
@@ -451,6 +470,49 @@ class ClaudeMicApp:
         if self.debug:
             self._console.print(f"[blue][DEBUG] No match found[/]")
         return False, text
+
+    def _init_command_processor(self) -> None:
+        """Initialize command processor for voice commands."""
+        from claude_mic.command.processor import CommandProcessor
+
+        self._command_processor = CommandProcessor(
+            injector=self._injector,
+            window_manager=self._window_manager,
+            on_enter_listening=self._enter_listening_mode,
+            on_exit_listening=self._exit_listening_mode,
+            console=self._console,
+            ollama_model=self.config.command.ollama_model,
+            ollama_timeout=self.config.command.ollama_timeout,
+            format_text=self.config.command.format_text,
+        )
+
+    def _init_window_manager(self) -> None:
+        """Initialize window manager for target window selection."""
+        from claude_mic.window.xdotool import XdotoolWindowManager
+
+        manager = XdotoolWindowManager()
+        if manager.is_available():
+            self._window_manager = manager
+            if self.config.verbose:
+                self._console.print(f"[dim]Window manager: {manager.get_name()}[/]")
+
+            # Set default target if configured
+            if self.config.window.default_target:
+                windows = manager.find_windows(self.config.window.default_target)
+                if windows:
+                    manager.set_target(windows[0])
+                    self._console.print(f"[dim]Target window: {windows[0].name}[/]")
+
+    def _enter_listening_mode(self) -> None:
+        """Enter LISTENING mode (continuous transcription without wake word)."""
+        self._listening_mode = True
+        self._console.print("[bold green]>>> LISTENING MODE[/]")
+        # TODO: Play beep sound
+
+    def _exit_listening_mode(self) -> None:
+        """Exit LISTENING mode."""
+        self._listening_mode = False
+        self._console.print("[bold yellow]<<< LISTENING MODE OFF[/]")
 
     def _transcribe_and_inject(self, audio_data) -> None:
         """Transcribe audio and inject text."""
@@ -484,12 +546,40 @@ class ClaudeMicApp:
                         self._console.print("[dim]Wake word only, no command.[/]")
                         self.state = AppState.IDLE
                         return
+
+                    # Process commands if enabled (only when wake word was used, not in listening mode)
+                    if self._command_processor and not self._listening_mode:
+                        was_command, formatted_text = self._command_processor.process(text)
+                        if was_command:
+                            self.state = AppState.IDLE
+                            return
+                        # Use formatted text if available
+                        if formatted_text:
+                            text = formatted_text
+
+                    # In listening mode, check for exit command
+                    if self._listening_mode:
+                        text_lower = text.lower().strip()
+                        # Check for "smetti" or "Joshua smetti"
+                        if text_lower == "smetti" or text_lower == "stop" or text_lower == "basta":
+                            self._exit_listening_mode()
+                            self.state = AppState.IDLE
+                            return
+                        if self.wake_word and self.wake_word in text_lower and ("smetti" in text_lower or "stop" in text_lower):
+                            self._exit_listening_mode()
+                            self.state = AppState.IDLE
+                            return
+
                     with self._lock:
                         self.state = AppState.INJECTING
 
                     # Truncate display if too long
                     display_text = text[:60] + "..." if len(text) > 60 else text
                     self._console.print(f"[green]Transcribed:[/] {display_text}        ")
+
+                    # Record injection for repeat
+                    if self._command_processor:
+                        self._command_processor.record_injection(text)
 
                     # Add Enter if configured
                     inject_text = text + "\n" if self.config.injection.auto_enter else text

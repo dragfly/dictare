@@ -133,6 +133,14 @@ def run(
         bool,
         typer.Option("--debug", help="Debug mode: show all transcriptions but only paste with wake word"),
     ] = False,
+    no_commands: Annotated[
+        bool,
+        typer.Option("--no-commands", help="Disable voice command processing"),
+    ] = False,
+    target_window: Annotated[
+        Optional[str],
+        typer.Option("--target-window", "-t", help="Target window for text injection (X11 only)"),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -164,6 +172,11 @@ def run(
         config.audio.max_duration = max_duration
     if verbose:
         config.verbose = verbose
+    if no_commands:
+        config.command.enabled = False
+    if target_window:
+        config.window.enabled = True
+        config.window.default_target = target_window
 
     # Lazy import to speed up CLI
     from claude_mic.core.app import ClaudeMicApp

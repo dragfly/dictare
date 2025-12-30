@@ -12,6 +12,7 @@ class AppState(Enum):
     RECORDING = auto()
     TRANSCRIBING = auto()
     INJECTING = auto()
+    LISTENING = auto()  # Continuous transcription mode (no wake word needed)
     ERROR = auto()
 
     def __str__(self) -> str:
