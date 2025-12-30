@@ -560,15 +560,25 @@ class ClaudeMicApp:
                     # In listening mode, check for exit command
                     if self._listening_mode:
                         text_lower = text.lower().strip()
-                        # Check for "smetti" or "Joshua smetti"
-                        if text_lower == "smetti" or text_lower == "stop" or text_lower == "basta":
-                            self._exit_listening_mode()
-                            self.state = AppState.IDLE
-                            return
-                        if self.wake_word and self.wake_word in text_lower and ("smetti" in text_lower or "stop" in text_lower):
-                            self._exit_listening_mode()
-                            self.state = AppState.IDLE
-                            return
+                        # Exit words (handle punctuation and Whisper transcription errors)
+                        # Whisper often transcribes "smetti" as "zmetti", "zmeti", "smetty", etc.
+                        exit_words = [
+                            "smetti", "stop", "basta", "fermati",
+                            "zmetti", "zmeti", "smetty", "smetty", "smety",
+                        ]
+                        for word in exit_words:
+                            # Match: "smetti", "smetti!", "Smetti.", etc.
+                            if text_lower == word or text_lower.startswith(word + "!") or text_lower.startswith(word + "."):
+                                self._exit_listening_mode()
+                                self.state = AppState.IDLE
+                                return
+                        # Check for "Joshua smetti", "Joshua basta", etc.
+                        if self.wake_word and self.wake_word in text_lower:
+                            for word in exit_words:
+                                if word in text_lower:
+                                    self._exit_listening_mode()
+                                    self.state = AppState.IDLE
+                                    return
 
                     with self._lock:
                         self.state = AppState.INJECTING
