@@ -74,7 +74,7 @@ wheels = [
 
 [[package]]
 name = "claude-mic"
-version = "0.4.3"
+version = "0.4.4"
 source = { editable = "." }
 dependencies = [
     { name = "faster-whisper" },
@@ -96,7 +96,6 @@ dev = [
     { name = "ruff" },
 ]
 gpu = [
-    { name = "ctranslate2" },
     { name = "nvidia-cudnn-cu12" },
 ]
 linux = [
@@ -108,7 +107,6 @@ macos = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ctranslate2", extras = ["cuda12"], marker = "extra == 'gpu'", specifier = ">=4.0.0" },
     { name = "evdev", marker = "extra == 'linux'", specifier = ">=1.7.0" },
     { name = "faster-whisper", specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
