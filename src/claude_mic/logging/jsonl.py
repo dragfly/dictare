@@ -141,7 +141,7 @@ class JSONLLogger:
         """Log a text injection."""
         self.log(
             "injection",
-            text=text[:100],  # Truncate for log size
+            text=text,  # Full text for debugging
             method=method,
             success=success,
         )

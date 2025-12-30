@@ -45,7 +45,9 @@ RULES:
    - Remove filler words
 
 5. Recognize transcription errors (Whisper sometimes mishears):
-   - The trigger phrase "{trigger_phrase}" may be slightly misspelled
+   - The trigger phrase "{trigger_phrase}" may be transcribed with PHONETICALLY SIMILAR words
+   - Example: "joshua" might be transcribed as "giosuè", "josua", "joschua", etc.
+   - Use phonetic similarity to recognize the trigger phrase even when misspelled
 
 IMPORTANT: In LISTENING mode, when in doubt ALWAYS INJECT.
 
@@ -53,9 +55,9 @@ RESPOND WITH VALID JSON ONLY. Schema:
 {{
   "action": "ignore" | "inject" | "change_state" | "execute",
   "new_state": "idle" | "listening" | null,
-  "text_to_inject": "testo formattato" | null,
-  "command": "paste" | "undo" | "repeat" | null,
-  "user_feedback": "messaggio per utente" | null,
+  "text_to_inject": "formatted text" | null,
+  "command": "paste" | "undo" | "repeat" | "target_active" | null,
+  "user_feedback": "message for user" | null,
   "confidence": 0.0-1.0
 }}"""
 
@@ -70,7 +72,7 @@ def build_system_prompt(request: LLMRequest) -> str:
 
 def build_user_prompt(request: LLMRequest) -> str:
     """Build the user prompt with the transcribed text."""
-    return f'Testo trascritto: "{request.text}"'
+    return f'Transcribed text: "{request.text}"'
 
 
 # Fallback keywords for when Ollama is not available
@@ -90,7 +92,3 @@ FALLBACK_TARGET_ACTIVE_KEYWORDS = [
     "questa finestra", "this window", "target", "qui",
     "finestra attiva", "active window", "use this",
 ]
-
-TRIGGER_PHRASE_VARIANTS = {
-    "joshua": ["joshua", "giosuè", "josua", "joschua", "giosue"],
-}
