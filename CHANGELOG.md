@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2025-12-30
+
+### Fixed
+- **auto_enter now works with ydotool**: Fixed Enter key not being sent
+  - ydotool's `type` command doesn't interpret `\n` as Enter
+  - Now sends `ydotool key enter` separately when text ends with newline
+  - This fixes the `--enter` flag not working
+
 ## [0.9.1] - 2025-12-30
 
 ### Added
