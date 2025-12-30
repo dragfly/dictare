@@ -18,13 +18,11 @@ class Action(Enum):
     IGNORE = "ignore"  # No trigger phrase, noise, etc.
     INJECT = "inject"  # Inject text into terminal
     CHANGE_STATE = "change_state"  # Enter/exit LISTENING mode
-    EXECUTE = "execute"  # Execute command (paste, undo, repeat)
+    EXECUTE = "execute"  # Execute command (repeat)
 
 class Command(Enum):
     """Executable commands."""
 
-    PASTE = "paste"
-    UNDO = "undo"
     REPEAT = "repeat"
 
 @dataclass

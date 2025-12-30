@@ -32,8 +32,6 @@ RULES:
 3. Commands to recognize (by MEANING, in any language):
    - START LISTENING: User wants you to pay attention and transcribe continuously
    - STOP LISTENING: User wants to end the transcription session
-   - PASTE: User wants to paste from clipboard → command="paste"
-   - UNDO: User wants to undo last action → command="undo"
    - REPEAT: User wants to repeat last injection → command="repeat"
 
 4. Text formatting for injection:
@@ -54,7 +52,7 @@ RESPOND WITH VALID JSON ONLY. Schema:
   "action": "ignore" | "inject" | "change_state" | "execute",
   "new_state": "idle" | "listening" | null,
   "text_to_inject": "formatted text" | null,
-  "command": "paste" | "undo" | "repeat" | null,
+  "command": "repeat" | null,
   "user_feedback": "message for user" | null,
   "confidence": 0.0-1.0
 }}"""
@@ -80,6 +78,4 @@ FALLBACK_EXIT_KEYWORDS = [
     "zmetti", "zmeti", "smetty", "smety",  # Whisper errors
 ]
 
-FALLBACK_PASTE_KEYWORDS = ["incolla", "paste"]
-FALLBACK_UNDO_KEYWORDS = ["annulla", "undo"]
 FALLBACK_REPEAT_KEYWORDS = ["ripeti", "repeat"]

@@ -87,6 +87,7 @@ voxtype run --language it         # Force Italian
 voxtype run --enter               # Auto-press Enter after typing
 voxtype run --clipboard           # Use clipboard (for accented chars)
 voxtype check                     # Verify setup
+voxtype speak "Hello world"       # Text-to-speech (requires espeak-ng)
 ```
 
 ## Options
@@ -94,14 +95,23 @@ voxtype check                     # Verify setup
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--vad` | | Voice Activity Detection (hands-free) |
-| `--wake-word` | `-w` | Trigger phrase (e.g., "Hey") |
-| `--model` | `-m` | Whisper model (tiny/base/small/medium/large-v3) |
+| `--wake-word` | `-w` | Trigger phrase (e.g., "Joshua") |
+| `--model` | `-m` | Whisper model (tiny/base/small/medium/large-v3/large-v3-turbo) |
 | `--language` | `-l` | Language code (it, en, es, fr...) or "auto" |
-| `--key` | `-k` | Push-to-talk key (KEY_SCROLLLOCK, KEY_F5, etc.) |
+| `--key` | `-k` | Push-to-talk key (KEY_SCROLLLOCK, KEY_RIGHTMETA, etc.) |
 | `--enter` | `-e` | Auto-press Enter after typing |
 | `--clipboard` | `-C` | Copy to clipboard instead of typing |
+| `--keyboard` | `-K` | Force keyboard typing (may crash some apps) |
 | `--gpu` | | Use GPU acceleration (NVIDIA CUDA) |
 | `--mlx` | | Use GPU acceleration (Apple Silicon Metal) |
+| `--config` | `-c` | Path to custom config file |
+| `--max-duration` | `-d` | Max recording duration in seconds (default 60) |
+| `--silence-ms` | `-s` | VAD silence duration to end speech (default 1200) |
+| `--typing-delay` | | Delay between keystrokes in ms (for keyboard mode) |
+| `--log-file` | `-L` | JSONL log file for structured logging |
+| `--debug` | | Show all transcriptions (debug mode) |
+| `--no-commands` | | Disable voice command processing |
+| `--verbose` | `-v` | Enable verbose output |
 
 ## Configuration
 
@@ -112,8 +122,8 @@ voxtype config  # Show current config
 
 ## Requirements
 
-- Linux (X11 or Wayland)
-- Docker (for building dependencies)
+- Linux (X11 or Wayland) or macOS (Intel or Apple Silicon)
+- Docker (for building dependencies on Linux)
 - [uv](https://github.com/astral-sh/uv) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 
 ## How It Works
@@ -131,13 +141,13 @@ Audio → Whisper (STT) → LLM (commands) → ydotool (typing)
 
 ### macOS
 
-- **Clipboard mode is default**: On macOS, voxtype uses clipboard (paste) instead of keystroke injection. This avoids compatibility issues with some apps like Claude Code. Use `--clipboard` explicitly or let it auto-detect.
+- **Clipboard mode is default**: voxtype uses clipboard (paste) instead of keystroke injection. This avoids compatibility issues with some apps. Use `--keyboard` to force direct typing.
 - **Accessibility permissions**: Required for both clipboard paste and keystroke simulation. Add your terminal app in System Settings → Privacy & Security → Accessibility.
 - **Latency**: Expect ~8 seconds with `large-v3-turbo` on MLX. Use `medium` or `small` for faster response.
 
 ### Linux
 
-- **Direct typing**: Uses ydotool/wtype/xdotool for direct keystroke injection (faster than clipboard).
+- **Clipboard mode is default**: Same as macOS, clipboard is preferred for compatibility. Use `--keyboard` to force direct typing via ydotool/wtype/xdotool.
 - **GPU acceleration**: With CUDA, expect ~2-3 seconds latency with `large-v3`.
 
 ## License
