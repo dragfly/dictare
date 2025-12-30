@@ -383,6 +383,9 @@ class ClaudeMicApp:
         """Handle VAD speech start detection."""
         with self._lock:
             if self.state != AppState.IDLE:
+                # Debug: show why we're ignoring
+                if self.debug:
+                    self._console.print(f"[yellow][DEBUG] Speech ignored, state={self.state.name}[/]")
                 return
             self.state = AppState.RECORDING
 
