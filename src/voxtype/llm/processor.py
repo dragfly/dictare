@@ -286,8 +286,10 @@ class LLMProcessor:
 
             return LLMResponse.ignore("Trigger phrase only, no command")
 
-        # No trigger phrase configured - inject everything
-        return LLMResponse.inject(request.text)
+        # No trigger phrase configured
+        # In IDLE mode: ignore (user must toggle back to LISTENING via hotkey)
+        # This should not happen in normal flow since we check LISTENING above
+        return LLMResponse.ignore("Not in LISTENING mode", backend="keyword")
 
     def _find_trigger_phrase(self, text_lower: str, trigger: str) -> tuple[bool, str]:
         """Find trigger phrase anywhere in text (fallback mode - exact match only).
