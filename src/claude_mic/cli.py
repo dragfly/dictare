@@ -189,7 +189,20 @@ def run(
     logger = None
     if log_file:
         from claude_mic.logging import JSONLLogger
-        logger = JSONLLogger(log_file, __version__)
+
+        # Collect startup parameters for logging
+        log_params = {
+            "input_mode": "vad" if vad else "push_to_talk",
+            "trigger_phrase": wake_word,
+            "stt_model": config.stt.model_size,
+            "stt_device": config.stt.device,
+            "stt_language": config.stt.language,
+            "output_mode": config.injection.backend,
+            "auto_enter": config.injection.auto_enter,
+            "debug": debug,
+            "silence_ms": silence_ms or 1200,
+        }
+        logger = JSONLLogger(log_file, __version__, params=log_params)
         console.print(f"[dim]Logging to: {log_file}[/]")
 
     mic_app = ClaudeMicApp(
