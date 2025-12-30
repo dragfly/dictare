@@ -27,11 +27,13 @@ def _generate_beep(
 _BEEP_START = _generate_beep(800, 0.15)  # Higher pitch for start
 _BEEP_STOP = _generate_beep(400, 0.15)  # Lower pitch for stop
 
-# Error/busy beep: two short beeps
+# Error/busy beep: three harsh beeps (longer, more annoying)
 _BEEP_BUSY = np.concatenate([
-    _generate_beep(600, 0.08),  # First short beep
-    np.zeros(int(_SAMPLE_RATE * 0.05), dtype=np.float32),  # Gap
-    _generate_beep(600, 0.08),  # Second short beep
+    _generate_beep(500, 0.15),  # First beep
+    np.zeros(int(_SAMPLE_RATE * 0.08), dtype=np.float32),  # Gap
+    _generate_beep(500, 0.15),  # Second beep
+    np.zeros(int(_SAMPLE_RATE * 0.08), dtype=np.float32),  # Gap
+    _generate_beep(500, 0.15),  # Third beep
 ])
 
 def play_beep_start() -> None:
