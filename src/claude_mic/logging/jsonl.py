@@ -18,12 +18,18 @@ class JSONLLogger:
     {"ts":"2024-12-30T10:30:01Z","event":"wake_word_check","found":true,...}
     """
 
-    def __init__(self, log_path: Path | str, version: str) -> None:
+    def __init__(
+        self,
+        log_path: Path | str,
+        version: str,
+        params: Optional[dict] = None,
+    ) -> None:
         """Initialize the JSONL logger.
 
         Args:
             log_path: Path to the log file.
             version: Application version for logging.
+            params: Optional startup parameters to log.
         """
         self.log_path = Path(log_path)
         self.version = version
@@ -35,8 +41,11 @@ class JSONLLogger:
         # Open file in append mode
         self._file = open(self.log_path, "a", encoding="utf-8")
 
-        # Log session start
-        self.log("session_start", version=version)
+        # Log session start with all parameters
+        session_data = {"version": version}
+        if params:
+            session_data.update(params)
+        self.log("session_start", **session_data)
 
     def log(self, event: str, **data: Any) -> None:
         """Log an event with structured data.
