@@ -125,6 +125,10 @@ def run(
         Optional[int],
         typer.Option("--silence-ms", "-s", help="VAD silence duration to end speech (default 1200)"),
     ] = None,
+    wake_word: Annotated[
+        Optional[str],
+        typer.Option("--wake-word", "-w", help="Wake word to activate (e.g., 'Joshua')"),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -160,15 +164,17 @@ def run(
     # Lazy import to speed up CLI
     from claude_mic.core.app import ClaudeMicApp
 
-    mic_app = ClaudeMicApp(config, use_vad=vad, vad_silence_ms=silence_ms)
+    mic_app = ClaudeMicApp(config, use_vad=vad, vad_silence_ms=silence_ms, wake_word=wake_word)
 
     mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
     device_str = "[magenta]GPU (CUDA)[/]" if config.stt.device == "cuda" else "CPU"
     input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
+    wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
     console.print(
         Panel(
             f"[bold green]claude-mic[/] v{__version__}\n\n"
             f"Input mode: {input_mode}\n"
+            f"{wake_str}"
             f"STT model: [cyan]{config.stt.model_size}[/] on {device_str}\n"
             f"Language: [cyan]{config.stt.language}[/]\n"
             f"Output mode: {mode_str}\n\n"

@@ -30,17 +30,25 @@ class ClaudeMicApp:
     # Minimum recording duration in seconds
     MIN_RECORDING_DURATION = 0.3
 
-    def __init__(self, config: Config, use_vad: bool = False, vad_silence_ms: int | None = None) -> None:
+    def __init__(
+        self,
+        config: Config,
+        use_vad: bool = False,
+        vad_silence_ms: int | None = None,
+        wake_word: str | None = None,
+    ) -> None:
         """Initialize the application.
 
         Args:
             config: Application configuration.
             use_vad: If True, use VAD mode instead of push-to-talk.
-            vad_silence_ms: Silence duration in ms to end speech (default 700).
+            vad_silence_ms: Silence duration in ms to end speech (default 1200).
+            wake_word: Optional wake word to activate (e.g., "Joshua").
         """
         self.config = config
         self.use_vad = use_vad
         self.vad_silence_ms = vad_silence_ms or 1200
+        self.wake_word = wake_word.lower() if wake_word else None
         self.state = AppState.IDLE
         self._running = False
         self._console = Console()
@@ -398,6 +406,35 @@ class ClaudeMicApp:
         # Transcribe and inject
         self._transcribe_and_inject(audio_data)
 
+    def _check_wake_word(self, text: str) -> tuple[bool, str]:
+        """Check if text starts with wake word and return filtered text.
+
+        Args:
+            text: Transcribed text.
+
+        Returns:
+            Tuple of (wake_word_found, filtered_text).
+        """
+        if not self.wake_word:
+            return True, text
+
+        text_lower = text.lower().strip()
+
+        # Check various formats: "Joshua, ...", "Joshua ...", "Joshua:"
+        for sep in [",", ":", " "]:
+            if text_lower.startswith(self.wake_word + sep):
+                # Remove wake word and separator
+                filtered = text[len(self.wake_word) + 1:].strip()
+                return True, filtered
+
+        # Check if it starts exactly with wake word (might be all they said)
+        if text_lower.startswith(self.wake_word):
+            filtered = text[len(self.wake_word):].strip()
+            if filtered:
+                return True, filtered
+
+        return False, text
+
     def _transcribe_and_inject(self, audio_data) -> None:
         """Transcribe audio and inject text."""
         def do_transcribe():
@@ -411,6 +448,18 @@ class ClaudeMicApp:
                 )
 
                 if text:
+                    # Check wake word
+                    wake_found, filtered_text = self._check_wake_word(text)
+                    if not wake_found:
+                        if self.config.verbose:
+                            self._console.print(f"[dim]Ignored (no wake word): {text[:40]}...[/]")
+                        self.state = AppState.IDLE
+                        return
+
+                    text = filtered_text
+                    if not text:
+                        self.state = AppState.IDLE
+                        return
                     with self._lock:
                         self.state = AppState.INJECTING
 
