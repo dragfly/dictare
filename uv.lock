@@ -1393,7 +1393,7 @@ wheels = [
 
 [[package]]
 name = "voxtype"
-version = "1.0.2"
+version = "1.0.4"
 source = { editable = "." }
 dependencies = [
     { name = "faster-whisper" },
