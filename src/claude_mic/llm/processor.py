@@ -178,9 +178,21 @@ class LLMProcessor:
                     self._console.print("[yellow]LLM returned execute without command, using keywords[/]")
                 return self._process_with_keywords(request)
 
-            # In LISTENING mode: trust LLM decision, but override IGNORE
-            # (LLM should never ignore in LISTENING mode - always inject or exit)
+            # In LISTENING mode: check for exit commands first, then handle LLM decision
             if request.current_state == AppState.LISTENING:
+                text_lower = request.text.lower()
+                words = text_lower.split()
+
+                # Check for SHORT exit commands (≤4 words) - these should always exit
+                # Examples: "smetti", "stop", "Joshua smetti", "ok basta"
+                if len(words) <= 4:
+                    for keyword in FALLBACK_EXIT_KEYWORDS:
+                        if keyword in text_lower:
+                            if self._console:
+                                self._console.print(f"[yellow]LISTENING: short exit command '{keyword}' detected[/]")
+                            return LLMResponse.exit_listening(backend="ollama")
+
+                # If LLM says IGNORE on longer text, inject anyway
                 if action == Action.IGNORE:
                     if self._console:
                         self._console.print("[yellow]LISTENING: LLM said ignore, injecting anyway[/]")
@@ -190,16 +202,27 @@ class LLMProcessor:
                         override="LLM said ignore in LISTENING mode",
                     )
 
-            # Sanity check: in IDLE mode, if LLM says ignore but text has trigger phrase + ascolta, override
-            if request.current_state == AppState.IDLE and action == Action.IGNORE and request.trigger_phrase:
+            # Sanity check: in IDLE mode
+            if request.current_state == AppState.IDLE and request.trigger_phrase:
                 text_lower = request.text.lower()
                 trigger_found, _ = self._find_trigger_phrase(text_lower, request.trigger_phrase)
+
                 if trigger_found:
-                    for keyword in FALLBACK_ENTER_KEYWORDS:
-                        if keyword in text_lower:
-                            if self._console:
-                                self._console.print(f"[yellow]LLM ignored trigger+'{keyword}', overriding[/]")
-                            return LLMResponse.enter_listening()
+                    # Check for exit words - in IDLE mode, these should be ignored (can't exit what you're not in)
+                    has_exit_word = any(kw in text_lower for kw in FALLBACK_EXIT_KEYWORDS)
+                    has_enter_word = any(kw in text_lower for kw in FALLBACK_ENTER_KEYWORDS)
+
+                    # If LLM says enter listening but text has exit words (not enter words) - override to ignore
+                    if action == Action.CHANGE_STATE and new_state == AppState.LISTENING and has_exit_word and not has_enter_word:
+                        if self._console:
+                            self._console.print("[yellow]IDLE: LLM tried to enter LISTENING on exit word, ignoring[/]")
+                        return LLMResponse.ignore("Exit word in IDLE mode", backend="ollama")
+
+                    # If LLM says ignore but text has trigger + ascolta, override to enter
+                    if action == Action.IGNORE and has_enter_word:
+                        if self._console:
+                            self._console.print(f"[yellow]LLM ignored trigger+enter word, overriding[/]")
+                        return LLMResponse.enter_listening(backend="ollama")
 
             return LLMResponse(
                 action=action,
