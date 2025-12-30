@@ -1,6 +1,6 @@
 #!/bin/bash
 # voxtype installer for macOS
-# Usage: ./install-macos.sh [--gpu]
+# Usage: ./install-macos.sh [--mlx]
 
 set -e
 
@@ -18,17 +18,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Parse args
-WITH_GPU=0
+WITH_MLX=0
 for arg in "$@"; do
     case $arg in
-        --gpu) WITH_GPU=1 ;;
+        --mlx) WITH_MLX=1 ;;
     esac
 done
 
 TOTAL=3
 echo "voxtype installer (macOS)"
 echo "============================"
-[ $WITH_GPU -eq 1 ] && echo "GPU support: enabled"
+[ $WITH_MLX -eq 1 ] && echo "MLX support: enabled (Apple Silicon GPU)"
 
 # Check prerequisites
 command -v uv >/dev/null || fail "uv not found. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
@@ -54,10 +54,10 @@ if [ -d .venv ] && ! .venv/bin/python --version 2>/dev/null | grep -q "3\.11"; t
     rm -rf .venv
 fi
 EXTRAS="--extra macos"
-[ $WITH_GPU -eq 1 ] && EXTRAS="$EXTRAS --extra gpu"
+[ $WITH_MLX -eq 1 ] && EXTRAS="$EXTRAS --extra mlx"
 uv sync $EXTRAS >/dev/null
-if [ $WITH_GPU -eq 1 ]; then
-    info "Installed Python packages (with GPU/CUDA support)"
+if [ $WITH_MLX -eq 1 ]; then
+    info "Installed Python packages (with MLX for Apple Silicon GPU)"
 else
     info "Installed Python packages (with pynput for hotkey detection)"
 fi
@@ -67,34 +67,37 @@ step 3 "Checking permissions..."
 echo ""
 warn "macOS requires Accessibility permissions for keyboard simulation."
 echo ""
-echo "  Per aggiungere il tuo terminale:"
+echo "  To add your terminal app:"
 echo ""
 echo "  macOS Ventura/Sonoma (13+):"
-echo "    1. Apri System Settings"
+echo "    1. Open System Settings"
 echo "    2. Privacy & Security → Accessibility"
-echo "    3. Clicca il '+' in basso"
-echo "    4. Naviga a /Applications/Utilities/ e seleziona Terminal.app"
-echo "       (o il tuo terminale: iTerm, Alacritty, etc.)"
-echo "    5. Attiva il toggle accanto all'app"
+echo "    3. Click '+' at the bottom"
+echo "    4. Navigate to /Applications/Utilities/ and select Terminal.app"
+echo "       (or your terminal: iTerm, Alacritty, etc.)"
+echo "    5. Enable the toggle next to the app"
 echo ""
-echo "  macOS Monterey e precedenti (12-):"
-echo "    1. Apri System Preferences"
+echo "  macOS Monterey and earlier (12-):"
+echo "    1. Open System Preferences"
 echo "    2. Security & Privacy → Privacy → Accessibility"
-echo "    3. Clicca il lucchetto in basso a sinistra"
-echo "    4. Clicca '+' e aggiungi il tuo terminale"
+echo "    3. Click the lock at bottom left"
+echo "    4. Click '+' and add your terminal"
 echo ""
-echo "  Dopo aver aggiunto i permessi, RIAVVIA il terminale."
+echo "  After adding permissions, RESTART your terminal."
 echo ""
 
 # Done
 echo "===================="
 info "Installation complete!"
 echo ""
-echo "Tasti consigliati per Mac (ScrollLock non esiste):"
-echo "  --key KEY_RIGHTMETA   # Right Command (⌘) - CONSIGLIATO"
+echo "Recommended keys for Mac (ScrollLock doesn't exist):"
+echo "  --key KEY_RIGHTMETA   # Right Command (⌘) - RECOMMENDED"
 echo "  --key KEY_RIGHTALT    # Right Option (⌥)"
 echo ""
-echo "NOTA: Non usare F1-F12, producono sequenze escape nel terminale."
+echo "NOTE: Avoid F1-F12, they produce escape sequences in terminal."
 echo ""
-echo "Esempio:"
-echo "  uv run voxtype run --key KEY_RIGHTMETA --model medium --language it --enter"
+echo "Example:"
+echo "  uv run voxtype run --key KEY_RIGHTMETA --model base --enter"
+echo ""
+echo "With MLX (Apple Silicon GPU):"
+echo "  uv run voxtype run --mlx --key KEY_RIGHTMETA --model large-v3 --enter"

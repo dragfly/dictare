@@ -43,6 +43,34 @@ uv run voxtype run --gpu --model large-v3
 
 Requires NVIDIA GPU with CUDA 12+ drivers installed.
 
+## Quick Start (macOS)
+
+```bash
+git clone https://github.com/dragfly/voxtype
+cd voxtype
+./install-macos.sh        # For Apple Silicon: ./install-macos.sh --mlx
+# Grant Accessibility permissions (see installer output)
+uv run voxtype run --key KEY_RIGHTMETA
+```
+
+Hold **Right Command (⌘)**, speak, release. Text appears where your cursor is.
+
+### MLX Acceleration (Apple Silicon)
+
+For faster transcription on M1/M2/M3 Macs:
+
+```bash
+./install-macos.sh --mlx  # Installs mlx-whisper
+```
+
+Then run with `--mlx`:
+
+```bash
+uv run voxtype run --mlx --model large-v3 --key KEY_RIGHTMETA
+```
+
+MLX uses the Metal GPU, 3x faster than CPU.
+
 ## Usage
 
 ```bash
@@ -67,7 +95,8 @@ voxtype check                     # Verify setup
 | `--key` | `-k` | Push-to-talk key (KEY_SCROLLLOCK, KEY_F5, etc.) |
 | `--enter` | `-e` | Auto-press Enter after typing |
 | `--clipboard` | `-C` | Copy to clipboard instead of typing |
-| `--gpu` | | Use GPU acceleration (requires CUDA) |
+| `--gpu` | | Use GPU acceleration (NVIDIA CUDA) |
+| `--mlx` | | Use GPU acceleration (Apple Silicon Metal) |
 
 ## Configuration
 
