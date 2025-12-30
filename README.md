@@ -22,10 +22,26 @@ cd voxtype
 ./setup-permissions.sh    # One-time sudo
 # Log out and back in
 systemctl --user start ydotoold
-voxtype run
+uv run voxtype run
 ```
 
 Hold **ScrollLock**, speak, release. Text appears where your cursor is.
+
+### GPU Acceleration (Optional)
+
+For faster transcription with large models, install with CUDA support:
+
+```bash
+./install.sh --gpu        # Installs nvidia-cudnn-cu12
+```
+
+Then run with `--gpu`:
+
+```bash
+uv run voxtype run --gpu --model large-v3
+```
+
+Requires NVIDIA GPU with CUDA 12+ drivers installed.
 
 ## Usage
 
@@ -51,6 +67,7 @@ voxtype check                     # Verify setup
 | `--key` | `-k` | Push-to-talk key (KEY_SCROLLLOCK, KEY_F5, etc.) |
 | `--enter` | `-e` | Auto-press Enter after typing |
 | `--clipboard` | `-C` | Copy to clipboard instead of typing |
+| `--gpu` | | Use GPU acceleration (requires CUDA) |
 
 ## Configuration
 
