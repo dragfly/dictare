@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import queue
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import sounddevice as sd
@@ -128,6 +128,47 @@ class AudioCapture:
                 )
 
         return input_devices
+
+    def start_streaming(self, callback: Callable[["NDArray[np.float32]"], None]) -> None:
+        """Start continuous audio streaming with callback.
+
+        Args:
+            callback: Called for each audio chunk (512 samples for VAD).
+        """
+        with self._lock:
+            if self._stream is not None:
+                return
+
+            self._streaming_callback = callback
+            self._stream = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=self.channels,
+                device=self.device,
+                dtype=self.dtype,
+                blocksize=512,  # Match VAD chunk size
+                callback=self._streaming_audio_callback,
+            )
+            self._stream.start()
+
+    def _streaming_audio_callback(
+        self,
+        indata: NDArray[np.float32],
+        frames: int,
+        time_info: dict,
+        status: sd.CallbackFlags,
+    ) -> None:
+        """Callback for streaming mode."""
+        if hasattr(self, "_streaming_callback") and self._streaming_callback:
+            self._streaming_callback(indata.flatten().copy())
+
+    def stop_streaming(self) -> None:
+        """Stop continuous audio streaming."""
+        with self._lock:
+            if self._stream:
+                self._stream.stop()
+                self._stream.close()
+                self._stream = None
+            self._streaming_callback = None
 
     @staticmethod
     def get_default_device() -> dict | None:
