@@ -16,24 +16,28 @@ from claude_mic.injection.base import TextInjector
 from claude_mic.stt.base import STTEngine
 
 if TYPE_CHECKING:
+    from claude_mic.audio.vad import SileroVAD, StreamingVAD
     from claude_mic.config import Config
 
 class ClaudeMicApp:
     """Main application orchestrator.
 
     Coordinates audio capture, STT, hotkey detection, and text injection.
+    Supports both push-to-talk and VAD (voice activity detection) modes.
     """
 
     # Minimum recording duration in seconds
     MIN_RECORDING_DURATION = 0.3
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, use_vad: bool = False) -> None:
         """Initialize the application.
 
         Args:
             config: Application configuration.
+            use_vad: If True, use VAD mode instead of push-to-talk.
         """
         self.config = config
+        self.use_vad = use_vad
         self.state = AppState.IDLE
         self._running = False
         self._console = Console()
@@ -45,6 +49,10 @@ class ClaudeMicApp:
         self._hotkey: HotkeyListener | None = None
         self._injector: TextInjector | None = None
         self._recording_timer: threading.Timer | None = None
+
+        # VAD components
+        self._vad: SileroVAD | None = None
+        self._streaming_vad: StreamingVAD | None = None
 
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
@@ -196,7 +204,7 @@ class ClaudeMicApp:
         return ClipboardInjector()
 
     def _init_components(self) -> None:
-        """Initialize all components."""
+        """Initialize all components for push-to-talk mode."""
         self._console.print("[dim]Initializing components...[/]")
 
         self._audio = self._create_audio_capture()
@@ -209,6 +217,37 @@ class ClaudeMicApp:
             self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
 
         self._console.print(f"[green]Ready![/] Press {self.config.hotkey.key} to record.")
+
+    def _init_vad_components(self) -> None:
+        """Initialize components for VAD mode."""
+        self._console.print("[dim]Initializing VAD components...[/]")
+
+        self._audio = self._create_audio_capture()
+        self._stt = self._create_stt_engine()
+        self._injector = self._create_injector()
+
+        # Create VAD
+        from claude_mic.audio.vad import SileroVAD, StreamingVAD
+
+        self._vad = SileroVAD(
+            threshold=0.5,
+            neg_threshold=0.35,
+            min_silence_ms=700,  # End speech after 700ms silence
+            min_speech_ms=250,   # Need 250ms speech to trigger
+            sample_rate=self.config.audio.sample_rate,
+        )
+
+        # Create streaming VAD processor
+        self._streaming_vad = StreamingVAD(
+            vad=self._vad,
+            on_speech_start=self._on_vad_speech_start,
+            on_speech_end=self._on_vad_speech_end,
+        )
+
+        if self.config.verbose:
+            self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
+
+        self._console.print("[green]Ready![/] Start speaking...")
 
     def _on_hotkey_press(self) -> None:
         """Handle hotkey press - start recording."""
@@ -326,8 +365,115 @@ class ClaudeMicApp:
         thread = threading.Thread(target=transcribe_and_inject, daemon=True)
         thread.start()
 
+    def _on_vad_speech_start(self) -> None:
+        """Handle VAD speech start detection."""
+        with self._lock:
+            if self.state != AppState.IDLE:
+                return
+            self.state = AppState.RECORDING
+
+        self._console.print("[bold cyan]Listening...[/]", end="\r")
+
+    def _on_vad_speech_end(self, audio_data) -> None:
+        """Handle VAD speech end detection."""
+        import numpy as np
+
+        with self._lock:
+            if self.state != AppState.RECORDING:
+                return
+            self.state = AppState.TRANSCRIBING
+
+        # Check minimum duration
+        min_samples = int(self.config.audio.sample_rate * self.MIN_RECORDING_DURATION)
+        if len(audio_data) < min_samples:
+            self._console.print("[dim]Too short, ignoring.        [/]")
+            self.state = AppState.IDLE
+            return
+
+        self._console.print("[bold yellow]Transcribing...[/]", end="\r")
+
+        # Transcribe and inject
+        self._transcribe_and_inject(audio_data)
+
+    def _transcribe_and_inject(self, audio_data) -> None:
+        """Transcribe audio and inject text."""
+        def do_transcribe():
+            try:
+                if not self._stt:
+                    return
+
+                text = self._stt.transcribe(
+                    audio_data,
+                    language=self.config.stt.language,
+                )
+
+                if text:
+                    with self._lock:
+                        self.state = AppState.INJECTING
+
+                    # Truncate display if too long
+                    display_text = text[:60] + "..." if len(text) > 60 else text
+                    self._console.print(f"[green]Transcribed:[/] {display_text}        ")
+
+                    # Add Enter if configured
+                    inject_text = text + "\n" if self.config.injection.auto_enter else text
+
+                    if self._injector:
+                        # Pass auto_paste for clipboard mode
+                        if self._injector.get_name() == "clipboard":
+                            success = self._injector.type_text(
+                                inject_text,
+                                delay_ms=self.config.injection.typing_delay_ms,
+                                auto_paste=self.config.injection.auto_paste,
+                            )
+                            if success and self.config.injection.auto_paste:
+                                pass  # Auto-pasted, no message needed
+                            elif success:
+                                self._console.print(
+                                    "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
+                                )
+                        else:
+                            success = self._injector.type_text(
+                                inject_text,
+                                delay_ms=self.config.injection.typing_delay_ms,
+                            )
+
+                        if not success:
+                            if self.config.injection.fallback_to_clipboard:
+                                from claude_mic.injection.clipboard import ClipboardInjector
+
+                                clipboard = ClipboardInjector()
+                                if clipboard.is_available():
+                                    clipboard.type_text(text)
+                                    self._console.print(
+                                        "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
+                                    )
+                            else:
+                                self._console.print("[red]Failed to inject text[/]")
+                else:
+                    self._console.print("[dim]No speech detected.                    [/]")
+            except Exception as e:
+                self._console.print(f"[red]Error: {e}[/]")
+            finally:
+                self.state = AppState.IDLE
+
+        thread = threading.Thread(target=do_transcribe, daemon=True)
+        thread.start()
+
+    def _on_vad_audio_chunk(self, chunk) -> None:
+        """Process audio chunk through VAD."""
+        if self._streaming_vad and self._running:
+            self._streaming_vad.process_chunk(chunk)
+
     def run(self) -> None:
         """Start the application main loop."""
+        if self.use_vad:
+            self._run_vad_mode()
+        else:
+            self._run_push_to_talk_mode()
+
+    def _run_push_to_talk_mode(self) -> None:
+        """Run in push-to-talk mode."""
         self._init_components()
         self._running = True
 
@@ -344,6 +490,22 @@ class ClaudeMicApp:
         except KeyboardInterrupt:
             pass
 
+    def _run_vad_mode(self) -> None:
+        """Run in VAD (voice activity detection) mode."""
+        self._init_vad_components()
+        self._running = True
+
+        # Start continuous audio streaming
+        if self._audio:
+            self._audio.start_streaming(self._on_vad_audio_chunk)
+
+        # Keep main thread alive
+        try:
+            while self._running:
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            pass
+
     def stop(self) -> None:
         """Stop the application."""
         self._running = False
@@ -351,5 +513,10 @@ class ClaudeMicApp:
         if self._hotkey:
             self._hotkey.stop()
 
-        if self._audio and self._audio.is_recording():
-            self._audio.stop_recording()
+        if self._audio:
+            if self._audio.is_recording():
+                self._audio.stop_recording()
+            self._audio.stop_streaming()
+
+        if self._streaming_vad:
+            self._streaming_vad.flush()
