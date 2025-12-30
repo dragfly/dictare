@@ -294,6 +294,15 @@ class LLMProcessor:
                     if keyword in text_lower:
                         return LLMResponse.exit_listening()
 
+            # Check for commands even in LISTENING mode (with trigger phrase)
+            if request.trigger_phrase:
+                trigger_lower = request.trigger_phrase.lower()
+                if trigger_lower in text_lower:
+                    # Target active command
+                    for keyword in FALLBACK_TARGET_ACTIVE_KEYWORDS:
+                        if keyword in text_lower:
+                            return LLMResponse.execute(Command.TARGET_ACTIVE, backend="keyword")
+
             # Otherwise inject the text
             return LLMResponse.inject(request.text)
 
