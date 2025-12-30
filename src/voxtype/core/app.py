@@ -177,51 +177,43 @@ class ClaudeMicApp:
         )
 
     def _check_linux_dependencies(self) -> None:
-        """Check Linux-specific dependencies and warn if missing."""
+        """Check Linux-specific dependencies and exit if critical ones missing."""
         import shutil
-        import subprocess
+        from pathlib import Path
 
-        warnings = []
+        # Check if ydotoold is running (required for text injection)
+        if shutil.which("ydotool"):
+            # Check socket file (more reliable than pgrep)
+            socket_paths = [
+                Path(f"/run/user/{os.getuid()}/.ydotool_socket"),
+                Path("/tmp/.ydotool_socket"),
+            ]
+            if not any(p.exists() for p in socket_paths):
+                self._console.print("\n[red bold]ERROR: ydotoold is not running[/]\n")
+                self._console.print("ydotoold is required for text injection on Linux.")
+                self._console.print("It handles keyboard simulation for both typing and clipboard paste.\n")
+                self._console.print("[yellow]To start it:[/]")
+                self._console.print("  [cyan]systemctl --user start ydotoold[/]\n")
+                self._console.print("[dim]To enable auto-start on login:[/]")
+                self._console.print("  [dim]systemctl --user enable ydotoold[/]\n")
+                raise SystemExit(1)
 
-        # Check if ydotoold is running (needed for clipboard paste and keyboard mode)
-        ydotool_installed = shutil.which("ydotool") is not None
-        if ydotool_installed:
-            try:
-                result = subprocess.run(
-                    ["pgrep", "-x", "ydotoold"],
-                    capture_output=True,
-                    timeout=5,
-                )
-                if result.returncode != 0:
-                    warnings.append(
-                        "[red]ydotoold daemon is not running![/]\n"
-                        "  Start it with: [bold]systemctl --user start ydotoold[/]"
-                    )
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
-
-        # Check for clipboard tools
+        # Check for clipboard tools (warning only)
         session_type = os.environ.get("XDG_SESSION_TYPE", "")
         is_wayland = os.environ.get("WAYLAND_DISPLAY") or session_type == "wayland"
 
         if is_wayland:
             if not shutil.which("wl-copy"):
-                warnings.append(
+                self._console.print(
                     "[yellow]wl-copy not found (needed for clipboard on Wayland)[/]\n"
-                    "  Install: [bold]sudo apt install wl-clipboard[/]"
+                    "  Install: [bold]sudo apt install wl-clipboard[/]\n"
                 )
         else:
             if not shutil.which("xclip") and not shutil.which("xsel"):
-                warnings.append(
+                self._console.print(
                     "[yellow]xclip/xsel not found (needed for clipboard on X11)[/]\n"
-                    "  Install: [bold]sudo apt install xclip[/]"
+                    "  Install: [bold]sudo apt install xclip[/]\n"
                 )
-
-        for warning in warnings:
-            self._console.print(warning)
-
-        if any("[red]" in w for w in warnings):
-            self._console.print("")  # Extra line for readability
 
     def _create_injector(self) -> TextInjector:
         """Create text injector with auto-detection."""
