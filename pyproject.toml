@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11,<3.12"
 authors = [
-    { name = "Your Name", email = "you@example.com" }
+    { name = "dragfly" }
 ]
 keywords = ["voice", "speech-to-text", "dictation", "cli", "whisper", "linux", "wayland"]
 classifiers = [

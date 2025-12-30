@@ -10,9 +10,7 @@ from voxtype.llm.models import Action, AppState, Command, LLMRequest, LLMRespons
 from voxtype.llm.prompts import (
     FALLBACK_ENTER_KEYWORDS,
     FALLBACK_EXIT_KEYWORDS,
-    FALLBACK_PASTE_KEYWORDS,
     FALLBACK_REPEAT_KEYWORDS,
-    FALLBACK_UNDO_KEYWORDS,
     build_system_prompt,
     build_user_prompt,
 )
@@ -276,14 +274,6 @@ class LLMProcessor:
             for keyword in FALLBACK_EXIT_KEYWORDS:
                 if keyword in text_after:
                     return LLMResponse.exit_listening()
-
-            for keyword in FALLBACK_PASTE_KEYWORDS:
-                if keyword in text_after:
-                    return LLMResponse.execute(Command.PASTE)
-
-            for keyword in FALLBACK_UNDO_KEYWORDS:
-                if keyword in text_after:
-                    return LLMResponse.execute(Command.UNDO)
 
             for keyword in FALLBACK_REPEAT_KEYWORDS:
                 if keyword in text_after:
