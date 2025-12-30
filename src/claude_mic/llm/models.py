@@ -30,6 +30,7 @@ class Command(Enum):
     UNDO = "undo"
     REPEAT = "repeat"
     TARGET_WINDOW = "target_window"
+    TARGET_ACTIVE = "target_active"  # Set current focused window as target
 
 
 @dataclass

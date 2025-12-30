@@ -12,6 +12,7 @@ from claude_mic.llm.prompts import (
     FALLBACK_EXIT_KEYWORDS,
     FALLBACK_PASTE_KEYWORDS,
     FALLBACK_REPEAT_KEYWORDS,
+    FALLBACK_TARGET_ACTIVE_KEYWORDS,
     FALLBACK_UNDO_KEYWORDS,
     TRIGGER_PHRASE_VARIANTS,
     build_system_prompt,
@@ -212,6 +213,12 @@ class LLMProcessor:
                 text_lower = request.text.lower()
                 trigger_found, _ = self._find_trigger_phrase(text_lower, request.trigger_phrase)
 
+                # CRITICAL: Cannot change state without trigger phrase!
+                if not trigger_found and action == Action.CHANGE_STATE:
+                    if self._console:
+                        self._console.print("[yellow]IDLE: LLM tried to change state without trigger phrase, ignoring[/]")
+                    return LLMResponse.ignore("No trigger phrase for state change", backend="ollama")
+
                 if trigger_found:
                     # Check for exit words - in IDLE mode, these should be ignored (can't exit what you're not in)
                     has_exit_word = any(kw in text_lower for kw in FALLBACK_EXIT_KEYWORDS)
@@ -291,6 +298,10 @@ class LLMProcessor:
             for keyword in FALLBACK_REPEAT_KEYWORDS:
                 if keyword in text_after:
                     return LLMResponse.execute(Command.REPEAT)
+
+            for keyword in FALLBACK_TARGET_ACTIVE_KEYWORDS:
+                if keyword in text_lower:  # Check full text, not just after trigger
+                    return LLMResponse.execute(Command.TARGET_ACTIVE, backend="keyword")
 
             # Extract text to inject (text after trigger phrase)
             inject_text = self._extract_text_after_trigger(request)
