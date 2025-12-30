@@ -425,19 +425,30 @@ class ClaudeMicApp:
 
         text_lower = text.lower().strip()
 
-        # Check various formats: "Joshua, ...", "Joshua ...", "Joshua:"
-        for sep in [",", ":", " "]:
-            if text_lower.startswith(self.wake_word + sep):
+        if self.debug:
+            self._console.print(f"[blue][DEBUG] Wake check: text_lower='{text_lower}'[/]")
+            self._console.print(f"[blue][DEBUG] Wake word='{self.wake_word}'[/]")
+
+        # Check various formats: "Joshua, ...", "Joshua ...", "Joshua:", "Joshua."
+        for sep in [",", ":", ".", " "]:
+            pattern = self.wake_word + sep
+            if text_lower.startswith(pattern):
                 # Remove wake word and separator
                 filtered = text[len(self.wake_word) + 1:].strip()
+                if self.debug:
+                    self._console.print(f"[blue][DEBUG] Match with '{sep}' -> filtered='{filtered}'[/]")
                 return True, filtered
 
         # Check if it starts exactly with wake word (might be all they said)
         if text_lower.startswith(self.wake_word):
             filtered = text[len(self.wake_word):].strip()
+            if self.debug:
+                self._console.print(f"[blue][DEBUG] Exact match -> filtered='{filtered}'[/]")
             if filtered:
                 return True, filtered
 
+        if self.debug:
+            self._console.print(f"[blue][DEBUG] No match found[/]")
         return False, text
 
     def _transcribe_and_inject(self, audio_data) -> None:
