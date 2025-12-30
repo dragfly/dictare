@@ -61,15 +61,20 @@ For faster transcription on M1/M2/M3 Macs:
 
 ```bash
 ./install-macos.sh --mlx  # Installs mlx-whisper
+huggingface-cli login     # Required: MLX models are hosted on Hugging Face
 ```
+
+Create a free token at https://huggingface.co/settings/tokens
 
 Then run with `--mlx`:
 
 ```bash
-uv run voxtype run --mlx --model large-v3 --key KEY_RIGHTMETA
+uv run voxtype run --mlx --model large-v3-turbo --key KEY_RIGHTMETA
 ```
 
-MLX uses the Metal GPU, 3x faster than CPU.
+MLX uses the Metal GPU, significantly faster than CPU.
+
+> **Note**: Linux with `faster-whisper` doesn't require Hugging Face login.
 
 ## Usage
 
@@ -121,6 +126,19 @@ Audio → Whisper (STT) → LLM (commands) → ydotool (typing)
 2. **Speech-to-text**: faster-whisper transcribes locally
 3. **Command processing**: Ollama LLM interprets commands (with keyword fallback)
 4. **Text injection**: ydotool/wtype types text into the active window
+
+## Platform Notes
+
+### macOS
+
+- **Clipboard mode is default**: On macOS, voxtype uses clipboard (paste) instead of keystroke injection. This avoids compatibility issues with some apps like Claude Code. Use `--clipboard` explicitly or let it auto-detect.
+- **Accessibility permissions**: Required for both clipboard paste and keystroke simulation. Add your terminal app in System Settings → Privacy & Security → Accessibility.
+- **Latency**: Expect ~8 seconds with `large-v3-turbo` on MLX. Use `medium` or `small` for faster response.
+
+### Linux
+
+- **Direct typing**: Uses ydotool/wtype/xdotool for direct keystroke injection (faster than clipboard).
+- **GPU acceleration**: With CUDA, expect ~2-3 seconds latency with `large-v3`.
 
 ## License
 
