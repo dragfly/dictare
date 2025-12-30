@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from claude_mic.llm.models import AppState, LLMRequest
+from voxtype.llm.models import AppState, LLMRequest
 
-SYSTEM_PROMPT = """You are Joshua, a voice assistant for claude-mic.
+SYSTEM_PROMPT = """You are Joshua, a voice assistant for voxtype.
 You analyze transcribed speech and decide what action to take.
 
 CURRENT STATE: {current_state}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 
-from claude_mic.tts.base import TTSEngine
+from voxtype.tts.base import TTSEngine
 
 class EspeakTTS(TTSEngine):
     """TTS using espeak/espeak-ng."""

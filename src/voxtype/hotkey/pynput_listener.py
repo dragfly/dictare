@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 from typing import Callable
 
-from claude_mic.hotkey.base import HotkeyListener
+from voxtype.hotkey.base import HotkeyListener
 
 class PynputHotkeyListener(HotkeyListener):
     """Cross-platform hotkey listener using pynput.

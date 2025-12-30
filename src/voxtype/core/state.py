@@ -1,4 +1,4 @@
-"""State machine for claude-mic."""
+"""State machine for voxtype."""
 
 from __future__ import annotations
 

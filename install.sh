@@ -1,5 +1,5 @@
 #!/bin/bash
-# claude-mic installer (no sudo required)
+# voxtype installer (no sudo required)
 # Usage: ./install.sh [--system]
 
 set -e
@@ -22,11 +22,11 @@ SYSTEM_WIDE=0
 if [ "$1" = "--system" ]; then
     SYSTEM_WIDE=1
     TOTAL=5
-    echo "claude-mic installer (system-wide, requires sudo)"
+    echo "voxtype installer (system-wide, requires sudo)"
     BIN_DIR="/usr/local/bin"
 else
     TOTAL=5
-    echo "claude-mic installer (user-level, no sudo)"
+    echo "voxtype installer (user-level, no sudo)"
     BIN_DIR="$HOME/.local/bin"
 fi
 echo "===================="
@@ -132,4 +132,4 @@ else
     echo "    systemctl --user start ydotoold"
 fi
 echo ""
-echo "Run: uv run claude-mic run"
+echo "Run: uv run voxtype run"

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`claude-mic` is a push-to-talk voice-to-text tool designed for terminal applications. It captures audio while a hotkey is held, transcribes it locally using Whisper, and types the result into the active window.
+`voxtype` is a push-to-talk voice-to-text tool designed for terminal applications. It captures audio while a hotkey is held, transcribes it locally using Whisper, and types the result into the active window.
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -33,7 +33,7 @@ This is simpler, more predictable, and avoids false activations.
 Each component has an abstract base class and multiple implementations:
 
 ```
-src/claude_mic/
+src/voxtype/
 ├── hotkey/
 │   ├── base.py              # Abstract HotkeyListener
 │   ├── evdev_listener.py    # Linux (works everywhere)
@@ -122,7 +122,7 @@ We use OpenAI's Whisper via `faster-whisper`. Models are downloaded automaticall
 
 ## Configuration
 
-Config file: `~/.config/claude-mic/config.toml`
+Config file: `~/.config/voxtype/config.toml`
 
 ```toml
 [stt]

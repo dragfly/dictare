@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, Callable
 
-from claude_mic.hotkey.base import HotkeyListener
+from voxtype.hotkey.base import HotkeyListener
 
 if TYPE_CHECKING:
     import evdev
