@@ -270,10 +270,21 @@ class ClaudeMicApp:
         # Create LLM processor (replaces old command processor)
         self._init_llm_processor()
 
+        # Create hotkey listener for toggle (if available)
+        try:
+            self._hotkey = self._create_hotkey_listener()
+        except RuntimeError as e:
+            if self.config.verbose:
+                self._console.print(f"[yellow]Hotkey not available: {e}[/]")
+            self._hotkey = None
+
         if self.config.verbose:
             self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
+            if self._hotkey:
+                self._console.print(f"[dim]Toggle hotkey: {self._hotkey.get_key_name()}[/]")
 
-        self._console.print("[green]Ready![/] Start speaking...")
+        hotkey_msg = f" (or press {self.config.hotkey.key})" if self._hotkey else ""
+        self._console.print(f"[green]Ready![/] Start speaking...{hotkey_msg}")
 
     def _init_llm_processor(self) -> None:
         """Initialize the LLM-first processor."""
@@ -545,8 +556,12 @@ class ClaudeMicApp:
                     self.state = AppState.INJECTING
                 self._inject_text(response.text_to_inject)
 
-    def _enter_listening_mode(self) -> None:
-        """Enter LISTENING mode (continuous transcription without trigger phrase)."""
+    def _enter_listening_mode(self, trigger: str = "voice_command") -> None:
+        """Enter LISTENING mode (continuous transcription without trigger phrase).
+
+        Args:
+            trigger: What triggered the state change (voice_command, hotkey_toggle).
+        """
         from claude_mic.audio.beep import play_beep_start
 
         self._console.print("[bold green]>>> LISTENING MODE[/]")
@@ -555,13 +570,17 @@ class ClaudeMicApp:
             self._logger.log_state_change(
                 old_state="IDLE",
                 new_state="LISTENING",
-                trigger="ascolta_command",
+                trigger=trigger,
             )
 
         play_beep_start()
 
-    def _exit_listening_mode(self) -> None:
-        """Exit LISTENING mode."""
+    def _exit_listening_mode(self, trigger: str = "voice_command") -> None:
+        """Exit LISTENING mode.
+
+        Args:
+            trigger: What triggered the state change (voice_command, hotkey_toggle).
+        """
         from claude_mic.audio.beep import play_beep_stop
 
         self._console.print("[bold yellow]<<< LISTENING MODE OFF[/]")
@@ -570,10 +589,25 @@ class ClaudeMicApp:
             self._logger.log_state_change(
                 old_state="LISTENING",
                 new_state="IDLE",
-                trigger="smetti_command",
+                trigger=trigger,
             )
 
         play_beep_stop()
+
+    def _on_hotkey_toggle(self) -> None:
+        """Handle hotkey press in VAD mode - toggle LISTENING state."""
+        if not self._llm_processor:
+            return
+
+        from claude_mic.llm.models import AppState as LLMAppState
+
+        # Toggle the state
+        new_state = self._llm_processor.toggle_listening()
+
+        if new_state == LLMAppState.LISTENING:
+            self._enter_listening_mode(trigger="hotkey_toggle")
+        else:
+            self._exit_listening_mode(trigger="hotkey_toggle")
 
     def _execute_command(self, command: Command | None, args: dict | None) -> None:
         """Execute a voice command.
@@ -685,6 +719,13 @@ class ClaudeMicApp:
         """Run in VAD (voice activity detection) mode."""
         self._init_vad_components()
         self._running = True
+
+        # Start hotkey listener for toggle (if available)
+        if self._hotkey:
+            self._hotkey.start(
+                on_press=self._on_hotkey_toggle,
+                on_release=lambda: None,  # No action on release for toggle mode
+            )
 
         # Start continuous audio streaming
         if self._audio:
