@@ -526,7 +526,7 @@ class ClaudeMicApp:
         """
         from claude_mic.llm.models import Action, AppState as LLMAppState, Command
 
-        # Log the LLM decision
+        # Log the LLM decision with full debug info
         if self._logger:
             self._logger.log(
                 "llm_decision",
@@ -535,6 +535,10 @@ class ClaudeMicApp:
                 new_state=response.new_state.value if response.new_state else None,
                 command=response.command.value if response.command else None,
                 confidence=response.confidence,
+                backend=response.backend,
+                override_reason=response.override_reason,
+                raw_llm_response=response.raw_llm_response,
+                text_to_inject=response.text_to_inject[:100] if response.text_to_inject else None,
             )
 
         if response.action == Action.IGNORE:
