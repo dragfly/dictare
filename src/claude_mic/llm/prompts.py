@@ -83,6 +83,10 @@ FALLBACK_EXIT_KEYWORDS = [
 FALLBACK_PASTE_KEYWORDS = ["incolla", "paste"]
 FALLBACK_UNDO_KEYWORDS = ["annulla", "undo"]
 FALLBACK_REPEAT_KEYWORDS = ["ripeti", "repeat"]
+FALLBACK_TARGET_ACTIVE_KEYWORDS = [
+    "questa finestra", "this window", "target", "qui",
+    "finestra attiva", "active window", "use this",
+]
 
 TRIGGER_PHRASE_VARIANTS = {
     "joshua": ["joshua", "giosuè", "josua", "joschua", "giosue"],
