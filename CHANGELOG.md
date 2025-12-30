@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.12] - 2025-12-30
+
+### Changed
+- **Remove hardcoded trigger phrase variants**: LLM now uses phonetic similarity to recognize trigger phrase
+  - Removed `TRIGGER_PHRASE_VARIANTS` dictionary
+  - Prompt explains that trigger phrase may be transcribed with phonetically similar words
+  - LLM handles variations intelligently instead of hardcoded list
+- **Full text in logs**: Removed 100-character truncation, log now contains full text for debugging
+- **Prompt fully in English**: Removed last Italian remnants ("Testo trascritto" → "Transcribed text")
+- Added `target_active` command to JSON schema in prompt
+
 ## [0.8.11] - 2025-12-30
 
 ### Changed
