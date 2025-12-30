@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.16] - 2025-12-30
+
+### Fixed
+- **Target window injection with temporary focus**: xdotool type --window doesn't work without focus
+  - Now uses temporary focus: save current window → focus target → type → restore focus
+  - Text now correctly arrives at target window regardless of current focus
+  - Brief visual flash when switching focus is expected
+
 ## [0.8.15] - 2025-12-30
 
 ### Fixed

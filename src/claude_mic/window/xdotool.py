@@ -210,7 +210,11 @@ class XdotoolWindowManager(WindowManager):
         return None
 
     def send_text(self, text: str, window: Optional[Window] = None) -> bool:
-        """Send text to a window."""
+        """Send text to a window using temporary focus.
+
+        xdotool type --window doesn't work with many apps without focus,
+        so we temporarily focus the target window, type, then refocus original.
+        """
         if not self._xdotool:
             return False
 
@@ -220,12 +224,37 @@ class XdotoolWindowManager(WindowManager):
             return self._send_text_active(text)
 
         try:
-            # Type to specific window without changing focus
+            # Get current active window to restore focus later
+            current_result = subprocess.run(
+                [self._xdotool, "getactivewindow"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            current_window_id = current_result.stdout.strip() if current_result.returncode == 0 else None
+
+            # Focus target window
+            subprocess.run(
+                [self._xdotool, "windowactivate", "--sync", target.id],
+                capture_output=True,
+                timeout=5,
+            )
+
+            # Type text
             result = subprocess.run(
-                [self._xdotool, "type", "--window", target.id, "--clearmodifiers", text],
+                [self._xdotool, "type", "--clearmodifiers", text],
                 capture_output=True,
                 timeout=30,
             )
+
+            # Restore original focus
+            if current_window_id:
+                subprocess.run(
+                    [self._xdotool, "windowactivate", "--sync", current_window_id],
+                    capture_output=True,
+                    timeout=5,
+                )
+
             return result.returncode == 0
         except Exception:
             return False
