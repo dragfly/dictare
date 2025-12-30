@@ -245,6 +245,14 @@ class LLMProcessor:
                             self._console.print(f"[yellow]LLM ignored trigger+enter word, overriding[/]")
                         return LLMResponse.enter_listening(backend="ollama")
 
+                    # If LLM says ignore but text has trigger + target keywords, execute TARGET_ACTIVE
+                    if action == Action.IGNORE:
+                        for keyword in FALLBACK_TARGET_ACTIVE_KEYWORDS:
+                            if keyword in text_lower:
+                                if self._console:
+                                    self._console.print(f"[yellow]LLM ignored trigger+'{keyword}', executing TARGET_ACTIVE[/]")
+                                return LLMResponse.execute(Command.TARGET_ACTIVE, backend="ollama")
+
             return LLMResponse(
                 action=action,
                 new_state=new_state,

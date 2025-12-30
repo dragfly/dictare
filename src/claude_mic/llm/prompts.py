@@ -35,6 +35,7 @@ REGOLE:
    - incolla/paste → command="paste"
    - annulla/undo → command="undo"
    - ripeti/repeat → command="repeat"
+   - questa finestra/target/qui → command="target_active" (imposta finestra attiva come target)
 
 4. Formattazione testo da iniettare:
    - Rimuovi la trigger phrase e tutto cio che viene prima
