@@ -665,12 +665,15 @@ class ClaudeMicApp:
                     delay_ms=self.config.injection.typing_delay_ms,
                 )
 
-            # Log injection
+            # Log injection (include enter_sent status if available)
             if self._logger:
+                enter_sent = getattr(self._injector, '_enter_sent', None)
                 self._logger.log_injection(
                     text=text,
                     method=method,
                     success=success,
+                    auto_enter=self.config.injection.auto_enter,
+                    enter_sent=enter_sent,
                 )
 
             if not success:

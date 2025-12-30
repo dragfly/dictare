@@ -18,6 +18,7 @@ class YdotoolInjector(TextInjector):
     def __init__(self) -> None:
         """Initialize ydotool injector."""
         self._ydotool_path: str | None = None
+        self._enter_sent: bool = False
 
     def is_available(self) -> bool:
         """Check if ydotool is available and daemon is running."""
@@ -76,12 +77,19 @@ class YdotoolInjector(TextInjector):
 
             # Send Enter key if needed (ydotool type doesn't interpret \n)
             if send_enter:
+                import time
+                time.sleep(0.2)  # 200ms delay to ensure type completes
                 enter_result = subprocess.run(
-                    [self._ydotool_path, "key", "enter"],
+                    [self._ydotool_path, "key", "28:1", "28:0"],  # KEY_ENTER
                     capture_output=True,
                     timeout=5,
                 )
-                return enter_result.returncode == 0
+                if enter_result.returncode != 0:
+                    return False
+                self._enter_sent = True
+                return True
+
+            self._enter_sent = False
 
             return True
         except subprocess.TimeoutExpired:

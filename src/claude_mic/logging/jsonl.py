@@ -137,6 +137,8 @@ class JSONLLogger:
         text: str,
         method: str,
         success: bool,
+        auto_enter: bool = False,
+        enter_sent: bool | None = None,
     ) -> None:
         """Log a text injection."""
         self.log(
@@ -144,6 +146,8 @@ class JSONLLogger:
             text=text,  # Full text for debugging
             method=method,
             success=success,
+            auto_enter=auto_enter,
+            enter_sent=enter_sent,
         )
 
     def log_vad_event(
