@@ -140,7 +140,7 @@ class LLMProcessor:
             if result.returncode != 0:
                 return self._process_with_keywords(request)
 
-            return self._parse_ollama_response(result.stdout.strip())
+            return self._parse_ollama_response(result.stdout.strip(), request)
 
         except subprocess.TimeoutExpired:
             if self._console:
@@ -151,7 +151,7 @@ class LLMProcessor:
                 self._console.print(f"[yellow]Ollama error: {e}[/]")
             return self._process_with_keywords(request)
 
-    def _parse_ollama_response(self, response_text: str) -> LLMResponse:
+    def _parse_ollama_response(self, response_text: str, request: LLMRequest) -> LLMResponse:
         """Parse Ollama JSON response into LLMResponse."""
         try:
             data = json.loads(response_text)
@@ -166,6 +166,18 @@ class LLMProcessor:
             if data.get("command"):
                 command = Command(data["command"])
 
+            # Sanity check: if action is change_state but new_state is None, fall back to keywords
+            if action == Action.CHANGE_STATE and new_state is None:
+                if self._console:
+                    self._console.print("[yellow]LLM returned change_state without new_state, using keywords[/]")
+                return self._process_with_keywords(request)
+
+            # Sanity check: if action is execute but command is None, fall back
+            if action == Action.EXECUTE and command is None:
+                if self._console:
+                    self._console.print("[yellow]LLM returned execute without command, using keywords[/]")
+                return self._process_with_keywords(request)
+
             return LLMResponse(
                 action=action,
                 new_state=new_state,
@@ -178,17 +190,8 @@ class LLMProcessor:
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             if self._console:
                 self._console.print(f"[yellow]Failed to parse LLM response: {e}[/]")
-            # Create a basic inject response with the original text
-            return LLMResponse(
-                action=Action.INJECT,
-                text_to_inject=self._extract_text_after_trigger(
-                    LLMRequest(
-                        text=response_text,
-                        current_state=self._state,
-                        trigger_phrase=self.trigger_phrase,
-                    )
-                ),
-            )
+            # Fall back to keyword matching
+            return self._process_with_keywords(request)
 
     def _process_with_keywords(self, request: LLMRequest) -> LLMResponse:
         """Fallback: process with keyword matching."""
