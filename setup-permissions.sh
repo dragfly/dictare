@@ -1,10 +1,10 @@
 #!/bin/bash
 # Minimal sudo script - easy to review!
-# Sets up permissions for claude-mic
+# Sets up permissions for voxtype
 
 set -e
 
-echo "Setting up permissions for claude-mic..."
+echo "Setting up permissions for voxtype..."
 
 # Audio library + clipboard tool for X11
 sudo apt-get install -y libportaudio2 xclip

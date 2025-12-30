@@ -25,9 +25,9 @@ class AudioConfig(BaseModel):
 class STTConfig(BaseModel):
     """Speech-to-text configuration."""
 
-    backend: Literal["faster-whisper", "mlx-whisper", "openai"] = Field(
+    backend: Literal["faster-whisper", "mlx-whisper"] = Field(
         default="faster-whisper",
-        description="STT backend to use (faster-whisper, mlx-whisper for Apple Silicon, openai)",
+        description="STT backend to use (faster-whisper, mlx-whisper for Apple Silicon)",
     )
     model_size: str = Field(
         default="base",
@@ -86,12 +86,6 @@ class InjectionConfig(BaseModel):
     )
 
 
-class CloudConfig(BaseModel):
-    """Cloud STT configuration."""
-
-    openai_api_key: str = Field(default="", description="OpenAI API key for Whisper API")
-
-
 class CommandConfig(BaseModel):
     """Voice command configuration."""
 
@@ -111,10 +105,6 @@ class CommandConfig(BaseModel):
         default=5.0,
         description="Ollama request timeout in seconds",
     )
-    format_text: bool = Field(
-        default=True,
-        description="Use LLM to format/clean transcribed text",
-    )
 
 
 class Config(BaseModel):
@@ -124,11 +114,8 @@ class Config(BaseModel):
     stt: STTConfig = Field(default_factory=STTConfig)
     hotkey: HotkeyConfig = Field(default_factory=HotkeyConfig)
     injection: InjectionConfig = Field(default_factory=InjectionConfig)
-    cloud: CloudConfig = Field(default_factory=CloudConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
 
-    # UI settings
-    show_notification: bool = Field(default=True, description="Show desktop notifications")
     verbose: bool = Field(default=False, description="Enable verbose output")
 
 
@@ -201,18 +188,12 @@ typing_delay_ms = 0
 fallback_to_clipboard = true
 auto_enter = false  # Press Enter after typing
 
-[cloud]
-# openai_api_key = ""  # For cloud STT (optional)
-
 [command]
 enabled = true
 classifier_backend = "auto"  # auto, ollama, keyword
 ollama_model = "llama3.2:1b"
 ollama_timeout = 5.0
-format_text = true
 
-# UI settings
-show_notification = true
 verbose = false
 """
 

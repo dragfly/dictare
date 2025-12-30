@@ -141,10 +141,6 @@ def run(
         bool,
         typer.Option("--no-commands", help="Disable voice command processing"),
     ] = False,
-    target_window: Annotated[
-        Optional[str],
-        typer.Option("--target-window", "-t", help="Target window for text injection (X11 only)"),
-    ] = None,
     log_file: Annotated[
         Optional[Path],
         typer.Option("--log-file", "-L", help="JSONL log file for structured logging"),
@@ -192,9 +188,6 @@ def run(
         config.verbose = verbose
     if no_commands:
         config.command.enabled = False
-    if target_window:
-        config.window.enabled = True
-        config.window.default_target = target_window
     if typing_delay is not None:
         config.injection.typing_delay_ms = typing_delay
     if keyboard:
