@@ -35,6 +35,7 @@ class ClaudeMicApp:
         use_vad: bool = False,
         vad_silence_ms: int | None = None,
         wake_word: str | None = None,
+        debug: bool = False,
     ) -> None:
         """Initialize the application.
 
@@ -43,11 +44,13 @@ class ClaudeMicApp:
             use_vad: If True, use VAD mode instead of push-to-talk.
             vad_silence_ms: Silence duration in ms to end speech (default 1200).
             wake_word: Optional wake word to activate (e.g., "Joshua").
+            debug: If True, show all transcriptions but only paste with wake word.
         """
         self.config = config
         self.use_vad = use_vad
         self.vad_silence_ms = vad_silence_ms or 1200
         self.wake_word = wake_word.lower() if wake_word else None
+        self.debug = debug
         self.state = AppState.IDLE
         self._running = False
         self._console = Console()
@@ -447,16 +450,23 @@ class ClaudeMicApp:
                 )
 
                 if text:
+                    # Debug mode: always show full transcription
+                    if self.debug:
+                        self._console.print(f"[blue][DEBUG][/] {text}")
+
                     # Check wake word
                     wake_found, filtered_text = self._check_wake_word(text)
                     if not wake_found:
-                        if self.config.verbose:
-                            self._console.print(f"[dim]Ignored (no wake word): {text[:40]}...[/]")
+                        # Show what was heard (so user understands)
+                        if not self.debug:  # Already shown in debug mode
+                            display = text[:50] + "..." if len(text) > 50 else text
+                            self._console.print(f"[dim]No wake word:[/] {display}")
                         self.state = AppState.IDLE
                         return
 
                     text = filtered_text
                     if not text:
+                        self._console.print("[dim]Wake word only, no command.[/]")
                         self.state = AppState.IDLE
                         return
                     with self._lock:
