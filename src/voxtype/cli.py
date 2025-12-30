@@ -149,6 +149,14 @@ def run(
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
     ] = False,
+    typing_delay: Annotated[
+        Optional[int],
+        typer.Option("--typing-delay", help="Delay between keystrokes in ms (for keyboard mode)"),
+    ] = None,
+    keyboard: Annotated[
+        bool,
+        typer.Option("--keyboard", "-K", help="Use keyboard typing instead of clipboard (may crash some apps)"),
+    ] = False,
 ) -> None:
     """Start voxtype in push-to-talk or VAD mode.
 
@@ -183,6 +191,15 @@ def run(
     if target_window:
         config.window.enabled = True
         config.window.default_target = target_window
+    if typing_delay is not None:
+        config.injection.typing_delay_ms = typing_delay
+    if keyboard:
+        # Force keyboard mode (ydotool/wtype/xdotool on Linux, macos on macOS)
+        import sys
+        if sys.platform == "darwin":
+            config.injection.backend = "macos"
+        else:
+            config.injection.backend = "ydotool"  # Will fall back to wtype/xdotool
 
     # Lazy import to speed up CLI
     from voxtype.core.app import ClaudeMicApp

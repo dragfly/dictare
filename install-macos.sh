@@ -54,16 +54,13 @@ if [ -d .venv ] && ! .venv/bin/python --version 2>/dev/null | grep -q "3\.11"; t
     rm -rf .venv
 fi
 
-# Install base + macos deps
-uv sync --extra macos >/dev/null
-
+# Install dependencies
 if [ $WITH_MLX -eq 1 ]; then
-    # Install mlx-whisper with --no-deps to avoid old numba/llvmlite conflict
-    # Then install deps manually with modern versions
-    uv pip install --no-deps mlx-whisper >/dev/null 2>&1
-    uv pip install mlx mlx-audio huggingface-hub tqdm tiktoken "numba>=0.57" >/dev/null 2>&1
+    # All MLX deps are now in pyproject.toml [project.optional-dependencies.mlx]
+    uv sync --extra macos --extra mlx >/dev/null
     info "Installed Python packages (with MLX for Apple Silicon GPU)"
 else
+    uv sync --extra macos >/dev/null
     info "Installed Python packages (with pynput for hotkey detection)"
 fi
 
