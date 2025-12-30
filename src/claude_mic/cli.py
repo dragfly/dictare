@@ -121,6 +121,10 @@ def run(
         bool,
         typer.Option("--vad", help="Use VAD (Voice Activity Detection) instead of push-to-talk"),
     ] = False,
+    silence_ms: Annotated[
+        Optional[int],
+        typer.Option("--silence-ms", "-s", help="VAD silence duration to end speech (default 1200)"),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
@@ -156,7 +160,7 @@ def run(
     # Lazy import to speed up CLI
     from claude_mic.core.app import ClaudeMicApp
 
-    mic_app = ClaudeMicApp(config, use_vad=vad)
+    mic_app = ClaudeMicApp(config, use_vad=vad, vad_silence_ms=silence_ms)
 
     mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
     device_str = "[magenta]GPU (CUDA)[/]" if config.stt.device == "cuda" else "CPU"
