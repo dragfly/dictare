@@ -362,9 +362,9 @@ class ClaudeMicApp:
         if self.config.audio.audio_feedback:
             from voxtype.audio.beep import play_beep_start  # noqa: F401
             import sounddevice as sd
-            # Play silent buffer to initialize output
+            # Play longer silent buffer to fully initialize output
             import numpy as np
-            sd.play(np.zeros(100, dtype=np.float32), 16000, blocking=True)
+            sd.play(np.zeros(8000, dtype=np.float32), 16000, blocking=True)  # 500ms silence
 
         self._console.print(f"[green]Ready![/] Start speaking...{hotkey_msg}")
 
