@@ -146,11 +146,15 @@ class LLMProcessor:
         except subprocess.TimeoutExpired:
             if self._console:
                 self._console.print("[yellow]Ollama timeout, using keywords[/]")
-            return self._process_with_keywords(request)
+            response = self._process_with_keywords(request)
+            response.override_reason = f"Ollama timeout ({self.ollama_timeout}s)"
+            return response
         except Exception as e:
             if self._console:
                 self._console.print(f"[yellow]Ollama error: {e}[/]")
-            return self._process_with_keywords(request)
+            response = self._process_with_keywords(request)
+            response.override_reason = f"Ollama error: {e}"
+            return response
 
     def _parse_ollama_response(self, response_text: str, request: LLMRequest) -> LLMResponse:
         """Parse Ollama JSON response into LLMResponse."""

@@ -529,8 +529,11 @@ class ClaudeMicApp:
 
         # Log the LLM decision with full debug info
         if self._logger:
+            # Get current LLM processor state for context
+            current_llm_state = self._llm_processor.state.value if self._llm_processor else "unknown"
             self._logger.log(
                 "llm_decision",
+                current_state=current_llm_state,  # State BEFORE this decision
                 text=original_text,
                 action=response.action.value,
                 new_state=response.new_state.value if response.new_state else None,
