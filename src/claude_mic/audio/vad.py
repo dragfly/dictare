@@ -114,7 +114,13 @@ class SileroVAD(VADEngine):
         # Update context for next chunk
         self._context = x[:, -64:]
 
-        return float(out[0, 0])
+        # Handle different output shapes
+        if out.ndim == 2:
+            return float(out[0, 0])
+        elif out.ndim == 1:
+            return float(out[0])
+        else:
+            return float(out.flat[0])
 
 
 class StreamingVAD:
