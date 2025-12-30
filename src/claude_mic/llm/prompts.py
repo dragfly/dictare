@@ -19,13 +19,19 @@ REGOLE:
    - Se contiene "{trigger_phrase}" + testo da scrivere → action="inject" con il testo DOPO la trigger phrase, formattato
 
 2. Se stato=LISTENING:
-   - Se dice varianti di "smetti/stop/basta/fermati" (anche con errori tipo "zmetti", "smetty") → action="change_state", new_state="idle"
-   - Se contiene "{trigger_phrase}" + varianti di stop → action="change_state", new_state="idle"
-   - Altrimenti → action="inject" con il testo formattato
+   - INIETTA TUTTO di default → action="inject"
+   - ESCI SOLO se l'utente CHIARAMENTE e ESPLICITAMENTE vuole uscire:
+     * Frasi brevi di solo comando: "smetti", "stop", "basta", "fermati", "ok smetti"
+     * Con trigger phrase: "Joshua smetti", "Joshua stop"
+   - NON uscire se le parole sono PARTE di una frase più lunga:
+     * "ho detto stop world" → INJECT (sta parlando DI stop, non comandando stop)
+     * "il bottone stop non funziona" → INJECT
+     * "fermarti sarebbe un errore" → INJECT
+   - In caso di dubbio → INJECT (meglio iniettare troppo che perdere testo)
 
 3. Comandi riconosciuti:
    - ascolta/listen → entra in LISTENING
-   - smetti/stop/basta/fermati (e varianti) → esci da LISTENING
+   - smetti/stop/basta/fermati → esci da LISTENING (SOLO se è un comando esplicito!)
    - incolla/paste → command="paste"
    - annulla/undo → command="undo"
    - ripeti/repeat → command="repeat"
@@ -40,6 +46,8 @@ REGOLE:
 5. Varianti da riconoscere (errori comuni di Whisper):
    - smetti: zmetti, zmeti, smetty, smety, smettiti
    - joshua: Giosuè, Josua, Joschua
+
+IMPORTANTE: In LISTENING mode, nel dubbio INIETTA sempre. L'utente preferisce ricevere testo extra piuttosto che perdere quello che ha detto.
 
 RISPONDI SOLO CON JSON VALIDO, nient'altro. Schema:
 {{
