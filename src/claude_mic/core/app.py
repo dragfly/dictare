@@ -562,8 +562,6 @@ class ClaudeMicApp:
         Args:
             trigger: What triggered the state change (voice_command, hotkey_toggle).
         """
-        from claude_mic.audio.beep import play_beep_start
-
         self._console.print("[bold green]>>> LISTENING MODE[/]")
 
         if self._logger:
@@ -573,7 +571,9 @@ class ClaudeMicApp:
                 trigger=trigger,
             )
 
-        play_beep_start()
+        if self.config.audio.audio_feedback:
+            from claude_mic.audio.beep import play_beep_start
+            play_beep_start()
 
     def _exit_listening_mode(self, trigger: str = "voice_command") -> None:
         """Exit LISTENING mode.
@@ -581,8 +581,6 @@ class ClaudeMicApp:
         Args:
             trigger: What triggered the state change (voice_command, hotkey_toggle).
         """
-        from claude_mic.audio.beep import play_beep_stop
-
         self._console.print("[bold yellow]<<< LISTENING MODE OFF[/]")
 
         if self._logger:
@@ -592,7 +590,9 @@ class ClaudeMicApp:
                 trigger=trigger,
             )
 
-        play_beep_stop()
+        if self.config.audio.audio_feedback:
+            from claude_mic.audio.beep import play_beep_stop
+            play_beep_stop()
 
     def _on_hotkey_toggle(self) -> None:
         """Handle hotkey press in VAD mode - toggle LISTENING state."""
