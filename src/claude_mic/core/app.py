@@ -628,6 +628,17 @@ class ClaudeMicApp:
                     self._console.print(f"[cyan]Target: {windows[0].name}[/]")
                 else:
                     self._console.print(f"[yellow]Finestra non trovata: {target}[/]")
+        elif command == Command.TARGET_ACTIVE:
+            # Set currently focused window as target
+            if self._window_manager:
+                active = self._window_manager.get_active_window()
+                if active:
+                    self._window_manager.set_target(active)
+                    self._console.print(f"[cyan]Target impostato: {active.name}[/]")
+                else:
+                    self._console.print("[yellow]Nessuna finestra attiva trovata[/]")
+            else:
+                self._console.print("[yellow]Window manager non disponibile (solo X11)[/]")
 
     def _inject_text(self, text: str) -> None:
         """Inject text into the terminal.
