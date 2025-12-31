@@ -316,26 +316,35 @@ def check() -> None:
         console.print("[red]Some required dependencies are missing.[/]")
         if missing_with_hints:
             console.print("\n[bold]To fix, run:[/]")
+            # Deduplicate hints (e.g., mlx-whisper and pynput both suggest same install)
+            seen_hints: set[str] = set()
             for result in missing_with_hints:
-                console.print(f"  [cyan]{result.install_hint}[/]")
+                if result.install_hint and result.install_hint not in seen_hints:
+                    seen_hints.add(result.install_hint)
+                    # Escape Rich markup in hint (e.g., [mlx,macos] would be interpreted as style)
+                    hint = result.install_hint.replace("[", r"\[")
+                    console.print(f"  [cyan]{hint}[/]")
         raise typer.Exit(1)
 
-    # Check for at least one text injection method
-    injection_methods = ["ydotool", "wtype", "xdotool"]
-    has_injection = any(r.available for r in results if r.name in injection_methods)
-    clipboard_available = any(r.available for r in results if r.name == "Clipboard")
+    # Check for at least one text injection method (Linux only)
+    # macOS uses osascript/pbcopy which are built-in
+    import sys
+    if sys.platform == "linux":
+        injection_methods = ["ydotool", "wtype", "xdotool"]
+        has_injection = any(r.available for r in results if r.name in injection_methods)
+        clipboard_available = any(r.available for r in results if r.name == "Clipboard")
 
-    if not has_injection:
-        if clipboard_available:
-            console.print(
-                "\n[yellow]Warning:[/] No auto-typing tool available. "
-                "Text will be copied to clipboard instead."
-            )
-        else:
-            console.print(
-                "\n[red]Warning:[/] No text injection method available. "
-                "Install ydotool, wtype, or xdotool."
-            )
+        if not has_injection:
+            if clipboard_available:
+                console.print(
+                    "\n[yellow]Warning:[/] No auto-typing tool available. "
+                    "Text will be copied to clipboard instead."
+                )
+            else:
+                console.print(
+                    "\n[red]Warning:[/] No text injection method available. "
+                    "Install ydotool, wtype, or xdotool."
+                )
 
 
 @app.command()

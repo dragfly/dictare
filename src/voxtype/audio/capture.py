@@ -68,7 +68,7 @@ class AudioCapture:
             self._stream = sd.InputStream(
                 samplerate=self.sample_rate,
                 channels=self.channels,
-                device=self.device,
+                device=self.device or None,  # Empty string -> None (use default)
                 dtype=self.dtype,
                 callback=self._audio_callback,
             )
@@ -143,7 +143,7 @@ class AudioCapture:
             self._stream = sd.InputStream(
                 samplerate=self.sample_rate,
                 channels=self.channels,
-                device=self.device,
+                device=self.device or None,  # Empty string -> None (use default)
                 dtype=self.dtype,
                 blocksize=512,  # Match VAD chunk size
                 callback=self._streaming_audio_callback,

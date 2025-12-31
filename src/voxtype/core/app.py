@@ -570,12 +570,18 @@ class ClaudeMicApp:
                     if self.debug:
                         self._console.print(f"[blue][DEBUG][/] {text}")
 
-                    # LLM-first: ALL text goes through LLM processor
-                    if self._llm_processor:
+                    # In LISTENING mode: skip LLM for speed, just inject directly
+                    # Commands only work via hotkey toggle, not voice
+                    from voxtype.llm.models import AppState as LLMAppState
+                    if self._llm_processor and self._llm_processor.state == LLMAppState.LISTENING:
+                        # Fast path: direct injection, no LLM processing
+                        self._inject_text(text)
+                    elif self._llm_processor:
+                        # Non-listening mode: process through LLM for commands
                         response = self._llm_processor.process(text)
                         self._execute_llm_response(response, text)
                     else:
-                        # Fallback: just inject the text
+                        # No LLM processor: just inject the text
                         self._inject_text(text)
                 else:
                     self._console.print("[dim]No speech detected.                    [/]")
