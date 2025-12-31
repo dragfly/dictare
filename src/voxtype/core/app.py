@@ -93,9 +93,6 @@ class ClaudeMicApp:
         # LLM-first processor (replaces old command processor)
         self._llm_processor: LLMProcessor | None = None
 
-        # Flag to track if speech was ignored (for ready-to-listen feedback)
-        self._speech_was_ignored = False
-
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
         return AudioCapture(
@@ -459,47 +456,7 @@ class ClaudeMicApp:
                 if text:
                     with self._lock:
                         self.state = AppState.INJECTING
-
-                    # Truncate display if too long
-                    display_text = text[:60] + "..." if len(text) > 60 else text
-                    self._console.print(f"[green]Transcribed:[/] {display_text}        ")
-
-                    # Add Enter if configured
-                    inject_text = text + "\n" if self.config.injection.auto_enter else text
-
-                    if self._injector:
-                        # Pass auto_paste for clipboard mode
-                        if self._injector.get_name() == "clipboard":
-                            success = self._injector.type_text(
-                                inject_text,
-                                delay_ms=self.config.injection.typing_delay_ms,
-                                auto_paste=self.config.injection.auto_paste,
-                            )
-                            if success and self.config.injection.auto_paste:
-                                pass  # Auto-pasted, no message needed
-                            elif success:
-                                self._console.print(
-                                    "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
-                                )
-                        else:
-                            success = self._injector.type_text(
-                                inject_text,
-                                delay_ms=self.config.injection.typing_delay_ms,
-                            )
-
-                        if not success:
-                            if self.config.injection.fallback_to_clipboard:
-                                # Try clipboard fallback
-                                from voxtype.injection.clipboard import ClipboardInjector
-
-                                clipboard = ClipboardInjector()
-                                if clipboard.is_available():
-                                    clipboard.type_text(text)
-                                    self._console.print(
-                                        "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
-                                    )
-                            else:
-                                self._console.print("[red]Failed to inject text[/]")
+                    self._inject_text(text)
                 else:
                     self._console.print("[dim]No speech detected.                    [/]")
             except Exception as e:
@@ -521,7 +478,6 @@ class ClaudeMicApp:
                 if self.config.audio.audio_feedback:
                     from voxtype.audio.beep import play_beep_busy
                     play_beep_busy()
-                self._speech_was_ignored = True
                 return
             self.state = AppState.RECORDING
 
@@ -607,30 +563,9 @@ class ClaudeMicApp:
                 self._console.print(f"[red]Error: {e}[/]")
             finally:
                 self.state = AppState.IDLE
-                # If still in LISTENING mode, signal ready to listen again
-                self._signal_ready_to_listen()
 
         thread = threading.Thread(target=do_transcribe, daemon=True)
         thread.start()
-
-    def _signal_ready_to_listen(self) -> None:
-        """Signal that system is ready to listen again (only if speech was ignored)."""
-        from voxtype.llm.models import AppState as LLMAppState
-
-        # Only signal if speech was ignored during this transcription cycle
-        if not self._speech_was_ignored:
-            return
-
-        if self._llm_processor and self._llm_processor.state == LLMAppState.LISTENING:
-            # Delay to ensure VAD is truly ready before signaling
-            time.sleep(0.75)
-            self._console.print("[green]Ready to listen[/]")
-            if self.config.audio.audio_feedback:
-                from voxtype.audio.beep import play_beep_start
-                play_beep_start()
-
-        # Reset the flag
-        self._speech_was_ignored = False
 
     def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
         """Execute the action decided by the LLM.
