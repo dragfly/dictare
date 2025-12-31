@@ -221,11 +221,15 @@ def run(
     if ollama_model:
         config.command.ollama_model = ollama_model
 
+    import time as _time
+    _start = _time.time()
+
     # Show startup message immediately
     console.print("[dim]Starting voxtype...[/]")
 
     # Lazy import to speed up CLI
-    from voxtype.core.app import ClaudeMicApp
+    from voxtype.core.app import VoxtypeApp
+    console.print(f"[dim]Import done ({_time.time() - _start:.1f}s)[/]")
 
     # Create JSONL logger if requested
     logger = None
@@ -247,8 +251,9 @@ def run(
         logger = JSONLLogger(log_file, __version__, params=log_params)
         console.print(f"[dim]Logging to: {log_file}[/]")
 
-    console.print("[dim]Initializing...[/]")
-    mic_app = ClaudeMicApp(
+    console.print("[dim]Creating app...[/]")
+    _app_start = _time.time()
+    app = VoxtypeApp(
         config,
         use_vad=vad,
         vad_silence_ms=silence_ms,
@@ -257,6 +262,7 @@ def run(
         logger=logger,
         initial_mode=mode,
     )
+    console.print(f"[dim]App created ({_time.time() - _app_start:.1f}s)[/]")
 
     output_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
     mode_str = "[cyan]transcription[/] (fast)" if mode == "transcription" else "[yellow]command[/] (LLM)"
@@ -285,10 +291,10 @@ def run(
     )
 
     try:
-        mic_app.run()
+        app.run()
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down...[/]")
-        mic_app.stop()
+        app.stop()
     finally:
         if logger:
             logger.close()
