@@ -8,7 +8,7 @@ version = "1.0.7"
 description = "Voice-to-text for your terminal"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11,<3.14"
 authors = [
     { name = "dragfly" }
 ]
