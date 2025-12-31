@@ -383,7 +383,7 @@ key = "KEY_SCROLLLOCK"  # evdev key name
 backend = "auto"  # ydotool, wtype, clipboard
 typing_delay_ms = 0
 fallback_to_clipboard = true
-auto_enter = false  # Press Enter after typing
+auto_enter = true  # Press Enter after typing (use --no-enter to disable)
 
 [command]
 enabled = true
