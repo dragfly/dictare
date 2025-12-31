@@ -280,18 +280,18 @@ class ClaudeMicApp:
                 self._console.print(f"[yellow]{backend} not available[/]")
 
         # Auto-detect best available injector
-        # Prefer clipboard to avoid issues with fast typing crashing some apps (e.g., Claude Code)
+        # Prefer keyboard mode (with typing delay to avoid crashing apps)
         if sys.platform == "darwin":
             candidates = [
-                ClipboardInjector(),
                 MacOSInjector(),
+                ClipboardInjector(),
             ]
         else:
             candidates = [
-                ClipboardInjector(),
                 YdotoolInjector(),
                 WtypeInjector(),
                 XdotoolInjector(),
+                ClipboardInjector(),
             ]
 
         for injector in candidates:
