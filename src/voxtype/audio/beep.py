@@ -82,24 +82,16 @@ def play_beep_busy() -> None:
         pass  # Don't fail on audio errors
 
 
-# TTS mode announcements per language
+# TTS mode announcements per language (fallback to English for unsupported languages)
 _MODE_PHRASES = {
     "it": {"transcription": "modalità trascrizione", "command": "modalità comandi"},
     "en": {"transcription": "transcription mode", "command": "command mode"},
-    "es": {"transcription": "modo transcripción", "command": "modo comandos"},
-    "fr": {"transcription": "mode transcription", "command": "mode commandes"},
-    "de": {"transcription": "Transkriptionsmodus", "command": "Befehlsmodus"},
-    "pt": {"transcription": "modo transcrição", "command": "modo comandos"},
 }
 
 # macOS voice names per language
 _MACOS_VOICES = {
     "it": "Alice",
     "en": "Samantha",
-    "es": "Monica",
-    "fr": "Thomas",
-    "de": "Anna",
-    "pt": "Luciana",
 }
 
 
