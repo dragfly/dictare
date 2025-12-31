@@ -865,7 +865,11 @@ class ClaudeMicApp:
                 time.sleep(0.1)
                 if self._audio and self._audio.needs_reconnect():
                     self._console.print("[yellow]Audio device changed, reconnecting...[/]")
-                    self._audio.reconnect_streaming(self._on_vad_audio_chunk)
+                    if self._audio.reconnect_streaming(self._on_vad_audio_chunk):
+                        self._console.print("[green]Audio reconnected.[/]")
+                    else:
+                        self._console.print("[red]Failed to reconnect audio. Please restart.[/]")
+                        break
         except KeyboardInterrupt:
             pass
 

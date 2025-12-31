@@ -206,11 +206,19 @@ class AudioCapture:
             return True
         return False
 
-    def reconnect_streaming(self, callback: Callable[["NDArray[np.float32]"], None]) -> None:
+    def reconnect_streaming(self, callback: Callable[["NDArray[np.float32]"], None]) -> bool:
         """Reconnect audio stream after device change."""
         import time
 
         self._needs_reconnect = False
         self.stop_streaming()
-        time.sleep(0.5)
-        self.start_streaming(callback)
+
+        # Retry a few times - PortAudio needs time to reset after device change
+        for attempt in range(5):
+            time.sleep(1.0)
+            try:
+                self.start_streaming(callback)
+                return True
+            except Exception:
+                pass
+        return False
