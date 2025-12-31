@@ -176,6 +176,16 @@ def run(
     """
     config = load_config(config_file)
 
+    # Auto-detect MLX on Apple Silicon Mac
+    import platform
+    import sys
+    if sys.platform == "darwin" and platform.machine() == "arm64":
+        try:
+            import mlx_whisper  # noqa: F401
+            config.stt.backend = "mlx-whisper"
+        except ImportError:
+            pass  # mlx-whisper not installed, use default
+
     # Override config with CLI options
     if model:
         config.stt.model_size = model
