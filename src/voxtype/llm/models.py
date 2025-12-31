@@ -6,12 +6,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-
-class AppState(Enum):
-    """Application state."""
-
-    IDLE = "idle"
-    LISTENING = "listening"
+# Import AppState from core to avoid duplication
+from voxtype.core.state import AppState
 
 
 class Action(Enum):
@@ -71,7 +67,7 @@ class LLMResponse:
         return cls(
             action=Action.CHANGE_STATE,
             new_state=AppState.LISTENING,
-            user_feedback="Modalita ascolto attivata",
+            user_feedback="Listening mode activated",
             backend=backend,
         )
 
@@ -81,7 +77,7 @@ class LLMResponse:
         return cls(
             action=Action.CHANGE_STATE,
             new_state=AppState.IDLE,
-            user_feedback="Modalita ascolto disattivata",
+            user_feedback="Listening mode deactivated",
             backend=backend,
         )
 

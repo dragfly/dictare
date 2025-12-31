@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 from typing import TYPE_CHECKING, Callable
 
@@ -105,7 +106,7 @@ class EvdevHotkeyListener(HotkeyListener):
                 # Device closed or disconnected
                 pass
             except Exception as e:
-                print(f"Hotkey listener error: {e}")
+                sys.stderr.write(f"Hotkey listener error: {e}\n")
 
         self._thread = threading.Thread(target=listen_loop, daemon=True)
         self._thread.start()

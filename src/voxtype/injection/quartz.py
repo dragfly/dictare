@@ -43,7 +43,7 @@ class QuartzInjector(TextInjector):
         except ImportError:
             self._available = False
             return False
-        except Exception:
+        except OSError:
             self._available = False
             return False
 
@@ -106,7 +106,7 @@ class QuartzInjector(TextInjector):
                 CGEventPost(kCGSessionEventTap, enter_up)
 
             return True
-        except Exception:
+        except (ImportError, OSError):
             return False
 
     def get_name(self) -> str:

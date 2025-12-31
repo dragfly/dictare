@@ -109,9 +109,9 @@ def run(
         Optional[str],
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
-    enter: Annotated[
+    no_enter: Annotated[
         bool,
-        typer.Option("--enter", "-e", help="Auto-press Enter after typing"),
+        typer.Option("--no-enter", help="Don't press Enter after typing/pasting"),
     ] = False,
     clipboard: Annotated[
         bool,
@@ -193,15 +193,16 @@ def run(
         except ImportError:
             pass  # mlx-whisper not installed, use default
     elif sys.platform == "linux":
-        # Linux: try CUDA GPU
+        # Linux: try CUDA GPU via ctranslate2 (faster-whisper dependency)
         try:
-            import torch
-            if torch.cuda.is_available():
+            import ctranslate2
+            if "cuda" in ctranslate2.get_supported_compute_types("cuda"):
                 config.stt.device = "cuda"
                 config.stt.compute_type = "float16"
                 console.print("[dim]CUDA GPU detected, using GPU acceleration[/]")
-        except ImportError:
-            pass  # torch not installed or no CUDA
+                _setup_cuda_library_path()
+        except (ImportError, RuntimeError):
+            pass  # ctranslate2 not installed or no CUDA
 
     # Override config with CLI options
     if model:
@@ -210,8 +211,8 @@ def run(
         config.hotkey.key = key
     if language:
         config.stt.language = language
-    if enter:
-        config.injection.auto_enter = True
+    if no_enter:
+        config.injection.auto_enter = False
     if clipboard:
         config.injection.backend = "clipboard"
     if mlx:
@@ -256,7 +257,7 @@ def run(
             "output_mode": config.injection.backend,
             "auto_enter": config.injection.auto_enter,
             "debug": debug,
-            "silence_ms": silence_ms or 1200,
+            "silence_ms": silence_ms or VoxtypeApp.DEFAULT_VAD_SILENCE_MS,
         }
         logger = JSONLLogger(log_file, __version__, params=log_params)
         console.print(f"[dim]Logging to: {log_file}[/]")

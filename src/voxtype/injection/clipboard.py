@@ -93,7 +93,7 @@ class ClipboardInjector(TextInjector):
         except subprocess.TimeoutExpired:
             proc.kill()
             return False
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def _send_paste_shortcut(self) -> None:
@@ -131,7 +131,7 @@ class ClipboardInjector(TextInjector):
                             capture_output=True,
                             timeout=5,
                         )
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             pass  # Best effort, don't fail if paste doesn't work
 
     def _send_enter_key(self) -> None:
@@ -165,8 +165,8 @@ class ClipboardInjector(TextInjector):
                             capture_output=True,
                             timeout=5,
                         )
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError):
+            pass  # Best effort
 
     def get_name(self) -> str:
         """Get injector name."""
