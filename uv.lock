@@ -1878,6 +1878,7 @@ name = "voxtype"
 version = "1.0.11"
 source = { editable = "." }
 dependencies = [
+    { name = "faster-whisper" },
     { name = "numpy" },
     { name = "pydantic" },
     { name = "rich" },
@@ -1900,7 +1901,6 @@ gpu = [
 ]
 linux = [
     { name = "evdev" },
-    { name = "faster-whisper" },
 ]
 macos = [
     { name = "pynput" },
@@ -1918,7 +1918,7 @@ mlx = [
 [package.metadata]
 requires-dist = [
     { name = "evdev", marker = "extra == 'linux'", specifier = ">=1.7.0" },
-    { name = "faster-whisper", marker = "extra == 'linux'", specifier = ">=1.0.0" },
+    { name = "faster-whisper", specifier = ">=1.0.0" },
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
     { name = "mlx", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
     { name = "mlx-whisper", marker = "extra == 'mlx'", specifier = ">=0.4.0" },

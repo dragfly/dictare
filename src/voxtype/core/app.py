@@ -124,17 +124,13 @@ class ClaudeMicApp:
         else:
             device_str = "CPU"
 
-        if self.config.verbose:
-            self._console.print(f"[dim]Loading {self.config.stt.model_size} model on {device_str}...[/]")
+        self._console.print(f"[dim]Loading STT model {self.config.stt.model_size} on {device_str} (first run may download)...[/]")
 
         engine.load_model(
             self.config.stt.model_size,
             device=self.config.stt.device,
             compute_type=self.config.stt.compute_type,
         )
-
-        if self.config.verbose:
-            self._console.print("[dim]Model loaded.[/]")
 
         return engine
 
@@ -339,11 +335,14 @@ class ClaudeMicApp:
         # Create VAD (Silero VAD via faster-whisper)
         from voxtype.audio.vad import SileroVAD, StreamingVAD
 
+        self._console.print("[dim]Loading VAD model (first run may download)...[/]")
         self._vad = SileroVAD(
             threshold=0.5,
             min_silence_ms=self.vad_silence_ms,
             min_speech_ms=250,
         )
+        # Pre-load the model now, not on first speech
+        self._vad._load_model()
 
         # Create streaming VAD processor
         self._streaming_vad = StreamingVAD(
