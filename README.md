@@ -117,9 +117,28 @@ voxtype speak "Hello world"       # Text-to-speech (requires espeak-ng)
 ## Configuration
 
 ```bash
-voxtype init    # Create ~/.config/voxtype/config.toml
-voxtype config  # Show current config
+voxtype init                              # Create ~/.config/voxtype/config.toml
+voxtype config                            # Show all config with env var names
+voxtype config get stt.model_size         # Get a single value
+voxtype config set stt.model_size large-v3  # Set a value
+voxtype config path                       # Show config file path
 ```
+
+### Environment Variables
+
+All config options can be overridden via environment variables:
+
+```bash
+VOXTYPE_STT_MODEL_SIZE=large-v3 voxtype run
+VOXTYPE_STT_LANGUAGE=it voxtype run
+VOXTYPE_COMMAND_OLLAMA_MODEL=qwen2.5:3b voxtype run
+```
+
+Priority (highest to lowest):
+1. CLI flags (`--model`, `--language`, etc.)
+2. Environment variables (`VOXTYPE_*`)
+3. Config file (`~/.config/voxtype/config.toml`)
+4. Built-in defaults
 
 ## Requirements
 
