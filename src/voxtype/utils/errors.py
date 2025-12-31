@@ -1,13 +1,13 @@
 """Custom exceptions for voxtype."""
 
 
-class ClaudeMicError(Exception):
+class VoxtypeError(Exception):
     """Base exception for voxtype."""
 
     pass
 
 
-class AudioError(ClaudeMicError):
+class AudioError(VoxtypeError):
     """Audio-related errors."""
 
     pass
@@ -26,7 +26,7 @@ class NoMicrophoneError(AudioError):
         )
 
 
-class STTError(ClaudeMicError):
+class STTError(VoxtypeError):
     """Speech-to-text errors."""
 
     pass
@@ -38,7 +38,7 @@ class ModelLoadError(STTError):
     pass
 
 
-class HotkeyError(ClaudeMicError):
+class HotkeyError(VoxtypeError):
     """Hotkey detection errors."""
 
     pass
@@ -56,7 +56,7 @@ class InputPermissionError(HotkeyError):
         )
 
 
-class InjectionError(ClaudeMicError):
+class InjectionError(VoxtypeError):
     """Text injection errors."""
 
     pass

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from voxtype.logging.jsonl import JSONLLogger
 
 
-class ClaudeMicApp:
+class VoxtypeApp:
     """Main application orchestrator.
 
     Coordinates audio capture, STT, hotkey detection, and text injection.
