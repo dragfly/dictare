@@ -37,7 +37,7 @@ class MacOSInjector(TextInjector):
 
         Args:
             text: Text to type.
-            delay_ms: Delay between characters (not used, AppleScript handles timing).
+            delay_ms: Delay between characters in milliseconds.
 
         Returns:
             True if successful.
@@ -50,12 +50,27 @@ class MacOSInjector(TextInjector):
         # Escape special characters for AppleScript
         escaped = text.replace("\\", "\\\\").replace('"', '\\"')
 
-        # Build AppleScript: type text, then optionally press Return
-        if send_enter:
-            # Small delay between text and Return to ensure text is fully typed
-            script = f'tell application "System Events"\nkeystroke "{escaped}"\ndelay 0.1\nkey code 36\nend tell'
+        # Build AppleScript
+        if delay_ms > 0:
+            # Type character by character with delay (slower but safer for some apps)
+            delay_sec = delay_ms / 1000.0
+            lines = [f'set theText to "{escaped}"']
+            lines.append("tell application \"System Events\"")
+            lines.append("repeat with theChar in characters of theText")
+            lines.append("keystroke theChar")
+            lines.append(f"delay {delay_sec}")
+            lines.append("end repeat")
+            if send_enter:
+                lines.append("delay 0.1")
+                lines.append("key code 36")
+            lines.append("end tell")
+            script = "\n".join(lines)
         else:
-            script = f'tell application "System Events" to keystroke "{escaped}"'
+            # Fast bulk typing
+            if send_enter:
+                script = f'tell application "System Events"\nkeystroke "{escaped}"\ndelay 0.1\nkey code 36\nend tell'
+            else:
+                script = f'tell application "System Events" to keystroke "{escaped}"'
 
         try:
             # Ensure UTF-8 locale for proper accent handling
@@ -66,7 +81,7 @@ class MacOSInjector(TextInjector):
             result = subprocess.run(
                 ["osascript", "-e", script],
                 capture_output=True,
-                timeout=30,
+                timeout=120,  # Longer timeout for slow typing
                 encoding="utf-8",
                 env=env,
             )
