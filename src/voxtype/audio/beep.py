@@ -84,7 +84,7 @@ def play_beep_busy() -> None:
 
 # TTS mode announcements per language
 _MODE_PHRASES = {
-    "it": {"transcription": "modalità trascrizione", "command": "modalità comando"},
+    "it": {"transcription": "modalità trascrizione", "command": "modalità comandi"},
     "en": {"transcription": "transcription mode", "command": "command mode"},
     "es": {"transcription": "modo transcripción", "command": "modo comando"},
     "fr": {"transcription": "mode transcription", "command": "mode commande"},
