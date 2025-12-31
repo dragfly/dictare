@@ -32,8 +32,8 @@ class STTConfig(BaseModel):
         description="STT backend to use (faster-whisper, mlx-whisper for Apple Silicon)",
     )
     model_size: str = Field(
-        default="base",
-        description="Whisper model size (tiny/base/small/medium/large-v3)",
+        default="large-v3-turbo",
+        description="Whisper model size (tiny/base/small/medium/large-v3/large-v3-turbo)",
     )
     language: str = Field(
         default="auto",
@@ -370,7 +370,7 @@ audio_feedback = true  # Play beep on listening mode toggle
 
 [stt]
 backend = "faster-whisper"
-model_size = "base"  # tiny, base, small, medium, large-v3
+model_size = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
 language = "auto"    # auto-detect, or "en", "it", etc.
 compute_type = "int8"
 beam_size = 5

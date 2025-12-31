@@ -176,16 +176,27 @@ def run(
     """
     config = load_config(config_file)
 
-    # Auto-detect MLX on Apple Silicon Mac
+    # Auto-detect GPU acceleration
     import platform
     import sys
     if sys.platform == "darwin" and platform.machine() == "arm64":
+        # Apple Silicon: try MLX
         try:
             console.print("[dim]Loading MLX (first run may take ~30s)...[/]")
             import mlx_whisper  # noqa: F401
             config.stt.backend = "mlx-whisper"
         except ImportError:
             pass  # mlx-whisper not installed, use default
+    elif sys.platform == "linux":
+        # Linux: try CUDA GPU
+        try:
+            import torch
+            if torch.cuda.is_available():
+                config.stt.device = "cuda"
+                config.stt.compute_type = "float16"
+                console.print("[dim]CUDA GPU detected, using GPU acceleration[/]")
+        except ImportError:
+            pass  # torch not installed or no CUDA
 
     # Override config with CLI options
     if model:
