@@ -157,14 +157,16 @@ On macOS, text injection uses **osascript** (AppleScript) which requires Accessi
 
 ### macOS
 
-- **Clipboard mode is default**: voxtype uses clipboard (paste) instead of keystroke injection. This avoids compatibility issues with some apps. Use `--keyboard` to force direct typing.
-- **Accessibility permissions**: Required for both clipboard paste and keystroke simulation. Add your terminal app in System Settings → Privacy & Security → Accessibility.
-- **Latency**: Expect ~8 seconds with `large-v3-turbo` on MLX. Use `medium` or `small` for faster response.
+- **Keyboard mode is default**: Uses Quartz for direct Unicode keystroke injection
+- **Accessibility permissions**: Required for keyboard simulation. Add your terminal app in System Settings → Privacy & Security → Accessibility
+- **Fallback**: If Quartz unavailable, falls back to osascript → clipboard
+- Use `--clipboard` to force clipboard mode (overwrites clipboard but more compatible)
 
 ### Linux
 
-- **Clipboard mode is default**: Same as macOS, clipboard is preferred for compatibility. Use `--keyboard` to force direct typing via ydotool/wtype/xdotool.
-- **GPU acceleration**: With CUDA, expect ~2-3 seconds latency with `large-v3`.
+- **Keyboard mode is default**: Uses ydotool for universal keystroke injection (X11/Wayland/TTY)
+- **Fallback**: ydotool → wtype → xdotool → clipboard
+- **GPU acceleration**: CUDA auto-detected, expect ~2-3 seconds latency with `large-v3-turbo`
 
 ## License
 
