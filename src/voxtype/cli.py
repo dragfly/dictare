@@ -148,6 +148,10 @@ def run(
         bool,
         typer.Option("--no-commands", help="Disable voice command processing"),
     ] = False,
+    mode: Annotated[
+        str,
+        typer.Option("--mode", "-M", help="Mode: 'transcription' (fast, no LLM) or 'command' (LLM for commands)"),
+    ] = "transcription",
     log_file: Annotated[
         Optional[Path],
         typer.Option("--log-file", "-L", help="JSONL log file for structured logging"),
@@ -241,9 +245,11 @@ def run(
         wake_word=wake_word,
         debug=debug,
         logger=logger,
+        initial_mode=mode,
     )
 
-    mode_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
+    output_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
+    mode_str = "[cyan]transcription[/] (fast)" if mode == "transcription" else "[yellow]command[/] (LLM)"
     if config.stt.backend == "mlx-whisper":
         device_str = "[magenta]GPU (MLX/Metal)[/]"
     elif config.stt.device == "cuda":
@@ -255,11 +261,13 @@ def run(
     console.print(
         Panel(
             f"[bold green]voxtype[/] v{__version__}\n\n"
-            f"Input mode: {input_mode}\n"
+            f"Input: {input_mode}\n"
             f"{wake_str}"
-            f"STT model: [cyan]{config.stt.model_size}[/] on {device_str}\n"
+            f"Mode: {mode_str}\n"
+            f"STT: [cyan]{config.stt.model_size}[/] on {device_str}\n"
             f"Language: [cyan]{config.stt.language}[/]\n"
-            f"Output mode: {mode_str}\n\n"
+            f"Output: {output_str}\n\n"
+            f"[dim]CMD tap: toggle listening | CMD double-tap: switch mode[/]\n"
             f"Press [bold]Ctrl+C[/] to exit",
             title="Ready",
             border_style="green",

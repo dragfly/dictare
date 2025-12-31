@@ -35,6 +35,9 @@ class ClaudeMicApp:
     # Minimum recording duration in seconds
     MIN_RECORDING_DURATION = 0.3
 
+    # Double-tap detection threshold in seconds
+    DOUBLE_TAP_THRESHOLD = 0.4
+
     def __init__(
         self,
         config: Config,
@@ -43,6 +46,7 @@ class ClaudeMicApp:
         wake_word: str | None = None,
         debug: bool = False,
         logger: JSONLLogger | None = None,
+        initial_mode: str = "transcription",
     ) -> None:
         """Initialize the application.
 
@@ -53,6 +57,7 @@ class ClaudeMicApp:
             wake_word: Trigger phrase to activate (e.g., "Joshua").
             debug: If True, show all transcriptions.
             logger: Optional JSONL logger for structured logging.
+            initial_mode: Processing mode - 'transcription' (fast) or 'command' (LLM).
         """
         self.config = config
         self.use_vad = use_vad
@@ -64,6 +69,15 @@ class ClaudeMicApp:
         self._console = Console()
         self._lock = threading.Lock()
         self._logger = logger
+
+        # Processing mode: 'transcription' (fast, no LLM) or 'command' (LLM)
+        self._processing_mode = initial_mode
+
+        # Listening state: True = actively listening, False = paused
+        self._listening = False
+
+        # Double-tap detection
+        self._last_tap_time: float = 0.0
 
         # Initialize components
         self._audio: AudioCapture | None = None
@@ -570,18 +584,22 @@ class ClaudeMicApp:
                     if self.debug:
                         self._console.print(f"[blue][DEBUG][/] {text}")
 
-                    # In LISTENING mode: skip LLM for speed, just inject directly
-                    # Commands only work via hotkey toggle, not voice
-                    from voxtype.llm.models import AppState as LLMAppState
-                    if self._llm_processor and self._llm_processor.state == LLMAppState.LISTENING:
-                        # Fast path: direct injection, no LLM processing
+                    # Check listening state first
+                    if not self._listening:
+                        # Not listening: ignore transcription
+                        self._console.print("[dim]Not listening, ignoring.[/]")
+                        return
+
+                    # Listening: check processing mode
+                    if self._processing_mode == "transcription":
+                        # Transcription mode: fast inject, no LLM
                         self._inject_text(text)
-                    elif self._llm_processor:
-                        # Non-listening mode: process through LLM for commands
+                    elif self._processing_mode == "command" and self._llm_processor:
+                        # Command mode: process through LLM
                         response = self._llm_processor.process(text)
                         self._execute_llm_response(response, text)
                     else:
-                        # No LLM processor: just inject the text
+                        # Fallback: just inject
                         self._inject_text(text)
                 else:
                     self._console.print("[dim]No speech detected.                    [/]")
@@ -709,19 +727,81 @@ class ClaudeMicApp:
             )
 
     def _on_hotkey_toggle(self) -> None:
-        """Handle hotkey press in VAD mode - toggle LISTENING state."""
-        if not self._llm_processor:
+        """Handle hotkey press in VAD mode.
+
+        Single tap: toggle listening on/off
+        Double tap: switch between transcription and command mode
+        """
+        current_time = time.time()
+        time_since_last = current_time - self._last_tap_time
+        self._last_tap_time = current_time
+
+        # Double tap detection
+        if time_since_last < self.DOUBLE_TAP_THRESHOLD:
+            # Double tap: switch processing mode
+            self._switch_processing_mode()
             return
 
-        from voxtype.llm.models import AppState as LLMAppState
+        # Single tap: toggle listening
+        self._toggle_listening()
 
-        # Toggle the state
-        new_state = self._llm_processor.toggle_listening()
+    def _toggle_listening(self) -> None:
+        """Toggle listening on/off."""
+        self._listening = not self._listening
 
-        if new_state == LLMAppState.LISTENING:
-            self._enter_listening_mode(trigger="hotkey_toggle")
+        if self._listening:
+            # Entering listening mode
+            self._console.print("[bold green]>>> LISTENING ON[/]")
+            self._play_feedback("listening_on")
+
+            # Also update LLM processor state if available
+            if self._llm_processor:
+                from voxtype.llm.models import AppState as LLMAppState
+                self._llm_processor._state = LLMAppState.LISTENING
         else:
-            self._exit_listening_mode(trigger="hotkey_toggle")
+            # Exiting listening mode
+            self._console.print("[bold red]<<< LISTENING OFF[/]")
+            self._play_feedback("listening_off")
+
+            # Also update LLM processor state if available
+            if self._llm_processor:
+                from voxtype.llm.models import AppState as LLMAppState
+                self._llm_processor._state = LLMAppState.IDLE
+
+    def _switch_processing_mode(self) -> None:
+        """Switch between transcription and command mode."""
+        if self._processing_mode == "transcription":
+            self._processing_mode = "command"
+            self._console.print("[bold yellow]>>> MODE: COMMAND (LLM)[/]")
+        else:
+            self._processing_mode = "transcription"
+            self._console.print("[bold cyan]>>> MODE: TRANSCRIPTION (fast)[/]")
+
+        self._play_feedback("mode_switch")
+
+    def _play_feedback(self, event: str) -> None:
+        """Play audio feedback for state changes.
+
+        Args:
+            event: Type of event - 'listening_on', 'listening_off', 'mode_switch'
+        """
+        if not self.config.audio.audio_feedback:
+            return
+
+        try:
+            from voxtype.audio.beep import play_beep
+
+            if event == "listening_on":
+                play_beep(frequency=800, duration_ms=100)
+            elif event == "listening_off":
+                play_beep(frequency=400, duration_ms=150)
+            elif event == "mode_switch":
+                # Two short beeps for mode switch
+                play_beep(frequency=600, duration_ms=50)
+                time.sleep(0.05)
+                play_beep(frequency=900, duration_ms=50)
+        except Exception:
+            pass  # Ignore audio feedback errors
 
     def _execute_command(self, command: Command | None, args: dict | None) -> None:
         """Execute a voice command.
@@ -798,7 +878,8 @@ class ClaudeMicApp:
 
     def _on_vad_audio_chunk(self, chunk) -> None:
         """Process audio chunk through VAD."""
-        if self._streaming_vad and self._running:
+        # Only process if running AND listening
+        if self._streaming_vad and self._running and self._listening:
             self._streaming_vad.process_chunk(chunk)
 
     def run(self) -> None:
@@ -830,6 +911,11 @@ class ClaudeMicApp:
         """Run in VAD (voice activity detection) mode."""
         self._init_vad_components()
         self._running = True
+        self._listening = True  # Start actively listening
+
+        # Show initial state
+        mode_name = "TRANSCRIPTION" if self._processing_mode == "transcription" else "COMMAND"
+        self._console.print(f"[bold green]>>> LISTENING ON[/] [dim]({mode_name} mode)[/]")
 
         # Start hotkey listener for toggle (if available)
         if self._hotkey:
