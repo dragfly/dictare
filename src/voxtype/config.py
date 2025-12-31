@@ -77,7 +77,7 @@ class InjectionConfig(BaseModel):
         description="Fall back to clipboard if typing fails",
     )
     auto_enter: bool = Field(
-        default=False,
+        default=True,
         description="Automatically press Enter after typing text",
     )
     auto_paste: bool = Field(
