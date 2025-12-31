@@ -265,6 +265,20 @@ def run(
         device_str = "CPU"
     input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
     wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
+
+    # Format the hotkey nicely
+    hotkey = config.hotkey.key
+    if hotkey in ("KEY_LEFTMETA", "KEY_RIGHTMETA"):
+        if sys.platform == "darwin":
+            hotkey_display = "⌘ (Command)"
+        else:
+            hotkey_display = "Super/Meta"
+    elif hotkey == "KEY_SCROLLLOCK":
+        hotkey_display = "Scroll Lock"
+    else:
+        # Remove KEY_ prefix for cleaner display
+        hotkey_display = hotkey.replace("KEY_", "")
+
     console.print(
         Panel(
             f"[bold green]voxtype[/] v{__version__}\n\n"
@@ -274,7 +288,7 @@ def run(
             f"STT: [cyan]{config.stt.model_size}[/] on {device_str}\n"
             f"Language: [cyan]{config.stt.language}[/]\n"
             f"Output: {output_str}\n\n"
-            f"[dim]CMD tap: toggle listening | CMD double-tap: switch mode[/]\n"
+            f"[dim][cyan]{hotkey_display}[/] tap: toggle listening | double-tap: switch mode[/]\n"
             f"Press [bold]Ctrl+C[/] to exit",
             title="Ready",
             border_style="green",
