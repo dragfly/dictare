@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voxtype"
-version = "1.0.20"
+version = "1.0.21"
 description = "Voice-to-text for your terminal"
 readme = "README.md"
 license = "MIT"
@@ -48,6 +48,7 @@ dev = [
 ]
 macos = [
     "pynput>=1.7.0",
+    "pyobjc-framework-Quartz>=10.0",
 ]
 cloud = [
     "openai>=1.0.0",
