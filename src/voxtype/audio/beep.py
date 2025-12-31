@@ -84,12 +84,12 @@ def play_beep_busy() -> None:
 
 # TTS mode announcements per language
 _MODE_PHRASES = {
-    "it": {"transcription": "trascrizione", "command": "comando"},
-    "en": {"transcription": "transcription", "command": "command"},
-    "es": {"transcription": "transcripción", "command": "comando"},
-    "fr": {"transcription": "transcription", "command": "commande"},
-    "de": {"transcription": "Transkription", "command": "Befehl"},
-    "pt": {"transcription": "transcrição", "command": "comando"},
+    "it": {"transcription": "modalità trascrizione", "command": "modalità comando"},
+    "en": {"transcription": "transcription mode", "command": "command mode"},
+    "es": {"transcription": "modo transcripción", "command": "modo comando"},
+    "fr": {"transcription": "mode transcription", "command": "mode commande"},
+    "de": {"transcription": "Transkriptionsmodus", "command": "Befehlsmodus"},
+    "pt": {"transcription": "modo transcrição", "command": "modo comando"},
 }
 
 # macOS voice names per language
