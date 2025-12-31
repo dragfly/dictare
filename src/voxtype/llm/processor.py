@@ -31,7 +31,7 @@ class LLMProcessor:
     def __init__(
         self,
         trigger_phrase: str | None = None,
-        ollama_model: str = "llama3.2:1b",
+        ollama_model: str = "qwen2.5:1.5b",
         ollama_timeout: float = 5.0,
         console: Console | None = None,
     ) -> None:
