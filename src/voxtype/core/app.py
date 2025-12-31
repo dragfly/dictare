@@ -724,17 +724,17 @@ class VoxtypeApp:
             return
 
         try:
-            from voxtype.audio.beep import play_beep
+            from voxtype.audio.beep import play_beep_start, play_beep_stop
 
             if event == "listening_on":
-                play_beep(frequency=800, duration_ms=100)
+                play_beep_start()
             elif event == "listening_off":
-                play_beep(frequency=400, duration_ms=150)
+                play_beep_stop()
             elif event == "mode_switch":
-                # Two short beeps for mode switch
-                play_beep(frequency=600, duration_ms=50)
-                time.sleep(0.05)
-                play_beep(frequency=900, duration_ms=50)
+                # Two beeps for mode switch (start then stop tone)
+                play_beep_start()
+                time.sleep(0.1)
+                play_beep_stop()
         except Exception:
             pass  # Ignore audio feedback errors
 
