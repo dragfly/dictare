@@ -50,9 +50,6 @@ macos = [
     "pynput>=1.7.0",
     "pyobjc-framework-Quartz>=10.0",
 ]
-cloud = [
-    "openai>=1.0.0",
-]
 gpu = [
     "nvidia-cudnn-cu12>=9.0.0",
 ]
