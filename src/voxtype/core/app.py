@@ -865,14 +865,37 @@ class ClaudeMicApp:
             while self._running:
                 time.sleep(0.1)
                 if self._audio and self._audio.needs_reconnect():
-                    self._console.print("[yellow]Audio device changed, reconnecting...[/]")
-                    if self._audio.reconnect_streaming(self._on_vad_audio_chunk):
-                        self._console.print("[green]Audio reconnected.[/]")
+                    self._console.print("[yellow]Audio device changed, reconnecting...[/]", end="")
+                    if self._reconnect_audio():
+                        self._console.print(" [green]OK[/]")
                     else:
-                        self._console.print("[red]Failed to reconnect audio. Please restart.[/]")
+                        self._console.print(" [red]FAILED[/]")
+                        self._console.print("[red]Could not reconnect audio. Please restart.[/]")
                         break
         except KeyboardInterrupt:
             pass
+
+    def _reconnect_audio(self) -> bool:
+        """Recreate audio capture after device change."""
+        # Stop and destroy old audio capture
+        if self._audio:
+            try:
+                self._audio.stop_streaming()
+            except Exception:
+                pass
+            self._audio = None
+
+        # Retry with fresh AudioCapture object
+        for attempt in range(5):
+            self._console.print(f" {attempt + 1}", end="", highlight=False)
+            time.sleep(1.0)
+            try:
+                self._audio = self._create_audio_capture()
+                self._audio.start_streaming(self._on_vad_audio_chunk)
+                return True
+            except Exception:
+                self._audio = None
+        return False
 
     def stop(self) -> None:
         """Stop the application."""
