@@ -29,7 +29,7 @@ class MacOSInjector(TextInjector):
                 timeout=5,
             )
             return result.returncode == 0
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def _has_non_ascii(self, text: str) -> bool:
@@ -61,7 +61,7 @@ class MacOSInjector(TextInjector):
                 timeout=10,
             )
             return result.returncode == 0
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def type_text(self, text: str, delay_ms: int = 0) -> bool:
@@ -124,7 +124,7 @@ class MacOSInjector(TextInjector):
             return result.returncode == 0
         except subprocess.TimeoutExpired:
             return False
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def get_name(self) -> str:

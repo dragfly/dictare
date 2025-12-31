@@ -79,7 +79,7 @@ class YdotoolInjector(TextInjector):
                 timeout=5,
             )
             return True
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def type_text(self, text: str, delay_ms: int = 0) -> bool:
@@ -157,7 +157,7 @@ class YdotoolInjector(TextInjector):
             return True
         except subprocess.TimeoutExpired:
             return False
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def get_name(self) -> str:

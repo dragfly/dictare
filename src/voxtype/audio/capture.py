@@ -47,13 +47,11 @@ class AudioCapture:
     def _audio_callback(
         self,
         indata: NDArray[np.float32],
-        frames: int,
-        time_info: dict,
-        status: sd.CallbackFlags,
+        _frames: int,
+        _time_info: dict,
+        _status: sd.CallbackFlags,
     ) -> None:
         """Callback for sounddevice stream."""
-        if status:
-            print(f"Audio status: {status}")
         if self._recording:
             self._buffer.put(indata.copy())
 
@@ -154,8 +152,8 @@ class AudioCapture:
     def _streaming_audio_callback(
         self,
         indata: NDArray[np.float32],
-        frames: int,
-        time_info: dict,
+        _frames: int,
+        _time_info: dict,
         status: sd.CallbackFlags,
     ) -> None:
         """Callback for streaming mode."""

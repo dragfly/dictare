@@ -28,6 +28,9 @@ class LLMProcessor:
     - Text formatting for injection
     """
 
+    # Number of recent transcriptions to include in context
+    HISTORY_WINDOW_SIZE = 5
+
     def __init__(
         self,
         trigger_phrase: str | None = None,
@@ -77,7 +80,7 @@ class LLMProcessor:
             text=text,
             current_state=self._state,
             trigger_phrase=self.trigger_phrase,
-            history=self._history[-5:],
+            history=self._history[-self.HISTORY_WINDOW_SIZE:],
         )
 
         # Try Ollama first, fall back to keyword matching
@@ -350,6 +353,14 @@ class LLMProcessor:
         self._state = AppState.IDLE
         self._history.clear()
         self._last_injection = None
+
+    def set_listening(self, listening: bool) -> None:
+        """Set listening state.
+
+        Args:
+            listening: True to set LISTENING, False to set IDLE.
+        """
+        self._state = AppState.LISTENING if listening else AppState.IDLE
 
     def toggle_listening(self) -> AppState:
         """Toggle between IDLE and LISTENING states.
