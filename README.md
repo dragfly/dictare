@@ -2,16 +2,16 @@
 
 Voice-to-text for your terminal. Speak into your microphone and have your words typed anywhere.
 
-**Linux-first** | Push-to-talk or VAD | Wake word support | Works with any app
+**Linux-first** | VAD or Push-to-talk | Wake word support | Works with any app
 
 ## Features
 
+- **VAD mode** (default): Hands-free, automatic speech detection
 - **Push-to-talk**: Hold a key, speak, release → text appears
-- **VAD mode**: Hands-free, automatic speech detection
 - **Wake word**: Say "Hey voxtype" to start listening
 - **Universal**: Works with any terminal, editor, browser (via ydotool/wtype)
 - **Offline**: Local Whisper model, no cloud required
-- **Fast**: ~2 second latency with base model
+- **Fast**: GPU auto-detected on macOS (MLX) and Linux (CUDA)
 
 ## Quick Start
 
@@ -19,7 +19,7 @@ Voice-to-text for your terminal. Speak into your microphone and have your words 
 git clone https://github.com/dragfly/voxtype
 cd voxtype
 ./install.sh              # Auto-detects platform (macOS/Linux)
-uv run voxtype run --vad
+uv run voxtype run
 ```
 
 The installer automatically:
@@ -31,7 +31,7 @@ The installer automatically:
 After install, grant Accessibility permissions (see installer output), then:
 
 ```bash
-uv run voxtype run --vad
+uv run voxtype run
 ```
 
 Hold **Right Command (⌘)** to toggle listening. MLX is auto-detected on Apple Silicon.
@@ -44,25 +44,25 @@ After install, run permissions setup and start the daemon:
 ./setup-permissions.sh    # One-time sudo
 # Log out and back in
 systemctl --user start ydotoold
-uv run voxtype run --vad
+uv run voxtype run
 ```
 
-Hold **ScrollLock** to toggle listening.
+Hold **ScrollLock** to toggle listening. CUDA GPU is auto-detected.
 
 ### GPU Acceleration
 
 - **macOS (Apple Silicon)**: MLX is auto-detected, no flags needed
-- **Linux (NVIDIA)**: `./install.sh --gpu` then `uv run voxtype run --gpu`
+- **Linux (NVIDIA)**: CUDA is auto-detected if available
 
 ## Usage
 
 ```bash
-voxtype run                       # Push-to-talk mode
-voxtype run --vad                 # VAD mode (hands-free)
-voxtype run --vad --wake-word Hey # Wake word mode
+voxtype run                       # VAD mode (default, hands-free)
+voxtype run --ptt                 # Push-to-talk mode
+voxtype run --wake-word Hey       # Wake word mode
 voxtype run --model medium        # Larger model, better accuracy
 voxtype run --language it         # Force Italian
-voxtype run --enter               # Auto-press Enter after typing
+voxtype run --no-enter            # Don't auto-press Enter after typing
 voxtype run --clipboard           # Use clipboard (for accented chars)
 voxtype check                     # Verify setup
 voxtype speak "Hello world"       # Text-to-speech (requires espeak-ng)
@@ -72,16 +72,16 @@ voxtype speak "Hello world"       # Text-to-speech (requires espeak-ng)
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--vad` | | Voice Activity Detection (hands-free) |
+| `--ptt` | | Push-to-talk mode (VAD is default) |
 | `--wake-word` | `-w` | Trigger phrase (e.g., "Joshua") |
 | `--model` | `-m` | Whisper model (tiny/base/small/medium/large-v3/large-v3-turbo) |
 | `--language` | `-l` | Language code (it, en, es, fr...) or "auto" |
 | `--key` | `-k` | Push-to-talk key (KEY_SCROLLLOCK, KEY_RIGHTMETA, etc.) |
-| `--enter` | `-e` | Auto-press Enter after typing |
+| `--no-enter` | | Don't auto-press Enter after typing |
 | `--clipboard` | `-C` | Copy to clipboard instead of typing |
 | `--keyboard` | `-K` | Force keyboard typing (may crash some apps) |
-| `--gpu` | | Use GPU acceleration (NVIDIA CUDA) |
-| `--mlx` | | Use GPU acceleration (Apple Silicon Metal) |
+| `--gpu` | `-g` | Force GPU acceleration (NVIDIA CUDA) |
+| `--mlx` | | Force GPU acceleration (Apple Silicon Metal) |
 | `--config` | `-c` | Path to custom config file |
 | `--max-duration` | `-d` | Max recording duration in seconds (default 60) |
 | `--silence-ms` | `-s` | VAD silence duration to end speech (default 1200) |

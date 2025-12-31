@@ -2,16 +2,21 @@
 
 ## Overview
 
-`voxtype` is a push-to-talk voice-to-text tool designed for terminal applications. It captures audio while a hotkey is held, transcribes it locally using Whisper, and types the result into the active window.
+`voxtype` is a voice-to-text tool designed for terminal applications. It supports two input modes:
+- **VAD mode** (default): Hands-free, automatic speech detection using Silero VAD
+- **Push-to-talk mode**: Hold a hotkey to record, release to transcribe
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Hotkey    │───>│   Audio     │───>│    STT      │───>│  Injector   │
 │  Listener   │    │  Capture    │    │  (Whisper)  │    │  (Typing)   │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-      │                                                         │
+      │                  │                                      │
+      │            ┌─────────────┐                              │
+      │            │  Silero VAD │ (in VAD mode)                │
+      │            └─────────────┘                              │
       └──────────────────── State Machine ──────────────────────┘
-                    IDLE → RECORDING → TRANSCRIBING → TYPING
+                    IDLE → RECORDING → TRANSCRIBING → INJECTING
 ```
 
 ## Key Design Decisions
@@ -20,13 +25,18 @@
 
 All transcription happens locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper), a CTranslate2-optimized implementation of OpenAI's Whisper. No internet connection required, no API keys, no usage limits.
 
-### 2. Push-to-Talk
+### 2. Input Modes
 
-Instead of always-listening with Voice Activity Detection (VAD), we use a simple push-to-talk model:
-- **Hold key** → Start recording
-- **Release key** → Stop recording, transcribe, type
+**VAD mode** (default):
+- Uses Silero VAD for speech detection
+- Hotkey toggles listening on/off
+- Speech automatically detected and transcribed
+- Double-tap hotkey to switch between transcription/command modes
 
-This is simpler, more predictable, and avoids false activations.
+**Push-to-talk mode** (`--ptt`):
+- Hold key → Start recording
+- Release key → Stop recording, transcribe, type
+- Simpler, more predictable, avoids false activations
 
 ### 3. Modular Components
 
@@ -40,19 +50,27 @@ src/voxtype/
 │   └── pynput_listener.py   # macOS, X11 fallback
 ├── audio/
 │   ├── capture.py           # sounddevice-based recording
-│   └── vad.py               # (stub for future VAD)
+│   ├── vad.py               # Silero VAD for speech detection
+│   └── beep.py              # Audio feedback (beeps, TTS)
 ├── stt/
 │   ├── base.py              # Abstract STTEngine
-│   └── faster_whisper.py    # Local Whisper
+│   ├── faster_whisper.py    # Local Whisper (CPU/CUDA)
+│   └── mlx_whisper.py       # Apple Silicon MLX
 ├── injection/
 │   ├── base.py              # Abstract TextInjector
 │   ├── ydotool.py           # Linux universal
 │   ├── wtype.py             # Wayland
 │   ├── xdotool.py           # X11
 │   ├── macos.py             # macOS (osascript)
+│   ├── quartz.py            # macOS (Quartz, Unicode)
 │   └── clipboard.py         # Fallback
+├── llm/
+│   ├── processor.py         # LLM command processing
+│   ├── models.py            # Data models (AppState, Command, etc.)
+│   └── prompts.py           # LLM prompts
 └── core/
-    └── app.py               # Orchestrator
+    ├── app.py               # Orchestrator
+    └── state.py             # AppState, ProcessingMode enums
 ```
 
 ### 4. Graceful Degradation
@@ -69,19 +87,20 @@ If the preferred tool isn't available, fall back to the next best option:
 
 ## Speech-to-Text Models
 
-We use OpenAI's Whisper via `faster-whisper`. Models are downloaded automatically on first use.
+We use OpenAI's Whisper via `faster-whisper` (CPU/CUDA) or `mlx-whisper` (Apple Silicon). Models are downloaded automatically on first use.
 
-| Model | Size | RAM | Speed | Quality |
-|-------|------|-----|-------|---------|
-| `tiny` | 75 MB | ~1 GB | ~1s | Good for clear speech |
-| `base` | 150 MB | ~1 GB | ~2s | Default, balanced |
-| `small` | 500 MB | ~2 GB | ~4s | Better accuracy |
-| `medium` | 1.5 GB | ~4 GB | ~8s | Best for non-English |
-| `large-v3` | 3 GB | ~6 GB | ~15s | Maximum accuracy |
+| Model | Size | RAM | Speed (GPU) | Quality |
+|-------|------|-----|-------------|---------|
+| `tiny` | 75 MB | ~1 GB | ~0.5s | Good for clear speech |
+| `base` | 150 MB | ~1 GB | ~1s | Balanced |
+| `small` | 500 MB | ~2 GB | ~2s | Better accuracy |
+| `medium` | 1.5 GB | ~4 GB | ~4s | Best for non-English |
+| `large-v3` | 3 GB | ~6 GB | ~8s | Maximum accuracy |
+| `large-v3-turbo` | 1.6 GB | ~4 GB | ~3s | **Default**, fast + accurate |
 
-**Recommendation:**
-- English: `base` or `small`
-- Other languages: `medium` (much better for Italian, Spanish, etc.)
+**GPU auto-detection:**
+- macOS (Apple Silicon): MLX is auto-detected
+- Linux (NVIDIA): CUDA is auto-detected
 
 ## Platform-Specific Details
 
@@ -126,15 +145,18 @@ Config file: `~/.config/voxtype/config.toml`
 
 ```toml
 [stt]
-model_size = "medium"    # tiny, base, small, medium, large-v3
-language = "auto"        # or specific: "en", "it", "es", etc.
+model_size = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
+language = "auto"              # or specific: "en", "it", "es", etc.
 
 [hotkey]
 key = "KEY_SCROLLLOCK"   # Linux default
 # key = "KEY_RIGHTMETA"  # macOS recommended
 
 [injection]
-auto_enter = false       # Press Enter after typing
+auto_enter = true        # Press Enter after typing (default)
+
+[audio]
+audio_feedback = true    # Beeps and TTS for mode changes
 ```
 
 ## Dependencies
@@ -152,6 +174,6 @@ auto_enter = false       # Press Enter after typing
 
 ## Future Enhancements
 
-- **VAD mode**: Always-listening with Silero VAD (interface ready in `audio/vad.py`)
 - **Cloud STT**: Optional OpenAI Whisper API for faster/better transcription
 - **Custom vocabulary**: Boost recognition of technical terms
+- **Streaming transcription**: Real-time partial results during speech
