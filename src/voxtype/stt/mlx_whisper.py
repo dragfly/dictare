@@ -17,8 +17,8 @@ MLX_MODELS = {
     "base": "mlx-community/whisper-base",
     "small": "mlx-community/whisper-small",
     "medium": "mlx-community/whisper-medium",
-    "large": "mlx-community/whisper-large-v3",
-    "large-v3": "mlx-community/whisper-large-v3",
+    "large": "mlx-community/whisper-large-v3-mlx",
+    "large-v3": "mlx-community/whisper-large-v3-mlx",
     "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
 }
 
