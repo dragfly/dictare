@@ -93,7 +93,7 @@ class CommandConfig(BaseModel):
         description="Intent classifier backend (auto tries ollama first)",
     )
     ollama_model: str = Field(
-        default="llama3.2:1b",
+        default="qwen2.5:1.5b",
         description="Ollama model for intent classification",
     )
     ollama_timeout: float = Field(
@@ -181,7 +181,7 @@ auto_enter = false  # Press Enter after typing
 [command]
 enabled = true
 classifier_backend = "auto"  # auto, ollama, keyword
-ollama_model = "llama3.2:1b"
+ollama_model = "qwen2.5:1.5b"
 ollama_timeout = 5.0
 
 verbose = false

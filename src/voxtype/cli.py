@@ -153,6 +153,10 @@ def run(
         bool,
         typer.Option("--keyboard", "-K", help="Use keyboard typing instead of clipboard (may crash some apps)"),
     ] = False,
+    ollama_model: Annotated[
+        Optional[str],
+        typer.Option("--ollama-model", "-O", help="Ollama model for command processing (default: qwen2.5:1.5b)"),
+    ] = None,
 ) -> None:
     """Start voxtype in push-to-talk or VAD mode.
 
@@ -193,6 +197,8 @@ def run(
             config.injection.backend = "macos"
         else:
             config.injection.backend = "ydotool"  # Will fall back to wtype/xdotool
+    if ollama_model:
+        config.command.ollama_model = ollama_model
 
     # Lazy import to speed up CLI
     from voxtype.core.app import ClaudeMicApp
