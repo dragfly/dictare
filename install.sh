@@ -65,9 +65,9 @@ if [[ "$(uname)" == "Darwin" ]]; then
         rm -rf .venv
     fi
 
-    # Install dependencies with Python 3.12 for MLX compatibility
+    # Install dependencies with Python 3.11 for MLX compatibility (torch 2.0.1 only has cp311 wheels)
     if [ $WITH_MLX -eq 1 ]; then
-        uv sync --python 3.12 --extra macos --extra mlx >/dev/null
+        uv sync --python 3.11 --extra macos --extra mlx >/dev/null
         info "Installed Python packages (with MLX for Apple Silicon GPU)"
     else
         uv sync --extra macos >/dev/null
