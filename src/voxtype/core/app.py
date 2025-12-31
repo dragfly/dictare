@@ -337,15 +337,13 @@ class ClaudeMicApp:
         self._stt = self._create_stt_engine()
         self._injector = self._create_injector()
 
-        # Create VAD
+        # Create VAD (Silero VAD via faster-whisper)
         from voxtype.audio.vad import SileroVAD, StreamingVAD
 
         self._vad = SileroVAD(
             threshold=0.5,
-            neg_threshold=0.35,
-            min_silence_ms=self.vad_silence_ms,  # End speech after silence
-            min_speech_ms=250,   # Need 250ms speech to trigger
-            sample_rate=self.config.audio.sample_rate,
+            min_silence_ms=self.vad_silence_ms,
+            min_speech_ms=250,
         )
 
         # Create streaming VAD processor
