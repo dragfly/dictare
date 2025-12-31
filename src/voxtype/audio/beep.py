@@ -79,10 +79,10 @@ def play_beep_busy() -> None:
 _MODE_PHRASES = {
     "it": {"transcription": "modalità trascrizione", "command": "modalità comandi"},
     "en": {"transcription": "transcription mode", "command": "command mode"},
-    "es": {"transcription": "modo transcripción", "command": "modo comando"},
-    "fr": {"transcription": "mode transcription", "command": "mode commande"},
+    "es": {"transcription": "modo transcripción", "command": "modo comandos"},
+    "fr": {"transcription": "mode transcription", "command": "mode commandes"},
     "de": {"transcription": "Transkriptionsmodus", "command": "Befehlsmodus"},
-    "pt": {"transcription": "modo transcrição", "command": "modo comando"},
+    "pt": {"transcription": "modo transcrição", "command": "modo comandos"},
 }
 
 # macOS voice names per language
