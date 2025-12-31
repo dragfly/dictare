@@ -16,6 +16,7 @@ class AudioCapture:
     """Records audio from microphone using sounddevice.
 
     Uses callback-based streaming for low latency.
+    Automatically reconnects if audio device is unplugged.
     """
 
     def __init__(
@@ -41,6 +42,8 @@ class AudioCapture:
         self._stream: sd.InputStream | None = None
         self._recording = False
         self._lock = threading.Lock()
+        self._needs_reconnect = False
+        self._on_reconnect: Callable[[], None] | None = None
 
     def _audio_callback(
         self,
@@ -157,6 +160,10 @@ class AudioCapture:
         status: sd.CallbackFlags,
     ) -> None:
         """Callback for streaming mode."""
+        if status:
+            # Device error detected - schedule reconnect
+            self._needs_reconnect = True
+            return
         if hasattr(self, "_streaming_callback") and self._streaming_callback:
             self._streaming_callback(indata.flatten().copy())
 
@@ -190,3 +197,53 @@ class AudioCapture:
             }
         except Exception:
             return None
+
+    def needs_reconnect(self) -> bool:
+        """Check if audio device needs reconnection."""
+        return self._needs_reconnect
+
+    def reconnect_streaming(self, callback: Callable[["NDArray[np.float32]"], None]) -> bool:
+        """Reconnect audio stream after device change.
+
+        Args:
+            callback: Called for each audio chunk.
+
+        Returns:
+            True if reconnection succeeded, False otherwise.
+        """
+        import time
+
+        self._needs_reconnect = False
+
+        # Stop current stream if any
+        with self._lock:
+            if self._stream:
+                try:
+                    self._stream.stop()
+                    self._stream.close()
+                except Exception:
+                    pass
+                self._stream = None
+
+        # Wait for system to settle after device change
+        time.sleep(0.5)
+
+        # Retry a few times
+        for attempt in range(3):
+            try:
+                with self._lock:
+                    self._streaming_callback = callback
+                    self._stream = sd.InputStream(
+                        samplerate=self.sample_rate,
+                        channels=self.channels,
+                        device=None,  # Always use default after reconnect
+                        dtype=self.dtype,
+                        blocksize=512,
+                        callback=self._streaming_audio_callback,
+                    )
+                    self._stream.start()
+                return True
+            except Exception:
+                time.sleep(0.5 * (attempt + 1))
+
+        return False
