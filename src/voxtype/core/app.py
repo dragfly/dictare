@@ -78,6 +78,7 @@ class VoxtypeApp:
 
         # Double-tap detection
         self._last_tap_time: float = 0.0
+        self._pending_single_tap: threading.Timer | None = None
 
         # Initialize components
         self._audio: AudioCapture | None = None
@@ -673,12 +674,22 @@ class VoxtypeApp:
 
         # Double tap detection
         if time_since_last < self.DOUBLE_TAP_THRESHOLD:
+            # Cancel pending single tap
+            if self._pending_single_tap:
+                self._pending_single_tap.cancel()
+                self._pending_single_tap = None
             # Double tap: switch processing mode
             self._switch_processing_mode()
             return
 
-        # Single tap: toggle listening
-        self._toggle_listening()
+        # Schedule single tap with delay to allow for double tap detection
+        if self._pending_single_tap:
+            self._pending_single_tap.cancel()
+        self._pending_single_tap = threading.Timer(
+            self.DOUBLE_TAP_THRESHOLD,
+            self._toggle_listening
+        )
+        self._pending_single_tap.start()
 
     def _toggle_listening(self) -> None:
         """Toggle listening on/off."""
@@ -919,6 +930,11 @@ class VoxtypeApp:
     def stop(self) -> None:
         """Stop the application."""
         self._running = False
+
+        # Cancel any pending single tap timer
+        if self._pending_single_tap:
+            self._pending_single_tap.cancel()
+            self._pending_single_tap = None
 
         if self._hotkey:
             self._hotkey.stop()
