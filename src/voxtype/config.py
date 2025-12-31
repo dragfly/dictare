@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import tomllib
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+# Environment variable prefix
+ENV_PREFIX = "VOXTYPE_"
 
 class AudioConfig(BaseModel):
     """Audio capture configuration."""
@@ -121,25 +125,228 @@ def get_config_path() -> Path:
     """Get the configuration file path."""
     return get_config_dir() / "config.toml"
 
+def _key_to_env_var(key: str) -> str:
+    """Convert config key to environment variable name.
+
+    Example: stt.model_size -> VOXTYPE_STT_MODEL_SIZE
+    """
+    return ENV_PREFIX + key.upper().replace(".", "_")
+
+def _parse_value(value: str, current_type: type) -> Any:
+    """Parse string value to appropriate type."""
+    if current_type == bool:
+        return value.lower() in ("true", "1", "yes", "on")
+    elif current_type == int:
+        return int(value)
+    elif current_type == float:
+        return float(value)
+    else:
+        return value
+
+def _apply_env_overrides(config: Config) -> Config:
+    """Apply environment variable overrides to config.
+
+    Environment variables follow the pattern: VOXTYPE_SECTION_KEY
+    Example: VOXTYPE_STT_MODEL_SIZE=large-v3
+    """
+    config_dict = config.model_dump()
+
+    for section_name, section in config_dict.items():
+        if isinstance(section, dict):
+            for key, value in section.items():
+                env_var = _key_to_env_var(f"{section_name}.{key}")
+                env_value = os.environ.get(env_var)
+                if env_value is not None:
+                    section[key] = _parse_value(env_value, type(value) if value is not None else str)
+        else:
+            # Top-level keys like 'verbose'
+            env_var = _key_to_env_var(section_name)
+            env_value = os.environ.get(env_var)
+            if env_value is not None:
+                config_dict[section_name] = _parse_value(env_value, type(section) if section is not None else str)
+
+    return Config.model_validate(config_dict)
+
 def load_config(config_path: Path | None = None) -> Config:
-    """Load configuration from file.
+    """Load configuration from file with environment variable overrides.
+
+    Priority (highest to lowest):
+    1. Environment variables (VOXTYPE_*)
+    2. Config file (~/.config/voxtype/config.toml)
+    3. Built-in defaults
 
     Args:
         config_path: Path to config file. If None, uses default location.
 
     Returns:
-        Loaded configuration with defaults applied.
+        Loaded configuration with defaults and overrides applied.
     """
     if config_path is None:
         config_path = get_config_path()
 
-    if not config_path.exists():
-        return Config()
+    if config_path.exists():
+        with open(config_path, "rb") as f:
+            data = tomllib.load(f)
+        config = Config.model_validate(data)
+    else:
+        config = Config()
 
-    with open(config_path, "rb") as f:
-        data = tomllib.load(f)
+    # Apply environment variable overrides
+    return _apply_env_overrides(config)
 
-    return Config.model_validate(data)
+def get_config_value(key: str, config: Config | None = None) -> Any:
+    """Get a config value by dot-notation key.
+
+    Args:
+        key: Dot-notation key like 'stt.model_size' or 'verbose'
+        config: Config object (loads default if None)
+
+    Returns:
+        The config value
+
+    Raises:
+        KeyError: If key not found
+    """
+    if config is None:
+        config = load_config()
+
+    parts = key.split(".")
+    obj: Any = config
+
+    for part in parts:
+        if hasattr(obj, part):
+            obj = getattr(obj, part)
+        else:
+            raise KeyError(f"Unknown config key: {key}")
+
+    return obj
+
+def set_config_value(key: str, value: str, config_path: Path | None = None) -> None:
+    """Set a config value by dot-notation key.
+
+    Args:
+        key: Dot-notation key like 'stt.model_size' or 'verbose'
+        value: String value (will be converted to appropriate type)
+        config_path: Path to config file (uses default if None)
+
+    Raises:
+        KeyError: If key not found
+    """
+    if config_path is None:
+        config_path = get_config_path()
+
+    # Load current config
+    config = load_config(config_path)
+    config_dict = config.model_dump()
+
+    parts = key.split(".")
+
+    if len(parts) == 1:
+        # Top-level key
+        if parts[0] not in config_dict:
+            raise KeyError(f"Unknown config key: {key}")
+        current_value = config_dict[parts[0]]
+        config_dict[parts[0]] = _parse_value(value, type(current_value) if current_value is not None else str)
+    elif len(parts) == 2:
+        section, field = parts
+        if section not in config_dict or not isinstance(config_dict[section], dict):
+            raise KeyError(f"Unknown config section: {section}")
+        if field not in config_dict[section]:
+            raise KeyError(f"Unknown config key: {key}")
+        current_value = config_dict[section][field]
+        config_dict[section][field] = _parse_value(value, type(current_value) if current_value is not None else str)
+    else:
+        raise KeyError(f"Invalid config key format: {key}")
+
+    # Validate the new config
+    Config.model_validate(config_dict)
+
+    # Write back to TOML
+    _write_config(config_dict, config_path)
+
+def _write_config(config_dict: dict, config_path: Path) -> None:
+    """Write config dict to TOML file."""
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    lines = ["# voxtype configuration\n"]
+
+    # Top-level keys first
+    for key, value in config_dict.items():
+        if not isinstance(value, dict):
+            lines.append(f"{key} = {_format_toml_value(value)}\n")
+
+    lines.append("\n")
+
+    # Sections
+    for section, values in config_dict.items():
+        if isinstance(values, dict):
+            lines.append(f"[{section}]\n")
+            for key, value in values.items():
+                lines.append(f"{key} = {_format_toml_value(value)}\n")
+            lines.append("\n")
+
+    with open(config_path, "w") as f:
+        f.writelines(lines)
+
+def _format_toml_value(value: Any) -> str:
+    """Format a value for TOML output."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    elif isinstance(value, str):
+        return f'"{value}"'
+    elif value is None:
+        return '""'  # TOML doesn't have null, use empty string
+    else:
+        return str(value)
+
+def list_config_keys() -> list[tuple[str, str, Any, str]]:
+    """List all config keys with their descriptions and defaults.
+
+    Returns:
+        List of (key, type, default, description) tuples
+    """
+    result = []
+    config = Config()
+
+    # Top-level fields
+    for field_name, field_info in Config.model_fields.items():
+        if field_name in ("audio", "stt", "hotkey", "injection", "command"):
+            # These are sections, handle below
+            continue
+        value = getattr(config, field_name)
+        env_var = _key_to_env_var(field_name)
+        result.append((
+            field_name,
+            type(value).__name__,
+            value,
+            field_info.description or "",
+            env_var,
+        ))
+
+    # Sections
+    sections = [
+        ("audio", AudioConfig),
+        ("stt", STTConfig),
+        ("hotkey", HotkeyConfig),
+        ("injection", InjectionConfig),
+        ("command", CommandConfig),
+    ]
+
+    for section_name, section_class in sections:
+        section_config = section_class()
+        for field_name, field_info in section_class.model_fields.items():
+            key = f"{section_name}.{field_name}"
+            value = getattr(section_config, field_name)
+            env_var = _key_to_env_var(key)
+            result.append((
+                key,
+                type(value).__name__ if value is not None else "str",
+                value,
+                field_info.description or "",
+                env_var,
+            ))
+
+    return result
 
 def create_default_config() -> Path:
     """Create default configuration file.
