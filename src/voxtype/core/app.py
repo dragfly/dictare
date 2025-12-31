@@ -860,10 +860,18 @@ class ClaudeMicApp:
         if self._audio:
             self._audio.start_streaming(self._on_vad_audio_chunk)
 
-        # Keep main thread alive
+        # Keep main thread alive, check for device reconnection
         try:
             while self._running:
                 time.sleep(0.1)
+                # Check if audio device needs reconnection
+                if self._audio and self._audio.needs_reconnect():
+                    self._console.print("[yellow]Audio device changed, reconnecting...[/]")
+                    if self._audio.reconnect_streaming(self._on_vad_audio_chunk):
+                        self._console.print("[green]Audio reconnected.[/]")
+                    else:
+                        self._console.print("[red]Failed to reconnect audio.[/]")
+                        break
         except KeyboardInterrupt:
             pass
 
