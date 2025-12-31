@@ -52,7 +52,8 @@ class MacOSInjector(TextInjector):
 
         # Build AppleScript: type text, then optionally press Return
         if send_enter:
-            script = f'tell application "System Events"\nkeystroke "{escaped}"\nkey code 36\nend tell'
+            # Small delay between text and Return to ensure text is fully typed
+            script = f'tell application "System Events"\nkeystroke "{escaped}"\ndelay 0.1\nkey code 36\nend tell'
         else:
             script = f'tell application "System Events" to keystroke "{escaped}"'
 
