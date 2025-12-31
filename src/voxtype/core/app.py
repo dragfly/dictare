@@ -866,9 +866,7 @@ class ClaudeMicApp:
                 time.sleep(0.1)
                 if self._audio and self._audio.needs_reconnect():
                     self._console.print("[yellow]Audio device changed, reconnecting...[/]", end="")
-                    if self._reconnect_audio():
-                        self._console.print(" [green]OK[/]")
-                    else:
+                    if not self._reconnect_audio():
                         self._console.print(" [red]FAILED[/]")
                         self._console.print("[red]Could not reconnect audio. Please restart.[/]")
                         break
@@ -877,6 +875,8 @@ class ClaudeMicApp:
 
     def _reconnect_audio(self) -> bool:
         """Recreate audio capture after device change."""
+        import sounddevice as sd
+
         # Stop and destroy old audio capture
         if self._audio:
             try:
@@ -885,13 +885,29 @@ class ClaudeMicApp:
                 pass
             self._audio = None
 
-        # Retry with fresh AudioCapture object
+        # Retry with fresh AudioCapture object using NEW default device
         for attempt in range(5):
             self._console.print(f" {attempt + 1}", end="", highlight=False)
             time.sleep(1.0)
             try:
-                self._audio = self._create_audio_capture()
+                # Force PortAudio to refresh device list
+                sd._terminate()
+                sd._initialize()
+
+                # Create new AudioCapture with default device (None)
+                self._audio = AudioCapture(
+                    sample_rate=self.config.audio.sample_rate,
+                    channels=self.config.audio.channels,
+                    device=None,  # Always use new default on reconnect
+                )
                 self._audio.start_streaming(self._on_vad_audio_chunk)
+
+                # Show which device we connected to
+                device_info = AudioCapture.get_default_device()
+                if device_info:
+                    self._console.print(f" [green]OK[/] ({device_info['name']})")
+                else:
+                    self._console.print(" [green]OK[/]")
                 return True
             except Exception:
                 self._audio = None
