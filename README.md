@@ -111,6 +111,7 @@ voxtype speak "Hello world"       # Text-to-speech (requires espeak-ng)
 | `--log-file` | `-L` | JSONL log file for structured logging |
 | `--debug` | | Show all transcriptions (debug mode) |
 | `--no-commands` | | Disable voice command processing |
+| `--ollama-model` | `-O` | Ollama model for commands (default: qwen2.5:1.5b) |
 | `--verbose` | `-v` | Enable verbose output |
 
 ## Configuration
