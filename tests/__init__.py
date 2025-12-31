@@ -1,1 +1,1 @@
-"""Tests for claude-mic."""
+"""Tests for voxtype."""
