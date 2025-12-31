@@ -13,68 +13,46 @@ Voice-to-text for your terminal. Speak into your microphone and have your words 
 - **Offline**: Local Whisper model, no cloud required
 - **Fast**: ~2 second latency with base model
 
-## Quick Start (Linux)
+## Quick Start
 
 ```bash
 git clone https://github.com/dragfly/voxtype
 cd voxtype
-./install.sh              # No sudo, builds via Docker
+./install.sh              # Auto-detects platform (macOS/Linux)
+uv run voxtype run --vad
+```
+
+The installer automatically:
+- **macOS**: Detects Apple Silicon → enables MLX GPU acceleration
+- **Linux**: Builds ydotool via Docker, sets up systemd service
+
+### macOS
+
+After install, grant Accessibility permissions (see installer output), then:
+
+```bash
+uv run voxtype run --vad
+```
+
+Hold **Right Command (⌘)** to toggle listening. MLX is auto-detected on Apple Silicon.
+
+### Linux
+
+After install, run permissions setup and start the daemon:
+
+```bash
 ./setup-permissions.sh    # One-time sudo
 # Log out and back in
 systemctl --user start ydotoold
-uv run voxtype run
+uv run voxtype run --vad
 ```
 
-Hold **ScrollLock**, speak, release. Text appears where your cursor is.
+Hold **ScrollLock** to toggle listening.
 
-### GPU Acceleration (Optional)
+### GPU Acceleration
 
-For faster transcription with large models, install with CUDA support:
-
-```bash
-./install.sh --gpu        # Installs nvidia-cudnn-cu12
-```
-
-Then run with `--gpu`:
-
-```bash
-uv run voxtype run --gpu --model large-v3
-```
-
-Requires NVIDIA GPU with CUDA 12+ drivers installed.
-
-## Quick Start (macOS)
-
-```bash
-git clone https://github.com/dragfly/voxtype
-cd voxtype
-./install-macos.sh        # For Apple Silicon: ./install-macos.sh --mlx
-# Grant Accessibility permissions (see installer output)
-uv run voxtype run --key KEY_RIGHTMETA
-```
-
-Hold **Right Command (⌘)**, speak, release. Text appears where your cursor is.
-
-### MLX Acceleration (Apple Silicon)
-
-For faster transcription on M1/M2/M3 Macs:
-
-```bash
-./install-macos.sh --mlx  # Installs mlx-whisper
-huggingface-cli login     # Required: MLX models are hosted on Hugging Face
-```
-
-Create a free token at https://huggingface.co/settings/tokens
-
-Then run with `--mlx`:
-
-```bash
-uv run voxtype run --mlx --model large-v3-turbo --key KEY_RIGHTMETA
-```
-
-MLX uses the Metal GPU, significantly faster than CPU.
-
-> **Note**: Linux with `faster-whisper` doesn't require Hugging Face login.
+- **macOS (Apple Silicon)**: MLX is auto-detected, no flags needed
+- **Linux (NVIDIA)**: `./install.sh --gpu` then `uv run voxtype run --gpu`
 
 ## Usage
 
