@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 from voxtype.audio.capture import AudioCapture
-from voxtype.core.state import AppState
+from voxtype.core.state import AppState, ProcessingMode
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.injection.base import TextInjector
 from voxtype.stt.base import STTEngine
@@ -37,6 +37,9 @@ class VoxtypeApp:
     # Double-tap detection threshold in seconds
     DOUBLE_TAP_THRESHOLD = 0.4
 
+    # Default VAD silence duration in milliseconds
+    DEFAULT_VAD_SILENCE_MS = 1200
+
     def __init__(
         self,
         config: Config,
@@ -45,7 +48,7 @@ class VoxtypeApp:
         wake_word: str | None = None,
         debug: bool = False,
         logger: JSONLLogger | None = None,
-        initial_mode: str = "transcription",
+        initial_mode: ProcessingMode | str = ProcessingMode.TRANSCRIPTION,
     ) -> None:
         """Initialize the application.
 
@@ -56,11 +59,11 @@ class VoxtypeApp:
             wake_word: Trigger phrase to activate (e.g., "Joshua").
             debug: If True, show all transcriptions.
             logger: Optional JSONL logger for structured logging.
-            initial_mode: Processing mode - 'transcription' (fast) or 'command' (LLM).
+            initial_mode: Processing mode - TRANSCRIPTION (fast) or COMMAND (LLM).
         """
         self.config = config
         self.use_vad = use_vad
-        self.vad_silence_ms = vad_silence_ms or 1200
+        self.vad_silence_ms = vad_silence_ms or self.DEFAULT_VAD_SILENCE_MS
         self.trigger_phrase = wake_word  # Renamed: wake_word -> trigger_phrase
         self.debug = debug
         self.state = AppState.IDLE
@@ -69,8 +72,11 @@ class VoxtypeApp:
         self._lock = threading.Lock()
         self._logger = logger
 
-        # Processing mode: 'transcription' (fast, no LLM) or 'command' (LLM)
-        self._processing_mode = initial_mode
+        # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
+        if isinstance(initial_mode, str):
+            self._processing_mode = ProcessingMode(initial_mode)
+        else:
+            self._processing_mode = initial_mode
 
         # Listening state: True = actively listening, False = paused
         self._listening = False
@@ -547,10 +553,10 @@ class VoxtypeApp:
                         return
 
                     # Listening: check processing mode
-                    if self._processing_mode == "transcription":
+                    if self._processing_mode == ProcessingMode.TRANSCRIPTION:
                         # Transcription mode: fast inject, no LLM
                         self._inject_text(text)
-                    elif self._processing_mode == "command" and self._llm_processor:
+                    elif self._processing_mode == ProcessingMode.COMMAND and self._llm_processor:
                         # Command mode: process through LLM
                         response = self._llm_processor.process(text)
                         self._execute_llm_response(response, text)
@@ -698,38 +704,32 @@ class VoxtypeApp:
             # Entering listening mode
             self._console.print("[bold green]>>> LISTENING ON[/]")
             self._play_feedback("listening_on")
-
-            # Also update LLM processor state if available
-            if self._llm_processor:
-                from voxtype.llm.models import AppState as LLMAppState
-                self._llm_processor._state = LLMAppState.LISTENING
         else:
             # Exiting listening mode
             self._console.print("[bold red]<<< LISTENING OFF[/]")
             self._play_feedback("listening_off")
 
-            # Also update LLM processor state if available
-            if self._llm_processor:
-                from voxtype.llm.models import AppState as LLMAppState
-                self._llm_processor._state = LLMAppState.IDLE
+        # Sync LLM processor state if available
+        if self._llm_processor:
+            self._llm_processor.set_listening(self._listening)
 
     def _switch_processing_mode(self) -> None:
         """Switch between transcription and command mode."""
-        if self._processing_mode == "transcription":
-            self._processing_mode = "command"
+        if self._processing_mode == ProcessingMode.TRANSCRIPTION:
+            self._processing_mode = ProcessingMode.COMMAND
             self._console.print("[bold yellow]>>> MODE: COMMAND (LLM)[/]")
         else:
-            self._processing_mode = "transcription"
+            self._processing_mode = ProcessingMode.TRANSCRIPTION
             self._console.print("[bold cyan]>>> MODE: TRANSCRIPTION (fast)[/]")
 
         self._play_feedback("mode_switch", mode=self._processing_mode)
 
-    def _play_feedback(self, event: str, mode: str | None = None) -> None:
+    def _play_feedback(self, event: str, mode: ProcessingMode | None = None) -> None:
         """Play audio feedback for state changes.
 
         Args:
             event: Type of event - 'listening_on', 'listening_off', 'mode_switch'
-            mode: For mode_switch, the new mode ('transcription' or 'command')
+            mode: For mode_switch, the new ProcessingMode
         """
         if not self.config.audio.audio_feedback:
             return
@@ -744,7 +744,7 @@ class VoxtypeApp:
             elif event == "mode_switch" and mode:
                 # Speak the new mode in user's language
                 language = self.config.stt.language or "en"
-                speak_mode(mode, language)
+                speak_mode(mode.value, language)
         except Exception:
             pass  # Ignore audio feedback errors
 
@@ -859,7 +859,7 @@ class VoxtypeApp:
         self._listening = True  # Start actively listening
 
         # Show initial state
-        mode_name = "TRANSCRIPTION" if self._processing_mode == "transcription" else "COMMAND"
+        mode_name = "TRANSCRIPTION" if self._processing_mode == ProcessingMode.TRANSCRIPTION else "COMMAND"
         self._console.print(f"[bold green]>>> LISTENING ON[/] [dim]({mode_name} mode)[/]")
 
         # Start hotkey listener for toggle (if available)

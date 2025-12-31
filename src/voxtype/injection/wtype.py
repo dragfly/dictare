@@ -57,7 +57,7 @@ class WtypeInjector(TextInjector):
             return result.returncode == 0
         except subprocess.TimeoutExpired:
             return False
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def get_name(self) -> str:
