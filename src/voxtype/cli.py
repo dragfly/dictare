@@ -126,8 +126,8 @@ def run(
     ] = None,
     vad: Annotated[
         bool,
-        typer.Option("--vad", help="Use VAD (Voice Activity Detection) instead of push-to-talk"),
-    ] = False,
+        typer.Option("--vad/--ptt", help="VAD mode (default) or push-to-talk mode"),
+    ] = True,
     silence_ms: Annotated[
         Optional[int],
         typer.Option("--silence-ms", "-s", help="VAD silence duration to end speech (default 1200)"),
