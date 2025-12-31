@@ -60,14 +60,14 @@ if [[ "$(uname)" == "Darwin" ]]; then
 
     # 2. Install Python dependencies
     step 2 "Installing Python dependencies..."
-    # Remove old venv if Python version is wrong
-    if [ -d .venv ] && ! .venv/bin/python --version 2>/dev/null | grep -q "3\.1[123]"; then
+    # MLX requires Python 3.12 (torch doesn't have 3.13 wheels yet)
+    if [ -d .venv ]; then
         rm -rf .venv
     fi
 
-    # Install dependencies
+    # Install dependencies with Python 3.12 for MLX compatibility
     if [ $WITH_MLX -eq 1 ]; then
-        uv sync --extra macos --extra mlx >/dev/null
+        uv sync --python 3.12 --extra macos --extra mlx >/dev/null
         info "Installed Python packages (with MLX for Apple Silicon GPU)"
     else
         uv sync --extra macos >/dev/null
