@@ -74,3 +74,67 @@ def play_beep_busy() -> None:
         sd.play(_BEEP_BUSY, _SAMPLE_RATE, blocking=False)
     except Exception:
         pass  # Don't fail on audio errors
+
+# TTS mode announcements per language
+_MODE_PHRASES = {
+    "it": {"transcription": "trascrizione", "command": "comando"},
+    "en": {"transcription": "transcription", "command": "command"},
+    "es": {"transcription": "transcripción", "command": "comando"},
+    "fr": {"transcription": "transcription", "command": "commande"},
+    "de": {"transcription": "Transkription", "command": "Befehl"},
+    "pt": {"transcription": "transcrição", "command": "comando"},
+}
+
+# macOS voice names per language
+_MACOS_VOICES = {
+    "it": "Alice",
+    "en": "Samantha",
+    "es": "Monica",
+    "fr": "Thomas",
+    "de": "Anna",
+    "pt": "Luciana",
+}
+
+def speak_mode(mode: str, language: str = "en") -> None:
+    """Speak the current mode using OS TTS.
+
+    Args:
+        mode: Either "transcription" or "command"
+        language: Language code (it, en, es, fr, de, pt)
+    """
+    import subprocess
+    import sys
+    import threading
+
+    # Get phrase for language, fallback to English
+    phrases = _MODE_PHRASES.get(language, _MODE_PHRASES["en"])
+    text = phrases.get(mode, mode)
+
+    def _speak():
+        try:
+            if sys.platform == "darwin":
+                # macOS: use 'say' command
+                voice = _MACOS_VOICES.get(language, "Samantha")
+                subprocess.run(
+                    ["say", "-v", voice, text],
+                    capture_output=True,
+                    timeout=5,
+                )
+            else:
+                # Linux: try espeak-ng, then espeak, then spd-say
+                lang_code = language if language != "en" else "en-us"
+                for cmd in [
+                    ["espeak-ng", "-v", lang_code, text],
+                    ["espeak", "-v", lang_code, text],
+                    ["spd-say", "-l", language, text],
+                ]:
+                    try:
+                        subprocess.run(cmd, capture_output=True, timeout=5)
+                        break
+                    except FileNotFoundError:
+                        continue
+        except Exception:
+            pass  # Silently fail if TTS not available
+
+    # Run in background thread to not block
+    threading.Thread(target=_speak, daemon=True).start()

@@ -722,29 +722,29 @@ class VoxtypeApp:
             self._processing_mode = "transcription"
             self._console.print("[bold cyan]>>> MODE: TRANSCRIPTION (fast)[/]")
 
-        self._play_feedback("mode_switch")
+        self._play_feedback("mode_switch", mode=self._processing_mode)
 
-    def _play_feedback(self, event: str) -> None:
+    def _play_feedback(self, event: str, mode: str | None = None) -> None:
         """Play audio feedback for state changes.
 
         Args:
             event: Type of event - 'listening_on', 'listening_off', 'mode_switch'
+            mode: For mode_switch, the new mode ('transcription' or 'command')
         """
         if not self.config.audio.audio_feedback:
             return
 
         try:
-            from voxtype.audio.beep import play_beep_start, play_beep_stop
+            from voxtype.audio.beep import play_beep_start, play_beep_stop, speak_mode
 
             if event == "listening_on":
                 play_beep_start()
             elif event == "listening_off":
                 play_beep_stop()
-            elif event == "mode_switch":
-                # Two beeps for mode switch (start then stop tone)
-                play_beep_start()
-                time.sleep(0.1)
-                play_beep_stop()
+            elif event == "mode_switch" and mode:
+                # Speak the new mode in user's language
+                language = self.config.stt.language or "en"
+                speak_mode(mode, language)
         except Exception:
             pass  # Ignore audio feedback errors
 
