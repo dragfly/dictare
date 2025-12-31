@@ -287,12 +287,16 @@ def check() -> None:
     table.add_column("Details")
 
     all_ok = True
+    missing_with_hints = []
+
     for result in results:
         if result.available:
             status = "[green]OK[/]"
         elif result.required:
             status = "[red]MISSING[/]"
             all_ok = False
+            if result.install_hint:
+                missing_with_hints.append(result)
         else:
             status = "[yellow]OPTIONAL[/]"
 
@@ -305,7 +309,10 @@ def check() -> None:
         console.print("[green]All required dependencies are available![/]")
     else:
         console.print("[red]Some required dependencies are missing.[/]")
-        console.print("Please install the missing dependencies and try again.")
+        if missing_with_hints:
+            console.print("\n[bold]To fix, run:[/]")
+            for result in missing_with_hints:
+                console.print(f"  [cyan]{result.install_hint}[/]")
         raise typer.Exit(1)
 
     # Check for at least one text injection method
