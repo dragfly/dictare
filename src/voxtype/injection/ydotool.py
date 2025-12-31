@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 
 from voxtype.injection.base import TextInjector
+
+# Key codes for ydotool
+KEY_LEFTCTRL = 29
+KEY_LEFTSHIFT = 42
+KEY_U = 22
+KEY_SPACE = 57
 
 class YdotoolInjector(TextInjector):
     """Text injection using ydotool.
 
     Works on X11, Wayland, and console.
     Requires ydotoold daemon to be running.
+    Uses Ctrl+Shift+U for Unicode characters (GTK/ibus).
     """
 
     def __init__(self) -> None:
@@ -36,6 +44,44 @@ class YdotoolInjector(TextInjector):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
+    def _has_non_ascii(self, text: str) -> bool:
+        """Check if text contains non-ASCII characters."""
+        return any(ord(c) > 127 for c in text)
+
+    def _type_unicode_char(self, char: str) -> bool:
+        """Type a single Unicode character using Ctrl+Shift+U method."""
+        if not self._ydotool_path:
+            return False
+
+        hex_code = format(ord(char), "x")
+
+        try:
+            # Press Ctrl+Shift+U
+            subprocess.run(
+                [self._ydotool_path, "key", f"{KEY_LEFTCTRL}:1", f"{KEY_LEFTSHIFT}:1", f"{KEY_U}:1", f"{KEY_U}:0", f"{KEY_LEFTSHIFT}:0", f"{KEY_LEFTCTRL}:0"],
+                capture_output=True,
+                timeout=5,
+            )
+            time.sleep(0.05)
+
+            # Type the hex code
+            subprocess.run(
+                [self._ydotool_path, "type", "--key-delay", "1", "--key-hold", "1", "--", hex_code],
+                capture_output=True,
+                timeout=5,
+            )
+            time.sleep(0.05)
+
+            # Press Space to confirm
+            subprocess.run(
+                [self._ydotool_path, "key", f"{KEY_SPACE}:1", f"{KEY_SPACE}:0"],
+                capture_output=True,
+                timeout=5,
+            )
+            return True
+        except Exception:
+            return False
+
     def type_text(self, text: str, delay_ms: int = 0) -> bool:
         """Type text using ydotool.
 
@@ -56,28 +102,47 @@ class YdotoolInjector(TextInjector):
         if send_enter:
             text = text.rstrip("\n")
 
+        delay_sec = delay_ms / 1000.0 if delay_ms > 0 else 0
+
         try:
-            # Type the text
-            cmd = [self._ydotool_path, "type"]
-            # Override ydotool's slow defaults (20ms each)
-            cmd.extend(["--key-delay", str(delay_ms) if delay_ms > 0 else "1"])
-            cmd.extend(["--key-hold", "1"])
-            cmd.append("--")
-            cmd.append(text)
+            # If text has Unicode, type character by character
+            if self._has_non_ascii(text):
+                for char in text:
+                    if ord(char) > 127:
+                        # Unicode: use Ctrl+Shift+U method
+                        if not self._type_unicode_char(char):
+                            return False
+                    else:
+                        # ASCII: use normal type
+                        result = subprocess.run(
+                            [self._ydotool_path, "type", "--key-delay", "1", "--key-hold", "1", "--", char],
+                            capture_output=True,
+                            timeout=5,
+                        )
+                        if result.returncode != 0:
+                            return False
+                    if delay_sec > 0:
+                        time.sleep(delay_sec)
+            else:
+                # Pure ASCII: type all at once (faster)
+                cmd = [self._ydotool_path, "type"]
+                cmd.extend(["--key-delay", str(delay_ms) if delay_ms > 0 else "1"])
+                cmd.extend(["--key-hold", "1"])
+                cmd.append("--")
+                cmd.append(text)
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                timeout=30,
-            )
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    timeout=30,
+                )
 
-            if result.returncode != 0:
-                return False
+                if result.returncode != 0:
+                    return False
 
-            # Send Enter key if needed (ydotool type doesn't interpret \n)
+            # Send Enter key if needed
             if send_enter:
-                import time
-                time.sleep(0.2)  # 200ms delay to ensure type completes
+                time.sleep(0.2)
                 enter_result = subprocess.run(
                     [self._ydotool_path, "key", "28:1", "28:0"],  # KEY_ENTER
                     capture_output=True,
@@ -89,7 +154,6 @@ class YdotoolInjector(TextInjector):
                 return True
 
             self._enter_sent = False
-
             return True
         except subprocess.TimeoutExpired:
             return False

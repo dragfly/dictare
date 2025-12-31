@@ -249,6 +249,7 @@ class ClaudeMicApp:
         # Platform-specific imports
         if sys.platform == "darwin":
             from voxtype.injection.macos import MacOSInjector
+            from voxtype.injection.quartz import QuartzInjector
         else:
             from voxtype.injection.wtype import WtypeInjector
             from voxtype.injection.xdotool import XdotoolInjector
@@ -262,6 +263,7 @@ class ClaudeMicApp:
             # Use specific backend
             if sys.platform == "darwin":
                 injectors = {
+                    "quartz": QuartzInjector,
                     "macos": MacOSInjector,
                     "clipboard": ClipboardInjector,
                 }
@@ -279,9 +281,10 @@ class ClaudeMicApp:
                 self._console.print(f"[yellow]{backend} not available[/]")
 
         # Auto-detect best available injector
-        # Prefer keyboard mode (with typing delay to avoid crashing apps)
+        # Prefer Quartz for Unicode support, then AppleScript, then clipboard
         if sys.platform == "darwin":
             candidates = [
+                QuartzInjector(),
                 MacOSInjector(),
                 ClipboardInjector(),
             ]
