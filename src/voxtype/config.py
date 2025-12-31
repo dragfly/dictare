@@ -64,12 +64,12 @@ class HotkeyConfig(BaseModel):
 class InjectionConfig(BaseModel):
     """Text injection configuration."""
 
-    backend: Literal["ydotool", "wtype", "clipboard", "auto"] = Field(
+    backend: Literal["ydotool", "wtype", "xdotool", "macos", "clipboard", "auto"] = Field(
         default="auto",
         description="Text injection backend to use",
     )
     typing_delay_ms: int = Field(
-        default=0,
+        default=2,
         description="Delay between characters in milliseconds",
     )
     fallback_to_clipboard: bool = Field(
