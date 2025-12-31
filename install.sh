@@ -95,7 +95,14 @@ if [[ "$(uname)" == "Darwin" ]]; then
     echo ""
     if [ $WITH_MLX -eq 1 ]; then
         echo "MLX is auto-detected, no need for --mlx flag!"
+        echo ""
     fi
+    echo "Optional: Add alias for easier access:"
+    echo ""
+    echo "  echo 'alias voxtype=\"uv run --directory $SCRIPT_DIR voxtype\"' >> ~/.zshrc"
+    echo "  source ~/.zshrc"
+    echo ""
+    echo "Then just run: voxtype run --vad"
 
 else
     #############################################
@@ -226,4 +233,11 @@ EOF
     fi
     echo ""
     echo "Run: uv run voxtype run"
+    echo ""
+    echo "Optional: Add alias for easier access:"
+    echo ""
+    echo "  echo 'alias voxtype=\"uv run --directory $SCRIPT_DIR voxtype\"' >> ~/.bashrc"
+    echo "  source ~/.bashrc"
+    echo ""
+    echo "Then just run: voxtype run --vad"
 fi
