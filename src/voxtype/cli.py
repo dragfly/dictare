@@ -181,6 +181,7 @@ def run(
     import sys
     if sys.platform == "darwin" and platform.machine() == "arm64":
         try:
+            console.print("[dim]Loading MLX (first run may take ~30s)...[/]")
             import mlx_whisper  # noqa: F401
             config.stt.backend = "mlx-whisper"
         except ImportError:
@@ -221,15 +222,8 @@ def run(
     if ollama_model:
         config.command.ollama_model = ollama_model
 
-    import time as _time
-    _start = _time.time()
-
-    # Show startup message immediately
-    console.print("[dim]Starting voxtype...[/]")
-
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
-    console.print(f"[dim]Import done ({_time.time() - _start:.1f}s)[/]")
 
     # Create JSONL logger if requested
     logger = None
@@ -251,8 +245,6 @@ def run(
         logger = JSONLLogger(log_file, __version__, params=log_params)
         console.print(f"[dim]Logging to: {log_file}[/]")
 
-    console.print("[dim]Creating app...[/]")
-    _app_start = _time.time()
     app = VoxtypeApp(
         config,
         use_vad=vad,
@@ -262,7 +254,6 @@ def run(
         logger=logger,
         initial_mode=mode,
     )
-    console.print(f"[dim]App created ({_time.time() - _app_start:.1f}s)[/]")
 
     output_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
     mode_str = "[cyan]transcription[/] (fast)" if mode == "transcription" else "[yellow]command[/] (LLM)"
