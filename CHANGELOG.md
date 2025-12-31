@@ -5,6 +5,143 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-12-31
+
+### Added
+- **ProcessingMode enum**: Type-safe mode switching (transcription/command)
+- **Tests**: 16 new tests for config and CLI modules
+- **Constants**: `DEFAULT_VAD_SILENCE_MS`, `HISTORY_WINDOW_SIZE` for better maintainability
+- **set_listening() method**: Proper API for LLM processor state management
+
+### Changed
+- **Auto-detect CUDA**: Uses ctranslate2 instead of torch for GPU detection on Linux
+- **--enter → --no-enter**: Enter is now default behavior, use --no-enter to disable
+- **Exception handling**: Replaced broad `except Exception` with specific exceptions
+- **State consolidation**: Single source of truth for app state
+
+### Fixed
+- **Duplicate AppState enum**: Removed from llm/models.py, now imports from core/state
+- **Italian strings**: Removed hardcoded Italian from llm/models.py
+- **Unused parameters**: Prefixed with underscore per Python conventions
+- **Bare print()**: Replaced with sys.stderr.write() in hotkey listener
+
+### Refactored
+- Major code cleanup for open-source publication
+- Version sync (pyproject.toml + __init__.py)
+
+## [1.2.0] - 2025-12-31
+
+### Changed
+- **Default model**: Changed from `base` to `large-v3-turbo` for better accuracy
+- **Auto-detect GPU**: Automatically use CUDA on Linux if available
+- **Auto-detect MLX**: Already detecting on Apple Silicon, now also for GPU
+
+## [1.1.0] - 2025-12-31
+
+### Added
+- **Voice feedback for mode switching**: TTS announces mode changes
+  - macOS: Uses `say` command with language-appropriate voices
+  - Linux: Uses espeak-ng, espeak, or spd-say
+  - Supports Italian and English
+
+### Fixed
+- **Double-tap detection**: Fixed issue where double-tap triggered both single-tap and mode switch
+  - Uses timer to delay single-tap action, allowing cancellation on second click
+- **Beep sounds**: Restored beep sounds by using correct function names
+- **Hotkey display**: Shows configured hotkey in Ready panel
+
+## [1.0.22] - 2025-12-31
+
+### Added
+- **Hotkey display**: Show configured hotkey in Ready panel (⌘ Command on macOS, Scroll Lock on Linux)
+
+### Fixed
+- **Double-tap bug**: Double-tap no longer triggers single-tap action
+
+## [1.0.21] - 2025-12-31
+
+### Added
+- **Native Unicode keyboard support**: Direct Unicode input for macOS (Quartz) and Linux
+- **Startup messages**: Better UX feedback during startup
+- **MLX loading message**: Shows "Loading MLX (first run may take ~30s)..."
+
+### Fixed
+- **Italian accents**: Use clipboard for Unicode characters on macOS
+- **MLX model name**: Correct model name for large-v3 (whisper-large-v3-mlx)
+
+### Refactored
+- Renamed ClaudeMicApp to VoxtypeApp
+- Removed claude-mic references
+
+## [1.0.20] - 2025-12-31
+
+### Added
+- **Unified installer**: Auto-platform detection for Linux/macOS
+- **auto_enter default**: Now defaults to True for automatic Enter after typing
+- **Alias setup instructions**: Shows at end of install
+
+### Fixed
+- **Audio device reconnection**: Improved handling of device changes
+  - Force PortAudio refresh on device change
+  - Recreate AudioCapture on device change
+  - Retry with longer waits
+  - Show device name on reconnection
+- **Python compatibility**: Use Python 3.11 for MLX (torch compatibility)
+
+## [1.0.18] - 2025-12-30
+
+### Fixed
+- **Typing stability**: Increase default typing delay to 5ms
+
+## [1.0.17] - 2025-12-30
+
+### Added
+- **Auto-detect MLX**: Automatically use MLX on Apple Silicon Mac
+
+## [1.0.16] - 2025-12-30
+
+### Added
+- **Keyboard mode for macOS**: Default to keyboard mode with 2ms delay
+- **Typing delay**: Implement configurable typing delay for macOS
+
+### Fixed
+- **Enter key delay**: Add delay before Enter key in macOS keyboard mode
+
+## [1.0.15] - 2025-12-30
+
+### Fixed
+- **Enter key in macOS keyboard mode**: Handle Enter key properly (fixes #16)
+
+## [1.0.14] - 2025-12-30
+
+### Refactored
+- Simplify app.py - remove 65 lines of redundant code
+
+## [1.0.13] - 2025-12-30
+
+### Added
+- **Modern CLI config UX**: Environment variable overrides
+- **--ollama-model flag**: Switch default to qwen2.5:1.5b
+- **Two-dimensional state control**: Listening mode + processing mode
+- **Smart dependency check**: Shows install hints for missing dependencies
+
+### Fixed
+- **Python version**: Support 3.11-3.13 (onnxruntime compatibility)
+- **Pre-load models**: Load before Ready message for better UX
+
+### Refactored
+- Simplify VAD - use Silero only via faster-whisper
+
+## [1.0.7] - 2025-12-30
+
+### Refactored
+- Move audio warmup to beep.py for cleaner code
+
+## [1.0.6] - 2025-12-30
+
+### Fixed
+- **Audio warmup**: Increase buffer to 500ms for better first beep
+
 ## [1.0.5] - 2025-12-30
 
 ### Fixed
