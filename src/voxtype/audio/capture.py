@@ -200,7 +200,12 @@ class AudioCapture:
 
     def needs_reconnect(self) -> bool:
         """Check if audio device needs reconnection."""
-        return self._needs_reconnect
+        if self._needs_reconnect:
+            return True
+        # Also check if stream died unexpectedly
+        if self._stream is not None and not self._stream.active:
+            return True
+        return False
 
     def reconnect_streaming(self, callback: Callable[["NDArray[np.float32]"], None]) -> None:
         """Reconnect audio stream after device change."""
