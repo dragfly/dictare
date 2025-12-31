@@ -22,7 +22,7 @@ from voxtype.config import (
 
 app = typer.Typer(
     name="voxtype",
-    help="Voice-to-text for Claude Code CLI",
+    help="Voice-to-text for your terminal",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -83,7 +83,7 @@ def main_callback(
         typer.Option("--version", "-V", callback=version_callback, is_eager=True),
     ] = None,
 ) -> None:
-    """voxtype: Voice-to-text for Claude Code CLI."""
+    """voxtype: Voice-to-text for your terminal."""
     pass
 
 @app.command()
