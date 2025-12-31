@@ -196,12 +196,14 @@ def run(
         # Linux: try CUDA GPU via ctranslate2 (faster-whisper dependency)
         try:
             import ctranslate2
-            if "cuda" in ctranslate2.get_supported_compute_types("cuda"):
+            # Check if CUDA device is available
+            cuda_device_count = ctranslate2.get_cuda_device_count()
+            if cuda_device_count > 0:
                 config.stt.device = "cuda"
                 config.stt.compute_type = "float16"
-                console.print("[dim]CUDA GPU detected, using GPU acceleration[/]")
+                console.print(f"[dim]CUDA GPU detected ({cuda_device_count} device(s)), using GPU acceleration[/]")
                 _setup_cuda_library_path()
-        except (ImportError, RuntimeError):
+        except (ImportError, RuntimeError, AttributeError):
             pass  # ctranslate2 not installed or no CUDA
 
     # Override config with CLI options
