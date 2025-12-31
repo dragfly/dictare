@@ -221,6 +221,9 @@ def run(
     if ollama_model:
         config.command.ollama_model = ollama_model
 
+    # Show startup message immediately
+    console.print("[dim]Starting voxtype...[/]")
+
     # Lazy import to speed up CLI
     from voxtype.core.app import ClaudeMicApp
 
@@ -244,6 +247,7 @@ def run(
         logger = JSONLLogger(log_file, __version__, params=log_params)
         console.print(f"[dim]Logging to: {log_file}[/]")
 
+    console.print("[dim]Initializing...[/]")
     mic_app = ClaudeMicApp(
         config,
         use_vad=vad,
