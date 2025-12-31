@@ -32,6 +32,38 @@ class MacOSInjector(TextInjector):
         except Exception:
             return False
 
+    def _has_non_ascii(self, text: str) -> bool:
+        """Check if text contains non-ASCII characters."""
+        return any(ord(c) > 127 for c in text)
+
+    def _type_via_clipboard(self, text: str, send_enter: bool) -> bool:
+        """Type text by copying to clipboard and pasting (for Unicode support)."""
+        try:
+            # Copy text to clipboard using pbcopy
+            proc = subprocess.run(
+                ["pbcopy"],
+                input=text.encode("utf-8"),
+                capture_output=True,
+                timeout=5,
+            )
+            if proc.returncode != 0:
+                return False
+
+            # Paste with Cmd+V (and optionally Enter)
+            if send_enter:
+                script = 'tell application "System Events"\nkeystroke "v" using command down\ndelay 0.1\nkey code 36\nend tell'
+            else:
+                script = 'tell application "System Events" to keystroke "v" using command down'
+
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                timeout=10,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
     def type_text(self, text: str, delay_ms: int = 0) -> bool:
         """Type text using AppleScript keystroke command.
 
@@ -46,6 +78,10 @@ class MacOSInjector(TextInjector):
         send_enter = text.endswith("\n")
         if send_enter:
             text = text[:-1]
+
+        # Use clipboard for Unicode characters (keystroke doesn't handle them well)
+        if self._has_non_ascii(text):
+            return self._type_via_clipboard(text, send_enter)
 
         # Escape special characters for AppleScript
         escaped = text.replace("\\", "\\\\").replace('"', '\\"')
