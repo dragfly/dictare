@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -16,6 +16,7 @@ class CheckResult:
     available: bool
     message: str
     required: bool = True
+    install_hint: str | None = None
 
 
 def is_linux() -> bool:
@@ -70,12 +71,12 @@ def check_dependencies() -> list[CheckResult]:
 
     # Python version
     py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-    py_ok = sys.version_info >= (3, 10)
+    py_ok = sys.version_info >= (3, 11)
     results.append(
         CheckResult(
             name="Python",
             available=py_ok,
-            message=f"Version {py_version}" + ("" if py_ok else " (need 3.10+)"),
+            message=f"Version {py_version}" + ("" if py_ok else " (need 3.11+)"),
         )
     )
 
@@ -101,25 +102,49 @@ def check_dependencies() -> list[CheckResult]:
             )
         )
 
-    # STT
-    try:
-        import faster_whisper  # noqa: F401
+    # STT - platform specific
+    if is_macos():
+        # macOS uses mlx-whisper
+        try:
+            import mlx_whisper  # noqa: F401
 
-        results.append(
-            CheckResult(
-                name="faster-whisper",
-                available=True,
-                message="Installed",
+            results.append(
+                CheckResult(
+                    name="mlx-whisper",
+                    available=True,
+                    message="Installed (Apple Silicon GPU)",
+                )
             )
-        )
-    except ImportError:
-        results.append(
-            CheckResult(
-                name="faster-whisper",
-                available=False,
-                message="Not installed",
+        except ImportError:
+            results.append(
+                CheckResult(
+                    name="mlx-whisper",
+                    available=False,
+                    message="Not installed",
+                    install_hint="uv tool install 'voxtype[mlx,macos]' --force",
+                )
             )
-        )
+    else:
+        # Linux uses faster-whisper
+        try:
+            import faster_whisper  # noqa: F401
+
+            results.append(
+                CheckResult(
+                    name="faster-whisper",
+                    available=True,
+                    message="Installed",
+                )
+            )
+        except ImportError:
+            results.append(
+                CheckResult(
+                    name="faster-whisper",
+                    available=False,
+                    message="Not installed",
+                    install_hint="uv tool install 'voxtype[linux]' --force",
+                )
+            )
 
     # Hotkey detection (Linux)
     if is_linux():
@@ -131,7 +156,7 @@ def check_dependencies() -> list[CheckResult]:
                     name="evdev",
                     available=True,
                     message="Installed",
-                    required=False,  # Optional, pynput can be used as fallback
+                    required=False,
                 )
             )
 
@@ -146,7 +171,8 @@ def check_dependencies() -> list[CheckResult]:
                         available=len(devices) > 0,
                         message=f"Found {len(devices)} device(s)"
                         if devices
-                        else "No access (add user to 'input' group)",
+                        else "No access",
+                        install_hint="sudo usermod -aG input $USER && newgrp input",
                     )
                 )
             except PermissionError:
@@ -154,7 +180,8 @@ def check_dependencies() -> list[CheckResult]:
                     CheckResult(
                         name="Input devices",
                         available=False,
-                        message="Permission denied (add user to 'input' group)",
+                        message="Permission denied",
+                        install_hint="sudo usermod -aG input $USER && newgrp input",
                     )
                 )
         except ImportError:
@@ -162,8 +189,31 @@ def check_dependencies() -> list[CheckResult]:
                 CheckResult(
                     name="evdev",
                     available=False,
-                    message="Not installed (pip install evdev)",
-                    required=False,  # Optional, pynput can be used as fallback
+                    message="Not installed",
+                    required=False,
+                    install_hint="uv tool install 'voxtype[linux]' --force",
+                )
+            )
+
+    # macOS hotkey
+    if is_macos():
+        try:
+            import pynput  # noqa: F401
+
+            results.append(
+                CheckResult(
+                    name="pynput",
+                    available=True,
+                    message="Installed",
+                )
+            )
+        except ImportError:
+            results.append(
+                CheckResult(
+                    name="pynput",
+                    available=False,
+                    message="Not installed",
+                    install_hint="uv tool install 'voxtype[mlx,macos]' --force",
                 )
             )
 
@@ -172,14 +222,24 @@ def check_dependencies() -> list[CheckResult]:
         # ydotool
         ydotool_exists = check_command_exists("ydotool")
         ydotoold_running = check_ydotoold_running() if ydotool_exists else False
+
+        if ydotool_exists and ydotoold_running:
+            msg = "Ready"
+            hint = None
+        elif ydotool_exists:
+            msg = "ydotoold not running"
+            hint = "systemctl --user start ydotoold"
+        else:
+            msg = "Not installed"
+            hint = "See install-linux.sh in the repo"
+
         results.append(
             CheckResult(
                 name="ydotool",
                 available=ydotool_exists and ydotoold_running,
-                message="Ready"
-                if (ydotool_exists and ydotoold_running)
-                else ("ydotoold not running" if ydotool_exists else "Not installed"),
+                message=msg,
                 required=False,
+                install_hint=hint,
             )
         )
 
@@ -191,6 +251,7 @@ def check_dependencies() -> list[CheckResult]:
                 available=wtype_exists,
                 message="Available" if wtype_exists else "Not installed",
                 required=False,
+                install_hint="sudo apt install wtype" if not wtype_exists else None,
             )
         )
 
@@ -202,6 +263,7 @@ def check_dependencies() -> list[CheckResult]:
                 available=xdotool_exists,
                 message="Available" if xdotool_exists else "Not installed",
                 required=False,
+                install_hint="sudo apt install xdotool" if not xdotool_exists else None,
             )
         )
 
@@ -214,6 +276,7 @@ def check_dependencies() -> list[CheckResult]:
                 available=wl_copy or xclip,
                 message="wl-copy" if wl_copy else ("xclip" if xclip else "Not available"),
                 required=False,
+                install_hint="sudo apt install wl-clipboard" if not (wl_copy or xclip) else None,
             )
         )
 
