@@ -43,11 +43,19 @@ class MacOSInjector(TextInjector):
         Returns:
             True if successful.
         """
+        # Check if text ends with newline (Enter requested)
+        send_enter = text.endswith("\n")
+        if send_enter:
+            text = text[:-1]
+
         # Escape special characters for AppleScript
         escaped = text.replace("\\", "\\\\").replace('"', '\\"')
 
-        # AppleScript to type text
-        script = f'tell application "System Events" to keystroke "{escaped}"'
+        # Build AppleScript: type text, then optionally press Return
+        if send_enter:
+            script = f'tell application "System Events"\nkeystroke "{escaped}"\nkey code 36\nend tell'
+        else:
+            script = f'tell application "System Events" to keystroke "{escaped}"'
 
         try:
             # Ensure UTF-8 locale for proper accent handling
