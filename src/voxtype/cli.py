@@ -201,6 +201,11 @@ def run(
         except (ImportError, RuntimeError, AttributeError):
             pass  # ctranslate2 not installed or no CUDA
 
+    # Auto-detect hotkey based on platform (if using default)
+    if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
+        # macOS doesn't have ScrollLock, use Right Command instead
+        config.hotkey.key = "KEY_RIGHTMETA"
+
     # Override config with CLI options
     if model:
         config.stt.model_size = model
