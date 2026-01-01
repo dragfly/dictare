@@ -493,15 +493,13 @@ class VoxtypeApp:
             if self.state != AppState.IDLE:
                 # Debug: show why we're ignoring
                 if self.debug:
-                    self._console.print(f"\n[yellow][DEBUG] Speech ignored, state={self.state.name}[/]")
-                # Play busy beep so user knows to retry
+                    self._console.print(f"\n[yellow][DEBUG] Speech buffering, state={self.state.name}[/]")
+                # Play busy beep so user knows we're busy (but still recording)
                 if self.config.audio.audio_feedback:
                     from voxtype.audio.beep import play_beep_busy
                     play_beep_busy()
                     self._speech_was_ignored = True
-                # Reset VAD so it doesn't accumulate audio we'll never process
-                if self._streaming_vad:
-                    self._streaming_vad.reset()
+                # DON'T reset VAD - let it buffer audio for when we're ready
                 return
             self.state = AppState.RECORDING
 
@@ -513,9 +511,21 @@ class VoxtypeApp:
     def _on_vad_speech_end(self, audio_data) -> None:
         """Handle VAD speech end detection."""
         with self._lock:
-            if self.state != AppState.RECORDING:
+            if self.state == AppState.TRANSCRIBING:
+                # Still busy with previous transcription, discard buffered audio
+                if self.debug:
+                    self._console.print(f"\n[yellow][DEBUG] Buffered speech discarded, still transcribing[/]")
                 return
-            self.state = AppState.TRANSCRIBING
+            elif self.state == AppState.IDLE:
+                # Buffered speech arrived and we're now ready - process it
+                if self.debug:
+                    self._console.print(f"\n[yellow][DEBUG] Processing buffered speech[/]")
+                self.state = AppState.TRANSCRIBING
+            elif self.state == AppState.RECORDING:
+                # Normal flow
+                self.state = AppState.TRANSCRIBING
+            else:
+                return
 
         # Calculate duration
         duration_ms = len(audio_data) / self.config.audio.sample_rate * 1000
