@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2026-01-01
+
+### Refactored
+- **Reduced cyclomatic complexity**: All E/D rated functions now A/B
+  - `cli.py:run`: E(35) → A(3) by extracting `_create_logger()`, `_auto_detect_acceleration()`, `_apply_cli_overrides()`, `_format_status_panel()`
+  - `platform.py:check_dependencies`: E(33) → A(3) by extracting category-specific checkers
+  - `processor.py:_parse_ollama_response`: D(26) → A(4) by extracting `_build_response_from_json()`, `_validate_response()`, `_validate_listening_response()`, `_validate_idle_response()`
+- **Average complexity**: A (3.17) across 265 functions
+
 ## [1.3.4] - 2025-12-31
 
 ### Fixed
