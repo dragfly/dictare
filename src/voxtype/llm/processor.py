@@ -160,90 +160,109 @@ class LLMProcessor:
         """Parse Ollama JSON response into LLMResponse."""
         try:
             data = json.loads(response_text)
+            response = self._build_response_from_json(data, response_text)
 
-            action = Action(data.get("action", "ignore"))
-
-            new_state = None
-            if data.get("new_state"):
-                new_state = AppState(data["new_state"])
-
-            command = None
-            if data.get("command"):
-                command = Command(data["command"])
-
-            # Sanity check: if action is change_state but new_state is None, fall back to keywords
-            if action == Action.CHANGE_STATE and new_state is None:
-                if self._console:
-                    self._console.print("[yellow]LLM returned change_state without new_state, using keywords[/]")
+            if response is None:
                 return self._process_with_keywords(request)
 
-            # Sanity check: if action is execute but command is None, fall back
-            if action == Action.EXECUTE and command is None:
-                if self._console:
-                    self._console.print("[yellow]LLM returned execute without command, using keywords[/]")
-                return self._process_with_keywords(request)
+            return self._validate_response(response, request)
 
-            # In LISTENING mode: check for exit commands first, then handle LLM decision
-            if request.current_state == AppState.LISTENING:
-                text_lower = request.text.lower()
-                words = text_lower.split()
-
-                # Block invalid transition: can't enter LISTENING when already in LISTENING
-                if action == Action.CHANGE_STATE and new_state == AppState.LISTENING:
-                    if self._console:
-                        self._console.print("[yellow]LISTENING: LLM tried to re-enter LISTENING, injecting instead[/]")
-                    return LLMResponse.inject(
-                        request.text,
-                        backend="ollama",
-                        override="Invalid state transition: already in LISTENING",
-                    )
-
-                # Check for SHORT exit commands (≤4 words) - these should always exit
-                # Examples: "smetti", "stop", "Joshua smetti", "ok basta"
-                if len(words) <= 4:
-                    for keyword in FALLBACK_EXIT_KEYWORDS:
-                        if keyword in text_lower:
-                            if self._console:
-                                self._console.print(f"[yellow]LISTENING: short exit command '{keyword}' detected[/]")
-                            return LLMResponse.exit_listening(backend="ollama")
-
-                # If LLM says IGNORE on longer text, inject anyway
-                if action == Action.IGNORE:
-                    if self._console:
-                        self._console.print("[yellow]LISTENING: LLM said ignore, injecting anyway[/]")
-                    return LLMResponse.inject(
-                        request.text,
-                        backend="ollama",
-                        override="LLM said ignore in LISTENING mode",
-                    )
-
-            # Sanity check: in IDLE mode
-            if request.current_state == AppState.IDLE and request.trigger_phrase:
-                text_lower = request.text.lower()
-                trigger_found, _ = self._find_trigger_phrase(text_lower, request.trigger_phrase)
-
-                # CRITICAL: Cannot change state without trigger phrase!
-                if not trigger_found and action == Action.CHANGE_STATE:
-                    if self._console:
-                        self._console.print("[yellow]IDLE: LLM tried to change state without trigger phrase, ignoring[/]")
-                    return LLMResponse.ignore("No trigger phrase for state change", backend="ollama")
-
-            return LLMResponse(
-                action=action,
-                new_state=new_state,
-                text_to_inject=data.get("text_to_inject"),
-                command=command,
-                command_args=data.get("command_args"),
-                user_feedback=data.get("user_feedback"),
-                confidence=data.get("confidence", 1.0),
-                backend="ollama",
-                raw_llm_response=response_text[:500],  # Truncate for log size
-            )
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             if self._console:
                 self._console.print(f"[yellow]Failed to parse LLM response: {e}[/]")
-            # Fall back to keyword matching
             return self._process_with_keywords(request)
+
+    def _build_response_from_json(
+        self, data: dict, response_text: str
+    ) -> LLMResponse | None:
+        """Build LLMResponse from JSON data, return None if invalid."""
+        action = Action(data.get("action", "ignore"))
+
+        new_state = AppState(data["new_state"]) if data.get("new_state") else None
+        command = Command(data["command"]) if data.get("command") else None
+
+        # Basic validity checks
+        if action == Action.CHANGE_STATE and new_state is None:
+            if self._console:
+                self._console.print("[yellow]LLM returned change_state without new_state[/]")
+            return None
+
+        if action == Action.EXECUTE and command is None:
+            if self._console:
+                self._console.print("[yellow]LLM returned execute without command[/]")
+            return None
+
+        return LLMResponse(
+            action=action,
+            new_state=new_state,
+            text_to_inject=data.get("text_to_inject"),
+            command=command,
+            command_args=data.get("command_args"),
+            user_feedback=data.get("user_feedback"),
+            confidence=data.get("confidence", 1.0),
+            backend="ollama",
+            raw_llm_response=response_text[:500],
+        )
+
+    def _validate_response(self, response: LLMResponse, request: LLMRequest) -> LLMResponse:
+        """Validate response against current state, fallback to keywords if invalid."""
+        if request.current_state == AppState.LISTENING:
+            return self._validate_listening_response(response, request)
+        elif request.current_state == AppState.IDLE and request.trigger_phrase:
+            return self._validate_idle_response(response, request)
+        return response
+
+    def _validate_listening_response(
+        self, response: LLMResponse, request: LLMRequest
+    ) -> LLMResponse:
+        """Validate response when in LISTENING mode."""
+        text_lower = request.text.lower()
+        words = text_lower.split()
+
+        # Block invalid transition: can't re-enter LISTENING
+        if response.action == Action.CHANGE_STATE and response.new_state == AppState.LISTENING:
+            if self._console:
+                self._console.print("[yellow]LISTENING: LLM tried to re-enter LISTENING[/]")
+            return LLMResponse.inject(
+                request.text,
+                backend="ollama",
+                override="Invalid state transition: already in LISTENING",
+            )
+
+        # Short exit commands (≤4 words) should always exit
+        if len(words) <= 4:
+            for keyword in FALLBACK_EXIT_KEYWORDS:
+                if keyword in text_lower:
+                    if self._console:
+                        self._console.print(f"[yellow]LISTENING: short exit '{keyword}'[/]")
+                    return LLMResponse.exit_listening(backend="ollama")
+
+        # Don't ignore in LISTENING mode - inject instead
+        if response.action == Action.IGNORE:
+            if self._console:
+                self._console.print("[yellow]LISTENING: LLM said ignore, injecting[/]")
+            return LLMResponse.inject(
+                request.text,
+                backend="ollama",
+                override="LLM said ignore in LISTENING mode",
+            )
+
+        return response
+
+    def _validate_idle_response(
+        self, response: LLMResponse, request: LLMRequest
+    ) -> LLMResponse:
+        """Validate response when in IDLE mode with trigger phrase."""
+        text_lower = request.text.lower()
+        trigger_found, _ = self._find_trigger_phrase(text_lower, request.trigger_phrase)
+
+        # Cannot change state without trigger phrase
+        if not trigger_found and response.action == Action.CHANGE_STATE:
+            if self._console:
+                self._console.print("[yellow]IDLE: state change without trigger phrase[/]")
+            return LLMResponse.ignore("No trigger phrase for state change", backend="ollama")
+
+        return response
 
     def _process_with_keywords(self, request: LLMRequest) -> LLMResponse:
         """Fallback: process with keyword matching."""

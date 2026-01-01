@@ -80,6 +80,155 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _auto_detect_acceleration(config) -> None:
+    """Auto-detect GPU acceleration (MLX on macOS, CUDA on Linux)."""
+    import platform
+    import sys
+
+    if sys.platform == "darwin" and platform.machine() == "arm64":
+        # Apple Silicon: try MLX
+        try:
+            console.print("[dim]Loading MLX (first run may take ~30s)...[/]")
+            import mlx_whisper  # noqa: F401
+            config.stt.backend = "mlx-whisper"
+        except ImportError:
+            pass  # mlx-whisper not installed, use default
+    elif sys.platform == "linux":
+        # Linux: try CUDA GPU via ctranslate2 (faster-whisper dependency)
+        try:
+            import ctranslate2
+            cuda_device_count = ctranslate2.get_cuda_device_count()
+            if cuda_device_count > 0:
+                config.stt.device = "cuda"
+                config.stt.compute_type = "float16"
+                console.print(f"[dim]CUDA GPU detected ({cuda_device_count} device(s)), using GPU acceleration[/]")
+                _setup_cuda_library_path()
+        except (ImportError, RuntimeError, AttributeError):
+            pass  # ctranslate2 not installed or no CUDA
+
+
+def _apply_cli_overrides(
+    config,
+    *,
+    model: str | None,
+    key: str | None,
+    language: str | None,
+    no_enter: bool,
+    clipboard: bool,
+    mlx: bool,
+    gpu: bool,
+    max_duration: int | None,
+    verbose: bool,
+    no_commands: bool,
+    typing_delay: int | None,
+    keyboard: bool,
+    ollama_model: str | None,
+) -> None:
+    """Apply CLI options to config."""
+    import sys
+
+    if model:
+        config.stt.model_size = model
+    if key:
+        config.hotkey.key = key
+    if language:
+        config.stt.language = language
+    if no_enter:
+        config.injection.auto_enter = False
+    if clipboard:
+        config.injection.backend = "clipboard"
+    if mlx:
+        config.stt.backend = "mlx-whisper"
+    elif gpu:
+        config.stt.device = "cuda"
+        config.stt.compute_type = "float16"
+        _setup_cuda_library_path()
+    if max_duration:
+        config.audio.max_duration = max_duration
+    if verbose:
+        config.verbose = verbose
+    if no_commands:
+        config.command.enabled = False
+    if typing_delay is not None:
+        config.injection.typing_delay_ms = typing_delay
+    if keyboard:
+        if sys.platform == "darwin":
+            config.injection.backend = "macos"
+        else:
+            config.injection.backend = "ydotool"
+    if ollama_model:
+        config.command.ollama_model = ollama_model
+
+
+def _format_status_panel(config, vad: bool, mode: str, wake_word: str | None, clipboard: bool) -> Panel:
+    """Create the status panel for the Ready message."""
+    import sys
+
+    # Device string
+    if config.stt.backend == "mlx-whisper":
+        device_str = "[magenta]GPU (MLX/Metal)[/]"
+    elif config.stt.device == "cuda":
+        device_str = "[magenta]GPU (CUDA)[/]"
+    else:
+        device_str = "CPU"
+
+    # Mode strings
+    output_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
+    mode_str = "[cyan]transcription[/] (fast)" if mode == "transcription" else "[yellow]command[/] (LLM)"
+    input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
+    wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
+
+    # Format the hotkey nicely
+    hotkey = config.hotkey.key
+    if hotkey in ("KEY_LEFTMETA", "KEY_RIGHTMETA"):
+        hotkey_display = "⌘ (Command)" if sys.platform == "darwin" else "Super/Meta"
+    elif hotkey == "KEY_SCROLLLOCK":
+        hotkey_display = "Scroll Lock"
+    else:
+        hotkey_display = hotkey.replace("KEY_", "")
+
+    return Panel(
+        f"[bold green]voxtype[/] v{__version__}\n\n"
+        f"Input: {input_mode}\n"
+        f"{wake_str}"
+        f"Mode: {mode_str}\n"
+        f"STT: [cyan]{config.stt.model_size}[/] on {device_str}\n"
+        f"Language: [cyan]{config.stt.language}[/]\n"
+        f"Output: {output_str}\n\n"
+        f"[dim][cyan]{hotkey_display}[/] tap: toggle listening | double-tap: switch mode[/]\n"
+        f"Press [bold]Ctrl+C[/] to exit",
+        title="Ready",
+        border_style="green",
+    )
+
+
+def _create_logger(
+    log_file: Path | None,
+    config,
+    vad: bool,
+    wake_word: str | None,
+    debug: bool,
+    silence_ms: int | None,
+):
+    """Create JSONL logger if log file is specified."""
+    if not log_file:
+        return None
+
+    from voxtype.logging.jsonl import JSONLLogger
+
+    log_params = {
+        "input_mode": "vad" if vad else "push_to_talk",
+        "trigger_phrase": wake_word,
+        "debug": debug,
+        "silence_ms": silence_ms,
+        "stt_model": config.stt.model_size,
+        "stt_backend": config.stt.backend,
+        "stt_language": config.stt.language,
+        "injection_backend": config.injection.backend,
+    }
+    return JSONLLogger(log_file, __version__, params=log_params)
+
+
 @app.callback()
 def main_callback(
     version: Annotated[
@@ -182,29 +331,7 @@ def run(
     config = load_config(config_file)
 
     # Auto-detect GPU acceleration
-    import platform
-    import sys
-    if sys.platform == "darwin" and platform.machine() == "arm64":
-        # Apple Silicon: try MLX
-        try:
-            console.print("[dim]Loading MLX (first run may take ~30s)...[/]")
-            import mlx_whisper  # noqa: F401
-            config.stt.backend = "mlx-whisper"
-        except ImportError:
-            pass  # mlx-whisper not installed, use default
-    elif sys.platform == "linux":
-        # Linux: try CUDA GPU via ctranslate2 (faster-whisper dependency)
-        try:
-            import ctranslate2
-            # Check if CUDA device is available
-            cuda_device_count = ctranslate2.get_cuda_device_count()
-            if cuda_device_count > 0:
-                config.stt.device = "cuda"
-                config.stt.compute_type = "float16"
-                console.print(f"[dim]CUDA GPU detected ({cuda_device_count} device(s)), using GPU acceleration[/]")
-                _setup_cuda_library_path()
-        except (ImportError, RuntimeError, AttributeError):
-            pass  # ctranslate2 not installed or no CUDA
+    _auto_detect_acceleration(config)
 
     # Auto-detect hotkey based on platform (if using default)
     if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
@@ -212,64 +339,30 @@ def run(
         config.hotkey.key = "KEY_RIGHTMETA"
 
     # Override config with CLI options
-    if model:
-        config.stt.model_size = model
-    if key:
-        config.hotkey.key = key
-    if language:
-        config.stt.language = language
-    if no_enter:
-        config.injection.auto_enter = False
-    if clipboard:
-        config.injection.backend = "clipboard"
-    if mlx:
-        config.stt.backend = "mlx-whisper"
-    elif gpu:
-        config.stt.device = "cuda"
-        config.stt.compute_type = "float16"  # Better for GPU
-        _setup_cuda_library_path()
-    if max_duration:
-        config.audio.max_duration = max_duration
-    if verbose:
-        config.verbose = verbose
-    if no_commands:
-        config.command.enabled = False
-    if typing_delay is not None:
-        config.injection.typing_delay_ms = typing_delay
-    if keyboard:
-        # Force keyboard mode (ydotool/wtype/xdotool on Linux, macos on macOS)
-        import sys
-        if sys.platform == "darwin":
-            config.injection.backend = "macos"
-        else:
-            config.injection.backend = "ydotool"  # Will fall back to wtype/xdotool
-    if ollama_model:
-        config.command.ollama_model = ollama_model
+    _apply_cli_overrides(
+        config,
+        model=model,
+        key=key,
+        language=language,
+        no_enter=no_enter,
+        clipboard=clipboard,
+        mlx=mlx,
+        gpu=gpu,
+        max_duration=max_duration,
+        verbose=verbose,
+        no_commands=no_commands,
+        typing_delay=typing_delay,
+        keyboard=keyboard,
+        ollama_model=ollama_model,
+    )
 
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
 
     # Create JSONL logger if requested
-    logger = None
-    if log_file:
-        from voxtype.logging import JSONLLogger
+    logger = _create_logger(log_file, config, vad, wake_word, debug, silence_ms)
 
-        # Collect startup parameters for logging
-        log_params = {
-            "input_mode": "vad" if vad else "push_to_talk",
-            "trigger_phrase": wake_word,
-            "stt_model": config.stt.model_size,
-            "stt_device": config.stt.device,
-            "stt_language": config.stt.language,
-            "output_mode": config.injection.backend,
-            "auto_enter": config.injection.auto_enter,
-            "debug": debug,
-            "silence_ms": silence_ms or VoxtypeApp.DEFAULT_VAD_SILENCE_MS,
-        }
-        logger = JSONLLogger(log_file, __version__, params=log_params)
-        console.print(f"[dim]Logging to: {log_file}[/]")
-
-    app = VoxtypeApp(
+    voxtypeapp = VoxtypeApp(
         config,
         use_vad=vad,
         vad_silence_ms=silence_ms,
@@ -279,51 +372,13 @@ def run(
         initial_mode=mode,
     )
 
-    output_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
-    mode_str = "[cyan]transcription[/] (fast)" if mode == "transcription" else "[yellow]command[/] (LLM)"
-    if config.stt.backend == "mlx-whisper":
-        device_str = "[magenta]GPU (MLX/Metal)[/]"
-    elif config.stt.device == "cuda":
-        device_str = "[magenta]GPU (CUDA)[/]"
-    else:
-        device_str = "CPU"
-    input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
-    wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
-
-    # Format the hotkey nicely
-    hotkey = config.hotkey.key
-    if hotkey in ("KEY_LEFTMETA", "KEY_RIGHTMETA"):
-        if sys.platform == "darwin":
-            hotkey_display = "⌘ (Command)"
-        else:
-            hotkey_display = "Super/Meta"
-    elif hotkey == "KEY_SCROLLLOCK":
-        hotkey_display = "Scroll Lock"
-    else:
-        # Remove KEY_ prefix for cleaner display
-        hotkey_display = hotkey.replace("KEY_", "")
-
-    console.print(
-        Panel(
-            f"[bold green]voxtype[/] v{__version__}\n\n"
-            f"Input: {input_mode}\n"
-            f"{wake_str}"
-            f"Mode: {mode_str}\n"
-            f"STT: [cyan]{config.stt.model_size}[/] on {device_str}\n"
-            f"Language: [cyan]{config.stt.language}[/]\n"
-            f"Output: {output_str}\n\n"
-            f"[dim][cyan]{hotkey_display}[/] tap: toggle listening | double-tap: switch mode[/]\n"
-            f"Press [bold]Ctrl+C[/] to exit",
-            title="Ready",
-            border_style="green",
-        )
-    )
+    console.print(_format_status_panel(config, vad, mode, wake_word, clipboard))
 
     try:
-        app.run()
+        voxtypeapp.run()
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down...[/]")
-        app.stop()
+        voxtypeapp.stop()
     finally:
         if logger:
             logger.close()
