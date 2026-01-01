@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -34,7 +35,6 @@ def _setup_cuda_library_path() -> None:
     """Set up CUDA libraries by preloading them before ctranslate2."""
     import ctypes
     import os
-    import sys
 
     # Find nvidia packages in site-packages
     for path in sys.path:
@@ -83,7 +83,6 @@ def version_callback(value: bool) -> None:
 def _auto_detect_acceleration(config) -> None:
     """Auto-detect GPU acceleration (MLX on macOS, CUDA on Linux)."""
     import platform
-    import sys
 
     if sys.platform == "darwin" and platform.machine() == "arm64":
         # Apple Silicon: try MLX
@@ -125,8 +124,6 @@ def _apply_cli_overrides(
     ollama_model: str | None,
 ) -> None:
     """Apply CLI options to config."""
-    import sys
-
     if model:
         config.stt.model_size = model
     if key:
@@ -162,8 +159,6 @@ def _apply_cli_overrides(
 
 def _format_status_panel(config, vad: bool, mode: str, wake_word: str | None, clipboard: bool) -> Panel:
     """Create the status panel for the Ready message."""
-    import sys
-
     # Device string
     if config.stt.backend == "mlx-whisper":
         device_str = "[magenta]GPU (MLX/Metal)[/]"
@@ -436,7 +431,6 @@ def check() -> None:
 
     # Check for at least one text injection method (Linux only)
     # macOS uses osascript/pbcopy which are built-in
-    import sys
     if sys.platform == "linux":
         injection_methods = ["ydotool", "wtype", "xdotool"]
         has_injection = any(r.available for r in results if r.name in injection_methods)
