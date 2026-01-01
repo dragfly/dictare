@@ -105,6 +105,23 @@ class CommandConfig(BaseModel):
         description="Ollama request timeout in seconds",
     )
 
+class ControllerConfig(BaseModel):
+    """Controller device configuration for project switching."""
+
+    device: str | None = Field(
+        default=None,
+        description="Controller device name (e.g., 'V012345-Ver---0000 V-tech-USB product')",
+    )
+    keys: dict[str, str] = Field(
+        default_factory=lambda: {
+            "KEY_ESC": "listening_on",
+            "KEY_B": "listening_off",
+            "KEY_UP": "project_next",
+            "KEY_DOWN": "project_prev",
+        },
+        description="Key-to-command mappings",
+    )
+
 class Config(BaseModel):
     """Main configuration."""
 
@@ -113,6 +130,7 @@ class Config(BaseModel):
     hotkey: HotkeyConfig = Field(default_factory=HotkeyConfig)
     injection: InjectionConfig = Field(default_factory=InjectionConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
+    controller: ControllerConfig = Field(default_factory=ControllerConfig)
 
     verbose: bool = Field(default=False, description="Enable verbose output")
 
@@ -330,6 +348,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str]]:
         ("hotkey", HotkeyConfig),
         ("injection", InjectionConfig),
         ("command", CommandConfig),
+        ("controller", ControllerConfig),
     ]
 
     for section_name, section_class in sections:
