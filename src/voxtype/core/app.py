@@ -499,6 +499,9 @@ class VoxtypeApp:
                     from voxtype.audio.beep import play_beep_busy
                     play_beep_busy()
                     self._speech_was_ignored = True
+                # Reset VAD so it doesn't accumulate audio we'll never process
+                if self._streaming_vad:
+                    self._streaming_vad.reset()
                 return
             self.state = AppState.RECORDING
 

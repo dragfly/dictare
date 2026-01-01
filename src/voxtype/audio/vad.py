@@ -221,3 +221,12 @@ class StreamingVAD:
             self._is_speaking = False
             self.vad.reset()
             self.on_speech_end(audio)
+
+    def reset(self) -> None:
+        """Reset streaming state (discard accumulated audio)."""
+        self._is_speaking = False
+        self._audio_buffer = []
+        self._silence_samples = 0
+        self._speech_samples = 0
+        self._pre_buffer = []
+        self.vad.reset()
