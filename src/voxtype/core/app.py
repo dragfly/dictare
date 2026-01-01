@@ -103,6 +103,9 @@ class VoxtypeApp:
         # LLM-first processor (replaces old command processor)
         self._llm_processor: LLMProcessor | None = None
 
+        # Track if speech was ignored (for ready-to-listen feedback)
+        self._speech_was_ignored = False
+
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
         return AudioCapture(
@@ -496,6 +499,7 @@ class VoxtypeApp:
                 if self.config.audio.audio_feedback:
                     from voxtype.audio.beep import play_beep_busy
                     play_beep_busy()
+                    self._speech_was_ignored = True
                 return
             self.state = AppState.RECORDING
 
@@ -581,9 +585,30 @@ class VoxtypeApp:
                 self._console.print(f"[red]Error: {e}[/]")
             finally:
                 self.state = AppState.IDLE
+                self._signal_ready_to_listen()
 
         thread = threading.Thread(target=do_transcribe, daemon=True)
         thread.start()
+
+    def _signal_ready_to_listen(self) -> None:
+        """Signal ready to listen after transcription (only if speech was ignored)."""
+        if not self._speech_was_ignored:
+            return
+
+        if not self._listening:
+            self._speech_was_ignored = False
+            return
+
+        # Delay before ready signal
+        import time
+        time.sleep(0.75)
+
+        self._console.print("[green]Ready to listen[/]")
+        if self.config.audio.audio_feedback:
+            from voxtype.audio.beep import play_beep_start
+            play_beep_start()
+
+        self._speech_was_ignored = False
 
     def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
         """Execute the action decided by the LLM.
