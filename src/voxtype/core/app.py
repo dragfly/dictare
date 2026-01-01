@@ -900,6 +900,11 @@ class VoxtypeApp:
                     delay_ms=self.config.injection.typing_delay_ms,
                 )
 
+                # Beep when file write succeeds (so user knows they can switch project)
+                if success and method.startswith("file:"):
+                    from voxtype.audio.beep import play_beep_sent
+                    play_beep_sent()
+
             # Log injection (include enter_sent status if available)
             if self._logger:
                 enter_sent = getattr(self._injector, '_enter_sent', None)

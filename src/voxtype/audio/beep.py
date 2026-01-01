@@ -29,6 +29,13 @@ def _generate_beep(
 _BEEP_START = _generate_beep(800, 0.15)  # Higher pitch for start
 _BEEP_STOP = _generate_beep(400, 0.15)  # Lower pitch for stop
 
+# Sent beep: two quick ascending tones (positive feedback)
+_BEEP_SENT = np.concatenate([
+    _generate_beep(600, 0.08),
+    np.zeros(int(_SAMPLE_RATE * 0.03), dtype=np.float32),
+    _generate_beep(900, 0.08),
+])
+
 # Error/busy beep: five loud high beeps (very noticeable, annoying)
 _BEEP_BUSY = np.concatenate([
     _generate_beep(900, 0.12),  # Beep 1
@@ -68,6 +75,16 @@ def play_beep_stop() -> None:
         import sounddevice as sd
 
         sd.play(_BEEP_STOP, _SAMPLE_RATE, blocking=False)
+    except Exception:
+        pass  # Don't fail on audio errors
+
+
+def play_beep_sent() -> None:
+    """Play a beep indicating transcription was sent/written."""
+    try:
+        import sounddevice as sd
+
+        sd.play(_BEEP_SENT, _SAMPLE_RATE, blocking=False)
     except Exception:
         pass  # Don't fail on audio errors
 
