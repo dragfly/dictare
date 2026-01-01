@@ -1108,29 +1108,50 @@ class VoxtypeApp:
         self._speak_project(new_project)
 
     def _speak_project(self, project_name: str) -> None:
-        """Speak the project name using TTS (with fallbacks)."""
+        """Speak the project name using TTS (piper preferred, with fallbacks)."""
+        import os
+        import shutil
         import subprocess
         import sys
         import threading
 
-        text = f"project {project_name}"
+        text = f"progetto {project_name}"
 
         def _speak():
             try:
                 if sys.platform == "darwin":
-                    subprocess.run(["say", text], capture_output=True, timeout=5)
-                else:
-                    # Linux: try multiple TTS backends
-                    for cmd in [
-                        ["spd-say", "-w", text],
-                        ["espeak-ng", text],
-                        ["espeak", text],
-                    ]:
-                        try:
-                            subprocess.run(cmd, capture_output=True, timeout=5)
-                            break
-                        except FileNotFoundError:
-                            continue
+                    subprocess.run(["say", text], capture_output=True, timeout=10)
+                    return
+
+                # Linux: try piper first (neural TTS, sounds great)
+                piper_model = os.path.expanduser(
+                    "~/.local/share/piper-voices/it_IT-paola-medium.onnx"
+                )
+                if os.path.exists(piper_model):
+                    try:
+                        # Use python -m piper | aplay
+                        subprocess.run(
+                            f'echo "{text}" | {sys.executable} -m piper '
+                            f'--model {piper_model} --output-raw 2>/dev/null | '
+                            f'aplay -r 22050 -f S16_LE -t raw - 2>/dev/null',
+                            shell=True,
+                            timeout=10,
+                        )
+                        return
+                    except Exception:
+                        pass  # Fall through to other TTS
+
+                # Fallback: spd-say, espeak-ng, espeak
+                for cmd in [
+                    ["spd-say", "-w", text],
+                    ["espeak-ng", text],
+                    ["espeak", text],
+                ]:
+                    try:
+                        subprocess.run(cmd, capture_output=True, timeout=5)
+                        return
+                    except FileNotFoundError:
+                        continue
             except Exception:
                 pass  # Silently fail if TTS not available
 
