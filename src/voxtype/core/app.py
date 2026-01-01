@@ -493,7 +493,7 @@ class VoxtypeApp:
             if self.state != AppState.IDLE:
                 # Debug: show why we're ignoring
                 if self.debug:
-                    self._console.print(f"[yellow][DEBUG] Speech ignored, state={self.state.name}[/]")
+                    self._console.print(f"\n[yellow][DEBUG] Speech ignored, state={self.state.name}[/]")
                 # Play busy beep so user knows to retry
                 if self.config.audio.audio_feedback:
                     from voxtype.audio.beep import play_beep_busy
