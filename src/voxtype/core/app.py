@@ -492,24 +492,20 @@ class VoxtypeApp:
 
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
+        # Always show "Listening..." when VAD detects speech
+        self._console.print("[bold cyan]Listening...[/]", end="\r")
+
         with self._lock:
             if self.state != AppState.IDLE:
-                # Debug: show why we're ignoring
+                # Debug: show why we're buffering
                 if self.debug:
                     self._console.print(f"\n[yellow][DEBUG] Speech buffering, state={self.state.name}[/]")
-                # Play busy beep so user knows we're busy (but still recording)
-                if self.config.audio.audio_feedback:
-                    from voxtype.audio.beep import play_beep_busy
-                    play_beep_busy()
-                    self._speech_was_ignored = True
                 # DON'T reset VAD - let it buffer audio for when we're ready
                 return
             self.state = AppState.RECORDING
 
         if self._logger:
             self._logger.log_vad_event("speech_start")
-
-        self._console.print("[bold cyan]Listening...[/]", end="\r")
 
     def _on_vad_speech_end(self, audio_data) -> None:
         """Handle VAD speech end detection."""
