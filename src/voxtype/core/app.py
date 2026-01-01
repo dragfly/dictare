@@ -106,6 +106,9 @@ class VoxtypeApp:
         # Track if speech was ignored (for ready-to-listen feedback)
         self._speech_was_ignored = False
 
+        # Audio queue for buffered speech during transcription
+        self._audio_queue: list = []
+
     def _create_audio_capture(self) -> AudioCapture:
         """Create audio capture component."""
         return AudioCapture(
@@ -513,17 +516,13 @@ class VoxtypeApp:
         """Handle VAD speech end detection."""
         with self._lock:
             if self.state == AppState.TRANSCRIBING:
-                # Still busy with previous transcription, discard buffered audio
+                # Still busy - queue audio for later
                 if self.debug:
-                    self._console.print(f"\n[yellow][DEBUG] Buffered speech discarded, still transcribing[/]")
+                    self._console.print(f"\n[yellow][DEBUG] Queuing speech (transcribing)[/]")
+                self._audio_queue.append(audio_data)
                 return
-            elif self.state == AppState.IDLE:
-                # Buffered speech arrived and we're now ready - process it
-                if self.debug:
-                    self._console.print(f"\n[yellow][DEBUG] Processing buffered speech[/]")
-                self.state = AppState.TRANSCRIBING
-            elif self.state == AppState.RECORDING:
-                # Normal flow
+            elif self.state in (AppState.IDLE, AppState.RECORDING):
+                # Ready to process
                 self.state = AppState.TRANSCRIBING
             else:
                 return
@@ -599,6 +598,8 @@ class VoxtypeApp:
             finally:
                 self.state = AppState.IDLE
                 self._signal_ready_to_listen()
+                # Process queued audio if any
+                self._process_queued_audio()
 
         thread = threading.Thread(target=do_transcribe, daemon=True)
         thread.start()
@@ -613,7 +614,6 @@ class VoxtypeApp:
             return
 
         # Delay before ready signal
-        import time
         time.sleep(0.75)
 
         self._console.print("[green]Ready to listen[/]")
@@ -622,6 +622,32 @@ class VoxtypeApp:
             play_beep_start()
 
         self._speech_was_ignored = False
+
+    def _process_queued_audio(self) -> None:
+        """Process any queued audio from speech that occurred during transcription."""
+        if not self._audio_queue:
+            return
+
+        # Pop first queued audio
+        audio_data = self._audio_queue.pop(0)
+
+        if self.debug:
+            self._console.print(f"[yellow][DEBUG] Processing queued audio ({len(self._audio_queue)} remaining)[/]")
+
+        # Check minimum duration
+        min_samples = int(self.config.audio.sample_rate * self.MIN_RECORDING_DURATION)
+        if len(audio_data) < min_samples:
+            self._console.print("[dim]Queued audio too short, ignoring.[/]")
+            # Try next in queue
+            self._process_queued_audio()
+            return
+
+        # Set state and process
+        with self._lock:
+            self.state = AppState.TRANSCRIBING
+
+        self._console.print("[bold yellow]Transcribing (queued)...[/]", end="\r")
+        self._transcribe_and_process(audio_data)
 
     def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
         """Execute the action decided by the LLM.
