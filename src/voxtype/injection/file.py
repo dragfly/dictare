@@ -28,8 +28,9 @@ class FileInjector(TextInjector):
             True if successful.
         """
         try:
-            with open(self.filepath, "a") as f:
-                f.write(text + "\n")
+            with open(self.filepath, "ab") as f:
+                # Write text as-is (already has \n from auto_enter)
+                f.write(text.encode())
                 f.flush()
             return True
         except OSError:
