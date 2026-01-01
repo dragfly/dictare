@@ -18,11 +18,16 @@ class EvdevHotkeyListener(HotkeyListener):
     Requires the user to be in the 'input' group or have root access.
     """
 
-    def __init__(self, key_name: str = "KEY_SCROLLLOCK") -> None:
+    def __init__(
+        self,
+        key_name: str = "KEY_SCROLLLOCK",
+        exclude_device: str | None = None,
+    ) -> None:
         """Initialize evdev hotkey listener.
 
         Args:
             key_name: evdev key name (e.g., KEY_SCROLLLOCK, KEY_F12).
+            exclude_device: Device name substring to exclude (e.g., controller device).
 
         Raises:
             ImportError: If evdev is not installed.
@@ -31,6 +36,7 @@ class EvdevHotkeyListener(HotkeyListener):
         import evdev as _evdev  # noqa: F401
 
         self.key_name = key_name
+        self.exclude_device = exclude_device
         self._running = False
         self._thread: threading.Thread | None = None
         self._device: evdev.InputDevice | None = None
@@ -44,33 +50,72 @@ class EvdevHotkeyListener(HotkeyListener):
         if target_key is None:
             raise ValueError(f"Unknown key: {self.key_name}")
 
-        devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
-
-        # Filter out virtual devices (like ydotool)
-        real_devices = [
-            d for d in devices
-            if "virtual" not in d.name.lower() and "ydotool" not in d.name.lower()
+        # Keywords that indicate non-keyboard devices to avoid
+        exclude_keywords = [
+            "virtual", "ydotool", "bluetooth", "presenter", "clicker",
+            "remote", "consumer control", "system control"
         ]
 
-        # First, try to find a device that explicitly has the target key
-        for device in real_devices:
-            capabilities = device.capabilities()
-            if evdev.ecodes.EV_KEY in capabilities:
+        # Also exclude the controller device if specified
+        if self.exclude_device:
+            exclude_keywords.append(self.exclude_device.lower())
+
+        selected_device = None
+        devices = []
+
+        try:
+            for path in evdev.list_devices():
+                device = evdev.InputDevice(path)
+                devices.append(device)
+
+                name_lower = device.name.lower()
+
+                # Skip excluded devices
+                if any(kw in name_lower for kw in exclude_keywords):
+                    continue
+
+                # Check if device has EV_KEY capability
+                capabilities = device.capabilities()
+                if evdev.ecodes.EV_KEY not in capabilities:
+                    continue
+
                 key_caps = capabilities[evdev.ecodes.EV_KEY]
+
+                # First preference: device explicitly has the target key
                 if target_key in key_caps:
-                    return device
+                    selected_device = device
+                    break
 
-        # Fallback: return first real device with EV_KEY capability
-        for device in real_devices:
-            if evdev.ecodes.EV_KEY in device.capabilities():
-                return device
+            # If no device found with target key, try fallback (first keyboard)
+            if selected_device is None:
+                for device in devices:
+                    name_lower = device.name.lower()
+                    if any(kw in name_lower for kw in exclude_keywords):
+                        continue
+                    if evdev.ecodes.EV_KEY in device.capabilities():
+                        selected_device = device
+                        break
 
-        raise RuntimeError(
-            "No keyboard device found.\n"
-            "Please add your user to the 'input' group:\n"
-            "  sudo usermod -aG input $USER\n"
-            "Then log out and back in."
-        )
+        finally:
+            # Close all devices except the selected one
+            for device in devices:
+                if device != selected_device:
+                    try:
+                        device.close()
+                    except Exception:
+                        pass
+
+        if selected_device is None:
+            raise RuntimeError(
+                "No keyboard device found.\n"
+                "Please add your user to the 'input' group:\n"
+                "  sudo usermod -aG input $USER\n"
+                "Then log out and back in."
+            )
+
+        sys.stderr.write(f"[hotkey] Using device: {selected_device.path} ({selected_device.name})\n")
+        sys.stderr.flush()
+        return selected_device
 
     def start(
         self,

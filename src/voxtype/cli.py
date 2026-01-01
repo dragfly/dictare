@@ -336,8 +336,8 @@ def run(
         typer.Option("--output-dir", "-D", help="Directory for project transcription files (<project>.transcription)"),
     ] = None,
     projects: Annotated[
-        Optional[list[str]],
-        typer.Option("--projects", "-P", help="Project IDs (default: voxtype). Files: <output-dir>/<project>.transcription"),
+        Optional[str],
+        typer.Option("--projects", "-P", help="Project IDs comma-separated (e.g., pippo,pluto,paperino)"),
     ] = None,
     controller: Annotated[
         Optional[str],
@@ -383,8 +383,8 @@ def run(
     # Create JSONL logger if requested
     logger = _create_logger(log_file, config, vad, wake_word, debug, silence_ms)
 
-    # Handle projects mode
-    project_list = list(projects) if projects else None
+    # Handle projects mode - parse comma-separated string
+    project_list = [p.strip() for p in projects.split(",")] if projects else None
     output_dir_str = str(output_dir) if output_dir else None
     controller_device = controller or config.controller.device
 

@@ -171,7 +171,11 @@ class VoxtypeApp:
             try:
                 from voxtype.hotkey.evdev_listener import EvdevHotkeyListener
 
-                listener = EvdevHotkeyListener(self.config.hotkey.key)
+                # Exclude controller device to avoid conflicts
+                listener = EvdevHotkeyListener(
+                    self.config.hotkey.key,
+                    exclude_device=self.controller_device,
+                )
 
                 # Check if key is available, suggest fallback if not
                 if not listener.is_key_available():
@@ -181,7 +185,10 @@ class VoxtypeApp:
                             f"[yellow]Key {self.config.hotkey.key} not found, "
                             f"using {fallback} instead[/]"
                         )
-                        listener = EvdevHotkeyListener(fallback)
+                        listener = EvdevHotkeyListener(
+                            fallback,
+                            exclude_device=self.controller_device,
+                        )
 
                 return listener
             except ImportError:
@@ -1047,6 +1054,9 @@ class VoxtypeApp:
 
     def _on_controller_command(self, command: str) -> None:
         """Handle controller command."""
+        if self.debug:
+            self._console.print(f"\n[yellow][DEBUG] Controller command: {command}[/]")
+
         if command == "listening_on":
             self._set_listening(True)
         elif command == "listening_off":
@@ -1099,15 +1109,33 @@ class VoxtypeApp:
         self._speak_project(new_project)
 
     def _speak_project(self, project_name: str) -> None:
-        """Speak the project name using TTS."""
-        try:
-            from voxtype.tts.espeak import EspeakTTS
+        """Speak the project name using TTS (with fallbacks)."""
+        import subprocess
+        import sys
+        import threading
 
-            tts = EspeakTTS(language="en", speed=180)
-            if tts.is_available():
-                tts.speak(f"project {project_name}")
-        except Exception:
-            pass  # Ignore TTS errors
+        text = f"project {project_name}"
+
+        def _speak():
+            try:
+                if sys.platform == "darwin":
+                    subprocess.run(["say", text], capture_output=True, timeout=5)
+                else:
+                    # Linux: try multiple TTS backends
+                    for cmd in [
+                        ["spd-say", "-w", text],
+                        ["espeak-ng", text],
+                        ["espeak", text],
+                    ]:
+                        try:
+                            subprocess.run(cmd, capture_output=True, timeout=5)
+                            break
+                        except FileNotFoundError:
+                            continue
+            except Exception:
+                pass  # Silently fail if TTS not available
+
+        threading.Thread(target=_speak, daemon=True).start()
 
     def _discard_current(self) -> None:
         """Discard current recording/transcription."""
