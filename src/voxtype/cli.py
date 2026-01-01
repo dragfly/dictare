@@ -157,7 +157,9 @@ def _apply_cli_overrides(
         config.command.ollama_model = ollama_model
 
 
-def _format_status_panel(config, vad: bool, mode: str, wake_word: str | None, clipboard: bool) -> Panel:
+def _format_status_panel(
+    config, vad: bool, mode: str, wake_word: str | None, clipboard: bool, output_file: str | None = None
+) -> Panel:
     """Create the status panel for the Ready message."""
     # Device string
     if config.stt.backend == "mlx-whisper":
@@ -168,7 +170,12 @@ def _format_status_panel(config, vad: bool, mode: str, wake_word: str | None, cl
         device_str = "CPU"
 
     # Mode strings
-    output_str = "[yellow]clipboard[/] (Ctrl+V to paste)" if clipboard else "keyboard"
+    if output_file:
+        output_str = f"[cyan]file[/] ({output_file})"
+    elif clipboard:
+        output_str = "[yellow]clipboard[/] (Ctrl+V to paste)"
+    else:
+        output_str = "keyboard"
     mode_str = "[cyan]transcription[/] (fast)" if mode == "transcription" else "[yellow]command[/] (LLM)"
     input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
     wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
@@ -317,6 +324,10 @@ def run(
         Optional[str],
         typer.Option("--ollama-model", "-O", help="Ollama model for command processing (default: qwen2.5:1.5b)"),
     ] = None,
+    output_file: Annotated[
+        Optional[Path],
+        typer.Option("--output-file", "-F", help="Write transcriptions to a file instead of typing"),
+    ] = None,
 ) -> None:
     """Start voxtype in push-to-talk or VAD mode.
 
@@ -365,9 +376,10 @@ def run(
         debug=debug,
         logger=logger,
         initial_mode=mode,
+        output_file=str(output_file) if output_file else None,
     )
 
-    console.print(_format_status_panel(config, vad, mode, wake_word, clipboard))
+    console.print(_format_status_panel(config, vad, mode, wake_word, clipboard, str(output_file) if output_file else None))
 
     try:
         voxtypeapp.run()

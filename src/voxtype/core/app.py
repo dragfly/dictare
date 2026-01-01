@@ -50,6 +50,7 @@ class VoxtypeApp:
         debug: bool = False,
         logger: JSONLLogger | None = None,
         initial_mode: ProcessingMode | str = ProcessingMode.TRANSCRIPTION,
+        output_file: str | None = None,
     ) -> None:
         """Initialize the application.
 
@@ -61,12 +62,14 @@ class VoxtypeApp:
             debug: If True, show all transcriptions.
             logger: Optional JSONL logger for structured logging.
             initial_mode: Processing mode - TRANSCRIPTION (fast) or COMMAND (LLM).
+            output_file: If set, write transcriptions to this file instead of typing.
         """
         self.config = config
         self.use_vad = use_vad
         self.vad_silence_ms = vad_silence_ms or self.DEFAULT_VAD_SILENCE_MS
         self.trigger_phrase = wake_word  # Renamed: wake_word -> trigger_phrase
         self.debug = debug
+        self.output_file = output_file
         self.state = AppState.IDLE
         self._running = False
         self._console = Console()
@@ -251,6 +254,11 @@ class VoxtypeApp:
     def _create_injector(self) -> TextInjector:
         """Create text injector with auto-detection."""
         import sys
+
+        # File output mode - use FileInjector
+        if self.output_file:
+            from voxtype.injection.file import FileInjector
+            return FileInjector(self.output_file)
 
         from voxtype.injection.clipboard import ClipboardInjector
 
