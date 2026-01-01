@@ -50,6 +50,9 @@ class VoxtypeApp:
         logger: JSONLLogger | None = None,
         initial_mode: ProcessingMode | str = ProcessingMode.TRANSCRIPTION,
         output_file: str | None = None,
+        output_dir: str | None = None,
+        projects: list[str] | None = None,
+        controller_device: str | None = None,
     ) -> None:
         """Initialize the application.
 
@@ -62,6 +65,9 @@ class VoxtypeApp:
             logger: Optional JSONL logger for structured logging.
             initial_mode: Processing mode - TRANSCRIPTION (fast) or COMMAND (LLM).
             output_file: If set, write transcriptions to this file instead of typing.
+            output_dir: Directory for project transcription files.
+            projects: List of project IDs for multi-output mode.
+            controller_device: Device name for controller (for project switching).
         """
         self.config = config
         self.use_vad = use_vad
@@ -69,11 +75,18 @@ class VoxtypeApp:
         self.trigger_phrase = wake_word  # Renamed: wake_word -> trigger_phrase
         self.debug = debug
         self.output_file = output_file
+        self.output_dir = output_dir
+        self.projects = projects or []
+        self.controller_device = controller_device
         self.state = AppState.IDLE
         self._running = False
         self._console = Console()
         self._lock = threading.Lock()
         self._logger = logger
+
+        # Project state
+        self._current_project_index = 0
+        self._controller = None  # Controller listener
 
         # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
         if isinstance(initial_mode, str):
@@ -256,14 +269,24 @@ class VoxtypeApp:
                     "  Install: [bold]sudo apt install xclip[/]\n"
                 )
 
+    def _get_current_output_file(self) -> str | None:
+        """Get the current output file path based on project mode."""
+        if self.output_file:
+            return self.output_file
+        if self.output_dir and self.projects:
+            project = self.projects[self._current_project_index]
+            return f"{self.output_dir}/{project}.transcription"
+        return None
+
     def _create_injector(self) -> TextInjector:
         """Create text injector with auto-detection."""
         import sys
 
         # File output mode - use FileInjector
-        if self.output_file:
+        output_path = self._get_current_output_file()
+        if output_path:
             from voxtype.injection.file import FileInjector
-            return FileInjector(self.output_file)
+            return FileInjector(output_path)
 
         from voxtype.injection.clipboard import ClipboardInjector
 
@@ -387,6 +410,10 @@ class VoxtypeApp:
             self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
             if self._hotkey:
                 self._console.print(f"[dim]Toggle hotkey: {self._hotkey.get_key_name()}[/]")
+
+        # Create project files and initialize controller
+        self._create_project_files()
+        self._init_controller()
 
         hotkey_msg = f" (or press {self.config.hotkey.key})" if self._hotkey else ""
 
@@ -994,6 +1021,127 @@ class VoxtypeApp:
                 self._audio = None
         return False
 
+    def _init_controller(self) -> None:
+        """Initialize controller listener for project switching."""
+        if not self.controller_device or not self.projects:
+            return
+
+        try:
+            from voxtype.hotkey.controller_listener import ControllerListener
+
+            self._controller = ControllerListener(
+                device_name=self.controller_device,
+                key_mappings=self.config.controller.keys,
+            )
+
+            if self._controller.start(self._on_controller_command):
+                self._console.print(f"[dim]Controller: {self.controller_device}[/]")
+            else:
+                self._console.print(f"[yellow]Controller device not found: {self.controller_device}[/]")
+                self._controller = None
+        except ImportError:
+            self._console.print("[yellow]evdev not installed, controller disabled[/]")
+        except Exception as e:
+            self._console.print(f"[yellow]Controller error: {e}[/]")
+
+    def _on_controller_command(self, command: str) -> None:
+        """Handle controller command."""
+        if command == "listening_on":
+            self._set_listening(True)
+        elif command == "listening_off":
+            self._set_listening(False)
+        elif command == "project_next":
+            self._switch_project(1)
+        elif command == "project_prev":
+            self._switch_project(-1)
+        elif command == "discard":
+            self._discard_current()
+
+    def _set_listening(self, on: bool) -> None:
+        """Set listening state on/off."""
+        if self._listening == on:
+            return
+
+        self._listening = on
+
+        if on:
+            self._console.print("[bold green]>>> LISTENING ON[/]")
+            self._play_feedback("listening_on")
+        else:
+            self._console.print("[bold red]<<< LISTENING OFF[/]")
+            self._play_feedback("listening_off")
+
+        # Sync LLM processor state if available
+        if self._llm_processor:
+            self._llm_processor.set_listening(on)
+
+    def _switch_project(self, direction: int) -> None:
+        """Switch to next/previous project.
+
+        Args:
+            direction: 1 for next, -1 for previous
+        """
+        if not self.projects:
+            return
+
+        # Circular navigation
+        self._current_project_index = (self._current_project_index + direction) % len(self.projects)
+        new_project = self.projects[self._current_project_index]
+
+        # Update the injector to write to the new project file
+        self._injector = self._create_injector()
+
+        # Show feedback
+        self._console.print(f"[bold cyan]>>> Project: {new_project}[/]")
+
+        # Speak the project name
+        self._speak_project(new_project)
+
+    def _speak_project(self, project_name: str) -> None:
+        """Speak the project name using TTS."""
+        try:
+            from voxtype.tts.espeak import EspeakTTS
+
+            tts = EspeakTTS(language="en", speed=180)
+            if tts.is_available():
+                tts.speak(f"project {project_name}")
+        except Exception:
+            pass  # Ignore TTS errors
+
+    def _discard_current(self) -> None:
+        """Discard current recording/transcription."""
+        with self._lock:
+            # Clear audio queue
+            self._audio_queue.clear()
+
+            # Reset VAD if active
+            if self._streaming_vad:
+                self._streaming_vad.flush()
+
+            # Reset state if recording
+            if self.state == AppState.RECORDING:
+                self.state = AppState.IDLE
+
+        self._console.print("[yellow]Discarded[/]")
+
+    def _create_project_files(self) -> None:
+        """Create project transcription files (empty, so inputmux can find them)."""
+        if not self.output_dir or not self.projects:
+            return
+
+        import os
+        from pathlib import Path
+
+        # Create output directory if needed
+        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+
+        for project in self.projects:
+            filepath = f"{self.output_dir}/{project}.transcription"
+            # Create empty file if doesn't exist
+            if not os.path.exists(filepath):
+                Path(filepath).touch()
+            self._console.print(f"[dim]Output: {filepath}[/]")
+
     def stop(self) -> None:
         """Stop the application."""
         self._running = False
@@ -1002,6 +1150,9 @@ class VoxtypeApp:
         if self._pending_single_tap:
             self._pending_single_tap.cancel()
             self._pending_single_tap = None
+
+        if self._controller:
+            self._controller.stop()
 
         if self._hotkey:
             self._hotkey.stop()
