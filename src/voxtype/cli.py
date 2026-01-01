@@ -158,7 +158,8 @@ def _apply_cli_overrides(
 
 
 def _format_status_panel(
-    config, vad: bool, mode: str, wake_word: str | None, clipboard: bool, output_file: str | None = None
+    config, vad: bool, mode: str, wake_word: str | None, clipboard: bool,
+    output_file: str | None = None, projects: list[str] | None = None
 ) -> Panel:
     """Create the status panel for the Ready message."""
     # Device string
@@ -170,7 +171,9 @@ def _format_status_panel(
         device_str = "CPU"
 
     # Mode strings
-    if output_file:
+    if projects:
+        output_str = f"[cyan]projects[/] ({', '.join(projects)})"
+    elif output_file:
         output_str = f"[cyan]file[/] ({output_file})"
     elif clipboard:
         output_str = "[yellow]clipboard[/] (Ctrl+V to paste)"
@@ -326,7 +329,19 @@ def run(
     ] = None,
     output_file: Annotated[
         Optional[Path],
-        typer.Option("--output-file", "-F", help="Write transcriptions to a file instead of typing"),
+        typer.Option("--output-file", "-F", help="Write transcriptions to a single file instead of typing"),
+    ] = None,
+    output_dir: Annotated[
+        Optional[Path],
+        typer.Option("--output-dir", "-D", help="Directory for project transcription files (<project>.transcription)"),
+    ] = None,
+    projects: Annotated[
+        Optional[list[str]],
+        typer.Option("--projects", "-P", help="Project IDs (default: voxtype). Files: <output-dir>/<project>.transcription"),
+    ] = None,
+    controller: Annotated[
+        Optional[str],
+        typer.Option("--controller", help="Controller device name for project switching"),
     ] = None,
 ) -> None:
     """Start voxtype in push-to-talk or VAD mode.
@@ -368,6 +383,19 @@ def run(
     # Create JSONL logger if requested
     logger = _create_logger(log_file, config, vad, wake_word, debug, silence_ms)
 
+    # Handle projects mode
+    project_list = list(projects) if projects else None
+    output_dir_str = str(output_dir) if output_dir else None
+    controller_device = controller or config.controller.device
+
+    # If projects specified but no output_dir, default to current directory
+    if project_list and not output_dir_str:
+        output_dir_str = "."
+
+    # If output_dir specified but no projects, default to ["voxtype"]
+    if output_dir_str and not project_list:
+        project_list = ["voxtype"]
+
     voxtypeapp = VoxtypeApp(
         config,
         use_vad=vad,
@@ -377,9 +405,12 @@ def run(
         logger=logger,
         initial_mode=mode,
         output_file=str(output_file) if output_file else None,
+        output_dir=output_dir_str,
+        projects=project_list,
+        controller_device=controller_device,
     )
 
-    console.print(_format_status_panel(config, vad, mode, wake_word, clipboard, str(output_file) if output_file else None))
+    console.print(_format_status_panel(config, vad, mode, wake_word, clipboard, str(output_file) if output_file else None, project_list))
 
     try:
         voxtypeapp.run()

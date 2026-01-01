@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-01-01
+
+### Added
+- **Multi-project support**: `--projects` option for multiple output targets (e.g., `--projects pippo pluto`)
+- **Output directory**: `--output-dir` for project transcription files (`<dir>/<project>.transcription`)
+- **Controller device**: `--controller` option to use a Bluetooth presenter/clicker for project switching
+- **Controller commands**: listening_on, listening_off, project_next, project_prev, discard
+- **TTS feedback**: Speaks project name when switching (via espeak)
+- **Config section**: `[controller]` with device name and key mappings
+
+### Changed
+- Projects mode creates files on startup so inputmux can find them
+
 ## [1.3.10] - 2026-01-01
 
 ### Fixed
