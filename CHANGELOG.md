@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-01-02
+
+### Fixed
+- **Config `injection.backend` now respected**: Status panel now shows actual backend from config, not just CLI flag
+- **Output display**: Shows actual backend name (ydotool, clipboard, etc.) instead of generic "keyboard"
+
 ## [1.7.1] - 2026-01-02
 
 ### Fixed
