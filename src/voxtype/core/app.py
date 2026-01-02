@@ -156,7 +156,14 @@ class VoxtypeApp:
             self.config.stt.model_size,
             device=self.config.stt.device,
             compute_type=self.config.stt.compute_type,
+            console=self._console,
+            verbose=self.debug,
         )
+
+        # Update device string if fallback occurred
+        actual_device = getattr(engine, '_device', self.config.stt.device)
+        if actual_device != self.config.stt.device:
+            self._console.print(f"[dim]Actually using: {actual_device.upper()}[/]")
 
         return engine
 
