@@ -24,15 +24,19 @@ class AudioConfig(BaseModel):
         default=True,
         description="Play beep when entering/exiting LISTENING mode",
     )
+    vad: bool = Field(
+        default=True,
+        description="Use VAD mode (True) or push-to-talk mode (False)",
+    )
+    silence_ms: int = Field(
+        default=1200,
+        description="VAD silence duration to end speech in milliseconds",
+    )
 
 
 class STTConfig(BaseModel):
     """Speech-to-text configuration."""
 
-    backend: Literal["faster-whisper", "mlx-whisper"] = Field(
-        default="faster-whisper",
-        description="STT backend to use (faster-whisper, mlx-whisper for Apple Silicon)",
-    )
     model_size: str = Field(
         default="large-v3-turbo",
         description="Whisper model size (tiny/base/small/medium/large-v3/large-v3-turbo)",
@@ -50,35 +54,31 @@ class STTConfig(BaseModel):
         description="Device to use (auto/cpu/cuda) - auto detects best available",
     )
     beam_size: int = Field(default=5, description="Beam size for decoding")
+    hw_accel: bool = Field(
+        default=True,
+        description="Enable hardware acceleration (CUDA on Linux, MLX on macOS)",
+    )
 
 
 class HotkeyConfig(BaseModel):
     """Hotkey configuration."""
 
-    backend: Literal["evdev", "pynput", "auto"] = Field(
-        default="auto",
-        description="Hotkey backend to use",
-    )
     key: str = Field(
         default="KEY_SCROLLLOCK",
         description="Push-to-talk key (evdev key name)",
     )
 
 
-class InjectionConfig(BaseModel):
-    """Text injection configuration."""
+class OutputConfig(BaseModel):
+    """Text output configuration."""
 
-    backend: Literal["ydotool", "wtype", "xdotool", "macos", "clipboard", "auto"] = Field(
-        default="auto",
-        description="Text injection backend to use",
+    method: Literal["keyboard", "clipboard", "file"] = Field(
+        default="keyboard",
+        description="Output method: keyboard (type), clipboard (paste), or file",
     )
     typing_delay_ms: int = Field(
         default=5,
         description="Delay between characters in milliseconds",
-    )
-    fallback_to_clipboard: bool = Field(
-        default=True,
-        description="Fall back to clipboard if typing fails",
     )
     auto_enter: bool = Field(
         default=False,
@@ -97,9 +97,13 @@ class CommandConfig(BaseModel):
         default=True,
         description="Enable voice command processing",
     )
-    classifier_backend: Literal["auto", "ollama", "keyword"] = Field(
-        default="auto",
-        description="Intent classifier backend (auto tries ollama first)",
+    wake_word: str = Field(
+        default="",
+        description="Wake word to activate (e.g., 'Joshua')",
+    )
+    mode: Literal["transcription", "command"] = Field(
+        default="transcription",
+        description="Processing mode: transcription (fast) or command (LLM)",
     )
     ollama_model: str = Field(
         default="qwen2.5:1.5b",
@@ -129,15 +133,29 @@ class ControllerConfig(BaseModel):
     )
 
 
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+
+    debug: bool = Field(
+        default=False,
+        description="Debug mode: show all transcriptions",
+    )
+    log_file: str = Field(
+        default="",
+        description="JSONL log file path for structured logging",
+    )
+
+
 class Config(BaseModel):
     """Main configuration."""
 
     audio: AudioConfig = Field(default_factory=AudioConfig)
     stt: STTConfig = Field(default_factory=STTConfig)
     hotkey: HotkeyConfig = Field(default_factory=HotkeyConfig)
-    injection: InjectionConfig = Field(default_factory=InjectionConfig)
+    output: OutputConfig = Field(default_factory=OutputConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
     controller: ControllerConfig = Field(default_factory=ControllerConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     verbose: bool = Field(default=False, description="Enable verbose output")
 
@@ -347,18 +365,18 @@ def _format_toml_value(value: Any) -> str:
         return str(value)
 
 
-def list_config_keys() -> list[tuple[str, str, Any, str]]:
+def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
     """List all config keys with their descriptions and defaults.
 
     Returns:
-        List of (key, type, default, description) tuples
+        List of (key, type, default, description, env_var) tuples
     """
     result = []
     config = Config()
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "hotkey", "injection", "command"):
+        if field_name in ("audio", "stt", "hotkey", "output", "command", "controller", "logging"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -376,9 +394,10 @@ def list_config_keys() -> list[tuple[str, str, Any, str]]:
         ("audio", AudioConfig),
         ("stt", STTConfig),
         ("hotkey", HotkeyConfig),
-        ("injection", InjectionConfig),
+        ("output", OutputConfig),
         ("command", CommandConfig),
         ("controller", ControllerConfig),
+        ("logging", LoggingConfig),
     ]
 
     for section_name, section_class in sections:
@@ -417,30 +436,45 @@ sample_rate = 16000
 channels = 1
 # device = "default"  # Uncomment to specify audio device
 audio_feedback = true  # Play beep on listening mode toggle
+vad = true             # VAD mode (false = push-to-talk)
+silence_ms = 1200      # VAD silence threshold
 
 [stt]
-backend = "faster-whisper"
 model_size = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
-language = "auto"    # auto-detect, or "en", "it", etc.
-device = "auto"      # auto (detect GPU/MLX), cpu, cuda (use --no-accel to force CPU)
+language = "auto"              # auto-detect, or "en", "it", etc.
+device = "auto"                # auto, cpu, cuda
 compute_type = "int8"
 beam_size = 5
+hw_accel = true                # Enable hardware acceleration
 
 [hotkey]
-backend = "auto"
-key = "KEY_SCROLLLOCK"  # evdev key name
+key = "KEY_SCROLLLOCK"  # evdev key name (for PTT mode)
 
-[injection]
-backend = "auto"  # ydotool, wtype, clipboard
-typing_delay_ms = 0
-fallback_to_clipboard = true
-auto_enter = false  # Visual newline only (use --auto-enter to submit automatically)
+[output]
+method = "keyboard"    # keyboard, clipboard, or file
+typing_delay_ms = 5
+auto_enter = false     # Visual newline only
+auto_paste = true      # For clipboard mode
 
 [command]
 enabled = true
-classifier_backend = "auto"  # auto, ollama, keyword
+wake_word = ""         # e.g., "Joshua"
+mode = "transcription" # transcription or command
 ollama_model = "qwen2.5:1.5b"
 ollama_timeout = 5.0
+
+[controller]
+# device = "V012345-Ver---0000 V-tech-USB product"
+
+[controller.keys]
+KEY_ESC = "listening_on"
+KEY_B = "listening_off"
+KEY_UP = "project_next"
+KEY_DOWN = "project_prev"
+
+[logging]
+debug = false
+log_file = ""
 
 verbose = false
 """

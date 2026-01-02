@@ -44,12 +44,7 @@ class VoxtypeApp:
     def __init__(
         self,
         config: Config,
-        use_vad: bool = False,
-        vad_silence_ms: int | None = None,
-        wake_word: str | None = None,
-        debug: bool = False,
         logger: JSONLLogger | None = None,
-        initial_mode: ProcessingMode | str = ProcessingMode.TRANSCRIPTION,
         output_file: str | None = None,
         output_dir: str | None = None,
         projects: list[str] | None = None,
@@ -58,23 +53,19 @@ class VoxtypeApp:
         """Initialize the application.
 
         Args:
-            config: Application configuration.
-            use_vad: If True, use VAD mode instead of push-to-talk.
-            vad_silence_ms: Silence duration in ms to end speech (default 1200).
-            wake_word: Trigger phrase to activate (e.g., "Joshua").
-            debug: If True, show all transcriptions.
+            config: Application configuration (all settings read from config).
             logger: Optional JSONL logger for structured logging.
-            initial_mode: Processing mode - TRANSCRIPTION (fast) or COMMAND (LLM).
             output_file: If set, write transcriptions to this file instead of typing.
             output_dir: Directory for project transcription files.
             projects: List of project IDs for multi-output mode.
             controller_device: Device name for controller (for project switching).
         """
         self.config = config
-        self.use_vad = use_vad
-        self.vad_silence_ms = vad_silence_ms or self.DEFAULT_VAD_SILENCE_MS
-        self.trigger_phrase = wake_word  # Renamed: wake_word -> trigger_phrase
-        self.debug = debug
+        # Read settings from config
+        self.use_vad = config.audio.vad
+        self.vad_silence_ms = config.audio.silence_ms
+        self.trigger_phrase = config.command.wake_word or None
+        self.debug = config.logging.debug
         self.output_file = output_file
         self.output_dir = output_dir
         self.projects = projects or []
@@ -90,10 +81,7 @@ class VoxtypeApp:
         self._controller = None  # Controller listener
 
         # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
-        if isinstance(initial_mode, str):
-            self._processing_mode = ProcessingMode(initial_mode)
-        else:
-            self._processing_mode = initial_mode
+        self._processing_mode = ProcessingMode(config.command.mode)
 
         # Listening state: True = actively listening, False = paused
         self._listening = False
@@ -132,24 +120,29 @@ class VoxtypeApp:
 
     def _create_stt_engine(self) -> STTEngine:
         """Create and load STT engine."""
-        if self.config.stt.backend == "faster-whisper":
-            from voxtype.stt.faster_whisper import FasterWhisperEngine
+        # Auto-detect MLX on Apple Silicon
+        use_mlx = False
+        if sys.platform == "darwin":
+            import platform
+            if platform.machine() == "arm64" and self.config.stt.hw_accel:
+                try:
+                    import mlx_whisper  # noqa: F401
+                    use_mlx = True
+                except ImportError:
+                    pass
 
-            engine = FasterWhisperEngine()
-        elif self.config.stt.backend == "mlx-whisper":
+        if use_mlx:
             from voxtype.stt.mlx_whisper import MLXWhisperEngine
-
             engine = MLXWhisperEngine()
-        else:
-            raise ValueError(f"Unknown STT backend: {self.config.stt.backend}")
-
-        # Determine device string for display
-        if self.config.stt.backend == "mlx-whisper":
             device_str = "GPU (MLX/Metal)"
-        elif self.config.stt.device == "cuda":
-            device_str = "GPU (CUDA)"
         else:
-            device_str = "CPU"
+            from voxtype.stt.faster_whisper import FasterWhisperEngine
+            engine = FasterWhisperEngine()
+            # Determine device string for display
+            if self.config.stt.device == "cuda":
+                device_str = "GPU (CUDA)"
+            else:
+                device_str = "CPU"
 
         self._console.print(f"[dim]Loading STT model {self.config.stt.model_size} on {device_str} (first run may download)...[/]")
 
@@ -170,11 +163,10 @@ class VoxtypeApp:
 
     def _create_hotkey_listener(self) -> HotkeyListener:
         """Create hotkey listener with smart fallback."""
-        backend = self.config.hotkey.backend
         errors: list[str] = []
 
         # Try evdev first on Linux
-        if backend in ("auto", "evdev") and sys.platform == "linux":
+        if sys.platform == "linux":
             try:
                 from voxtype.hotkey.evdev_listener import EvdevHotkeyListener
 
@@ -203,22 +195,21 @@ class VoxtypeApp:
             except Exception as e:
                 errors.append(f"evdev error: {e}")
 
-        # Fallback to pynput
-        if backend in ("auto", "pynput"):
-            try:
-                from voxtype.hotkey.pynput_listener import PynputHotkeyListener
+        # Fallback to pynput (macOS and X11)
+        try:
+            from voxtype.hotkey.pynput_listener import PynputHotkeyListener
 
-                listener = PynputHotkeyListener(self.config.hotkey.key)
-                if listener.is_key_available():
-                    if errors:
-                        self._console.print("[yellow]Using pynput for hotkey detection[/]")
-                    return listener
-                else:
-                    errors.append(f"pynput: key {self.config.hotkey.key} not supported")
-            except ImportError:
-                errors.append("pynput not installed (pip install pynput)")
-            except Exception as e:
-                errors.append(f"pynput error: {e}")
+            listener = PynputHotkeyListener(self.config.hotkey.key)
+            if listener.is_key_available():
+                if errors:
+                    self._console.print("[yellow]Using pynput for hotkey detection[/]")
+                return listener
+            else:
+                errors.append(f"pynput: key {self.config.hotkey.key} not supported")
+        except ImportError:
+            errors.append("pynput not installed (pip install pynput)")
+        except Exception as e:
+            errors.append(f"pynput error: {e}")
 
         # No hotkey backend available
         error_details = "\n  - ".join(errors)
@@ -294,60 +285,37 @@ class VoxtypeApp:
         return None
 
     def _create_injector(self) -> TextInjector:
-        """Create text injector with auto-detection."""
-        import sys
-
-        # File output mode - use FileInjector
-        output_path = self._get_current_output_file()
-        if output_path:
-            from voxtype.injection.file import FileInjector
-            return FileInjector(output_path)
-
+        """Create text injector based on config.output.method."""
         from voxtype.injection.clipboard import ClipboardInjector
 
-        # Platform-specific imports
+        # File output mode (explicit or via output_file/output_dir)
+        output_path = self._get_current_output_file()
+        if output_path or self.config.output.method == "file":
+            from voxtype.injection.file import FileInjector
+            return FileInjector(output_path or "voxtype.txt")
+
+        # Clipboard mode
+        if self.config.output.method == "clipboard":
+            return ClipboardInjector()
+
+        # Keyboard mode - auto-detect best available injector
         if sys.platform == "darwin":
             from voxtype.injection.macos import MacOSInjector
             from voxtype.injection.quartz import QuartzInjector
-        else:
-            from voxtype.injection.wtype import WtypeInjector
-            from voxtype.injection.xdotool import XdotoolInjector
-            from voxtype.injection.ydotool import YdotoolInjector
-            # Check Linux dependencies
-            self._check_linux_dependencies()
 
-        backend = self.config.injection.backend
-
-        if backend != "auto":
-            # Use specific backend
-            if sys.platform == "darwin":
-                injectors = {
-                    "quartz": QuartzInjector,
-                    "macos": MacOSInjector,
-                    "clipboard": ClipboardInjector,
-                }
-            else:
-                injectors = {
-                    "ydotool": YdotoolInjector,
-                    "wtype": WtypeInjector,
-                    "xdotool": XdotoolInjector,
-                    "clipboard": ClipboardInjector,
-                }
-            if backend in injectors:
-                injector = injectors[backend]()
-                if injector.is_available():
-                    return injector
-                self._console.print(f"[yellow]{backend} not available[/]")
-
-        # Auto-detect best available injector
-        # Prefer Quartz for Unicode support, then AppleScript, then clipboard
-        if sys.platform == "darwin":
             candidates = [
                 QuartzInjector(),
                 MacOSInjector(),
                 ClipboardInjector(),
             ]
         else:
+            from voxtype.injection.wtype import WtypeInjector
+            from voxtype.injection.xdotool import XdotoolInjector
+            from voxtype.injection.ydotool import YdotoolInjector
+
+            # Check Linux dependencies
+            self._check_linux_dependencies()
+
             candidates = [
                 YdotoolInjector(),
                 WtypeInjector(),
@@ -904,11 +872,11 @@ class VoxtypeApp:
             if method == "clipboard":
                 success = self._injector.type_text(
                     inject_text,
-                    delay_ms=self.config.injection.typing_delay_ms,
-                    auto_paste=self.config.injection.auto_paste,
-                    auto_enter=self.config.injection.auto_enter,
+                    delay_ms=self.config.output.typing_delay_ms,
+                    auto_paste=self.config.output.auto_paste,
+                    auto_enter=self.config.output.auto_enter,
                 )
-                if success and self.config.injection.auto_paste:
+                if success and self.config.output.auto_paste:
                     pass  # Auto-pasted, no message needed
                 elif success:
                     self._console.print(
@@ -917,12 +885,12 @@ class VoxtypeApp:
             else:
                 success = self._injector.type_text(
                     inject_text,
-                    delay_ms=self.config.injection.typing_delay_ms,
-                    auto_enter=self.config.injection.auto_enter,
+                    delay_ms=self.config.output.typing_delay_ms,
+                    auto_enter=self.config.output.auto_enter,
                 )
 
                 # When auto_enter=false, send visual newline (Alt+Enter) for separation
-                if success and not self.config.injection.auto_enter:
+                if success and not self.config.output.auto_enter:
                     self._injector.send_newline()
 
                 # Beep when file write succeeds (so user knows they can switch project)
@@ -937,22 +905,12 @@ class VoxtypeApp:
                     text=text,
                     method=method,
                     success=success,
-                    auto_enter=self.config.injection.auto_enter,
+                    auto_enter=self.config.output.auto_enter,
                     enter_sent=enter_sent,
                 )
 
             if not success:
-                if self.config.injection.fallback_to_clipboard:
-                    from voxtype.injection.clipboard import ClipboardInjector
-
-                    clipboard = ClipboardInjector()
-                    if clipboard.is_available():
-                        clipboard.type_text(text)
-                        self._console.print(
-                            "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
-                        )
-                else:
-                    self._console.print("[red]Failed to inject text[/]")
+                self._console.print("[red]Failed to inject text[/]")
 
     def _on_vad_audio_chunk(self, chunk) -> None:
         """Process audio chunk through VAD."""

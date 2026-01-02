@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-02
+
+### BREAKING CHANGES
+- **Config section renamed**: `[injection]` → `[output]`
+- **Config key renamed**: `injection.backend` → `output.method` with values `keyboard|clipboard|file`
+- **CLI options changed**:
+  - `--clipboard`, `--keyboard` → `--output keyboard|clipboard|file`
+  - `--mlx`, `--no-accel` → `--hw-accel=true|false`
+  - `--no-commands` → `--commands=true|false`
+  - `--vad/--ptt` → `--vad=true|false`
+
+### Removed
+- **`fallback_to_clipboard`**: No longer needed, output method is explicit
+- **`--mlx` flag**: MLX is auto-detected on Apple Silicon
+
+### Added
+- **All CLI options now in config**:
+  - `audio.vad` - VAD mode (true) or push-to-talk (false)
+  - `audio.silence_ms` - VAD silence duration in milliseconds
+  - `command.wake_word` - Wake word to activate
+  - `command.mode` - Processing mode (transcription|command)
+  - `logging.debug` - Debug mode
+  - `logging.log_file` - JSONL log file path
+  - `stt.hw_accel` - Hardware acceleration (auto-detect)
+- **New `[logging]` config section** for debug and log_file
+
+### Changed
+- **Simplified output method selection**: Choose between `keyboard`, `clipboard`, or `file`
+  - Internal backend (ydotool/wtype/xdotool/quartz/macos) is auto-detected
+- **Boolean flags are explicit**: Use `--flag=true` or `--flag=false`
+
+### Migration
+Delete your existing config file and run `voxtype init`:
+```bash
+rm ~/.config/voxtype/config.toml
+voxtype init
+```
+
 ## [1.7.2] - 2026-01-02
 
 ### Fixed
