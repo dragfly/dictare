@@ -316,8 +316,20 @@ def _write_config(config_dict: dict, config_path: Path) -> None:
         if isinstance(values, dict):
             lines.append(f"[{section}]\n")
             for key, value in values.items():
-                lines.append(f"{key} = {_format_toml_value(value)}\n")
+                if isinstance(value, dict):
+                    # Skip nested dicts here, handle them as subsections
+                    pass
+                else:
+                    lines.append(f"{key} = {_format_toml_value(value)}\n")
             lines.append("\n")
+
+            # Handle nested dicts as subsections (e.g., controller.keys)
+            for key, value in values.items():
+                if isinstance(value, dict):
+                    lines.append(f"[{section}.{key}]\n")
+                    for subkey, subvalue in value.items():
+                        lines.append(f"{subkey} = {_format_toml_value(subvalue)}\n")
+                    lines.append("\n")
 
     with open(config_path, "w") as f:
         f.writelines(lines)
