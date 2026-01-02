@@ -753,6 +753,112 @@ def transcribe(
             print("\n[Cancelled]", file=sys.stderr)
         raise typer.Exit(1)
 
+@app.command()
+def devices(
+    set_hotkey: Annotated[
+        bool,
+        typer.Option("--set-hotkey", "-k", help="Set selected device as hotkey device"),
+    ] = False,
+    set_controller: Annotated[
+        bool,
+        typer.Option("--set-controller", "-c", help="Set selected device as controller"),
+    ] = False,
+) -> None:
+    """List input devices and optionally configure hotkey/controller device.
+
+    Shows all input devices, prioritizing keyboards at the top.
+    Use --set-hotkey or --set-controller to save selection to config.
+
+    Example:
+        voxtype devices                    # Just list devices
+        voxtype devices --set-hotkey       # Select device for hotkey
+        voxtype devices --set-controller   # Select device for controller
+    """
+    if sys.platform != "linux":
+        console.print("[yellow]Device selection is only available on Linux[/]")
+        raise typer.Exit(1)
+
+    try:
+        import evdev
+    except ImportError:
+        console.print("[red]evdev not installed[/]")
+        console.print("Install with: [cyan]pip install evdev[/]")
+        raise typer.Exit(1)
+
+    # Collect all devices with their info
+    devices_info = []
+    for path in evdev.list_devices():
+        try:
+            device = evdev.InputDevice(path)
+            caps = device.capabilities().get(evdev.ecodes.EV_KEY, [])
+            has_scroll = evdev.ecodes.KEY_SCROLLLOCK in caps
+            has_keys = len(caps) > 0
+            name = device.name
+            is_keyboard = "keyboard" in name.lower()
+            device.close()
+
+            devices_info.append({
+                "path": path,
+                "name": name,
+                "has_keys": has_keys,
+                "has_scroll": has_scroll,
+                "is_keyboard": is_keyboard,
+            })
+        except Exception:
+            continue
+
+    # Sort: keyboards first, then by name
+    devices_info.sort(key=lambda d: (not d["is_keyboard"], d["name"].lower()))
+
+    if not devices_info:
+        console.print("[yellow]No input devices found[/]")
+        raise typer.Exit(1)
+
+    # Display table
+    table = Table(title="Input Devices", show_header=True, header_style="bold")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Device Name", style="cyan")
+    table.add_column("Keys", justify="center", width=6)
+    table.add_column("ScrollLock", justify="center", width=10)
+    table.add_column("Type", width=12)
+
+    for i, dev in enumerate(devices_info, 1):
+        keys_icon = "[green]✓[/]" if dev["has_keys"] else "[dim]—[/]"
+        scroll_icon = "[green]✓[/]" if dev["has_scroll"] else "[dim]—[/]"
+        dev_type = "[cyan]Keyboard[/]" if dev["is_keyboard"] else "[dim]Other[/]"
+
+        table.add_row(str(i), dev["name"], keys_icon, scroll_icon, dev_type)
+
+    console.print(table)
+
+    # If setting hotkey or controller, prompt for selection
+    if set_hotkey or set_controller:
+        console.print()
+        target = "hotkey" if set_hotkey else "controller"
+        prompt = f"Select device for {target} [1-{len(devices_info)}]"
+
+        try:
+            choice = typer.prompt(prompt, type=int)
+            if choice < 1 or choice > len(devices_info):
+                console.print("[red]Invalid selection[/]")
+                raise typer.Exit(1)
+
+            selected = devices_info[choice - 1]
+
+            # Save to config
+            if set_hotkey:
+                set_config_value("hotkey.device", selected["name"])
+                console.print(f"[green]✓[/] Hotkey device set to: [cyan]{selected['name']}[/]")
+            else:
+                set_config_value("controller.device", selected["name"])
+                console.print(f"[green]✓[/] Controller device set to: [cyan]{selected['name']}[/]")
+
+        except (ValueError, KeyboardInterrupt):
+            console.print("\n[yellow]Cancelled[/]")
+            raise typer.Exit(0)
+    else:
+        console.print("\n[dim]Use --set-hotkey or --set-controller to configure a device[/]")
+
 def main() -> None:
     """Entry point for the CLI."""
     app()

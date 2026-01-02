@@ -21,12 +21,14 @@ class EvdevHotkeyListener(HotkeyListener):
         self,
         key_name: str = "KEY_SCROLLLOCK",
         exclude_device: str | None = None,
+        target_device: str | None = None,
     ) -> None:
         """Initialize evdev hotkey listener.
 
         Args:
             key_name: evdev key name (e.g., KEY_SCROLLLOCK, KEY_F12).
             exclude_device: Device name substring to exclude (e.g., controller device).
+            target_device: Device name substring to prefer (e.g., specific keyboard).
 
         Raises:
             ImportError: If evdev is not installed.
@@ -36,6 +38,7 @@ class EvdevHotkeyListener(HotkeyListener):
 
         self.key_name = key_name
         self.exclude_device = exclude_device
+        self.target_device = target_device
         self._running = False
         self._thread: threading.Thread | None = None
         self._device: evdev.InputDevice | None = None
@@ -44,8 +47,10 @@ class EvdevHotkeyListener(HotkeyListener):
     def _find_keyboard_device(self):
         """Find a keyboard device that has the target key.
 
-        Prioritizes devices with 'keyboard' in the name to avoid selecting
-        presenters, clickers, or other input devices that happen to have keys.
+        Prioritizes:
+        1. User-specified target_device (if set)
+        2. Devices with 'keyboard' in the name
+        3. Any device with the target key
         """
         import evdev
 
@@ -63,6 +68,7 @@ class EvdevHotkeyListener(HotkeyListener):
         if self.exclude_device:
             exclude_keywords.append(self.exclude_device.lower())
 
+        user_specified = None     # Priority 0: user-specified device
         keyboard_with_key = None  # Priority 1: has "keyboard" in name + has target key
         any_with_key = None       # Priority 2: has target key (no "keyboard" in name)
         devices = []
@@ -74,9 +80,11 @@ class EvdevHotkeyListener(HotkeyListener):
 
                 name_lower = device.name.lower()
 
-                # Skip excluded devices
+                # Skip excluded devices (unless user specifically requested it)
                 if any(kw in name_lower for kw in exclude_keywords):
-                    continue
+                    # But if user specified this device, allow it
+                    if not (self.target_device and self.target_device.lower() in name_lower):
+                        continue
 
                 # Check if device has EV_KEY capability
                 capabilities = device.capabilities()
@@ -87,16 +95,21 @@ class EvdevHotkeyListener(HotkeyListener):
 
                 # Check if device has the target key
                 if target_key in key_caps:
-                    if "keyboard" in name_lower:
+                    # Priority 0: user-specified device
+                    if self.target_device and self.target_device.lower() in name_lower:
+                        user_specified = device
+                        break  # User knows what they want
+                    elif "keyboard" in name_lower:
                         # Priority 1: real keyboard with the key
                         keyboard_with_key = device
-                        break  # Found the best option, stop searching
+                        if not self.target_device:
+                            break  # Found the best auto option
                     elif any_with_key is None:
                         # Priority 2: first device with the key (keep looking for keyboard)
                         any_with_key = device
 
             # Select best available device
-            selected_device = keyboard_with_key or any_with_key
+            selected_device = user_specified or keyboard_with_key or any_with_key
 
             # If no device found with target key, try fallback (first keyboard)
             if selected_device is None:

@@ -62,7 +62,11 @@ class HotkeyConfig(BaseModel):
 
     key: str = Field(
         default="KEY_SCROLLLOCK",
-        description="Push-to-talk key (evdev key name)",
+        description="Toggle listening key (evdev key name)",
+    )
+    device: str = Field(
+        default="",
+        description="Keyboard device name for hotkey (empty = auto-detect)",
     )
 
 class OutputConfig(BaseModel):
