@@ -178,11 +178,16 @@ def _format_status_panel(
     output_file: str | None = None, projects: list[str] | None = None
 ) -> Panel:
     """Create the status panel for the Ready message."""
-    # Device string
+    # Device string - check what will ACTUALLY be used
     if config.stt.backend == "mlx-whisper":
         device_str = "[magenta]GPU (MLX/Metal)[/]"
     elif config.stt.device == "cuda":
-        device_str = "[magenta]GPU (CUDA)[/]"
+        # Check if cuDNN is actually available
+        from voxtype.cuda_setup import _find_cudnn_path
+        if _find_cudnn_path():
+            device_str = "[magenta]GPU (CUDA)[/]"
+        else:
+            device_str = "CPU [dim](GPU detected, cuDNN missing)[/]"
     else:
         device_str = "CPU"
 
