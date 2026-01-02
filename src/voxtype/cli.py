@@ -125,19 +125,25 @@ def _apply_cli_overrides(
     model: str | None,
     key: str | None,
     language: str | None,
-    auto_enter: bool,
-    clipboard: bool,
-    mlx: bool,
+    auto_enter: bool | None,
+    output: str | None,
     max_duration: int | None,
-    verbose: bool,
-    no_commands: bool,
+    verbose: bool | None,
+    commands: bool | None,
     typing_delay: int | None,
-    keyboard: bool,
     ollama_model: str | None,
+    vad: bool | None,
+    silence_ms: int | None,
+    wake_word: str | None,
+    mode: str | None,
+    debug: bool | None,
+    log_file: str | None,
+    audio_feedback: bool | None,
+    hw_accel: bool | None,
 ) -> None:
     """Apply CLI options to config.
 
-    Note: cpu_only is handled earlier in _auto_detect_acceleration()
+    Only overrides if value is explicitly provided (not None for optional, not default for bool).
     """
     if model:
         config.stt.model_size = model
@@ -145,58 +151,67 @@ def _apply_cli_overrides(
         config.hotkey.key = key
     if language:
         config.stt.language = language
-    if auto_enter:
-        config.injection.auto_enter = True
-    if clipboard:
-        config.injection.backend = "clipboard"
-    if mlx:
-        config.stt.backend = "mlx-whisper"
+    if auto_enter is not None:
+        config.output.auto_enter = auto_enter
+    if output:
+        config.output.method = output
     if max_duration:
         config.audio.max_duration = max_duration
-    if verbose:
+    if verbose is not None:
         config.verbose = verbose
-    if no_commands:
-        config.command.enabled = False
+    if commands is not None:
+        config.command.enabled = commands
     if typing_delay is not None:
-        config.injection.typing_delay_ms = typing_delay
-    if keyboard:
-        if sys.platform == "darwin":
-            config.injection.backend = "macos"
-        else:
-            config.injection.backend = "ydotool"
+        config.output.typing_delay_ms = typing_delay
     if ollama_model:
         config.command.ollama_model = ollama_model
+    if vad is not None:
+        config.audio.vad = vad
+    if silence_ms is not None:
+        config.audio.silence_ms = silence_ms
+    if wake_word is not None:
+        config.command.wake_word = wake_word
+    if mode:
+        config.command.mode = mode
+    if debug is not None:
+        config.logging.debug = debug
+    if log_file:
+        config.logging.log_file = log_file
+    if audio_feedback is not None:
+        config.audio.audio_feedback = audio_feedback
+    if hw_accel is not None:
+        config.stt.hw_accel = hw_accel
 
 def _format_status_panel(
-    config, vad: bool, mode: str, wake_word: str | None,
-    output_file: str | None = None, projects: list[str] | None = None
+    config, output_file: str | None = None, projects: list[str] | None = None
 ) -> Panel:
     """Create the status panel for the Ready message."""
     # Device string - check what will ACTUALLY be used
-    if config.stt.backend == "mlx-whisper":
-        device_str = "[magenta]GPU (MLX/Metal)[/]"
-    elif config.stt.device == "cuda":
+    if config.stt.device == "cuda":
         # Check if cuDNN is actually available
         from voxtype.cuda_setup import _find_cudnn_path
         if _find_cudnn_path():
             device_str = "[magenta]GPU (CUDA)[/]"
         else:
             device_str = "CPU [dim](GPU detected, cuDNN missing)[/]"
-    else:
+    elif not config.stt.hw_accel:
         device_str = "CPU"
+    else:
+        device_str = "CPU"  # Auto-detect didn't find acceleration
 
-    # Output mode - use config, not CLI flag
+    # Output mode
     if projects:
         output_str = f"[cyan]projects[/] ({', '.join(projects)})"
     elif output_file:
         output_str = f"[cyan]file[/] ({output_file})"
-    elif config.injection.backend == "clipboard":
+    elif config.output.method == "clipboard":
         output_str = "[yellow]clipboard[/] (Ctrl+V to paste)"
     else:
-        output_str = config.injection.backend
-    mode_str = "[cyan]transcription[/] (fast)" if mode == "transcription" else "[yellow]command[/] (LLM)"
-    input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
-    wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
+        output_str = config.output.method
+
+    mode_str = "[cyan]transcription[/] (fast)" if config.command.mode == "transcription" else "[yellow]command[/] (LLM)"
+    input_mode = "[cyan]VAD[/] (auto-detect speech)" if config.audio.vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
+    wake_str = f"Wake word: [cyan]{config.command.wake_word}[/]\n" if config.command.wake_word else ""
 
     # Format the hotkey nicely
     hotkey = config.hotkey.key
@@ -221,31 +236,23 @@ def _format_status_panel(
         border_style="green",
     )
 
-def _create_logger(
-    log_file: Path | None,
-    config,
-    vad: bool,
-    wake_word: str | None,
-    debug: bool,
-    silence_ms: int | None,
-):
-    """Create JSONL logger if log file is specified."""
-    if not log_file:
+def _create_logger(config):
+    """Create JSONL logger if log file is specified in config."""
+    if not config.logging.log_file:
         return None
 
     from voxtype.logging.jsonl import JSONLLogger
 
     log_params = {
-        "input_mode": "vad" if vad else "push_to_talk",
-        "trigger_phrase": wake_word,
-        "debug": debug,
-        "silence_ms": silence_ms,
+        "input_mode": "vad" if config.audio.vad else "push_to_talk",
+        "trigger_phrase": config.command.wake_word,
+        "debug": config.logging.debug,
+        "silence_ms": config.audio.silence_ms,
         "stt_model": config.stt.model_size,
-        "stt_backend": config.stt.backend,
         "stt_language": config.stt.language,
-        "injection_backend": config.injection.backend,
+        "output_method": config.output.method,
     }
-    return JSONLLogger(log_file, __version__, params=log_params)
+    return JSONLLogger(Path(config.logging.log_file), __version__, params=log_params)
 
 @app.callback()
 def main_callback(
@@ -259,101 +266,104 @@ def main_callback(
 
 @app.command()
 def run(
+    # Config file
     config_file: Annotated[
         Optional[Path],
         typer.Option("--config", "-c", help="Path to config file"),
     ] = None,
+    # STT options
     model: Annotated[
         Optional[str],
-        typer.Option("--model", "-m", help="Whisper model size (tiny/base/small/medium/large-v3)"),
-    ] = None,
-    key: Annotated[
-        Optional[str],
-        typer.Option("--key", "-k", help="Push-to-talk key (e.g., KEY_SCROLLLOCK)"),
+        typer.Option("--model", "-m", help="Whisper model (tiny/base/small/medium/large-v3/large-v3-turbo)"),
     ] = None,
     language: Annotated[
         Optional[str],
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
-    auto_enter: Annotated[
-        bool,
-        typer.Option("--auto-enter", help="Auto-submit at end of phrase"),
-    ] = False,
-    clipboard: Annotated[
-        bool,
-        typer.Option("--clipboard", "-C", help="Use clipboard instead of typing (for accented chars)"),
-    ] = False,
-    no_accel: Annotated[
-        bool,
-        typer.Option("--no-accel", help="Disable hardware acceleration (force CPU)"),
-    ] = False,
-    mlx: Annotated[
-        bool,
-        typer.Option("--mlx", help="Force MLX backend (Apple Silicon)"),
-    ] = False,
-    max_duration: Annotated[
-        Optional[int],
-        typer.Option("--max-duration", "-d", help="Max recording duration in seconds (default 60)"),
+    hw_accel: Annotated[
+        Optional[bool],
+        typer.Option("--hw-accel", help="Hardware acceleration (true=auto-detect, false=CPU only)"),
     ] = None,
+    # Input options
     vad: Annotated[
-        bool,
-        typer.Option("--vad/--ptt", help="VAD mode (default) or push-to-talk mode"),
-    ] = True,
+        Optional[bool],
+        typer.Option("--vad", help="VAD mode (true) or push-to-talk (false)"),
+    ] = None,
     silence_ms: Annotated[
         Optional[int],
-        typer.Option("--silence-ms", "-s", help="VAD silence duration to end speech (default 1200)"),
+        typer.Option("--silence-ms", "-s", help="VAD silence duration to end speech (ms)"),
     ] = None,
+    key: Annotated[
+        Optional[str],
+        typer.Option("--key", "-k", help="Push-to-talk key (e.g., KEY_SCROLLLOCK)"),
+    ] = None,
+    max_duration: Annotated[
+        Optional[int],
+        typer.Option("--max-duration", "-d", help="Max recording duration in seconds"),
+    ] = None,
+    # Output options
+    output: Annotated[
+        Optional[str],
+        typer.Option("--output", "-o", help="Output method: keyboard, clipboard, or file"),
+    ] = None,
+    output_file: Annotated[
+        Optional[Path],
+        typer.Option("--output-file", "-F", help="Write transcriptions to a single file"),
+    ] = None,
+    output_dir: Annotated[
+        Optional[Path],
+        typer.Option("--output-dir", "-D", help="Directory for project files (<project>.transcription)"),
+    ] = None,
+    projects: Annotated[
+        Optional[str],
+        typer.Option("--projects", "-P", help="Project IDs comma-separated"),
+    ] = None,
+    typing_delay: Annotated[
+        Optional[int],
+        typer.Option("--typing-delay", help="Delay between keystrokes in ms"),
+    ] = None,
+    auto_enter: Annotated[
+        Optional[bool],
+        typer.Option("--auto-enter", help="Auto-submit after typing (true/false)"),
+    ] = None,
+    # Command options
     wake_word: Annotated[
         Optional[str],
         typer.Option("--wake-word", "-w", help="Wake word to activate (e.g., 'Joshua')"),
     ] = None,
-    debug: Annotated[
-        bool,
-        typer.Option("--debug", help="Debug mode: show all transcriptions but only paste with wake word"),
-    ] = False,
-    no_commands: Annotated[
-        bool,
-        typer.Option("--no-commands", help="Disable voice command processing"),
-    ] = False,
     mode: Annotated[
-        str,
-        typer.Option("--mode", "-M", help="Mode: 'transcription' (fast, no LLM) or 'command' (LLM for commands)"),
-    ] = "transcription",
-    log_file: Annotated[
-        Optional[Path],
-        typer.Option("--log-file", "-L", help="JSONL log file for structured logging"),
+        Optional[str],
+        typer.Option("--mode", "-M", help="Mode: transcription or command"),
     ] = None,
-    verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Enable verbose output"),
-    ] = False,
-    typing_delay: Annotated[
-        Optional[int],
-        typer.Option("--typing-delay", help="Delay between keystrokes in ms (for keyboard mode)"),
+    commands: Annotated[
+        Optional[bool],
+        typer.Option("--commands", help="Enable voice commands (true/false)"),
     ] = None,
-    keyboard: Annotated[
-        bool,
-        typer.Option("--keyboard", "-K", help="Use keyboard typing instead of clipboard (may crash some apps)"),
-    ] = False,
     ollama_model: Annotated[
         Optional[str],
-        typer.Option("--ollama-model", "-O", help="Ollama model for command processing (default: qwen2.5:1.5b)"),
+        typer.Option("--ollama-model", "-O", help="Ollama model for command processing"),
     ] = None,
-    output_file: Annotated[
-        Optional[Path],
-        typer.Option("--output-file", "-F", help="Write transcriptions to a single file instead of typing"),
-    ] = None,
-    output_dir: Annotated[
-        Optional[Path],
-        typer.Option("--output-dir", "-D", help="Directory for project transcription files (<project>.transcription)"),
-    ] = None,
-    projects: Annotated[
-        Optional[str],
-        typer.Option("--projects", "-P", help="Project IDs comma-separated (e.g., pippo,pluto,paperino)"),
-    ] = None,
+    # Controller
     controller: Annotated[
         Optional[str],
         typer.Option("--controller", help="Controller device name for project switching"),
+    ] = None,
+    # Debug/logging options
+    verbose: Annotated[
+        Optional[bool],
+        typer.Option("--verbose", "-v", help="Verbose output (true/false)"),
+    ] = None,
+    debug: Annotated[
+        Optional[bool],
+        typer.Option("--debug", help="Debug mode (true/false)"),
+    ] = None,
+    log_file: Annotated[
+        Optional[str],
+        typer.Option("--log-file", "-L", help="JSONL log file path"),
+    ] = None,
+    audio_feedback: Annotated[
+        Optional[bool],
+        typer.Option("--audio-feedback", help="Play beep sounds (true/false)"),
     ] = None,
 ) -> None:
     """Start voxtype in push-to-talk or VAD mode.
@@ -363,36 +373,42 @@ def run(
     """
     config = load_config(config_file)
 
-    # Auto-detect hardware acceleration (unless --no-accel)
-    _auto_detect_acceleration(config, cpu_only=no_accel)
-
-    # Auto-detect hotkey based on platform (if using default)
-    if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
-        # macOS doesn't have ScrollLock, use Right Command instead
-        config.hotkey.key = "KEY_RIGHTMETA"
-
-    # Override config with CLI options
+    # Apply CLI overrides first (so hw_accel is set before auto-detect)
     _apply_cli_overrides(
         config,
         model=model,
         key=key,
         language=language,
         auto_enter=auto_enter,
-        clipboard=clipboard,
-        mlx=mlx,
+        output=output,
         max_duration=max_duration,
         verbose=verbose,
-        no_commands=no_commands,
+        commands=commands,
         typing_delay=typing_delay,
-        keyboard=keyboard,
         ollama_model=ollama_model,
+        vad=vad,
+        silence_ms=silence_ms,
+        wake_word=wake_word,
+        mode=mode,
+        debug=debug,
+        log_file=log_file,
+        audio_feedback=audio_feedback,
+        hw_accel=hw_accel,
     )
+
+    # Auto-detect hardware acceleration (unless hw_accel=false)
+    _auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
+
+    # Auto-detect hotkey based on platform (if using default)
+    if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
+        # macOS doesn't have ScrollLock, use Right Command instead
+        config.hotkey.key = "KEY_RIGHTMETA"
 
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
 
     # Create JSONL logger if requested
-    logger = _create_logger(log_file, config, vad, wake_word, debug, silence_ms)
+    logger = _create_logger(config)
 
     # Handle projects mode - parse comma-separated string
     project_list = [p.strip() for p in projects.split(",")] if projects else None
@@ -409,19 +425,14 @@ def run(
 
     voxtypeapp = VoxtypeApp(
         config,
-        use_vad=vad,
-        vad_silence_ms=silence_ms,
-        wake_word=wake_word,
-        debug=debug,
         logger=logger,
-        initial_mode=mode,
         output_file=str(output_file) if output_file else None,
         output_dir=output_dir_str,
         projects=project_list,
         controller_device=controller_device,
     )
 
-    console.print(_format_status_panel(config, vad, mode, wake_word, str(output_file) if output_file else None, project_list))
+    console.print(_format_status_panel(config, str(output_file) if output_file else None, project_list))
 
     try:
         voxtypeapp.run()
@@ -657,14 +668,10 @@ def transcribe(
         Optional[str],
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
-    no_accel: Annotated[
-        bool,
-        typer.Option("--no-accel", help="Disable hardware acceleration (force CPU)"),
-    ] = False,
-    mlx: Annotated[
-        bool,
-        typer.Option("--mlx", help="Force MLX backend (Apple Silicon)"),
-    ] = False,
+    hw_accel: Annotated[
+        Optional[bool],
+        typer.Option("--hw-accel", help="Hardware acceleration (true=auto-detect, false=CPU only)"),
+    ] = None,
     silence_ms: Annotated[
         int,
         typer.Option("--silence-ms", "-s", help="Silence duration to end recording (ms)"),
@@ -673,7 +680,7 @@ def transcribe(
         int,
         typer.Option("--max-duration", "-d", help="Max recording duration in seconds"),
     ] = 60,
-    output: Annotated[
+    output_file: Annotated[
         Optional[Path],
         typer.Option("--output", "-o", help="Output file (default: stdout)"),
     ] = None,
@@ -701,6 +708,10 @@ def transcribe(
 
     config = load_config(config_file)
 
+    # Apply CLI override for hw_accel
+    if hw_accel is not None:
+        config.stt.hw_accel = hw_accel
+
     # Suppress progress bars and loading messages unless verbose
     # Redirect stderr during model loading to suppress progress bars
     if not quiet:
@@ -711,53 +722,23 @@ def transcribe(
     if not os.environ.get("VOXTYPE_VERBOSE"):
         sys.stderr = io.StringIO()
 
-    # Positive flag for readability
-    use_accel = not no_accel
-
     try:
-        # Auto-detect hardware acceleration
-        if use_accel:
-            import platform
-            if sys.platform == "darwin" and platform.machine() == "arm64":
-                try:
-                    import mlx_whisper  # noqa: F401
-                    config.stt.backend = "mlx-whisper"
-                except ImportError:
-                    pass
-            elif sys.platform == "linux":
-                try:
-                    import ctranslate2
-                    cuda_device_count = ctranslate2.get_cuda_device_count()
-                    if cuda_device_count > 0:
-                        config.stt.device = "cuda"
-                        config.stt.compute_type = "float16"
-                        _setup_cuda_library_path()
-                except (ImportError, RuntimeError, AttributeError):
-                    pass
-        else:
-            # Force CPU mode
-            config.stt.device = "cpu"
-            config.stt.compute_type = "int8"
+        # Auto-detect hardware acceleration (unless hw_accel=false)
+        _auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
 
         # Apply CLI overrides
         if model:
             config.stt.model_size = model
         if language:
             config.stt.language = language
-        if mlx and use_accel:
-            config.stt.backend = "mlx-whisper"
 
         # Create STT engine
-        if config.stt.backend == "faster-whisper":
-            from voxtype.stt.faster_whisper import FasterWhisperEngine
-            stt_engine = FasterWhisperEngine()
-        elif config.stt.backend == "mlx-whisper":
+        if getattr(config.stt, "backend", "faster-whisper") == "mlx-whisper":
             from voxtype.stt.mlx_whisper import MLXWhisperEngine
             stt_engine = MLXWhisperEngine()
         else:
-            sys.stderr = old_stderr
-            console.print(f"[red]Unknown STT backend:[/] {config.stt.backend}", err=True)
-            raise typer.Exit(1)
+            from voxtype.stt.faster_whisper import FasterWhisperEngine
+            stt_engine = FasterWhisperEngine()
 
         stt_engine.load_model(
             config.stt.model_size,
@@ -785,10 +766,10 @@ def transcribe(
             # Show what was transcribed on stderr
             print(f"\n> {text}\n", file=sys.stderr)
 
-        if output:
-            output.write_text(text)
+        if output_file:
+            output_file.write_text(text)
             if not quiet:
-                print(f"[Saved to {output}]", file=sys.stderr)
+                print(f"[Saved to {output_file}]", file=sys.stderr)
         else:
             # Raw output to stdout for piping
             print(text, end="")
