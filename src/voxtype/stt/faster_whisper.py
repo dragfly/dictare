@@ -59,6 +59,10 @@ def _is_model_cached(model_size: str) -> bool:
 def _download_model_with_progress(model_size: str, console=None) -> str:
     """Download model with progress bar, return local path."""
     from huggingface_hub import snapshot_download
+    from huggingface_hub.utils import (
+        HfHubHTTPError,
+        RepositoryNotFoundError,
+    )
     from rich.progress import (
         BarColumn,
         DownloadColumn,
@@ -72,33 +76,71 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
     size_mb = _MODEL_SIZES_MB.get(model_size, "?")
 
     if console:
-        console.print(f"[cyan]Downloading model {model_size} (~{size_mb} MB)...[/]")
+        console.print(f"[cyan]Downloading Whisper model '{model_size}' (~{size_mb} MB)...[/]")
+        console.print(f"[dim]Source: huggingface.co/{repo_id}[/]")
 
-    # Download with rich progress bar
-    with Progress(
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(),
-        DownloadColumn(),
-        TransferSpeedColumn(),
-        TimeRemainingColumn(),
-        console=console,
-        transient=True,
-    ) as progress:
-        # huggingface_hub handles its own progress, but we show a wrapper
-        task = progress.add_task(f"Downloading {model_size}", total=None)
+    try:
+        # Download with rich progress bar
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+            transient=True,
+        ) as progress:
+            task = progress.add_task(f"Downloading {model_size}", total=None)
 
-        local_path = snapshot_download(
-            repo_id,
-            local_files_only=False,
-            token=False,  # Public repos don't need auth
-        )
+            local_path = snapshot_download(
+                repo_id,
+                local_files_only=False,
+                token=False,  # Public repos - no auth needed
+            )
 
-        progress.update(task, completed=True)
+            progress.update(task, completed=True)
 
-    if console:
-        console.print(f"[green]Model downloaded to cache[/]")
+        if console:
+            console.print(f"[green]Model downloaded successfully[/]")
 
-    return local_path
+        return local_path
+
+    except RepositoryNotFoundError as e:
+        if console:
+            console.print(f"\n[red bold]Download failed: Model not found[/]")
+            console.print(f"[yellow]Repository: {repo_id}[/]")
+            if "401" in str(e) or "Unauthorized" in str(e):
+                console.print("\n[yellow]This may be caused by an invalid Hugging Face token.[/]")
+                console.print("[dim]Try removing cached credentials:[/]")
+                console.print("[cyan]  rm -f ~/.cache/huggingface/token ~/.huggingface/token[/]")
+            else:
+                console.print(f"\n[dim]Error: {e}[/]")
+        raise RuntimeError(f"Model '{model_size}' not found on Hugging Face") from e
+
+    except HfHubHTTPError as e:
+        if console:
+            console.print(f"\n[red bold]Download failed: Network error[/]")
+            if "401" in str(e) or "Unauthorized" in str(e):
+                console.print("\n[yellow]Authentication error detected.[/]")
+                console.print("[dim]The Whisper models are public and don't require login.[/]")
+                console.print("[dim]You may have an expired/invalid token cached. Try:[/]")
+                console.print("[cyan]  rm -f ~/.cache/huggingface/token ~/.huggingface/token[/]")
+            elif "403" in str(e):
+                console.print("\n[yellow]Access denied. The model may require acceptance of terms.[/]")
+                console.print(f"[dim]Visit: https://huggingface.co/{repo_id}[/]")
+            else:
+                console.print(f"\n[dim]Error: {e}[/]")
+        raise RuntimeError(f"Failed to download model '{model_size}'") from e
+
+    except Exception as e:
+        if console:
+            console.print(f"\n[red bold]Download failed[/]")
+            console.print(f"[dim]Error: {e}[/]")
+            console.print("\n[yellow]Troubleshooting:[/]")
+            console.print("[dim]1. Check your internet connection[/]")
+            console.print("[dim]2. Try again in a few minutes (Hugging Face may be busy)[/]")
+            console.print("[dim]3. Clear HF cache: rm -rf ~/.cache/huggingface/hub/models--Systran--*[/]")
+        raise RuntimeError(f"Failed to download model '{model_size}'") from e
 
 class FasterWhisperEngine(STTEngine):
     """STT engine using faster-whisper (CTranslate2-based)."""
