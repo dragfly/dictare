@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-01-02
+
+### Changed
+- **Hardware acceleration is now auto-detected by default** - CUDA on Linux, MLX on macOS
+- **New `--no-accel` flag** replaces `--gpu` - use to force CPU mode
+- **Config `stt.device` default**: Changed from `"cpu"` to `"auto"`
+- **Model download progress bar**: Shows download progress when fetching Whisper models
+
+### Removed
+- **`--gpu/-g` flag**: No longer needed since GPU is auto-detected (use `--no-accel` to disable)
+
 ## [1.4.4] - 2026-01-02
 
 ### Added
