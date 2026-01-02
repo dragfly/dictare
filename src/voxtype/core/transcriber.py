@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import sys
 import threading
 import time
@@ -49,7 +50,16 @@ class OneShotTranscriber:
         self._audio_data: NDArray[np.float32] | None = None
         self._speech_started = False
         self._done = threading.Event()
+        self._cancelled = threading.Event()
         self._start_time: float = 0
+        self._audio_capture: AudioCapture | None = None
+
+    def _signal_handler(self, signum: int, frame) -> None:
+        """Handle SIGINT to cleanly stop recording."""
+        self._cancelled.set()
+        self._done.set()
+        if self._audio_capture:
+            self._audio_capture.stop_streaming()
 
     def record_and_transcribe(self) -> str:
         """Record audio with VAD and transcribe.
@@ -59,59 +69,71 @@ class OneShotTranscriber:
         Returns:
             Transcribed text.
         """
-        # Create components
-        audio_capture = AudioCapture(
-            sample_rate=self.config.audio.sample_rate,
-            channels=self.config.audio.channels,
-            device=self.config.audio.device,
-        )
-
-        vad = SileroVAD(
-            threshold=0.5,
-            neg_threshold=0.35,
-            min_silence_ms=self.silence_ms,
-            min_speech_ms=250,
-            sample_rate=self.config.audio.sample_rate,
-        )
-
-        streaming_vad = StreamingVAD(
-            vad=vad,
-            on_speech_start=self._on_speech_start,
-            on_speech_end=self._on_speech_end,
-        )
-
-        # Start streaming audio through VAD
-        print("[Waiting for speech...]", file=sys.stderr)
-        self._start_time = time.time()
-
-        audio_capture.start_streaming(streaming_vad.process_chunk)
+        # Set up signal handler for clean Ctrl+C
+        old_handler = signal.signal(signal.SIGINT, self._signal_handler)
 
         try:
+            # Create components
+            self._audio_capture = AudioCapture(
+                sample_rate=self.config.audio.sample_rate,
+                channels=self.config.audio.channels,
+                device=self.config.audio.device,
+            )
+
+            vad = SileroVAD(
+                threshold=0.5,
+                neg_threshold=0.35,
+                min_silence_ms=self.silence_ms,
+                min_speech_ms=250,
+                sample_rate=self.config.audio.sample_rate,
+            )
+
+            streaming_vad = StreamingVAD(
+                vad=vad,
+                on_speech_start=self._on_speech_start,
+                on_speech_end=self._on_speech_end,
+            )
+
+            # Start streaming audio through VAD
+            print("[Waiting for speech...]", file=sys.stderr)
+            self._start_time = time.time()
+
+            self._audio_capture.start_streaming(streaming_vad.process_chunk)
+
             # Wait for speech to end or timeout
-            while not self._done.is_set():
+            while not self._done.is_set() and not self._cancelled.is_set():
                 elapsed = time.time() - self._start_time
                 if elapsed > self.max_duration:
                     print(f"\n[Max duration {self.max_duration}s reached]", file=sys.stderr)
                     streaming_vad.flush()
                     break
-                time.sleep(0.05)
-        except KeyboardInterrupt:
-            print("\n[Cancelled]", file=sys.stderr)
-            streaming_vad.flush()
+                # Use wait with timeout instead of sleep for faster interrupt response
+                self._done.wait(timeout=0.1)
+
+            self._audio_capture.stop_streaming()
+
+            # Check if cancelled
+            if self._cancelled.is_set():
+                print("\n[Cancelled]", file=sys.stderr)
+                return ""
+
+            # Transcribe
+            if self._audio_data is None or len(self._audio_data) == 0:
+                return ""
+
+            print("[Transcribing...]", file=sys.stderr)
+            text = self.stt_engine.transcribe(
+                self._audio_data,
+                language=self.config.stt.language,
+            )
+
+            return text.strip()
+
         finally:
-            audio_capture.stop_streaming()
-
-        # Transcribe
-        if self._audio_data is None or len(self._audio_data) == 0:
-            return ""
-
-        print("[Transcribing...]", file=sys.stderr)
-        text = self.stt_engine.transcribe(
-            self._audio_data,
-            language=self.config.stt.language,
-        )
-
-        return text.strip()
+            # Restore original signal handler
+            signal.signal(signal.SIGINT, old_handler)
+            if self._audio_capture:
+                self._audio_capture.stop_streaming()
 
     def _on_speech_start(self) -> None:
         """Called when VAD detects speech start."""
