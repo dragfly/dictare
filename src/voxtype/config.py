@@ -122,6 +122,10 @@ class ControllerConfig(BaseModel):
         default=None,
         description="Controller device name (e.g., 'V012345-Ver---0000 V-tech-USB product')",
     )
+    type: Literal["presenter", "generic"] = Field(
+        default="presenter",
+        description="Controller type: presenter (clicker remote) or generic (custom key mappings)",
+    )
     keys: dict[str, str] = Field(
         default_factory=lambda: {
             "KEY_ESC": "listening_on",
@@ -129,7 +133,7 @@ class ControllerConfig(BaseModel):
             "KEY_UP": "agent_next",
             "KEY_DOWN": "agent_prev",
         },
-        description="Key-to-command mappings",
+        description="Key-to-command mappings (only used with type=generic)",
     )
 
 

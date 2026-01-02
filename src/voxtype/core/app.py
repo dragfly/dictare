@@ -955,16 +955,23 @@ class VoxtypeApp:
             return
 
         try:
-            from voxtype.hotkey.presenter_controller import PresenterController
-
-            self._controller = PresenterController(
-                device_name=self.controller_device,
-                verbose=self.config.verbose,
-            )
+            if self.config.controller.type == "presenter":
+                from voxtype.hotkey.presenter_controller import PresenterController
+                self._controller = PresenterController(
+                    device_name=self.controller_device,
+                    verbose=self.config.verbose,
+                )
+            else:
+                from voxtype.hotkey.controller_listener import ControllerListener
+                self._controller = ControllerListener(
+                    device_name=self.controller_device,
+                    key_mappings=self.config.controller.keys,
+                    verbose=self.config.verbose,
+                )
 
             if self._controller.start(self._on_controller_command):
                 if self.config.verbose:
-                    self._console.print(f"[dim]Controller: {self.controller_device}[/]")
+                    self._console.print(f"[dim]Controller: {self.controller_device} ({self.config.controller.type})[/]")
             else:
                 self._console.print(f"[yellow]Controller device not found: {self.controller_device}[/]")
                 self._controller = None
