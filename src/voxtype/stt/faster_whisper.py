@@ -25,25 +25,57 @@ class FasterWhisperEngine(STTEngine):
         model_size: str = "base",
         device: str = "cpu",
         compute_type: str = "int8",
+        console=None,
+        verbose: bool = False,
         **kwargs,
     ) -> None:
         """Load the Whisper model.
 
         Args:
             model_size: Model size (tiny/base/small/medium/large-v3).
-            device: Device to use (cpu/cuda).
+            device: Device to use (cpu/cuda/auto).
             compute_type: Compute type (int8/float16/float32).
+            console: Optional Rich console for messages.
+            verbose: Show detailed loading info.
             **kwargs: Additional options passed to WhisperModel.
         """
+        actual_device = device
+
+        # Setup CUDA if requested (must happen BEFORE importing faster_whisper)
+        if device == "cuda":
+            from voxtype.cuda_setup import setup_cuda
+
+            cuda_ok, actual_device = setup_cuda(console=console, verbose=verbose)
+            if not cuda_ok and console:
+                console.print("[yellow]Using CPU instead of GPU[/]")
+
         from faster_whisper import WhisperModel
 
-        self._model = WhisperModel(
-            model_size,
-            device=device,
-            compute_type=compute_type,
-            **kwargs,
-        )
+        try:
+            self._model = WhisperModel(
+                model_size,
+                device=actual_device,
+                compute_type=compute_type,
+                **kwargs,
+            )
+        except Exception as e:
+            # If CUDA fails at runtime, fall back to CPU
+            if actual_device == "cuda" and "cuda" in str(e).lower():
+                if console:
+                    console.print(f"[yellow]GPU error: {e}[/]")
+                    console.print("[yellow]Falling back to CPU[/]")
+                self._model = WhisperModel(
+                    model_size,
+                    device="cpu",
+                    compute_type="int8",
+                    **kwargs,
+                )
+                actual_device = "cpu"
+            else:
+                raise
+
         self._model_size = model_size
+        self._device = actual_device
 
     def transcribe(
         self,

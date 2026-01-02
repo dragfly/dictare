@@ -910,15 +910,15 @@ wheels = [
 
 [[package]]
 name = "nvidia-cudnn-cu12"
-version = "9.17.1.4"
+version = "9.1.1.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "nvidia-cublas-cu12" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/da/55/9987152bd99746b6d5d899a3e920f72f565f5adb4835dc44899382482e2c/nvidia_cudnn_cu12-9.17.1.4-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:d18d61bdd596fca0dbe459c129f6eb7a24ed2e6de1d7988b0a37ac63184ee05d", size = 646648394, upload-time = "2025-12-22T16:42:08.8Z" },
-    { url = "https://files.pythonhosted.org/packages/91/8b/b15aef578b64ff8b72f68f682b6a8254ee6aa6d3d236b4282a4d32dbdf1a/nvidia_cudnn_cu12-9.17.1.4-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:b5083ced291edb2baf8eab09951c6bc58b79b2023c4ec885657a63acdf51d0bd", size = 647835891, upload-time = "2025-12-22T16:43:28.317Z" },
-    { url = "https://files.pythonhosted.org/packages/56/67/e4b10d08c0658bb7e42766fe5cd5c450d0524425e70d12b5eb85a979318e/nvidia_cudnn_cu12-9.17.1.4-py3-none-win_amd64.whl", hash = "sha256:0760c843fb109631edf5bd4234f2a260a13a05c18ee2a20783fbb4eb04d56645", size = 634329630, upload-time = "2025-12-22T16:45:33.451Z" },
+    { url = "https://files.pythonhosted.org/packages/54/80/ac7959d80b9fd91e76330e7fb67846e30208a310432db111f089a17c09f7/nvidia_cudnn_cu12-9.1.1.17-py3-none-manylinux2014_aarch64.whl", hash = "sha256:4d0793256ddff1101a07b249b6604345d2f298d97f2a9c61672f3b8dcc834509", size = 663000831, upload-time = "2024-05-14T20:24:30.784Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/ac/51b2667404244148da02585dfa3a35813edea9208166463b705852718839/nvidia_cudnn_cu12-9.1.1.17-py3-none-manylinux2014_x86_64.whl", hash = "sha256:a6d280dd0aa2ecf9467eaf06092910f353fa6f129d206380109641da59236007", size = 664753765, upload-time = "2024-05-14T20:25:14.575Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/0a/4a3852f359aa6043369217155c4b905226634025d1b9c605286fdb823847/nvidia_cudnn_cu12-9.1.1.17-py3-none-win_amd64.whl", hash = "sha256:d7c4b96b1c5ca8e4dc0bdbf2ce386903ba03faa94d2997b72769fa5048cb5f1f", size = 679928156, upload-time = "2024-05-14T20:26:01.29Z" },
 ]
 
 [[package]]
@@ -1797,7 +1797,7 @@ wheels = [
 
 [[package]]
 name = "voxtype"
-version = "1.4.2"
+version = "1.4.3"
 source = { editable = "." }
 dependencies = [
     { name = "faster-whisper" },
@@ -1848,7 +1848,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "numba", marker = "extra == 'mlx'", specifier = ">=0.60" },
     { name = "numpy", specifier = ">=1.24.0" },
-    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.0.0" },
+    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.2.0" },
     { name = "piper-tts", marker = "extra == 'tts'", specifier = ">=1.2.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pynput", marker = "extra == 'macos'", specifier = ">=1.7.0" },
