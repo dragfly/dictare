@@ -57,12 +57,14 @@ class MLXWhisperEngine(STTEngine):
         self,
         audio: NDArray[np.float32],
         language: str = "auto",
+        hotwords: str | None = None,
     ) -> str:
         """Transcribe audio to text.
 
         Args:
             audio: Audio samples (float32, mono, 16kHz).
             language: Language code or "auto" for auto-detection.
+            hotwords: Comma-separated words to boost recognition (not supported by MLX).
 
         Returns:
             Transcribed text.
@@ -72,6 +74,9 @@ class MLXWhisperEngine(STTEngine):
         """
         if self._model_path is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
+
+        # Note: hotwords parameter is ignored by MLX Whisper (not supported)
+        _ = hotwords
 
         import mlx_whisper
         import numpy as np

@@ -128,7 +128,7 @@ def _apply_cli_overrides(
     config,
     *,
     model: str | None,
-    key: str | None,
+    hotkey: str | None,
     language: str | None,
     auto_enter: bool | None,
     output: str | None,
@@ -137,7 +137,6 @@ def _apply_cli_overrides(
     commands: bool | None,
     typing_delay: int | None,
     ollama_model: str | None,
-    vad: bool | None,
     silence_ms: int | None,
     wake_word: str | None,
     initial_mode: str | None,
@@ -152,8 +151,8 @@ def _apply_cli_overrides(
     """
     if model:
         config.stt.model_size = model
-    if key:
-        config.hotkey.key = key
+    if hotkey:
+        config.hotkey.key = hotkey
     if language:
         config.stt.language = language
     if auto_enter is not None:
@@ -170,8 +169,6 @@ def _apply_cli_overrides(
         config.output.typing_delay_ms = typing_delay
     if ollama_model:
         config.command.ollama_model = ollama_model
-    if vad is not None:
-        config.audio.vad = vad
     if silence_ms is not None:
         config.audio.silence_ms = silence_ms
     if wake_word is not None:
@@ -214,7 +211,6 @@ def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
         output_str = config.output.method
 
     mode_str = "[cyan]transcription[/] (fast)" if config.command.mode == "transcription" else "[yellow]command[/] (LLM)"
-    input_mode = "[cyan]VAD[/] (auto-detect speech)" if config.audio.vad else f"Manual: [cyan]{config.hotkey.key}[/]"
     wake_str = f"Wake word: [cyan]{config.command.wake_word}[/]\n" if config.command.wake_word else ""
 
     # Format the hotkey nicely
@@ -228,7 +224,6 @@ def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
 
     return Panel(
         f"[bold green]voxtype[/] v{__version__}\n\n"
-        f"Input: {input_mode}\n"
         f"{wake_str}"
         f"Mode: {mode_str}\n"
         f"STT: [cyan]{config.stt.model_size}[/] on {device_str}\n"
@@ -292,17 +287,13 @@ def run(
         typer.Option("--hw-accel", help="Hardware acceleration (true=auto-detect, false=CPU only)"),
     ] = None,
     # Input options
-    vad: Annotated[
-        Optional[bool],
-        typer.Option("--vad", help="VAD mode (true) or push-to-talk (false)"),
-    ] = None,
     silence_ms: Annotated[
         Optional[int],
         typer.Option("--silence-ms", "-s", help="VAD silence duration to end speech (ms)"),
     ] = None,
-    key: Annotated[
+    hotkey: Annotated[
         Optional[str],
-        typer.Option("--key", "-k", help="Push-to-talk key (e.g., KEY_SCROLLLOCK)"),
+        typer.Option("--hotkey", "-k", help="Toggle listening key (default: SCROLLLOCK)"),
     ] = None,
     max_duration: Annotated[
         Optional[int],
@@ -371,8 +362,8 @@ def run(
 ) -> None:
     """Start voxtype voice-to-text.
 
-    VAD mode (default): Automatically detects when you speak.
-    Manual mode: Hold the configured key while speaking.
+    Uses Voice Activity Detection (VAD) to automatically detect when you speak.
+    Tap the hotkey to toggle listening on/off, double-tap to switch mode.
     """
     config = load_config(config_file)
 
@@ -380,7 +371,7 @@ def run(
     _apply_cli_overrides(
         config,
         model=model,
-        key=key,
+        hotkey=hotkey,
         language=language,
         auto_enter=auto_enter,
         output=output,
@@ -389,7 +380,6 @@ def run(
         commands=commands,
         typing_delay=typing_delay,
         ollama_model=ollama_model,
-        vad=vad,
         silence_ms=silence_ms,
         wake_word=wake_word,
         initial_mode=initial_mode,

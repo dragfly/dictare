@@ -279,6 +279,7 @@ class FasterWhisperEngine(STTEngine):
         self,
         audio: NDArray[np.float32],
         language: str = "auto",
+        hotwords: str | None = None,
         beam_size: int = 5,
     ) -> str:
         """Transcribe audio to text.
@@ -286,6 +287,7 @@ class FasterWhisperEngine(STTEngine):
         Args:
             audio: Audio samples (float32, mono, 16kHz).
             language: Language code or "auto" for auto-detection.
+            hotwords: Comma-separated words to boost recognition.
             beam_size: Beam size for decoding.
 
         Returns:
@@ -306,14 +308,20 @@ class FasterWhisperEngine(STTEngine):
         # Handle language
         lang = None if language == "auto" else language
 
-        # Transcribe with built-in VAD filtering
-        segments, info = self._model.transcribe(
-            audio,
+        # Build transcribe kwargs
+        transcribe_kwargs = dict(
             language=lang,
             beam_size=beam_size,
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
         )
+
+        # Add hotwords if provided
+        if hotwords:
+            transcribe_kwargs["hotwords"] = hotwords
+
+        # Transcribe with built-in VAD filtering
+        segments, info = self._model.transcribe(audio, **transcribe_kwargs)
 
         # Collect all segment texts
         text_parts = []

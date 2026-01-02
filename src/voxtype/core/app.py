@@ -60,7 +60,6 @@ class VoxtypeApp:
         """
         self.config = config
         # Read settings from config
-        self.use_vad = config.audio.vad
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
         self.debug = config.logging.debug
@@ -92,7 +91,6 @@ class VoxtypeApp:
         self._stt: STTEngine | None = None
         self._hotkey: HotkeyListener | None = None
         self._injector: TextInjector | None = None
-        self._recording_timer: threading.Timer | None = None
 
         # VAD components
         self._vad: SileroVAD | None = None
@@ -279,13 +277,35 @@ class VoxtypeApp:
             return f"{self.output_dir}/{agent}.voxtype"
         return None
 
+    def _get_hotwords(self) -> str | None:
+        """Build hotwords string from config + wake_word.
+
+        Combines config.stt.hotwords with the wake_word (if set).
+        E.g., if config has 'voxtype' and wake_word is 'hey joshua',
+        returns 'voxtype,hey joshua'.
+        """
+        parts = []
+
+        # Add config hotwords
+        if self.config.stt.hotwords:
+            parts.append(self.config.stt.hotwords)
+
+        # Add wake word (lowercased, normalized)
+        if self.trigger_phrase:
+            # Normalize: remove punctuation, lowercase
+            normalized = self.trigger_phrase.lower().replace(",", " ").strip()
+            if normalized and normalized not in parts:
+                parts.append(normalized)
+
+        return ",".join(parts) if parts else None
+
     def _create_injector(self) -> TextInjector:
         """Create text injector based on config.output.method."""
         from voxtype.injection.clipboard import ClipboardInjector
 
-        # File output mode (explicit or via output_file/output_dir)
+        # Agent output mode (writes to <agent>.voxtype files)
         output_path = self._get_current_output_file()
-        if output_path or self.config.output.method == "file":
+        if output_path or self.config.output.method == "agent":
             from voxtype.injection.file import FileInjector
             return FileInjector(output_path or "voxtype.txt")
 
@@ -421,82 +441,6 @@ class VoxtypeApp:
         else:
             self._console.print("[dim]LLM processor: keyword fallback[/]")
 
-    def _on_hotkey_press(self) -> None:
-        """Handle hotkey press - start recording."""
-        with self._lock:
-            if self.state != AppState.IDLE:
-                return
-
-            self.state = AppState.RECORDING
-            if self._audio:
-                self._audio.start_recording()
-
-            # Start max duration timer
-            max_dur = self.config.audio.max_duration
-            if max_dur > 0:
-                self._recording_timer = threading.Timer(max_dur, self._on_max_duration)
-                self._recording_timer.start()
-
-            self._console.print("[bold cyan]Recording...[/]", end="\r")
-
-    def _on_max_duration(self) -> None:
-        """Handle max recording duration reached."""
-        self._console.print(f"[yellow]Max duration ({self.config.audio.max_duration}s) reached[/]")
-        self._on_hotkey_release()
-
-    def _on_hotkey_release(self) -> None:
-        """Handle hotkey release - stop recording and transcribe."""
-        # Cancel max duration timer
-        if self._recording_timer:
-            self._recording_timer.cancel()
-            self._recording_timer = None
-
-        with self._lock:
-            if self.state != AppState.RECORDING:
-                return
-
-            self.state = AppState.TRANSCRIBING
-
-        if not self._audio:
-            self.state = AppState.IDLE
-            return
-
-        audio_data = self._audio.stop_recording()
-
-        # Check minimum duration
-        min_samples = int(self.config.audio.sample_rate * self.MIN_RECORDING_DURATION)
-        if len(audio_data) < min_samples:
-            self._console.print("[dim]Recording too short, ignoring.        [/]")
-            self.state = AppState.IDLE
-            return
-
-        self._console.print("[bold yellow]Transcribing...[/]", end="\r")
-
-        # Transcribe in background to not block hotkey listener
-        def transcribe_and_inject() -> None:
-            try:
-                if not self._stt:
-                    return
-
-                text = self._stt.transcribe(
-                    audio_data,
-                    language=self.config.stt.language,
-                )
-
-                if text:
-                    with self._lock:
-                        self.state = AppState.INJECTING
-                    self._inject_text(text)
-                else:
-                    self._console.print("[dim]No speech detected.                    [/]")
-            except Exception as e:
-                self._console.print(f"[red]Error: {e}[/]")
-            finally:
-                self.state = AppState.IDLE
-
-        thread = threading.Thread(target=transcribe_and_inject, daemon=True)
-        thread.start()
-
     def _on_max_speech_duration(self) -> None:
         """Handle max speech duration reached in VAD mode."""
         self._console.print(
@@ -567,6 +511,7 @@ class VoxtypeApp:
                 text = self._stt.transcribe(
                     audio_data,
                     language=self.config.stt.language,
+                    hotwords=self._get_hotwords(),
                 )
 
                 if text:
@@ -865,18 +810,13 @@ class VoxtypeApp:
         if self._injector:
             method = self._injector.get_name()
             if method == "clipboard":
+                # Clipboard mode: always auto-paste (Ctrl+V)
                 success = self._injector.type_text(
                     inject_text,
                     delay_ms=self.config.output.typing_delay_ms,
-                    auto_paste=self.config.output.auto_paste,
+                    auto_paste=True,
                     auto_enter=self.config.output.auto_enter,
                 )
-                if success and self.config.output.auto_paste:
-                    pass  # Auto-pasted, no message needed
-                elif success:
-                    self._console.print(
-                        "[yellow]Copied to clipboard (Ctrl+V to paste)[/]"
-                    )
             else:
                 success = self._injector.type_text(
                     inject_text,
@@ -915,28 +855,7 @@ class VoxtypeApp:
 
     def run(self) -> None:
         """Start the application main loop."""
-        if self.use_vad:
-            self._run_vad_mode()
-        else:
-            self._run_push_to_talk_mode()
-
-    def _run_push_to_talk_mode(self) -> None:
-        """Run in push-to-talk mode."""
-        self._init_components()
-        self._running = True
-
-        if self._hotkey:
-            self._hotkey.start(
-                on_press=self._on_hotkey_press,
-                on_release=self._on_hotkey_release,
-            )
-
-        # Keep main thread alive
-        try:
-            while self._running:
-                time.sleep(0.1)
-        except KeyboardInterrupt:
-            pass
+        self._run_vad_mode()
 
     def _run_vad_mode(self) -> None:
         """Run in VAD (voice activity detection) mode."""
