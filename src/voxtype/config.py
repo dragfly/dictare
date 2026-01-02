@@ -56,6 +56,10 @@ class STTConfig(BaseModel):
         default=True,
         description="Enable hardware acceleration (CUDA on Linux, MLX on macOS)",
     )
+    hotwords: str = Field(
+        default="",
+        description="Comma-separated words to boost recognition (e.g., 'voxtype,joshua')",
+    )
 
 class HotkeyConfig(BaseModel):
     """Hotkey configuration."""
@@ -68,9 +72,9 @@ class HotkeyConfig(BaseModel):
 class OutputConfig(BaseModel):
     """Text output configuration."""
 
-    method: Literal["keyboard", "clipboard", "file"] = Field(
+    method: Literal["keyboard", "clipboard", "agent"] = Field(
         default="keyboard",
-        description="Output method: keyboard (type), clipboard (paste), or file",
+        description="Output method: keyboard (type), clipboard (paste), or agent (file)",
     )
     typing_delay_ms: int = Field(
         default=5,
@@ -110,7 +114,7 @@ class CommandConfig(BaseModel):
     )
 
 class ControllerConfig(BaseModel):
-    """Controller device configuration for project switching."""
+    """Controller device configuration for agent switching."""
 
     device: str | None = Field(
         default=None,
@@ -120,8 +124,8 @@ class ControllerConfig(BaseModel):
         default_factory=lambda: {
             "KEY_ESC": "listening_on",
             "KEY_B": "listening_off",
-            "KEY_UP": "project_next",
-            "KEY_DOWN": "project_prev",
+            "KEY_UP": "agent_next",
+            "KEY_DOWN": "agent_prev",
         },
         description="Key-to-command mappings",
     )
@@ -416,29 +420,30 @@ sample_rate = 16000
 channels = 1
 # device = "default"  # Uncomment to specify audio device
 audio_feedback = true  # Play beep on listening mode toggle
-vad = true             # VAD mode (false = push-to-talk)
-silence_ms = 1200      # VAD silence threshold
+vad = true             # VAD mode (false = manual trigger)
+silence_ms = 1200      # VAD silence threshold in ms
 
 [stt]
 model_size = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
-language = "auto"              # auto-detect, or "en", "it", etc.
+language = "auto"              # auto-detect, or "en", "de", "fr", etc.
 device = "auto"                # auto, cpu, cuda
 compute_type = "int8"
 beam_size = 5
 hw_accel = true                # Enable hardware acceleration
+# hotwords = "voxtype,joshua"  # Boost recognition of specific words
 
 [hotkey]
-key = "KEY_SCROLLLOCK"  # evdev key name (for PTT mode)
+key = "KEY_SCROLLLOCK"  # evdev key name (for manual mode)
 
 [output]
-method = "keyboard"    # keyboard, clipboard, or file
+method = "keyboard"    # keyboard, clipboard, or agent
 typing_delay_ms = 5
 auto_enter = false     # Visual newline only
-auto_paste = true      # For clipboard mode
+auto_paste = true      # Auto Ctrl+V after clipboard copy
 
 [command]
 enabled = true
-wake_word = ""         # e.g., "Joshua"
+wake_word = ""         # e.g., "hey joshua"
 mode = "transcription" # transcription or command
 ollama_model = "qwen2.5:1.5b"
 ollama_timeout = 5.0
@@ -449,8 +454,8 @@ ollama_timeout = 5.0
 [controller.keys]
 KEY_ESC = "listening_on"
 KEY_B = "listening_off"
-KEY_UP = "project_next"
-KEY_DOWN = "project_prev"
+KEY_UP = "agent_next"
+KEY_DOWN = "agent_prev"
 
 [logging]
 debug = false
