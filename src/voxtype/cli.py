@@ -647,6 +647,14 @@ def transcribe(
         Optional[Path],
         typer.Option("--output", "-o", help="Output file (default: stdout)"),
     ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress all status messages (pure pipe mode)"),
+    ] = False,
+    show_text: Annotated[
+        bool,
+        typer.Option("--show-text", "-t", help="Show transcribed text on stderr before output"),
+    ] = True,
 ) -> None:
     """Record and transcribe audio to text (one-shot).
 
@@ -658,49 +666,72 @@ def transcribe(
 
     Status messages go to stderr, transcription goes to stdout.
     """
+    import io
+    import os
+
     config = load_config(config_file)
 
-    # Auto-detect GPU acceleration
-    _auto_detect_acceleration(config)
+    # Suppress progress bars and loading messages unless verbose
+    # Redirect stderr during model loading to suppress progress bars
+    if not quiet:
+        print("[Loading model...]", file=sys.stderr)
 
-    # Apply CLI overrides
-    if model:
-        config.stt.model_size = model
-    if language:
-        config.stt.language = language
-    if mlx:
-        config.stt.backend = "mlx-whisper"
-    elif gpu:
-        config.stt.device = "cuda"
-        config.stt.compute_type = "float16"
-        _setup_cuda_library_path()
+    # Suppress tqdm and other progress output during load
+    old_stderr = sys.stderr
+    if not os.environ.get("VOXTYPE_VERBOSE"):
+        sys.stderr = io.StringIO()
 
-    # Create STT engine
-    if config.stt.backend == "faster-whisper":
-        from voxtype.stt.faster_whisper import FasterWhisperEngine
-        stt_engine = FasterWhisperEngine()
-    elif config.stt.backend == "mlx-whisper":
-        from voxtype.stt.mlx_whisper import MLXWhisperEngine
-        stt_engine = MLXWhisperEngine()
-    else:
-        console.print(f"[red]Unknown STT backend:[/] {config.stt.backend}", err=True)
-        raise typer.Exit(1)
+    try:
+        # Auto-detect GPU acceleration (this prints to console, suppress it)
+        import platform
+        if sys.platform == "darwin" and platform.machine() == "arm64":
+            try:
+                import mlx_whisper  # noqa: F401
+                config.stt.backend = "mlx-whisper"
+            except ImportError:
+                pass
+        elif sys.platform == "linux":
+            try:
+                import ctranslate2
+                cuda_device_count = ctranslate2.get_cuda_device_count()
+                if cuda_device_count > 0:
+                    config.stt.device = "cuda"
+                    config.stt.compute_type = "float16"
+                    _setup_cuda_library_path()
+            except (ImportError, RuntimeError, AttributeError):
+                pass
 
-    # Determine device string for display
-    if config.stt.backend == "mlx-whisper":
-        device_str = "GPU (MLX/Metal)"
-    elif config.stt.device == "cuda":
-        device_str = "GPU (CUDA)"
-    else:
-        device_str = "CPU"
+        # Apply CLI overrides
+        if model:
+            config.stt.model_size = model
+        if language:
+            config.stt.language = language
+        if mlx:
+            config.stt.backend = "mlx-whisper"
+        elif gpu:
+            config.stt.device = "cuda"
+            config.stt.compute_type = "float16"
+            _setup_cuda_library_path()
 
-    print(f"[Loading {config.stt.model_size} on {device_str}...]", file=sys.stderr)
+        # Create STT engine
+        if config.stt.backend == "faster-whisper":
+            from voxtype.stt.faster_whisper import FasterWhisperEngine
+            stt_engine = FasterWhisperEngine()
+        elif config.stt.backend == "mlx-whisper":
+            from voxtype.stt.mlx_whisper import MLXWhisperEngine
+            stt_engine = MLXWhisperEngine()
+        else:
+            sys.stderr = old_stderr
+            console.print(f"[red]Unknown STT backend:[/] {config.stt.backend}", err=True)
+            raise typer.Exit(1)
 
-    stt_engine.load_model(
-        config.stt.model_size,
-        device=config.stt.device,
-        compute_type=config.stt.compute_type,
-    )
+        stt_engine.load_model(
+            config.stt.model_size,
+            device=config.stt.device,
+            compute_type=config.stt.compute_type,
+        )
+    finally:
+        sys.stderr = old_stderr
 
     # Create transcriber and run
     from voxtype.core.transcriber import OneShotTranscriber
@@ -710,19 +741,26 @@ def transcribe(
         stt_engine=stt_engine,
         silence_ms=silence_ms,
         max_duration=max_duration,
+        quiet=quiet,
     )
 
     try:
         text = transcriber.record_and_transcribe()
 
+        if text and show_text and not quiet:
+            # Show what was transcribed on stderr
+            print(f"\n> {text}\n", file=sys.stderr)
+
         if output:
             output.write_text(text)
-            print(f"[Saved to {output}]", file=sys.stderr)
+            if not quiet:
+                print(f"[Saved to {output}]", file=sys.stderr)
         else:
             # Raw output to stdout for piping
             print(text, end="")
     except KeyboardInterrupt:
-        print("\n[Cancelled]", file=sys.stderr)
+        if not quiet:
+            print("\n[Cancelled]", file=sys.stderr)
         raise typer.Exit(1)
 
 def main() -> None:
