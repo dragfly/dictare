@@ -200,14 +200,18 @@ class FasterWhisperEngine(STTEngine):
             **kwargs: Additional options passed to WhisperModel.
         """
         actual_device = device
+        actual_compute_type = compute_type
 
         # Setup CUDA if requested (must happen BEFORE importing faster_whisper)
         if device == "cuda":
             from voxtype.cuda_setup import setup_cuda
 
             cuda_ok, actual_device = setup_cuda(console=console, verbose=verbose)
-            if not cuda_ok and console:
-                console.print("[yellow]Using CPU instead of GPU[/]")
+            if not cuda_ok:
+                # CPU doesn't support float16, use int8
+                actual_compute_type = "int8"
+                if console:
+                    console.print("[yellow]Using CPU instead of GPU[/]")
 
         # Check if model needs downloading, show progress if so
         model_path = model_size  # Default: let faster-whisper handle it
@@ -220,7 +224,7 @@ class FasterWhisperEngine(STTEngine):
             self._model = WhisperModel(
                 model_path,
                 device=actual_device,
-                compute_type=compute_type,
+                compute_type=actual_compute_type,
                 **kwargs,
             )
         except Exception as e:

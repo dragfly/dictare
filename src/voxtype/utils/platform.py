@@ -318,6 +318,99 @@ def _check_display_deps() -> list[CheckResult]:
     ]
 
 
+def _check_gpu_deps() -> list[CheckResult]:
+    """Check GPU/hardware acceleration dependencies."""
+    results: list[CheckResult] = []
+
+    if is_linux():
+        # Check for NVIDIA GPU
+        try:
+            from voxtype.cuda_setup import check_gpu_available, _find_cudnn_path
+
+            gpu_ok, gpu_count = check_gpu_available()
+
+            if gpu_ok:
+                # GPU found, check cuDNN
+                cudnn_path = _find_cudnn_path()
+                if cudnn_path:
+                    results.append(
+                        CheckResult(
+                            name="NVIDIA GPU",
+                            available=True,
+                            message=f"{gpu_count} device(s), cuDNN ready",
+                            required=False,
+                        )
+                    )
+                else:
+                    results.append(
+                        CheckResult(
+                            name="NVIDIA GPU",
+                            available=False,
+                            message=f"{gpu_count} device(s), cuDNN missing",
+                            required=False,
+                            install_hint="uv tool install voxtype --with 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'",
+                        )
+                    )
+            else:
+                results.append(
+                    CheckResult(
+                        name="NVIDIA GPU",
+                        available=False,
+                        message="Not detected (using CPU)",
+                        required=False,
+                    )
+                )
+        except Exception:
+            results.append(
+                CheckResult(
+                    name="NVIDIA GPU",
+                    available=False,
+                    message="Check failed",
+                    required=False,
+                )
+            )
+
+    elif is_macos():
+        # Check for Apple Silicon + MLX
+        import platform
+
+        is_arm = platform.machine() == "arm64"
+
+        if is_arm:
+            try:
+                import mlx_whisper  # noqa: F401
+
+                results.append(
+                    CheckResult(
+                        name="Apple Silicon",
+                        available=True,
+                        message="MLX ready",
+                        required=False,
+                    )
+                )
+            except ImportError:
+                results.append(
+                    CheckResult(
+                        name="Apple Silicon",
+                        available=False,
+                        message="MLX not installed",
+                        required=False,
+                        install_hint="uv tool install voxtype --with 'mlx-whisper>=0.4.0'",
+                    )
+                )
+        else:
+            results.append(
+                CheckResult(
+                    name="Apple Silicon",
+                    available=False,
+                    message="Intel Mac (no MLX)",
+                    required=False,
+                )
+            )
+
+    return results
+
+
 def check_dependencies() -> list[CheckResult]:
     """Check all system dependencies.
 
@@ -329,6 +422,7 @@ def check_dependencies() -> list[CheckResult]:
     results.extend(_check_python_version())
     results.extend(_check_audio_deps())
     results.extend(_check_stt_deps())
+    results.extend(_check_gpu_deps())
 
     if is_linux():
         results.extend(_check_hotkey_deps_linux())
