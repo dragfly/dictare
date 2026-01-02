@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2026-01-02
+
+### Added
+- **Automatic CUDA setup**: Pre-loads cuDNN libraries automatically before importing ctranslate2
+- **Graceful GPU fallback**: Falls back to CPU if CUDA/cuDNN fails, with clear error messages
+- **`cuda_setup.py`**: New module for GPU initialization with helpful remediation steps
+
+### Fixed
+- **cuDNN version pinned**: `nvidia-cudnn-cu12>=9.1.0,<9.2.0` to match ctranslate2 requirements
+- **No more `LD_LIBRARY_PATH`**: GPU acceleration works out of the box
+
 ## [1.4.3] - 2026-01-02
 
 ### Added
@@ -23,14 +34,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - VAD auto-detects speech start/end
   - Output to stdout (for pipes) or file (`-o`)
 
+## [1.4.1] - 2026-01-02
+
+### Added
+- **Piper TTS**: High-quality neural voice for project announcements (Italian "Paola" voice)
+- **"Sent" beep**: Ascending double-beep when transcription is written to file
+- **TTS fallback chain**: piper → spd-say → espeak-ng → espeak
+
+### Fixed
+- **Controller device selection**: Now selects device with matching keys (not just by name)
+- **Exclusive device grab**: Controller keys no longer go to terminal
+- **Hotkey device conflict**: Excludes controller device from hotkey listener
+- **Device handle leaks**: Properly closes unused evdev devices
+
 ## [1.4.0] - 2026-01-01
 
 ### Added
-- **Multi-project support**: `--projects` option for multiple output targets (e.g., `--projects pippo pluto`)
+- **Multi-project support**: `--projects` option for multiple output targets (comma-separated)
 - **Output directory**: `--output-dir` for project transcription files (`<dir>/<project>.transcription`)
 - **Controller device**: `--controller` option to use a Bluetooth presenter/clicker for project switching
 - **Controller commands**: listening_on, listening_off, project_next, project_prev, discard
-- **TTS feedback**: Speaks project name when switching (via espeak)
+- **TTS feedback**: Speaks project name when switching
 - **Config section**: `[controller]` with device name and key mappings
 
 ### Changed
