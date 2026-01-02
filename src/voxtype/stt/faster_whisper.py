@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     import numpy as np
 
 # Model sizes and their Hugging Face repo names
-# Note: "turbo" and "large-v3-turbo" are handled natively by faster-whisper
+# Note: turbo models use None - handled natively by faster-whisper
 _MODEL_REPOS = {
     "tiny": "Systran/faster-whisper-tiny",
     "tiny.en": "Systran/faster-whisper-tiny.en",
@@ -26,9 +26,8 @@ _MODEL_REPOS = {
     "large-v1": "Systran/faster-whisper-large-v1",
     "large-v2": "Systran/faster-whisper-large-v2",
     "large-v3": "Systran/faster-whisper-large-v3",
-    # turbo models - let faster-whisper handle these directly
-    "turbo": None,  # faster-whisper handles this natively
-    "large-v3-turbo": None,  # alias, faster-whisper handles this
+    "turbo": None,
+    "large-v3-turbo": None,
 }
 
 # Approximate model sizes in MB for display
@@ -50,16 +49,30 @@ _MODEL_SIZES_MB = {
 
 def _is_model_cached(model_size: str) -> bool:
     """Check if model is already downloaded."""
-    # If repo is None, faster-whisper handles it natively - skip our cache check
     repo_id = _MODEL_REPOS.get(model_size)
     if repo_id is None:
-        return True  # Let faster-whisper handle turbo models
+        # Turbo models: check faster-whisper's cache location
+        return _is_turbo_model_cached()
 
     try:
         from huggingface_hub import try_to_load_from_cache
 
         # Check for the main model file
         result = try_to_load_from_cache(repo_id, "model.bin")
+        return result is not None and os.path.exists(result)
+    except Exception:
+        return False
+
+
+def _is_turbo_model_cached() -> bool:
+    """Check if turbo model is cached (faster-whisper uses mobiuslabsgmbh repo)."""
+    try:
+        from huggingface_hub import try_to_load_from_cache
+
+        # faster-whisper uses this repo for turbo
+        result = try_to_load_from_cache(
+            "mobiuslabsgmbh/faster-whisper-large-v3-turbo", "model.bin"
+        )
         return result is not None and os.path.exists(result)
     except Exception:
         return False
@@ -85,8 +98,8 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
 
     repo_id = _MODEL_REPOS.get(model_size)
     if repo_id is None:
-        # Turbo models are handled natively by faster-whisper
-        return model_size
+        return model_size  # Turbo models: let faster-whisper handle
+
     size_mb = _MODEL_SIZES_MB.get(model_size, "?")
 
     if console:
@@ -215,8 +228,24 @@ class FasterWhisperEngine(STTEngine):
 
         # Check if model needs downloading, show progress if so
         model_path = model_size  # Default: let faster-whisper handle it
-        if not _is_model_cached(model_size):
-            model_path = _download_model_with_progress(model_size, console)
+        needs_download = not _is_model_cached(model_size)
+
+        if needs_download:
+            if _MODEL_REPOS.get(model_size) is None:
+                # Turbo models: faster-whisper handles download, just show message
+                size_mb = _MODEL_SIZES_MB.get(model_size, "?")
+                if console:
+                    console.print(
+                        f"[cyan]Downloading Whisper model '{model_size}' (~{size_mb} MB)...[/]"
+                    )
+                    console.print("[dim]This may take a few minutes...[/]")
+            else:
+                # Other models: use our progress bar
+                model_path = _download_model_with_progress(model_size, console)
+
+        # Suppress HF "unauthenticated requests" warning (not useful for users)
+        import logging
+        logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
         from faster_whisper import WhisperModel
 
