@@ -921,6 +921,10 @@ class VoxtypeApp:
                     auto_enter=self.config.injection.auto_enter,
                 )
 
+                # When auto_enter=false, send visual newline (Alt+Enter) for separation
+                if success and not self.config.injection.auto_enter:
+                    self._injector.send_newline()
+
                 # Beep when file write succeeds (so user knows they can switch project)
                 if success and method.startswith("file:"):
                     from voxtype.audio.beep import play_beep_sent
