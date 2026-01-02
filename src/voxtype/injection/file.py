@@ -1,4 +1,9 @@
-"""File-based text injection - writes to a file instead of typing."""
+"""File-based text injection - writes to a file instead of typing.
+
+Protocol for inputmux:
+- \\n = visual newline → inputmux sends Alt+Enter
+- <<SUBMIT>> = submit → inputmux sends Enter
+"""
 
 from __future__ import annotations
 
@@ -6,8 +11,16 @@ from pathlib import Path
 
 from voxtype.injection.base import TextInjector
 
+# Submit token for the file protocol
+SUBMIT_TOKEN = "<<SUBMIT>>"
+
 class FileInjector(TextInjector):
-    """Writes text to a file (append mode)."""
+    """Writes text to a file (append mode).
+
+    Uses a protocol that inputmux interprets:
+    - \\n = visual newline (inputmux sends Alt+Enter)
+    - <<SUBMIT>> = submit (inputmux sends Enter)
+    """
 
     def __init__(self, filepath: str | Path) -> None:
         self.filepath = Path(filepath)
@@ -22,20 +35,22 @@ class FileInjector(TextInjector):
         Args:
             text: Text to write.
             delay_ms: Ignored for file output.
-            auto_enter: If True and text ends with newline, keep it (submit signal).
-                        If False, strip trailing newline (text accumulates).
+            auto_enter: If True, add newline + submit token after text.
+                        If False, just write text (send_newline adds visual newline).
 
         Returns:
             True if successful.
         """
         try:
-            # Handle newline at end based on auto_enter mode
-            # When auto_enter=False, strip trailing newline to prevent submit
-            if not auto_enter and text.endswith("\n"):
+            # Strip trailing newline - we handle it based on auto_enter
+            if text.endswith("\n"):
                 text = text.rstrip("\n")
 
             with open(self.filepath, "ab") as f:
                 f.write(text.encode())
+                # Add newline + submit token if auto_enter
+                if auto_enter:
+                    f.write(f"\n{SUBMIT_TOKEN}\n".encode())
                 f.flush()
             return True
         except OSError:
@@ -46,27 +61,26 @@ class FileInjector(TextInjector):
         return f"file:{self.filepath}"
 
     def send_newline(self) -> bool:
-        """Write a space separator to the file.
+        """Write a newline to the file.
 
-        For file mode, newline means 'submit' to the reader (inputmux).
-        So for visual separation between phrases, we use a space instead.
+        Inputmux interprets this as Alt+Enter (visual newline).
         """
         try:
             with open(self.filepath, "ab") as f:
-                f.write(b" ")
+                f.write(b"\n")
                 f.flush()
             return True
         except OSError:
             return False
 
     def send_submit(self) -> bool:
-        """Write a submit marker to the file.
+        """Write a submit token to the file.
 
-        For file mode, we write a special marker that readers can detect.
+        Inputmux interprets this as Enter (submit).
         """
         try:
             with open(self.filepath, "ab") as f:
-                f.write(b"\n---SUBMIT---\n")
+                f.write(f"{SUBMIT_TOKEN}\n".encode())
                 f.flush()
             return True
         except OSError:
