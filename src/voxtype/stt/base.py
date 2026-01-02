@@ -28,12 +28,14 @@ class STTEngine(ABC):
         self,
         audio: NDArray[np.float32],
         language: str = "auto",
+        hotwords: str | None = None,
     ) -> str:
         """Transcribe audio to text.
 
         Args:
             audio: Audio samples (float32, mono, 16kHz).
             language: Language code or "auto" for auto-detection.
+            hotwords: Comma-separated words to boost recognition.
 
         Returns:
             Transcribed text.

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-01-02
+
+### Removed
+- **`auto_paste` config option**: Clipboard mode now always auto-pastes (Ctrl+V)
+- **PTT (Push-to-Talk) mode**: Only VAD mode now, simplifies codebase
+- **`--vad` flag**: Always VAD, no need to specify
+- **`audio.vad` config**: Removed (always true now)
+
+### Changed
+- **`--key` → `--hotkey`**: Clearer naming for toggle listening key
+- **Wake word auto-added to hotwords**: If you set `wake_word = "hey joshua"`, it's automatically added to STT hotwords
+
+### Added
+- **Hotwords in STT transcribe**: `stt.hotwords` now passed to faster-whisper for better recognition
+- **Wake word → hotwords merge**: Wake word is automatically included in hotwords
+
 ## [2.1.0] - 2026-01-02
 
 ### Changed
