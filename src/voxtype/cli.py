@@ -835,23 +835,32 @@ def devices(
     if set_hotkey or set_controller:
         console.print()
         target = "hotkey" if set_hotkey else "controller"
-        prompt = f"Select device for {target} [1-{len(devices_info)}]"
+        prompt = f"Select device for {target} [0=disable, 1-{len(devices_info)}]"
 
         try:
             choice = typer.prompt(prompt, type=int)
-            if choice < 1 or choice > len(devices_info):
+            if choice < 0 or choice > len(devices_info):
                 console.print("[red]Invalid selection[/]")
                 raise typer.Exit(1)
 
-            selected = devices_info[choice - 1]
-
-            # Save to config
-            if set_hotkey:
-                set_config_value("hotkey.device", selected["name"])
-                console.print(f"[green]✓[/] Hotkey device set to: [cyan]{selected['name']}[/]")
+            if choice == 0:
+                # Disable/clear the device
+                if set_hotkey:
+                    set_config_value("hotkey.device", "")
+                    console.print("[green]✓[/] Hotkey device cleared (auto-detect)")
+                else:
+                    set_config_value("controller.device", "")
+                    console.print("[green]✓[/] Controller disabled")
             else:
-                set_config_value("controller.device", selected["name"])
-                console.print(f"[green]✓[/] Controller device set to: [cyan]{selected['name']}[/]")
+                selected = devices_info[choice - 1]
+
+                # Save to config
+                if set_hotkey:
+                    set_config_value("hotkey.device", selected["name"])
+                    console.print(f"[green]✓[/] Hotkey device set to: [cyan]{selected['name']}[/]")
+                else:
+                    set_config_value("controller.device", selected["name"])
+                    console.print(f"[green]✓[/] Controller device set to: [cyan]{selected['name']}[/]")
 
         except (ValueError, KeyboardInterrupt):
             console.print("\n[yellow]Cancelled[/]")
