@@ -613,6 +613,118 @@ def speak(
     console.print(f"[dim]Speaking: {text[:50]}{'...' if len(text) > 50 else ''}[/]")
     tts.speak(text)
 
+@app.command()
+def transcribe(
+    config_file: Annotated[
+        Optional[Path],
+        typer.Option("--config", "-c", help="Path to config file"),
+    ] = None,
+    model: Annotated[
+        Optional[str],
+        typer.Option("--model", "-m", help="Whisper model size (tiny/base/small/medium/large-v3/large-v3-turbo)"),
+    ] = None,
+    language: Annotated[
+        Optional[str],
+        typer.Option("--language", "-l", help="Language code or 'auto'"),
+    ] = None,
+    gpu: Annotated[
+        bool,
+        typer.Option("--gpu", "-g", help="Use GPU (CUDA) for faster transcription"),
+    ] = False,
+    mlx: Annotated[
+        bool,
+        typer.Option("--mlx", help="Use MLX (Apple Silicon) for faster transcription"),
+    ] = False,
+    silence_ms: Annotated[
+        int,
+        typer.Option("--silence-ms", "-s", help="Silence duration to end recording (ms)"),
+    ] = 1200,
+    max_duration: Annotated[
+        int,
+        typer.Option("--max-duration", "-d", help="Max recording duration in seconds"),
+    ] = 60,
+    output: Annotated[
+        Optional[Path],
+        typer.Option("--output", "-o", help="Output file (default: stdout)"),
+    ] = None,
+) -> None:
+    """Record and transcribe audio to text (one-shot).
+
+    Perfect for piping to other tools:
+
+        voxtype transcribe | llm "respond to this"
+
+        llm "$(voxtype transcribe)"
+
+    Status messages go to stderr, transcription goes to stdout.
+    """
+    config = load_config(config_file)
+
+    # Auto-detect GPU acceleration
+    _auto_detect_acceleration(config)
+
+    # Apply CLI overrides
+    if model:
+        config.stt.model_size = model
+    if language:
+        config.stt.language = language
+    if mlx:
+        config.stt.backend = "mlx-whisper"
+    elif gpu:
+        config.stt.device = "cuda"
+        config.stt.compute_type = "float16"
+        _setup_cuda_library_path()
+
+    # Create STT engine
+    if config.stt.backend == "faster-whisper":
+        from voxtype.stt.faster_whisper import FasterWhisperEngine
+        stt_engine = FasterWhisperEngine()
+    elif config.stt.backend == "mlx-whisper":
+        from voxtype.stt.mlx_whisper import MLXWhisperEngine
+        stt_engine = MLXWhisperEngine()
+    else:
+        console.print(f"[red]Unknown STT backend:[/] {config.stt.backend}", err=True)
+        raise typer.Exit(1)
+
+    # Determine device string for display
+    if config.stt.backend == "mlx-whisper":
+        device_str = "GPU (MLX/Metal)"
+    elif config.stt.device == "cuda":
+        device_str = "GPU (CUDA)"
+    else:
+        device_str = "CPU"
+
+    print(f"[Loading {config.stt.model_size} on {device_str}...]", file=sys.stderr)
+
+    stt_engine.load_model(
+        config.stt.model_size,
+        device=config.stt.device,
+        compute_type=config.stt.compute_type,
+    )
+
+    # Create transcriber and run
+    from voxtype.core.transcriber import OneShotTranscriber
+
+    transcriber = OneShotTranscriber(
+        config=config,
+        stt_engine=stt_engine,
+        silence_ms=silence_ms,
+        max_duration=max_duration,
+    )
+
+    try:
+        text = transcriber.record_and_transcribe()
+
+        if output:
+            output.write_text(text)
+            print(f"[Saved to {output}]", file=sys.stderr)
+        else:
+            # Raw output to stdout for piping
+            print(text, end="")
+    except KeyboardInterrupt:
+        print("\n[Cancelled]", file=sys.stderr)
+        raise typer.Exit(1)
+
 def main() -> None:
     """Entry point for the CLI."""
     app()
