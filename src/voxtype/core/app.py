@@ -44,9 +44,8 @@ class VoxtypeApp:
         self,
         config: Config,
         logger: JSONLLogger | None = None,
-        output_file: str | None = None,
         output_dir: str | None = None,
-        projects: list[str] | None = None,
+        agents: list[str] | None = None,
         controller_device: str | None = None,
     ) -> None:
         """Initialize the application.
@@ -54,10 +53,9 @@ class VoxtypeApp:
         Args:
             config: Application configuration (all settings read from config).
             logger: Optional JSONL logger for structured logging.
-            output_file: If set, write transcriptions to this file instead of typing.
-            output_dir: Directory for project transcription files.
-            projects: List of project IDs for multi-output mode.
-            controller_device: Device name for controller (for project switching).
+            output_dir: Directory for agent files (<agent>.voxtype).
+            agents: List of agent IDs for multi-output mode.
+            controller_device: Device name for controller (for agent switching).
         """
         self.config = config
         # Read settings from config
@@ -65,9 +63,8 @@ class VoxtypeApp:
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
         self.debug = config.logging.debug
-        self.output_file = output_file
         self.output_dir = output_dir
-        self.projects = projects or []
+        self.agents = agents or []
         self.controller_device = controller_device
         self.state = AppState.IDLE
         self._running = False
@@ -75,8 +72,8 @@ class VoxtypeApp:
         self._lock = threading.Lock()
         self._logger = logger
 
-        # Project state
-        self._current_project_index = 0
+        # Agent state
+        self._current_agent_index = 0
         self._controller = None  # Controller listener
 
         # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
@@ -275,12 +272,10 @@ class VoxtypeApp:
                 )
 
     def _get_current_output_file(self) -> str | None:
-        """Get the current output file path based on project mode."""
-        if self.output_file:
-            return self.output_file
-        if self.output_dir and self.projects:
-            project = self.projects[self._current_project_index]
-            return f"{self.output_dir}/{project}.transcription"
+        """Get the current output file path based on agent mode."""
+        if self.output_dir and self.agents:
+            agent = self.agents[self._current_agent_index]
+            return f"{self.output_dir}/{agent}.voxtype"
         return None
 
     def _create_injector(self) -> TextInjector:
@@ -395,8 +390,8 @@ class VoxtypeApp:
             if self._hotkey:
                 self._console.print(f"[dim]Toggle hotkey: {self._hotkey.get_key_name()}[/]")
 
-        # Create project files and initialize controller
-        self._create_project_files()
+        # Create agent files and initialize controller
+        self._create_agent_files()
         self._init_controller()
 
         hotkey_msg = f" (or press {self.config.hotkey.key})" if self._hotkey else ""
@@ -1017,8 +1012,8 @@ class VoxtypeApp:
         return False
 
     def _init_controller(self) -> None:
-        """Initialize controller listener for project switching."""
-        if not self.controller_device or not self.projects:
+        """Initialize controller listener for agent switching."""
+        if not self.controller_device or not self.agents:
             return
 
         try:
@@ -1048,10 +1043,10 @@ class VoxtypeApp:
             self._set_listening(True)
         elif command == "listening_off":
             self._set_listening(False)
-        elif command == "project_next":
-            self._switch_project(1)
-        elif command == "project_prev":
-            self._switch_project(-1)
+        elif command == "agent_next":
+            self._switch_agent(1)
+        elif command == "agent_prev":
+            self._switch_agent(-1)
         elif command == "discard":
             self._discard_current()
         elif command == "send":
@@ -1075,37 +1070,37 @@ class VoxtypeApp:
         if self._llm_processor:
             self._llm_processor.set_listening(on)
 
-    def _switch_project(self, direction: int) -> None:
-        """Switch to next/previous project.
+    def _switch_agent(self, direction: int) -> None:
+        """Switch to next/previous agent.
 
         Args:
             direction: 1 for next, -1 for previous
         """
-        if not self.projects:
+        if not self.agents:
             return
 
         # Circular navigation
-        self._current_project_index = (self._current_project_index + direction) % len(self.projects)
-        new_project = self.projects[self._current_project_index]
+        self._current_agent_index = (self._current_agent_index + direction) % len(self.agents)
+        new_agent = self.agents[self._current_agent_index]
 
-        # Update the injector to write to the new project file
+        # Update the injector to write to the new agent file
         self._injector = self._create_injector()
 
         # Show feedback
-        self._console.print(f"[bold cyan]>>> Project: {new_project}[/]")
+        self._console.print(f"[bold cyan]>>> Agent: {new_agent}[/]")
 
-        # Speak the project name
-        self._speak_project(new_project)
+        # Speak the agent name
+        self._speak_agent(new_agent)
 
-    def _speak_project(self, project_name: str) -> None:
-        """Speak the project name using TTS (piper preferred, with fallbacks)."""
+    def _speak_agent(self, agent_name: str) -> None:
+        """Speak the agent name using TTS (piper preferred, with fallbacks)."""
         import os
         import shutil
         import subprocess
         import sys
         import threading
 
-        text = f"progetto {project_name}"
+        text = f"agent {agent_name}"
 
         def _speak():
             try:
@@ -1172,9 +1167,9 @@ class VoxtypeApp:
 
         self._console.print("[yellow]Discarded[/]")
 
-    def _create_project_files(self) -> None:
-        """Create project transcription files (empty, so inputmux can find them)."""
-        if not self.output_dir or not self.projects:
+    def _create_agent_files(self) -> None:
+        """Create agent output files (empty, so inputmux can find them)."""
+        if not self.output_dir or not self.agents:
             return
 
         import os
@@ -1183,8 +1178,8 @@ class VoxtypeApp:
         # Create output directory if needed
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
 
-        for project in self.projects:
-            filepath = f"{self.output_dir}/{project}.transcription"
+        for agent in self.agents:
+            filepath = f"{self.output_dir}/{agent}.voxtype"
             # Create empty file if doesn't exist
             if not os.path.exists(filepath):
                 Path(filepath).touch()

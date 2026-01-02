@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-02
+
+### Changed
+- **Terminology: projects → agents**: More aligned with multi-agent use case
+  - `--projects` → `--agents`
+  - `project_next`/`project_prev` → `agent_next`/`agent_prev` (controller commands)
+  - File extension: `.transcription` → `.voxtype`
+- **Output mode `file` → `agent`**: `--output agent` writes to `<agent>.voxtype` files
+- **`--mode` → `--initial-mode`**: Clarifies it's the starting mode (can be switched at runtime)
+- **Input mode naming**: "Push-to-talk" → "Manual" (clearer for non-VAD mode)
+- **Language default is always `auto`**: No hardcoded language
+
+### Added
+- **`stt.hotwords`**: Comma-separated words to boost recognition (e.g., `voxtype,joshua`)
+  - Helps with custom vocabulary that Whisper doesn't recognize well
+
+### Removed
+- **`--output-file`**: No longer needed, filename derived from agent ID
+
 ## [2.0.0] - 2026-01-02
 
 ### BREAKING CHANGES

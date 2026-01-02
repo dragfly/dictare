@@ -135,7 +135,7 @@ def _apply_cli_overrides(
     vad: bool | None,
     silence_ms: int | None,
     wake_word: str | None,
-    mode: str | None,
+    initial_mode: str | None,
     debug: bool | None,
     log_file: str | None,
     audio_feedback: bool | None,
@@ -171,8 +171,8 @@ def _apply_cli_overrides(
         config.audio.silence_ms = silence_ms
     if wake_word is not None:
         config.command.wake_word = wake_word
-    if mode:
-        config.command.mode = mode
+    if initial_mode:
+        config.command.mode = initial_mode
     if debug is not None:
         config.logging.debug = debug
     if log_file:
@@ -182,9 +182,7 @@ def _apply_cli_overrides(
     if hw_accel is not None:
         config.stt.hw_accel = hw_accel
 
-def _format_status_panel(
-    config, output_file: str | None = None, projects: list[str] | None = None
-) -> Panel:
+def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
     """Create the status panel for the Ready message."""
     # Device string - check what will ACTUALLY be used
     if config.stt.device == "cuda":
@@ -200,17 +198,17 @@ def _format_status_panel(
         device_str = "CPU"  # Auto-detect didn't find acceleration
 
     # Output mode
-    if projects:
-        output_str = f"[cyan]projects[/] ({', '.join(projects)})"
-    elif output_file:
-        output_str = f"[cyan]file[/] ({output_file})"
+    if agents:
+        output_str = f"[cyan]agents[/] ({', '.join(agents)})"
     elif config.output.method == "clipboard":
         output_str = "[yellow]clipboard[/] (Ctrl+V to paste)"
+    elif config.output.method == "agent":
+        output_str = "[cyan]agent[/] (single)"
     else:
         output_str = config.output.method
 
     mode_str = "[cyan]transcription[/] (fast)" if config.command.mode == "transcription" else "[yellow]command[/] (LLM)"
-    input_mode = "[cyan]VAD[/] (auto-detect speech)" if config.audio.vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
+    input_mode = "[cyan]VAD[/] (auto-detect speech)" if config.audio.vad else f"Manual: [cyan]{config.hotkey.key}[/]"
     wake_str = f"Wake word: [cyan]{config.command.wake_word}[/]\n" if config.command.wake_word else ""
 
     # Format the hotkey nicely
@@ -304,19 +302,15 @@ def run(
     # Output options
     output: Annotated[
         Optional[str],
-        typer.Option("--output", "-o", help="Output method: keyboard, clipboard, or file"),
-    ] = None,
-    output_file: Annotated[
-        Optional[Path],
-        typer.Option("--output-file", "-F", help="Write transcriptions to a single file"),
+        typer.Option("--output", "-o", help="Output method: keyboard, clipboard, or agent"),
     ] = None,
     output_dir: Annotated[
         Optional[Path],
-        typer.Option("--output-dir", "-D", help="Directory for project files (<project>.transcription)"),
+        typer.Option("--output-dir", "-D", help="Directory for agent files (<agent>.voxtype)"),
     ] = None,
-    projects: Annotated[
+    agents: Annotated[
         Optional[str],
-        typer.Option("--projects", "-P", help="Project IDs comma-separated"),
+        typer.Option("--agents", "-A", help="Agent IDs comma-separated (e.g., 'claude,pippo')"),
     ] = None,
     typing_delay: Annotated[
         Optional[int],
@@ -329,11 +323,11 @@ def run(
     # Command options
     wake_word: Annotated[
         Optional[str],
-        typer.Option("--wake-word", "-w", help="Wake word to activate (e.g., 'Joshua')"),
+        typer.Option("--wake-word", "-w", help="Wake word to activate (e.g., 'hey joshua')"),
     ] = None,
-    mode: Annotated[
+    initial_mode: Annotated[
         Optional[str],
-        typer.Option("--mode", "-M", help="Mode: transcription or command"),
+        typer.Option("--initial-mode", "-M", help="Starting mode: transcription or command"),
     ] = None,
     commands: Annotated[
         Optional[bool],
@@ -346,7 +340,7 @@ def run(
     # Controller
     controller: Annotated[
         Optional[str],
-        typer.Option("--controller", help="Controller device name for project switching"),
+        typer.Option("--controller", help="Controller device name for agent switching"),
     ] = None,
     # Debug/logging options
     verbose: Annotated[
@@ -366,10 +360,10 @@ def run(
         typer.Option("--audio-feedback", help="Play beep sounds (true/false)"),
     ] = None,
 ) -> None:
-    """Start voxtype in push-to-talk or VAD mode.
+    """Start voxtype voice-to-text.
 
-    Push-to-talk: Hold the configured key while speaking, release to transcribe.
-    VAD mode: Automatically detects when you speak, no key needed.
+    VAD mode (default): Automatically detects when you speak.
+    Manual mode: Hold the configured key while speaking.
     """
     config = load_config(config_file)
 
@@ -389,7 +383,7 @@ def run(
         vad=vad,
         silence_ms=silence_ms,
         wake_word=wake_word,
-        mode=mode,
+        initial_mode=initial_mode,
         debug=debug,
         log_file=log_file,
         audio_feedback=audio_feedback,
@@ -410,29 +404,28 @@ def run(
     # Create JSONL logger if requested
     logger = _create_logger(config)
 
-    # Handle projects mode - parse comma-separated string
-    project_list = [p.strip() for p in projects.split(",")] if projects else None
+    # Handle agent mode - parse comma-separated string
+    agent_list = [a.strip() for a in agents.split(",")] if agents else None
     output_dir_str = str(output_dir) if output_dir else None
     controller_device = controller or config.controller.device
 
-    # If projects specified but no output_dir, default to current directory
-    if project_list and not output_dir_str:
+    # If agents specified but no output_dir, default to current directory
+    if agent_list and not output_dir_str:
         output_dir_str = "."
 
-    # If output_dir specified but no projects, default to ["voxtype"]
-    if output_dir_str and not project_list:
-        project_list = ["voxtype"]
+    # If output_dir specified but no agents, default to ["voxtype"]
+    if output_dir_str and not agent_list:
+        agent_list = ["voxtype"]
 
     voxtypeapp = VoxtypeApp(
         config,
         logger=logger,
-        output_file=str(output_file) if output_file else None,
         output_dir=output_dir_str,
-        projects=project_list,
+        agents=agent_list,
         controller_device=controller_device,
     )
 
-    console.print(_format_status_panel(config, str(output_file) if output_file else None, project_list))
+    console.print(_format_status_panel(config, agent_list))
 
     try:
         voxtypeapp.run()
