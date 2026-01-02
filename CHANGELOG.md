@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-01-02
+
+### Added
+- **PresenterController**: New controller type for clicker/presenter remotes. Ignores modifier keys (Shift, Ctrl, Alt, Meta) and maps presenter buttons to commands transparently.
+- **`controller.type` config**: Choose between `presenter` (clicker remotes) or `generic` (custom key mappings for programmable keypads).
+
+### Fixed
+- **Double newline bug**: FileInjector was writing two newlines per phrase. Now correctly writes one.
+- **Controller logs in verbose only**: Controller debug messages now only show with `--verbose`.
+
 ## [2.6.0] - 2026-01-02
 
 ### Changed
