@@ -444,6 +444,7 @@ def check() -> None:
 
     all_ok = True
     missing_with_hints = []
+    optional_with_hints = []
 
     for result in results:
         if result.available:
@@ -455,6 +456,8 @@ def check() -> None:
                 missing_with_hints.append(result)
         else:
             status = "[yellow]OPTIONAL[/]"
+            if result.install_hint:
+                optional_with_hints.append(result)
 
         table.add_row(result.name, status, result.message)
 
@@ -463,6 +466,13 @@ def check() -> None:
 
     if all_ok:
         console.print("[green]All required dependencies are available![/]")
+        # Show GPU acceleration hint if applicable
+        gpu_hints = [r for r in optional_with_hints if r.name in ("NVIDIA GPU", "Apple Silicon")]
+        if gpu_hints:
+            console.print("\n[bold]To enable hardware acceleration:[/]")
+            for result in gpu_hints:
+                hint = result.install_hint.replace("[", r"\[")  # type: ignore
+                console.print(f"  [cyan]{hint}[/]")
     else:
         console.print("[red]Some required dependencies are missing.[/]")
         if missing_with_hints:
