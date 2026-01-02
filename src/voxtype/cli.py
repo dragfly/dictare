@@ -237,7 +237,7 @@ def _create_logger(config):
     from voxtype.logging.jsonl import JSONLLogger
 
     log_params = {
-        "input_mode": "vad" if config.audio.vad else "push_to_talk",
+        "input_mode": "vad",  # PTT mode removed in v2.2.0
         "trigger_phrase": config.command.wake_word,
         "debug": config.logging.debug,
         "silence_ms": config.audio.silence_ms,
