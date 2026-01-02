@@ -955,11 +955,10 @@ class VoxtypeApp:
             return
 
         try:
-            from voxtype.hotkey.controller_listener import ControllerListener
+            from voxtype.hotkey.presenter_controller import PresenterController
 
-            self._controller = ControllerListener(
+            self._controller = PresenterController(
                 device_name=self.controller_device,
-                key_mappings=self.config.controller.keys,
                 verbose=self.config.verbose,
             )
 
