@@ -23,10 +23,6 @@ class AudioConfig(BaseModel):
         default=True,
         description="Play beep when entering/exiting LISTENING mode",
     )
-    vad: bool = Field(
-        default=True,
-        description="Use VAD mode (True) or push-to-talk mode (False)",
-    )
     silence_ms: int = Field(
         default=1200,
         description="VAD silence duration to end speech in milliseconds",
@@ -83,10 +79,6 @@ class OutputConfig(BaseModel):
     auto_enter: bool = Field(
         default=False,
         description="Press Enter to submit after typing (False = visual newline only)",
-    )
-    auto_paste: bool = Field(
-        default=True,
-        description="Auto Ctrl+V after clipboard copy (when using clipboard mode)",
     )
 
 class CommandConfig(BaseModel):
@@ -420,7 +412,6 @@ sample_rate = 16000
 channels = 1
 # device = "default"  # Uncomment to specify audio device
 audio_feedback = true  # Play beep on listening mode toggle
-vad = true             # VAD mode (false = manual trigger)
 silence_ms = 1200      # VAD silence threshold in ms
 
 [stt]
@@ -433,13 +424,12 @@ hw_accel = true                # Enable hardware acceleration
 # hotwords = "voxtype,joshua"  # Boost recognition of specific words
 
 [hotkey]
-key = "KEY_SCROLLLOCK"  # evdev key name (for manual mode)
+key = "KEY_SCROLLLOCK"  # evdev key name (toggle listening)
 
 [output]
 method = "keyboard"    # keyboard, clipboard, or agent
 typing_delay_ms = 5
 auto_enter = false     # Visual newline only
-auto_paste = true      # Auto Ctrl+V after clipboard copy
 
 [command]
 enabled = true
