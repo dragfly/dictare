@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     import numpy as np
 
 # Model sizes and their Hugging Face repo names
+# Note: "turbo" and "large-v3-turbo" are handled natively by faster-whisper
 _MODEL_REPOS = {
     "tiny": "Systran/faster-whisper-tiny",
     "tiny.en": "Systran/faster-whisper-tiny.en",
@@ -25,7 +26,9 @@ _MODEL_REPOS = {
     "large-v1": "Systran/faster-whisper-large-v1",
     "large-v2": "Systran/faster-whisper-large-v2",
     "large-v3": "Systran/faster-whisper-large-v3",
-    "large-v3-turbo": "deepdml/faster-whisper-large-v3-turbo-ct2",  # Community port of OpenAI turbo
+    # turbo models - let faster-whisper handle these directly
+    "turbo": None,  # faster-whisper handles this natively
+    "large-v3-turbo": None,  # alias, faster-whisper handles this
 }
 
 # Approximate model sizes in MB for display
@@ -46,10 +49,14 @@ _MODEL_SIZES_MB = {
 
 def _is_model_cached(model_size: str) -> bool:
     """Check if model is already downloaded."""
+    # If repo is None, faster-whisper handles it natively - skip our cache check
+    repo_id = _MODEL_REPOS.get(model_size)
+    if repo_id is None:
+        return True  # Let faster-whisper handle turbo models
+
     try:
         from huggingface_hub import try_to_load_from_cache
 
-        repo_id = _MODEL_REPOS.get(model_size, f"Systran/faster-whisper-{model_size}")
         # Check for the main model file
         result = try_to_load_from_cache(repo_id, "model.bin")
         return result is not None and os.path.exists(result)
@@ -74,7 +81,10 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
         TransferSpeedColumn,
     )
 
-    repo_id = _MODEL_REPOS.get(model_size, f"Systran/faster-whisper-{model_size}")
+    repo_id = _MODEL_REPOS.get(model_size)
+    if repo_id is None:
+        # Turbo models are handled natively by faster-whisper
+        return model_size
     size_mb = _MODEL_SIZES_MB.get(model_size, "?")
 
     if console:
