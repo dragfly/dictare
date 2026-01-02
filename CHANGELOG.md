@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`controller.type` config**: Choose between `presenter` (clicker remotes) or `generic` (custom key mappings for programmable keypads).
 
 ### Fixed
+- **Debounce for presenter remotes**: Single button press on presenter remotes sends multiple keys (F5, B, P, S, etc.). Added 300ms debounce window to prevent multiple commands from single press.
+- **Device selection**: PresenterController now prefers keyboard devices (`kbd` in by-id symlink) over system control devices.
 - **Double newline bug**: FileInjector was writing two newlines per phrase. Now correctly writes one.
 - **Controller logs in verbose only**: Controller debug messages now only show with `--verbose`.
 
