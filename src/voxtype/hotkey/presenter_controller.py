@@ -78,20 +78,54 @@ class PresenterController:
             sys.stderr.flush()
 
     def _find_device(self) -> evdev.InputDevice | None:
-        """Find the presenter device by name."""
-        import evdev
+        """Find the presenter device by name.
 
+        Prefers devices with 'keyboard' or 'kbd' in their by-id symlink,
+        since presenters often register as multiple devices (keyboard, mouse, system control).
+        """
+        import evdev
+        import os
+
+        # Build a map of device path -> by-id symlink name
+        by_id_map: dict[str, str] = {}
+        by_id_dir = "/dev/input/by-id"
+        if os.path.isdir(by_id_dir):
+            for name in os.listdir(by_id_dir):
+                try:
+                    target = os.path.realpath(os.path.join(by_id_dir, name))
+                    by_id_map[target] = name
+                except OSError:
+                    pass
+
+        candidates = []
         try:
             for path in evdev.list_devices():
                 device = evdev.InputDevice(path)
                 if self.device_name in device.name:
-                    self._log(f"Found: {device.path} ({device.name})")
-                    return device
-                device.close()
+                    # Check if this is the keyboard device via by-id symlink
+                    by_id_name = by_id_map.get(device.path, "")
+                    is_kbd = "kbd" in by_id_name.lower() or "keyboard" in by_id_name.lower()
+                    candidates.append((device, is_kbd, by_id_name))
+                    self._log(f"Candidate: {device.path} ({by_id_name}) kbd={is_kbd}")
+                else:
+                    device.close()
         except Exception as e:
             self._log(f"Error finding device: {e}")
+            return None
 
-        return None
+        if not candidates:
+            return None
+
+        # Prefer keyboard device
+        candidates.sort(key=lambda x: (not x[1], x[0].path))  # kbd first, then by path
+
+        # Close non-selected devices
+        selected = candidates[0][0]
+        for device, _, _ in candidates[1:]:
+            device.close()
+
+        self._log(f"Selected: {selected.path} ({selected.name})")
+        return selected
 
     def start(self, on_command: Callable[[str], None]) -> bool:
         """Start listening for presenter button presses.
