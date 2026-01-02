@@ -101,7 +101,6 @@ def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
     if sys.platform == "darwin" and platform.machine() == "arm64":
         # Apple Silicon: try MLX
         try:
-            console.print("[dim]Loading MLX (first run may take ~30s)...[/]")
             import mlx_whisper  # noqa: F401
             config.stt.backend = "mlx-whisper"
         except ImportError:
@@ -114,7 +113,6 @@ def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
             if cuda_device_count > 0:
                 config.stt.device = "cuda"
                 config.stt.compute_type = "float16"
-                console.print(f"[dim]CUDA GPU detected ({cuda_device_count} device(s)), using GPU acceleration[/]")
                 _setup_cuda_library_path()
         except (ImportError, RuntimeError, AttributeError):
             pass  # ctranslate2 not installed or no CUDA, using CPU

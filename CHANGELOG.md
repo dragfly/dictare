@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-01-02
+
+### Changed
+- **Cleaner startup output**: Status box shows immediately, verbose messages only with `--verbose`
+- **Removed redundant "Ready!" message**: Box title already says "Ready"
+- **Verbose-only messages**: "Initializing...", "Loading STT...", "Loading VAD...", "LLM processor...", "Controller...", "Hotkey device..." now only shown with `--verbose`
+
+### Removed
+- **"CUDA GPU detected" message**: Info already in status box, no need to print separately
+
 ## [2.4.0] - 2026-01-02
 
 ### Added
