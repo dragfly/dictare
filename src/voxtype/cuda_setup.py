@@ -100,9 +100,10 @@ def setup_cuda(console: Console | None = None, verbose: bool = False) -> tuple[b
     cudnn_path = _find_cudnn_path()
 
     if cudnn_path is None:
-        if verbose and console:
-            console.print("[dim]cuDNN not found, will try GPU anyway or fall back to CPU[/]")
-        return True, "cuda"  # Let ctranslate2 try, might have bundled libs
+        if console:
+            console.print("[yellow]cuDNN libraries not found - using CPU[/]")
+            console.print("[dim]Install GPU support: pip install 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'[/]")
+        return False, "cpu"  # Don't try CUDA without cuDNN - causes core dumps
 
     # Pre-load cuDNN libraries
     success, error = _preload_cudnn_libraries(cudnn_path)
