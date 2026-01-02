@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-01-02
+
+### Added
+- **VAD max speech duration**: In VAD mode, speech is now chunked at `max_duration` (default 60s)
+  - Sends transcription and continues listening
+  - Plays beep to notify user
+- **`voxtype check` shows GPU status**: Detects NVIDIA GPU and cuDNN availability
+- **Hardware acceleration hints**: Shows exact install command when GPU detected but cuDNN missing
+- **Turbo model download message**: Shows "Downloading... This may take a few minutes"
+
+### Changed
+- **Ready box shows actual device**: Now shows "CPU (GPU detected, cuDNN missing)" instead of "GPU (CUDA)"
+- **Default `typing_delay_ms`**: Changed from 3 to 5 for better compatibility
+
+### Fixed
+- **`config set` nested dicts**: Now writes TOML subsections correctly (was writing Python dict syntax)
+- **Graceful CPU fallback**: No more crashes when cuDNN missing, uses int8 compute type
+
 ## [1.5.0] - 2026-01-02
 
 ### Changed

@@ -408,6 +408,8 @@ class VoxtypeApp:
             vad=self._vad,
             on_speech_start=self._on_vad_speech_start,
             on_speech_end=self._on_vad_speech_end,
+            max_speech_seconds=self.config.audio.max_duration,
+            on_max_speech=self._on_max_speech_duration,
         )
 
         # Create LLM processor (replaces old command processor)
@@ -531,6 +533,16 @@ class VoxtypeApp:
 
         thread = threading.Thread(target=transcribe_and_inject, daemon=True)
         thread.start()
+
+    def _on_max_speech_duration(self) -> None:
+        """Handle max speech duration reached in VAD mode."""
+        self._console.print(
+            f"[yellow]Max duration ({self.config.audio.max_duration}s) - sending, still listening...[/]"
+        )
+        # Play beep to notify user
+        if self.config.audio.audio_feedback:
+            from voxtype.audio.beep import play_beep
+            play_beep("listening_on")
 
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
