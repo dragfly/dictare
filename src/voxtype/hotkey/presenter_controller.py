@@ -38,10 +38,11 @@ class PresenterController:
     """
 
     # Keys that trigger "send" command (PLAY button variants)
-    SEND_KEYS = {"KEY_B", "KEY_F5", "KEY_S", "KEY_P", "KEY_TAB", "KEY_F4"}
+    # Note: KEY_ESC added because some presenters alternate between F5 and ESC on same button
+    SEND_KEYS = {"KEY_F5", "KEY_S", "KEY_P", "KEY_TAB", "KEY_F4", "KEY_ESC"}
 
     # Keys that trigger "toggle_listening" command
-    TOGGLE_KEYS = {"KEY_ESC"}
+    TOGGLE_KEYS = {"KEY_B"}
 
     # Keys for agent switching
     AGENT_NEXT_KEYS = {"KEY_UP", "KEY_PAGEUP"}
