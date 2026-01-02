@@ -70,6 +70,8 @@ class PresenterController:
         self._device: evdev.InputDevice | None = None
         self._stop_event = threading.Event()
         self._listening = True  # Track listening state for toggle
+        self._last_command_time: float = 0  # For debouncing
+        self._debounce_ms: int = 300  # Ignore commands within this window
 
     def _log(self, msg: str) -> None:
         """Log message if verbose mode is enabled."""
@@ -178,24 +180,31 @@ class PresenterController:
 
                     self._log(f"Key: {key_name}")
 
-                    # Map to command
+                    # Map to command (with debounce)
+                    import time
+                    now = time.time() * 1000  # ms
+                    if now - self._last_command_time < self._debounce_ms:
+                        self._log("→ debounced")
+                        continue
+
+                    cmd = None
                     if key_name in self.SEND_KEYS:
-                        self._log("→ send")
-                        on_command("send")
+                        cmd = "send"
                     elif key_name in self.TOGGLE_KEYS:
                         # Toggle listening state
                         self._listening = not self._listening
                         cmd = "listening_on" if self._listening else "listening_off"
-                        self._log(f"→ {cmd}")
-                        on_command(cmd)
                     elif key_name in self.AGENT_NEXT_KEYS:
-                        self._log("→ agent_next")
-                        on_command("agent_next")
+                        cmd = "agent_next"
                     elif key_name in self.AGENT_PREV_KEYS:
-                        self._log("→ agent_prev")
-                        on_command("agent_prev")
+                        cmd = "agent_prev"
+
+                    if cmd:
+                        self._log(f"→ {cmd}")
+                        self._last_command_time = now
+                        on_command(cmd)
                     else:
-                        self._log(f"→ unmapped")
+                        self._log("→ unmapped")
 
             except OSError as e:
                 self._log(f"OSError: {e}")
