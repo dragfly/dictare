@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-01-02
+
+### Fixed
+- **Hotkey not working**: `is_key_available()` now uses same device filtering as `_find_keyboard_device()`, preventing false positives when key exists only on virtual/excluded devices
+- **Logger crash**: Fixed reference to removed `config.audio.vad` in `_create_logger()`
+
 ## [2.2.0] - 2026-01-02
 
 ### Removed

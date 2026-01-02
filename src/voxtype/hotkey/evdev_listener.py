@@ -173,7 +173,11 @@ class EvdevHotkeyListener(HotkeyListener):
             self._thread = None
 
     def is_key_available(self) -> bool:
-        """Check if the configured key is available on any keyboard."""
+        """Check if the configured key is available on a usable keyboard.
+
+        Uses the same filtering as _find_keyboard_device() to avoid false positives
+        when key exists only on virtual/excluded devices.
+        """
         try:
             import evdev
 
@@ -181,9 +185,24 @@ class EvdevHotkeyListener(HotkeyListener):
             if target_key is None:
                 return False
 
+            # Same exclude keywords as _find_keyboard_device
+            exclude_keywords = [
+                "virtual", "ydotool", "bluetooth", "presenter", "clicker",
+                "remote", "consumer control", "system control"
+            ]
+            if self.exclude_device:
+                exclude_keywords.append(self.exclude_device.lower())
+
             devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
 
             for device in devices:
+                name_lower = device.name.lower()
+
+                # Skip excluded devices (same as _find_keyboard_device)
+                if any(kw in name_lower for kw in exclude_keywords):
+                    device.close()
+                    continue
+
                 capabilities = device.capabilities()
                 if evdev.ecodes.EV_KEY in capabilities:
                     key_caps = capabilities[evdev.ecodes.EV_KEY]
