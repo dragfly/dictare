@@ -61,7 +61,6 @@ class VoxtypeApp:
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
-        self.debug = config.logging.debug
         self.output_dir = output_dir
         self.agents = agents or []
         self.controller_device = controller_device
@@ -145,7 +144,7 @@ class VoxtypeApp:
             device=self.config.stt.device,
             compute_type=self.config.stt.compute_type,
             console=self._console,
-            verbose=self.debug,
+            verbose=self.config.verbose,
         )
 
         # Update device string if fallback occurred
@@ -431,7 +430,7 @@ class VoxtypeApp:
             trigger_phrase=self.trigger_phrase,
             ollama_model=self.config.command.ollama_model,
             ollama_timeout=self.config.command.ollama_timeout,
-            console=self._console if self.debug else None,
+            console=self._console if self.config.verbose else None,
         )
 
         # Show which backend is being used
@@ -458,7 +457,7 @@ class VoxtypeApp:
         with self._lock:
             if self.state != AppState.IDLE:
                 # Debug: show why we're buffering
-                if self.debug:
+                if self.config.verbose:
                     self._console.print(f"\n[yellow][DEBUG] Speech buffering, state={self.state.name}[/]")
                 # DON'T reset VAD - let it buffer audio for when we're ready
                 return
@@ -472,7 +471,7 @@ class VoxtypeApp:
         with self._lock:
             if self.state == AppState.TRANSCRIBING:
                 # Still busy - queue audio for later
-                if self.debug:
+                if self.config.verbose:
                     self._console.print(f"\n[yellow][DEBUG] Queuing speech (transcribing)[/]")
                 self._audio_queue.append(audio_data)
                 return
@@ -524,7 +523,7 @@ class VoxtypeApp:
                         )
 
                     # Debug mode: always show full transcription
-                    if self.debug:
+                    if self.config.verbose:
                         self._console.print(f"[blue][DEBUG][/] {text}")
 
                     # Check listening state first
@@ -587,7 +586,7 @@ class VoxtypeApp:
         # Pop first queued audio
         audio_data = self._audio_queue.pop(0)
 
-        if self.debug:
+        if self.config.verbose:
             self._console.print(f"[yellow][DEBUG] Processing queued audio ({len(self._audio_queue)} remaining)[/]")
 
         # Check minimum duration
@@ -633,7 +632,7 @@ class VoxtypeApp:
             )
 
         if response.action == Action.IGNORE:
-            if self.debug or response.user_feedback:
+            if self.config.verbose or response.user_feedback:
                 display = original_text[:50] + "..." if len(original_text) > 50 else original_text
                 feedback = response.user_feedback or "No trigger phrase"
                 self._console.print(f"[dim]{feedback}:[/] {display}")
@@ -955,7 +954,7 @@ class VoxtypeApp:
 
     def _on_controller_command(self, command: str) -> None:
         """Handle controller command."""
-        if self.debug:
+        if self.config.verbose:
             self._console.print(f"\n[yellow][DEBUG] Controller command: {command}[/]")
 
         if command == "listening_on":
