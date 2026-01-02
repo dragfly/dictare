@@ -895,8 +895,8 @@ class VoxtypeApp:
         display_text = text[:60] + "..." if len(text) > 60 else text
         self._console.print(f"[green]Transcribed:[/] {display_text}        ")
 
-        # Add Enter if configured
-        inject_text = text + "\n" if self.config.injection.auto_enter else text
+        # Always add newline (for visual separation or Enter key depending on auto_enter)
+        inject_text = text + "\n"
 
         if self._injector:
             method = self._injector.get_name()
@@ -905,6 +905,7 @@ class VoxtypeApp:
                     inject_text,
                     delay_ms=self.config.injection.typing_delay_ms,
                     auto_paste=self.config.injection.auto_paste,
+                    auto_enter=self.config.injection.auto_enter,
                 )
                 if success and self.config.injection.auto_paste:
                     pass  # Auto-pasted, no message needed
@@ -916,6 +917,7 @@ class VoxtypeApp:
                 success = self._injector.type_text(
                     inject_text,
                     delay_ms=self.config.injection.typing_delay_ms,
+                    auto_enter=self.config.injection.auto_enter,
                 )
 
                 # Beep when file write succeeds (so user knows they can switch project)
@@ -1090,6 +1092,8 @@ class VoxtypeApp:
             self._switch_project(-1)
         elif command == "discard":
             self._discard_current()
+        elif command == "send":
+            self._send_submit()
 
     def _set_listening(self, on: bool) -> None:
         """Set listening state on/off."""
@@ -1180,6 +1184,15 @@ class VoxtypeApp:
                 pass  # Silently fail if TTS not available
 
         threading.Thread(target=_speak, daemon=True).start()
+
+    def _send_submit(self) -> None:
+        """Send submit (Enter key) to the target."""
+        if self._injector:
+            success = self._injector.send_submit()
+            if success:
+                self._console.print("[green]Sent[/]")
+            else:
+                self._console.print("[red]Send failed[/]")
 
     def _discard_current(self) -> None:
         """Discard current recording/transcription."""
