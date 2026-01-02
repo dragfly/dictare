@@ -90,6 +90,7 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
         local_path = snapshot_download(
             repo_id,
             local_files_only=False,
+            token=False,  # Public repos don't need auth
         )
 
         progress.update(task, completed=True)
