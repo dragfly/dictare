@@ -32,6 +32,7 @@ class OneShotTranscriber:
         stt_engine: STTEngine,
         silence_ms: int = 1200,
         max_duration: int = 60,
+        quiet: bool = False,
     ) -> None:
         """Initialize transcriber.
 
@@ -40,11 +41,13 @@ class OneShotTranscriber:
             stt_engine: Loaded STT engine.
             silence_ms: Silence duration to end recording (ms).
             max_duration: Maximum recording duration (seconds).
+            quiet: Suppress status messages.
         """
         self.config = config
         self.stt_engine = stt_engine
         self.silence_ms = silence_ms
         self.max_duration = max_duration
+        self.quiet = quiet
 
         # State
         self._audio_data: NDArray[np.float32] | None = None
@@ -95,7 +98,8 @@ class OneShotTranscriber:
             )
 
             # Start streaming audio through VAD
-            print("[Waiting for speech...]", file=sys.stderr)
+            if not self.quiet:
+                print("[Waiting for speech...]", file=sys.stderr)
             self._start_time = time.time()
 
             self._audio_capture.start_streaming(streaming_vad.process_chunk)
@@ -104,7 +108,8 @@ class OneShotTranscriber:
             while not self._done.is_set() and not self._cancelled.is_set():
                 elapsed = time.time() - self._start_time
                 if elapsed > self.max_duration:
-                    print(f"\n[Max duration {self.max_duration}s reached]", file=sys.stderr)
+                    if not self.quiet:
+                        print(f"\n[Max duration {self.max_duration}s reached]", file=sys.stderr)
                     streaming_vad.flush()
                     break
                 # Use wait with timeout instead of sleep for faster interrupt response
@@ -114,14 +119,16 @@ class OneShotTranscriber:
 
             # Check if cancelled
             if self._cancelled.is_set():
-                print("\n[Cancelled]", file=sys.stderr)
+                if not self.quiet:
+                    print("\n[Cancelled]", file=sys.stderr)
                 return ""
 
             # Transcribe
             if self._audio_data is None or len(self._audio_data) == 0:
                 return ""
 
-            print("[Transcribing...]", file=sys.stderr)
+            if not self.quiet:
+                print("[Transcribing...]", file=sys.stderr)
             text = self.stt_engine.transcribe(
                 self._audio_data,
                 language=self.config.stt.language,
@@ -138,7 +145,8 @@ class OneShotTranscriber:
     def _on_speech_start(self) -> None:
         """Called when VAD detects speech start."""
         self._speech_started = True
-        print("[Listening...]", file=sys.stderr)
+        if not self.quiet:
+            print("[Listening...]", file=sys.stderr)
 
     def _on_speech_end(self, audio: NDArray[np.float32]) -> None:
         """Called when VAD detects speech end."""
