@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Config `stt.device` default**: Changed from `"cpu"` to `"auto"`
 - **Model download progress bar**: Shows download progress when fetching Whisper models
 
+### Fixed
+- **Turbo model support**: `turbo` and `large-v3-turbo` models now work correctly (handled natively by faster-whisper)
+- **HuggingFace auth errors**: Clear error messages with troubleshooting steps for download failures
+
 ### Removed
 - **`--gpu/-g` flag**: No longer needed since GPU is auto-detected (use `--no-accel` to disable)
 
