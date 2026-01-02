@@ -43,7 +43,11 @@ class EvdevHotkeyListener(HotkeyListener):
         self._stop_event = threading.Event()
 
     def _find_keyboard_device(self):
-        """Find a keyboard device that has the target key."""
+        """Find a keyboard device that has the target key.
+
+        Prioritizes devices with 'keyboard' in the name to avoid selecting
+        presenters, clickers, or other input devices that happen to have keys.
+        """
         import evdev
 
         target_key = getattr(evdev.ecodes, self.key_name, None)
@@ -60,7 +64,8 @@ class EvdevHotkeyListener(HotkeyListener):
         if self.exclude_device:
             exclude_keywords.append(self.exclude_device.lower())
 
-        selected_device = None
+        keyboard_with_key = None  # Priority 1: has "keyboard" in name + has target key
+        any_with_key = None       # Priority 2: has target key (no "keyboard" in name)
         devices = []
 
         try:
@@ -81,10 +86,18 @@ class EvdevHotkeyListener(HotkeyListener):
 
                 key_caps = capabilities[evdev.ecodes.EV_KEY]
 
-                # First preference: device explicitly has the target key
+                # Check if device has the target key
                 if target_key in key_caps:
-                    selected_device = device
-                    break
+                    if "keyboard" in name_lower:
+                        # Priority 1: real keyboard with the key
+                        keyboard_with_key = device
+                        break  # Found the best option, stop searching
+                    elif any_with_key is None:
+                        # Priority 2: first device with the key (keep looking for keyboard)
+                        any_with_key = device
+
+            # Select best available device
+            selected_device = keyboard_with_key or any_with_key
 
             # If no device found with target key, try fallback (first keyboard)
             if selected_device is None:
@@ -175,8 +188,9 @@ class EvdevHotkeyListener(HotkeyListener):
     def is_key_available(self) -> bool:
         """Check if the configured key is available on a usable keyboard.
 
-        Uses the same filtering as _find_keyboard_device() to avoid false positives
-        when key exists only on virtual/excluded devices.
+        Uses the same filtering and prioritization as _find_keyboard_device()
+        to avoid false positives when key exists only on virtual/excluded devices.
+        Prioritizes devices with 'keyboard' in the name.
         """
         try:
             import evdev
@@ -194,6 +208,8 @@ class EvdevHotkeyListener(HotkeyListener):
                 exclude_keywords.append(self.exclude_device.lower())
 
             devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+            found_on_keyboard = False
+            found_on_any = False
 
             for device in devices:
                 name_lower = device.name.lower()
@@ -207,11 +223,15 @@ class EvdevHotkeyListener(HotkeyListener):
                 if evdev.ecodes.EV_KEY in capabilities:
                     key_caps = capabilities[evdev.ecodes.EV_KEY]
                     if target_key in key_caps:
-                        device.close()
-                        return True
+                        if "keyboard" in name_lower:
+                            found_on_keyboard = True
+                            device.close()
+                            break  # Found on real keyboard, done
+                        else:
+                            found_on_any = True
                 device.close()
 
-            return False
+            return found_on_keyboard or found_on_any
         except Exception:
             return False
 
