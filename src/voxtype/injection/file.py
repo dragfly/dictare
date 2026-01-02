@@ -23,14 +23,19 @@ class FileInjector(TextInjector):
         Args:
             text: Text to write.
             delay_ms: Ignored for file output.
-            auto_enter: Ignored for file output (newlines always written).
+            auto_enter: If True and text ends with newline, keep it (submit signal).
+                        If False, strip trailing newline (text accumulates).
 
         Returns:
             True if successful.
         """
         try:
+            # Handle newline at end based on auto_enter mode
+            # When auto_enter=False, strip trailing newline to prevent submit
+            if not auto_enter and text.endswith("\n"):
+                text = text.rstrip("\n")
+
             with open(self.filepath, "ab") as f:
-                # Write text as-is (already has \n from auto_enter)
                 f.write(text.encode())
                 f.flush()
             return True
@@ -42,10 +47,14 @@ class FileInjector(TextInjector):
         return f"file:{self.filepath}"
 
     def send_newline(self) -> bool:
-        """Write a newline to the file."""
+        """Write a space separator to the file.
+
+        For file mode, newline means 'submit' to the reader (inputmux).
+        So for visual separation between phrases, we use a space instead.
+        """
         try:
             with open(self.filepath, "ab") as f:
-                f.write(b"\n")
+                f.write(b" ")
                 f.flush()
             return True
         except OSError:
