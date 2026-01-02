@@ -541,8 +541,8 @@ class VoxtypeApp:
         )
         # Play beep to notify user
         if self.config.audio.audio_feedback:
-            from voxtype.audio.beep import play_beep
-            play_beep("listening_on")
+            from voxtype.audio.beep import play_beep_sent
+            play_beep_sent()
 
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
