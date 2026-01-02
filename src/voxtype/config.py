@@ -73,7 +73,7 @@ class InjectionConfig(BaseModel):
         description="Text injection backend to use",
     )
     typing_delay_ms: int = Field(
-        default=3,
+        default=5,
         description="Delay between characters in milliseconds",
     )
     fallback_to_clipboard: bool = Field(
