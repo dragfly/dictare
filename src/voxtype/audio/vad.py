@@ -128,6 +128,8 @@ class StreamingVAD:
         vad: SileroVAD,
         on_speech_start: Callable[[], None],
         on_speech_end: Callable[[NDArray[np.float32]], None],
+        max_speech_seconds: int = 60,
+        on_max_speech: Callable[[], None] | None = None,
     ) -> None:
         """Initialize streaming VAD.
 
@@ -135,16 +137,21 @@ class StreamingVAD:
             vad: SileroVAD instance.
             on_speech_start: Called when speech starts.
             on_speech_end: Called when speech ends, with accumulated audio.
+            max_speech_seconds: Max duration before forced send (default 60s).
+            on_max_speech: Called when max speech duration reached (for beep).
         """
         self.vad = vad
         self.on_speech_start = on_speech_start
         self.on_speech_end = on_speech_end
+        self.max_speech_samples = max_speech_seconds * vad.sample_rate
+        self.on_max_speech = on_max_speech
 
         # State
         self._is_speaking = False
         self._audio_buffer: list[NDArray[np.float32]] = []
         self._silence_samples = 0
         self._speech_samples = 0
+        self._total_speech_samples = 0  # Track total for max duration
 
         # Pre-buffer for capturing audio just before speech starts
         self._pre_buffer: list[NDArray[np.float32]] = []
@@ -184,6 +191,20 @@ class StreamingVAD:
         else:
             # Currently speaking - accumulate audio
             self._audio_buffer.append(chunk.copy())
+            self._total_speech_samples += len(chunk)
+
+            # Check max speech duration (send partial, continue listening)
+            if self._total_speech_samples >= self.max_speech_samples:
+                if self._audio_buffer:
+                    audio = np.concatenate(self._audio_buffer)
+                    self._audio_buffer = []
+                    self._total_speech_samples = 0
+                    # Don't reset VAD state - we're still speaking
+                    # Notify for beep, then send audio
+                    if self.on_max_speech:
+                        self.on_max_speech()
+                    self.on_speech_end(audio)
+                return
 
             if prob < self.vad.neg_threshold:
                 self._silence_samples += len(chunk)
@@ -193,6 +214,7 @@ class StreamingVAD:
                 if self._silence_samples >= min_silence:
                     self._is_speaking = False
                     self._silence_samples = 0
+                    self._total_speech_samples = 0
 
                     # Combine audio and call callback
                     if self._audio_buffer:
@@ -228,5 +250,6 @@ class StreamingVAD:
         self._audio_buffer = []
         self._silence_samples = 0
         self._speech_samples = 0
+        self._total_speech_samples = 0
         self._pre_buffer = []
         self.vad.reset()
