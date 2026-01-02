@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`config set` nested dicts**: Now writes TOML subsections correctly (was writing Python dict syntax)
 - **Graceful CPU fallback**: No more crashes when cuDNN missing, uses int8 compute type
+- **VAD max duration beep**: Fixed ImportError using correct `play_beep_sent()` function
 
 ## [1.5.0] - 2026-01-02
 
