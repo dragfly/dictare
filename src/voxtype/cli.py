@@ -80,9 +80,27 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-def _auto_detect_acceleration(config) -> None:
-    """Auto-detect GPU acceleration (MLX on macOS, CUDA on Linux)."""
+def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
+    """Auto-detect hardware acceleration (MLX on macOS, CUDA on Linux).
+
+    Args:
+        config: The configuration object to update
+        cpu_only: If True, skip detection and force CPU
+    """
     import platform
+
+    # If cpu_only flag is set, force CPU and skip detection
+    if cpu_only:
+        config.stt.device = "cpu"
+        config.stt.compute_type = "int8"
+        return
+
+    # Only auto-detect if device is "auto"
+    if config.stt.device != "auto":
+        return
+
+    # Default to CPU if no acceleration found
+    config.stt.device = "cpu"
 
     if sys.platform == "darwin" and platform.machine() == "arm64":
         # Apple Silicon: try MLX
@@ -91,7 +109,7 @@ def _auto_detect_acceleration(config) -> None:
             import mlx_whisper  # noqa: F401
             config.stt.backend = "mlx-whisper"
         except ImportError:
-            pass  # mlx-whisper not installed, use default
+            pass  # mlx-whisper not installed, use CPU
     elif sys.platform == "linux":
         # Linux: try CUDA GPU via ctranslate2 (faster-whisper dependency)
         try:
@@ -103,7 +121,7 @@ def _auto_detect_acceleration(config) -> None:
                 console.print(f"[dim]CUDA GPU detected ({cuda_device_count} device(s)), using GPU acceleration[/]")
                 _setup_cuda_library_path()
         except (ImportError, RuntimeError, AttributeError):
-            pass  # ctranslate2 not installed or no CUDA
+            pass  # ctranslate2 not installed or no CUDA, using CPU
 
 
 def _apply_cli_overrides(
@@ -115,7 +133,6 @@ def _apply_cli_overrides(
     no_enter: bool,
     clipboard: bool,
     mlx: bool,
-    gpu: bool,
     max_duration: int | None,
     verbose: bool,
     no_commands: bool,
@@ -123,7 +140,10 @@ def _apply_cli_overrides(
     keyboard: bool,
     ollama_model: str | None,
 ) -> None:
-    """Apply CLI options to config."""
+    """Apply CLI options to config.
+
+    Note: cpu_only is handled earlier in _auto_detect_acceleration()
+    """
     if model:
         config.stt.model_size = model
     if key:
@@ -136,10 +156,6 @@ def _apply_cli_overrides(
         config.injection.backend = "clipboard"
     if mlx:
         config.stt.backend = "mlx-whisper"
-    elif gpu:
-        config.stt.device = "cuda"
-        config.stt.compute_type = "float16"
-        _setup_cuda_library_path()
     if max_duration:
         config.audio.max_duration = max_duration
     if verbose:
@@ -271,13 +287,13 @@ def run(
         bool,
         typer.Option("--clipboard", "-C", help="Use clipboard instead of typing (for accented chars)"),
     ] = False,
-    gpu: Annotated[
+    no_accel: Annotated[
         bool,
-        typer.Option("--gpu", "-g", help="Use GPU (CUDA) for faster transcription"),
+        typer.Option("--no-accel", help="Disable hardware acceleration (force CPU)"),
     ] = False,
     mlx: Annotated[
         bool,
-        typer.Option("--mlx", help="Use MLX (Apple Silicon) for faster transcription"),
+        typer.Option("--mlx", help="Force MLX backend (Apple Silicon)"),
     ] = False,
     max_duration: Annotated[
         Optional[int],
@@ -351,8 +367,8 @@ def run(
     """
     config = load_config(config_file)
 
-    # Auto-detect GPU acceleration
-    _auto_detect_acceleration(config)
+    # Auto-detect hardware acceleration (unless --no-accel)
+    _auto_detect_acceleration(config, cpu_only=no_accel)
 
     # Auto-detect hotkey based on platform (if using default)
     if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
@@ -368,7 +384,6 @@ def run(
         no_enter=no_enter,
         clipboard=clipboard,
         mlx=mlx,
-        gpu=gpu,
         max_duration=max_duration,
         verbose=verbose,
         no_commands=no_commands,
@@ -647,13 +662,13 @@ def transcribe(
         Optional[str],
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
-    gpu: Annotated[
+    no_accel: Annotated[
         bool,
-        typer.Option("--gpu", "-g", help="Use GPU (CUDA) for faster transcription"),
+        typer.Option("--no-accel", help="Disable hardware acceleration (force CPU)"),
     ] = False,
     mlx: Annotated[
         bool,
-        typer.Option("--mlx", help="Use MLX (Apple Silicon) for faster transcription"),
+        typer.Option("--mlx", help="Force MLX backend (Apple Silicon)"),
     ] = False,
     silence_ms: Annotated[
         int,
@@ -701,37 +716,41 @@ def transcribe(
     if not os.environ.get("VOXTYPE_VERBOSE"):
         sys.stderr = io.StringIO()
 
+    # Positive flag for readability
+    use_accel = not no_accel
+
     try:
-        # Auto-detect GPU acceleration (this prints to console, suppress it)
-        import platform
-        if sys.platform == "darwin" and platform.machine() == "arm64":
-            try:
-                import mlx_whisper  # noqa: F401
-                config.stt.backend = "mlx-whisper"
-            except ImportError:
-                pass
-        elif sys.platform == "linux":
-            try:
-                import ctranslate2
-                cuda_device_count = ctranslate2.get_cuda_device_count()
-                if cuda_device_count > 0:
-                    config.stt.device = "cuda"
-                    config.stt.compute_type = "float16"
-                    _setup_cuda_library_path()
-            except (ImportError, RuntimeError, AttributeError):
-                pass
+        # Auto-detect hardware acceleration
+        if use_accel:
+            import platform
+            if sys.platform == "darwin" and platform.machine() == "arm64":
+                try:
+                    import mlx_whisper  # noqa: F401
+                    config.stt.backend = "mlx-whisper"
+                except ImportError:
+                    pass
+            elif sys.platform == "linux":
+                try:
+                    import ctranslate2
+                    cuda_device_count = ctranslate2.get_cuda_device_count()
+                    if cuda_device_count > 0:
+                        config.stt.device = "cuda"
+                        config.stt.compute_type = "float16"
+                        _setup_cuda_library_path()
+                except (ImportError, RuntimeError, AttributeError):
+                    pass
+        else:
+            # Force CPU mode
+            config.stt.device = "cpu"
+            config.stt.compute_type = "int8"
 
         # Apply CLI overrides
         if model:
             config.stt.model_size = model
         if language:
             config.stt.language = language
-        if mlx:
+        if mlx and use_accel:
             config.stt.backend = "mlx-whisper"
-        elif gpu:
-            config.stt.device = "cuda"
-            config.stt.compute_type = "float16"
-            _setup_cuda_library_path()
 
         # Create STT engine
         if config.stt.backend == "faster-whisper":

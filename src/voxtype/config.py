@@ -46,8 +46,8 @@ class STTConfig(BaseModel):
         description="Compute type for faster-whisper (int8/float16/float32)",
     )
     device: str = Field(
-        default="cpu",
-        description="Device to use (cpu/cuda)",
+        default="auto",
+        description="Device to use (auto/cpu/cuda) - auto detects best available",
     )
     beam_size: int = Field(default=5, description="Beam size for decoding")
 
@@ -410,6 +410,7 @@ audio_feedback = true  # Play beep on listening mode toggle
 backend = "faster-whisper"
 model_size = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
 language = "auto"    # auto-detect, or "en", "it", etc.
+device = "auto"      # auto (detect GPU/MLX), cpu, cuda (use --no-accel to force CPU)
 compute_type = "int8"
 beam_size = 5
 
