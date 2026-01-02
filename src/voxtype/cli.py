@@ -822,6 +822,11 @@ def devices(
     table.add_column("ScrollLock", justify="center", width=10)
     table.add_column("Type", width=12)
 
+    # Add option 0 for disable/auto-detect
+    if set_hotkey or set_controller:
+        label = "[yellow](auto-detect)[/]" if set_hotkey else "[yellow](disabled)[/]"
+        table.add_row("0", label, "—", "—", "—")
+
     for i, dev in enumerate(devices_info, 1):
         keys_icon = "[green]✓[/]" if dev["has_keys"] else "[dim]—[/]"
         scroll_icon = "[green]✓[/]" if dev["has_scroll"] else "[dim]—[/]"
