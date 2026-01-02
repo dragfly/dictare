@@ -937,7 +937,15 @@ class VoxtypeApp:
 
     def _init_controller(self) -> None:
         """Initialize controller listener for agent switching."""
-        if not self.controller_device or not self.agents:
+        if not self.controller_device:
+            return
+
+        if not self.agents:
+            # Controller configured but no agents - show info message
+            self._console.print(
+                f"[dim]Controller: {self.controller_device} "
+                f"(inactive - use --agents to enable)[/]"
+            )
             return
 
         try:
