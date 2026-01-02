@@ -44,6 +44,7 @@ class EvdevHotkeyListener(HotkeyListener):
         self._thread: threading.Thread | None = None
         self._device: evdev.InputDevice | None = None
         self._stop_event = threading.Event()
+        self._selected_device_info: tuple[str, str] | None = None  # (path, name)
 
     def _find_keyboard_device(self):
         """Find a keyboard device that has the target key.
@@ -139,8 +140,8 @@ class EvdevHotkeyListener(HotkeyListener):
                 "Then log out and back in."
             )
 
-        sys.stderr.write(f"[hotkey] Using device: {selected_device.path} ({selected_device.name})\n")
-        sys.stderr.flush()
+        # Store device info for later retrieval
+        self._selected_device_info = (selected_device.path, selected_device.name)
         return selected_device
 
     def start(
@@ -255,6 +256,14 @@ class EvdevHotkeyListener(HotkeyListener):
         if name.startswith("KEY_"):
             name = name[4:]
         return name.replace("_", " ").title()
+
+    def get_selected_device_info(self) -> tuple[str, str] | None:
+        """Get the path and name of the selected device.
+
+        Returns:
+            Tuple of (path, name) or None if not yet selected.
+        """
+        return self._selected_device_info
 
     @staticmethod
     def list_available_keys() -> list[str]:

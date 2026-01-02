@@ -138,7 +138,8 @@ class VoxtypeApp:
             else:
                 device_str = "CPU"
 
-        self._console.print(f"[dim]Loading STT model {self.config.stt.model_size} on {device_str} (first run may download)...[/]")
+        if self.config.verbose:
+            self._console.print(f"[dim]Loading STT model {self.config.stt.model_size} on {device_str} (first run may download)...[/]")
 
         engine.load_model(
             self.config.stt.model_size,
@@ -372,7 +373,8 @@ class VoxtypeApp:
 
     def _init_vad_components(self) -> None:
         """Initialize components for VAD mode."""
-        self._console.print("[dim]Initializing VAD components...[/]")
+        if self.config.verbose:
+            self._console.print("[dim]Initializing VAD components...[/]")
 
         self._audio = self._create_audio_capture()
         self._stt = self._create_stt_engine()
@@ -381,7 +383,8 @@ class VoxtypeApp:
         # Create VAD (Silero VAD via faster-whisper)
         from voxtype.audio.vad import SileroVAD, StreamingVAD
 
-        self._console.print("[dim]Loading VAD model (first run may download)...[/]")
+        if self.config.verbose:
+            self._console.print("[dim]Loading VAD model (first run may download)...[/]")
         self._vad = SileroVAD(
             threshold=0.5,
             min_silence_ms=self.vad_silence_ms,
@@ -419,14 +422,10 @@ class VoxtypeApp:
         self._create_agent_files()
         self._init_controller()
 
-        hotkey_msg = f" (or press {self.config.hotkey.key})" if self._hotkey else ""
-
         # Pre-initialize audio output for beeps (avoids delay on first beep)
         if self.config.audio.audio_feedback:
             from voxtype.audio.beep import warmup_audio
             warmup_audio()
-
-        self._console.print(f"[green]Ready![/] Start speaking...{hotkey_msg}")
 
     def _init_llm_processor(self) -> None:
         """Initialize the LLM-first processor."""
@@ -440,10 +439,11 @@ class VoxtypeApp:
         )
 
         # Show which backend is being used
-        if self._llm_processor._is_ollama_available():
-            self._console.print(f"[dim]LLM processor: ollama ({self.config.command.ollama_model})[/]")
-        else:
-            self._console.print("[dim]LLM processor: keyword fallback[/]")
+        if self.config.verbose:
+            if self._llm_processor._is_ollama_available():
+                self._console.print(f"[dim]LLM processor: ollama ({self.config.command.ollama_model})[/]")
+            else:
+                self._console.print("[dim]LLM processor: keyword fallback[/]")
 
     def _on_max_speech_duration(self) -> None:
         """Handle max speech duration reached in VAD mode."""
@@ -867,16 +867,21 @@ class VoxtypeApp:
         self._running = True
         self._listening = True  # Start actively listening
 
-        # Show initial state
-        mode_name = "TRANSCRIPTION" if self._processing_mode == ProcessingMode.TRANSCRIPTION else "COMMAND"
-        self._console.print(f"[bold green]>>> LISTENING ON[/] [dim]({mode_name} mode)[/]")
-
         # Start hotkey listener for toggle (if available)
         if self._hotkey:
             self._hotkey.start(
                 on_press=self._on_hotkey_toggle,
                 on_release=lambda: None,  # No action on release for toggle mode
             )
+            # Show device info (verbose only, evdev only)
+            if self.config.verbose and hasattr(self._hotkey, "get_selected_device_info"):
+                device_info = self._hotkey.get_selected_device_info()
+                if device_info:
+                    self._console.print(f"[dim]Hotkey device: {device_info[0]} ({device_info[1]})[/]")
+
+        # Show initial state
+        mode_name = "TRANSCRIPTION" if self._processing_mode == ProcessingMode.TRANSCRIPTION else "COMMAND"
+        self._console.print(f"[bold green]>>> LISTENING ON[/] [dim]({mode_name} mode)[/]")
 
         # Start continuous audio streaming
         if self._audio:
@@ -941,11 +946,12 @@ class VoxtypeApp:
             return
 
         if not self.agents:
-            # Controller configured but no agents - show info message
-            self._console.print(
-                f"[dim]Controller: {self.controller_device} "
-                f"(inactive - use --agents to enable)[/]"
-            )
+            # Controller configured but no agents - show info message (only verbose)
+            if self.config.verbose:
+                self._console.print(
+                    f"[dim]Controller: {self.controller_device} "
+                    f"(inactive - use --agents to enable)[/]"
+                )
             return
 
         try:
@@ -957,7 +963,8 @@ class VoxtypeApp:
             )
 
             if self._controller.start(self._on_controller_command):
-                self._console.print(f"[dim]Controller: {self.controller_device}[/]")
+                if self.config.verbose:
+                    self._console.print(f"[dim]Controller: {self.controller_device}[/]")
             else:
                 self._console.print(f"[yellow]Controller device not found: {self.controller_device}[/]")
                 self._controller = None
