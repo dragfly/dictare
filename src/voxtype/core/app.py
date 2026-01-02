@@ -163,10 +163,14 @@ class VoxtypeApp:
             try:
                 from voxtype.hotkey.evdev_listener import EvdevHotkeyListener
 
+                # Get target device from config (if user specified one)
+                target_device = self.config.hotkey.device or None
+
                 # Exclude controller device to avoid conflicts
                 listener = EvdevHotkeyListener(
                     self.config.hotkey.key,
                     exclude_device=self.controller_device,
+                    target_device=target_device,
                 )
 
                 # Check if key is available, suggest fallback if not
@@ -180,6 +184,7 @@ class VoxtypeApp:
                         listener = EvdevHotkeyListener(
                             fallback,
                             exclude_device=self.controller_device,
+                            target_device=target_device,
                         )
 
                 return listener

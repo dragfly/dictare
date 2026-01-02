@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-01-02
+
+### Added
+- **`voxtype devices` command**: List input devices and configure hotkey/controller device interactively
+- **`hotkey.device` config**: Specify which keyboard to use for hotkey (empty = auto-detect)
+- Devices with "keyboard" in name shown first, easier to find your keyboard
+
+### Usage
+```bash
+voxtype devices                    # List all devices
+voxtype devices --set-hotkey       # Select device for hotkey
+voxtype devices --set-controller   # Select device for controller
+```
+
 ## [2.3.0] - 2026-01-02
 
 ### Changed
