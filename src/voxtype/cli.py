@@ -140,7 +140,6 @@ def _apply_cli_overrides(
     silence_ms: int | None,
     wake_word: str | None,
     initial_mode: str | None,
-    debug: bool | None,
     log_file: str | None,
     audio_feedback: bool | None,
     hw_accel: bool | None,
@@ -175,8 +174,6 @@ def _apply_cli_overrides(
         config.command.wake_word = wake_word
     if initial_mode:
         config.command.mode = initial_mode
-    if debug is not None:
-        config.logging.debug = debug
     if log_file:
         config.logging.log_file = log_file
     if audio_feedback is not None:
@@ -246,7 +243,7 @@ def _create_logger(config):
     log_params = {
         "input_mode": "vad",  # PTT mode removed in v2.2.0
         "trigger_phrase": config.command.wake_word,
-        "debug": config.logging.debug,
+        "verbose": config.verbose,
         "silence_ms": config.audio.silence_ms,
         "stt_model": config.stt.model_size,
         "stt_language": config.stt.language,
@@ -345,11 +342,7 @@ def run(
     # Debug/logging options
     verbose: Annotated[
         Optional[bool],
-        typer.Option("--verbose", "-v", help="Verbose output (true/false)"),
-    ] = None,
-    debug: Annotated[
-        Optional[bool],
-        typer.Option("--debug", help="Debug mode (true/false)"),
+        typer.Option("--verbose", "-v", help="Verbose output: show device info, transcriptions, debug messages"),
     ] = None,
     log_file: Annotated[
         Optional[str],
@@ -383,7 +376,6 @@ def run(
         silence_ms=silence_ms,
         wake_word=wake_word,
         initial_mode=initial_mode,
-        debug=debug,
         log_file=log_file,
         audio_feedback=audio_feedback,
         hw_accel=hw_accel,
