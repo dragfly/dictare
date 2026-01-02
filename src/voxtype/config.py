@@ -125,10 +125,6 @@ class ControllerConfig(BaseModel):
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
-    debug: bool = Field(
-        default=False,
-        description="Debug mode: show all transcriptions",
-    )
     log_file: str = Field(
         default="",
         description="JSONL log file path for structured logging",
@@ -448,7 +444,6 @@ KEY_UP = "agent_next"
 KEY_DOWN = "agent_prev"
 
 [logging]
-debug = false
 log_file = ""
 
 verbose = false
