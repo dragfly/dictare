@@ -959,6 +959,7 @@ class VoxtypeApp:
             self._controller = ControllerListener(
                 device_name=self.controller_device,
                 key_mappings=self.config.controller.keys,
+                verbose=self.config.verbose,
             )
 
             if self._controller.start(self._on_controller_command):
