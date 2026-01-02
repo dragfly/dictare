@@ -104,8 +104,7 @@ def setup_cuda(console: Console | None = None, verbose: bool = False) -> tuple[b
 
     if cudnn_path is None:
         if console:
-            console.print("[yellow]cuDNN libraries not found - using CPU[/]")
-            console.print("[dim]Install GPU support: pip install 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'[/]")
+            _print_acceleration_hint(console, "cuda")
         return False, "cpu"  # Don't try CUDA without cuDNN - causes core dumps
 
     # Pre-load cuDNN libraries
@@ -129,14 +128,36 @@ def _print_cudnn_error(console: Console, error: str | None, cudnn_path: str | No
     if error:
         console.print(f"[dim]Error: {error}[/]")
 
-    console.print("\n[bold]To enable GPU:[/]")
-    console.print("  1. Install cuDNN: [cyan]pip install 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'[/]")
+    _print_acceleration_hint(console, "cuda")
 
-    if cudnn_path:
-        console.print(f"\n  2. Or add to ~/.bashrc:")
-        console.print(f"     [cyan]export LD_LIBRARY_PATH=\"{cudnn_path}:$LD_LIBRARY_PATH\"[/]")
 
-    console.print("\n[dim]Falling back to CPU (slower but works)[/]\n")
+def _print_acceleration_hint(console: Console, accel_type: str) -> None:
+    """Print hint for enabling hardware acceleration.
+
+    Args:
+        console: Rich console for output.
+        accel_type: Type of acceleration ("cuda" or "mlx").
+    """
+    console.print("[yellow]Using CPU (hardware acceleration not configured)[/]")
+    console.print("")
+
+    if accel_type == "cuda":
+        console.print("[bold]To enable NVIDIA GPU acceleration:[/]")
+        console.print("")
+        console.print("  [cyan]uv tool install voxtype --with 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'[/]")
+        console.print("")
+        console.print("[dim]Or with pip:[/]")
+        console.print("  [dim]pip install 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'[/]")
+
+    elif accel_type == "mlx":
+        console.print("[bold]To enable Apple Silicon (MLX) acceleration:[/]")
+        console.print("")
+        console.print("  [cyan]uv tool install voxtype --with 'mlx-whisper>=0.4.0'[/]")
+        console.print("")
+        console.print("[dim]Or with pip:[/]")
+        console.print("  [dim]pip install 'mlx-whisper>=0.4.0'[/]")
+
+    console.print("")
 
 
 def check_gpu_available() -> tuple[bool, int]:
