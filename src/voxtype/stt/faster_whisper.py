@@ -25,7 +25,7 @@ _MODEL_REPOS = {
     "large-v1": "Systran/faster-whisper-large-v1",
     "large-v2": "Systran/faster-whisper-large-v2",
     "large-v3": "Systran/faster-whisper-large-v3",
-    "large-v3-turbo": "Systran/faster-whisper-large-v3-turbo",
+    "large-v3-turbo": "deepdml/faster-whisper-large-v3-turbo-ct2",  # Community port of OpenAI turbo
 }
 
 # Approximate model sizes in MB for display
@@ -60,6 +60,8 @@ def _is_model_cached(model_size: str) -> bool:
 
 def _download_model_with_progress(model_size: str, console=None) -> str:
     """Download model with progress bar, return local path."""
+    import os as _os
+
     from huggingface_hub import snapshot_download
     from huggingface_hub.utils import (
         HfHubHTTPError,
@@ -80,6 +82,13 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
     if console:
         console.print(f"[cyan]Downloading Whisper model '{model_size}' (~{size_mb} MB)...[/]")
         console.print(f"[dim]Source: huggingface.co/{repo_id}[/]")
+
+    # Clear any HF credentials from environment to avoid auth issues with public repos
+    hf_env_vars = ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HF_HUB_TOKEN"]
+    saved_env = {}
+    for var in hf_env_vars:
+        if var in _os.environ:
+            saved_env[var] = _os.environ.pop(var)
 
     try:
         # Download with rich progress bar
@@ -112,9 +121,11 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
             console.print(f"\n[red bold]Download failed: Model not found[/]")
             console.print(f"[yellow]Repository: {repo_id}[/]")
             if "401" in str(e) or "Unauthorized" in str(e):
-                console.print("\n[yellow]This may be caused by an invalid Hugging Face token.[/]")
-                console.print("[dim]Try removing cached credentials:[/]")
+                console.print("\n[yellow]Authentication error - invalid cached credentials.[/]")
+                console.print("[dim]The Whisper models are public and don't require login.[/]")
+                console.print("[dim]Remove cached/invalid credentials:[/]")
                 console.print("[cyan]  rm -f ~/.cache/huggingface/token ~/.huggingface/token[/]")
+                console.print("[dim]Also check ~/.netrc for huggingface.co entries[/]")
             else:
                 console.print(f"\n[dim]Error: {e}[/]")
         raise RuntimeError(f"Model '{model_size}' not found on Hugging Face") from e
@@ -123,10 +134,11 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
         if console:
             console.print(f"\n[red bold]Download failed: Network error[/]")
             if "401" in str(e) or "Unauthorized" in str(e):
-                console.print("\n[yellow]Authentication error detected.[/]")
+                console.print("\n[yellow]Authentication error - invalid cached credentials.[/]")
                 console.print("[dim]The Whisper models are public and don't require login.[/]")
-                console.print("[dim]You may have an expired/invalid token cached. Try:[/]")
+                console.print("[dim]Remove cached/invalid credentials:[/]")
                 console.print("[cyan]  rm -f ~/.cache/huggingface/token ~/.huggingface/token[/]")
+                console.print("[dim]Also check ~/.netrc for huggingface.co entries[/]")
             elif "403" in str(e):
                 console.print("\n[yellow]Access denied. The model may require acceptance of terms.[/]")
                 console.print(f"[dim]Visit: https://huggingface.co/{repo_id}[/]")
@@ -143,6 +155,11 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
             console.print("[dim]2. Try again in a few minutes (Hugging Face may be busy)[/]")
             console.print("[dim]3. Clear HF cache: rm -rf ~/.cache/huggingface/hub/models--Systran--*[/]")
         raise RuntimeError(f"Failed to download model '{model_size}'") from e
+
+    finally:
+        # Restore environment variables
+        for var, value in saved_env.items():
+            _os.environ[var] = value
 
 
 class FasterWhisperEngine(STTEngine):
