@@ -103,7 +103,8 @@ class PresenterController:
                 device = evdev.InputDevice(path)
                 if self.device_name in device.name:
                     # Check if this is the keyboard device via by-id symlink
-                    by_id_name = by_id_map.get(device.path, "")
+                    real_path = os.path.realpath(device.path)
+                    by_id_name = by_id_map.get(real_path, "")
                     is_kbd = "kbd" in by_id_name.lower() or "keyboard" in by_id_name.lower()
                     candidates.append((device, is_kbd, by_id_name))
                     self._log(f"Candidate: {device.path} ({by_id_name}) kbd={is_kbd}")
