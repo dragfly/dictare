@@ -2,8 +2,8 @@
 
 JSONL Protocol for inputmux:
 - {"text": "hello"}                 → type "hello"
-- {"text": "hello\\n"}              → type "hello" + Alt+Enter (visual newline)
 - {"text": "hello", "submit": true} → type "hello" + Enter (submit)
+- {"text": "\\n"}                   → Alt+Enter (visual newline)
 - {"submit": true}                  → just Enter
 """
 
@@ -43,13 +43,17 @@ class FileInjector(TextInjector):
         """Write text as JSONL message.
 
         Args:
-            text: Text to write (trailing \\n preserved for visual newline).
+            text: Text to write.
             delay_ms: Ignored for file output.
             auto_enter: If True, add submit flag for Enter.
 
         Returns:
             True if successful.
         """
+        # Strip trailing newline - send_newline() handles visual newlines
+        if text.endswith("\n"):
+            text = text.rstrip("\n")
+
         msg = {"text": text}
         if auto_enter:
             msg["submit"] = True
