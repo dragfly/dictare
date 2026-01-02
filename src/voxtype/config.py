@@ -77,8 +77,8 @@ class InjectionConfig(BaseModel):
         description="Fall back to clipboard if typing fails",
     )
     auto_enter: bool = Field(
-        default=True,
-        description="Automatically press Enter after typing text",
+        default=False,
+        description="Press Enter to submit after typing (False = visual newline only)",
     )
     auto_paste: bool = Field(
         default=True,
@@ -415,7 +415,7 @@ key = "KEY_SCROLLLOCK"  # evdev key name
 backend = "auto"  # ydotool, wtype, clipboard
 typing_delay_ms = 0
 fallback_to_clipboard = true
-auto_enter = true  # Press Enter after typing (use --no-enter to disable)
+auto_enter = false  # Visual newline only (use --auto-enter to submit automatically)
 
 [command]
 enabled = true

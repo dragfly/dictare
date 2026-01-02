@@ -64,20 +64,24 @@ class MacOSInjector(TextInjector):
         except (subprocess.SubprocessError, OSError):
             return False
 
-    def type_text(self, text: str, delay_ms: int = 0) -> bool:
+    def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
         """Type text using AppleScript keystroke command.
 
         Args:
             text: Text to type.
             delay_ms: Delay between characters in milliseconds.
+            auto_enter: If True and text ends with \\n, press Enter key.
+                        If False, type literal newline.
 
         Returns:
             True if successful.
         """
-        # Check if text ends with newline (Enter requested)
-        send_enter = text.endswith("\n")
+        # Handle newline based on auto_enter mode
+        has_newline = text.endswith("\n")
+        send_enter = has_newline and auto_enter
         if send_enter:
             text = text[:-1]
+        # If auto_enter=False, keep the \n for visual newline
 
         # Use clipboard for Unicode characters (keystroke doesn't handle them well)
         if self._has_non_ascii(text):
@@ -130,3 +134,36 @@ class MacOSInjector(TextInjector):
     def get_name(self) -> str:
         """Get injector name."""
         return "macos-osascript"
+
+    def send_newline(self) -> bool:
+        """Send visual newline using Option+Return."""
+        try:
+            # key code 36 = Return, using option down = Option+Return
+            result = subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    'tell application "System Events" to key code 36 using option down',
+                ],
+                capture_output=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except (subprocess.SubprocessError, OSError):
+            return False
+
+    def send_submit(self) -> bool:
+        """Send Return key to submit."""
+        try:
+            result = subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    'tell application "System Events" to key code 36',
+                ],
+                capture_output=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except (subprocess.SubprocessError, OSError):
+            return False

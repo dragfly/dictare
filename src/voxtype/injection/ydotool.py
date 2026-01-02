@@ -11,6 +11,8 @@ from voxtype.injection.base import TextInjector
 # Key codes for ydotool
 KEY_LEFTCTRL = 29
 KEY_LEFTSHIFT = 42
+KEY_LEFTALT = 56
+KEY_ENTER = 28
 KEY_U = 22
 KEY_SPACE = 57
 
@@ -82,12 +84,14 @@ class YdotoolInjector(TextInjector):
         except (subprocess.SubprocessError, OSError):
             return False
 
-    def type_text(self, text: str, delay_ms: int = 0) -> bool:
+    def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
         """Type text using ydotool.
 
         Args:
-            text: Text to type. If ends with newline, sends Enter key.
+            text: Text to type. If ends with newline, behavior depends on auto_enter.
             delay_ms: Delay between characters in milliseconds.
+            auto_enter: If True and text ends with \\n, press Enter key (submit).
+                        If False and text ends with \\n, type literal newline (visual only).
 
         Returns:
             True if successful.
@@ -97,10 +101,13 @@ class YdotoolInjector(TextInjector):
             if not self._ydotool_path:
                 return False
 
-        # Check if we need to send Enter at the end
-        send_enter = text.endswith("\n")
-        if send_enter:
+        # Handle newline at end based on auto_enter mode
+        has_newline = text.endswith("\n")
+        if has_newline:
             text = text.rstrip("\n")
+
+        # Only send Enter key if auto_enter is True
+        send_enter = has_newline and auto_enter
 
         delay_sec = delay_ms / 1000.0 if delay_ms > 0 else 0
 
@@ -140,7 +147,7 @@ class YdotoolInjector(TextInjector):
                 if result.returncode != 0:
                     return False
 
-            # Send Enter key if needed
+            # Send Enter key if auto_enter mode
             if send_enter:
                 time.sleep(0.2)
                 enter_result = subprocess.run(
@@ -153,6 +160,9 @@ class YdotoolInjector(TextInjector):
                 self._enter_sent = True
                 return True
 
+            # When auto_enter=false: don't add newline (keyboard mode can't do visual newline)
+            # Text accumulates on same line, user presses Enter when ready
+
             self._enter_sent = False
             return True
         except subprocess.TimeoutExpired:
@@ -163,3 +173,45 @@ class YdotoolInjector(TextInjector):
     def get_name(self) -> str:
         """Get injector name."""
         return "ydotool"
+
+    def send_newline(self) -> bool:
+        """Send visual newline using Alt+Enter."""
+        if not self._ydotool_path:
+            self._ydotool_path = shutil.which("ydotool")
+            if not self._ydotool_path:
+                return False
+
+        try:
+            # Alt+Enter: Alt down, Enter down, Enter up, Alt up
+            result = subprocess.run(
+                [
+                    self._ydotool_path,
+                    "key",
+                    f"{KEY_LEFTALT}:1",
+                    f"{KEY_ENTER}:1",
+                    f"{KEY_ENTER}:0",
+                    f"{KEY_LEFTALT}:0",
+                ],
+                capture_output=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except (subprocess.SubprocessError, OSError):
+            return False
+
+    def send_submit(self) -> bool:
+        """Send Enter key to submit."""
+        if not self._ydotool_path:
+            self._ydotool_path = shutil.which("ydotool")
+            if not self._ydotool_path:
+                return False
+
+        try:
+            result = subprocess.run(
+                [self._ydotool_path, "key", f"{KEY_ENTER}:1", f"{KEY_ENTER}:0"],
+                capture_output=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except (subprocess.SubprocessError, OSError):
+            return False
