@@ -168,7 +168,7 @@ def _apply_cli_overrides(
         config.command.ollama_model = ollama_model
 
 def _format_status_panel(
-    config, vad: bool, mode: str, wake_word: str | None, clipboard: bool,
+    config, vad: bool, mode: str, wake_word: str | None,
     output_file: str | None = None, projects: list[str] | None = None
 ) -> Panel:
     """Create the status panel for the Ready message."""
@@ -185,15 +185,15 @@ def _format_status_panel(
     else:
         device_str = "CPU"
 
-    # Mode strings
+    # Output mode - use config, not CLI flag
     if projects:
         output_str = f"[cyan]projects[/] ({', '.join(projects)})"
     elif output_file:
         output_str = f"[cyan]file[/] ({output_file})"
-    elif clipboard:
+    elif config.injection.backend == "clipboard":
         output_str = "[yellow]clipboard[/] (Ctrl+V to paste)"
     else:
-        output_str = "keyboard"
+        output_str = config.injection.backend
     mode_str = "[cyan]transcription[/] (fast)" if mode == "transcription" else "[yellow]command[/] (LLM)"
     input_mode = "[cyan]VAD[/] (auto-detect speech)" if vad else f"Push-to-talk: [cyan]{config.hotkey.key}[/]"
     wake_str = f"Wake word: [cyan]{wake_word}[/]\n" if wake_word else ""
@@ -421,7 +421,7 @@ def run(
         controller_device=controller_device,
     )
 
-    console.print(_format_status_panel(config, vad, mode, wake_word, clipboard, str(output_file) if output_file else None, project_list))
+    console.print(_format_status_panel(config, vad, mode, wake_word, str(output_file) if output_file else None, project_list))
 
     try:
         voxtypeapp.run()
