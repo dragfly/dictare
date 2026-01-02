@@ -47,12 +47,14 @@ class QuartzInjector(TextInjector):
             self._available = False
             return False
 
-    def type_text(self, text: str, delay_ms: int = 0) -> bool:
+    def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
         """Type text using Quartz keyboard events.
 
         Args:
             text: Text to type.
             delay_ms: Delay between characters in milliseconds.
+            auto_enter: If True and text ends with \\n, press Enter key.
+                        If False, type literal newline.
 
         Returns:
             True if successful.
@@ -69,10 +71,12 @@ class QuartzInjector(TextInjector):
         except ImportError:
             return False
 
-        # Check if text ends with newline (Enter requested)
-        send_enter = text.endswith("\n")
+        # Handle newline based on auto_enter mode
+        has_newline = text.endswith("\n")
+        send_enter = has_newline and auto_enter
         if send_enter:
             text = text[:-1]
+        # If auto_enter=False, keep the \n for visual newline
 
         try:
             source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
@@ -112,3 +116,64 @@ class QuartzInjector(TextInjector):
     def get_name(self) -> str:
         """Get injector name."""
         return "macos-quartz"
+
+    def send_newline(self) -> bool:
+        """Send visual newline using Option+Return."""
+        try:
+            from Quartz import (
+                CGEventCreateKeyboardEvent,
+                CGEventPost,
+                CGEventSetFlags,
+                CGEventSourceCreate,
+                kCGEventFlagMaskAlternate,
+                kCGEventSourceStateHIDSystemState,
+                kCGSessionEventTap,
+            )
+        except ImportError:
+            return False
+
+        try:
+            source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
+            if source is None:
+                return False
+
+            # Key code 36 = Return with Option modifier
+            event_down = CGEventCreateKeyboardEvent(source, 36, True)
+            CGEventSetFlags(event_down, kCGEventFlagMaskAlternate)
+            CGEventPost(kCGSessionEventTap, event_down)
+
+            event_up = CGEventCreateKeyboardEvent(source, 36, False)
+            CGEventPost(kCGSessionEventTap, event_up)
+
+            return True
+        except (ImportError, OSError):
+            return False
+
+    def send_submit(self) -> bool:
+        """Send Return key to submit."""
+        try:
+            from Quartz import (
+                CGEventCreateKeyboardEvent,
+                CGEventPost,
+                CGEventSourceCreate,
+                kCGEventSourceStateHIDSystemState,
+                kCGSessionEventTap,
+            )
+        except ImportError:
+            return False
+
+        try:
+            source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
+            if source is None:
+                return False
+
+            # Key code 36 = Return
+            event_down = CGEventCreateKeyboardEvent(source, 36, True)
+            CGEventPost(kCGSessionEventTap, event_down)
+
+            event_up = CGEventCreateKeyboardEvent(source, 36, False)
+            CGEventPost(kCGSessionEventTap, event_up)
+
+            return True
+        except (ImportError, OSError):
+            return False

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-01-02
+
+### Added
+- **Separate newline vs submit methods on all injectors**:
+  - `send_newline()` - visual line break without submitting (Alt+Enter on keyboard)
+  - `send_submit()` - submit/send the text (Enter key)
+- **Controller `send` command**: Map a controller button to manually submit text
+- **Full backend support**:
+  | Backend | send_newline | send_submit |
+  |---------|--------------|-------------|
+  | ydotool | Alt+Enter | Enter |
+  | xdotool | alt+Return | Return |
+  | wtype | Alt+Return | Return |
+  | clipboard | Alt+Enter | Enter |
+  | file | `\n` | `---SUBMIT---` marker |
+  | macos | Option+Return | Return |
+  | quartz | Option+Return | Return |
+
+### Changed
+- **TextInjector base class**: Added `send_newline()` and `send_submit()` abstract methods
+
 ## [1.6.0] - 2026-01-02
 
 ### Added

@@ -50,13 +50,15 @@ class ClipboardInjector(TextInjector):
         self._copy_cmd = self._detect_copy_command()
         return self._copy_cmd is not None
 
-    def type_text(self, text: str, delay_ms: int = 0, auto_paste: bool = False) -> bool:
+    def type_text(self, text: str, delay_ms: int = 0, auto_paste: bool = False, auto_enter: bool = True) -> bool:
         """Copy text to clipboard and optionally paste.
 
         Args:
             text: Text to copy to clipboard.
             delay_ms: Ignored for clipboard operations.
             auto_paste: If True, automatically send Ctrl+Shift+V after copying.
+            auto_enter: If True and text ends with \\n, send Enter key after paste.
+                        If False, keep \\n as literal newline (visual only).
 
         Returns:
             True if successful.
@@ -66,10 +68,12 @@ class ClipboardInjector(TextInjector):
             if not self._copy_cmd:
                 return False
 
-        # Handle Enter separately - pasting \n doesn't trigger Enter
-        send_enter = text.endswith("\n")
+        # Handle newline based on auto_enter mode
+        has_newline = text.endswith("\n")
+        send_enter = has_newline and auto_enter
         if send_enter:
             text = text[:-1]
+        # If auto_enter=False, keep the \n in text for visual newline
 
         try:
             proc = subprocess.Popen(
@@ -171,3 +175,53 @@ class ClipboardInjector(TextInjector):
     def get_name(self) -> str:
         """Get injector name."""
         return "clipboard"
+
+    def send_newline(self) -> bool:
+        """Send visual newline using Alt+Enter.
+
+        For clipboard mode, newlines should typically be in the pasted text.
+        This method sends Alt+Enter for cases where you need a newline after paste.
+        """
+        import sys
+
+        try:
+            if sys.platform == "darwin":
+                # macOS: Option+Return
+                import subprocess
+
+                subprocess.run(
+                    [
+                        "osascript",
+                        "-e",
+                        'tell application "System Events" to key code 36 using option down',
+                    ],
+                    capture_output=True,
+                    timeout=5,
+                )
+                return True
+            else:
+                # Linux: use ydotool or xdotool
+                ydotool = shutil.which("ydotool")
+                if ydotool:
+                    subprocess.run(
+                        [ydotool, "key", "56:1", "28:1", "28:0", "56:0"],
+                        capture_output=True,
+                        timeout=5,
+                    )
+                    return True
+                xdotool = shutil.which("xdotool")
+                if xdotool:
+                    subprocess.run(
+                        [xdotool, "key", "alt+Return"],
+                        capture_output=True,
+                        timeout=5,
+                    )
+                    return True
+            return False
+        except (subprocess.SubprocessError, OSError):
+            return False
+
+    def send_submit(self) -> bool:
+        """Send Enter key to submit."""
+        self._send_enter_key()
+        return True

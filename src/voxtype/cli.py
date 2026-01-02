@@ -130,7 +130,7 @@ def _apply_cli_overrides(
     model: str | None,
     key: str | None,
     language: str | None,
-    no_enter: bool,
+    auto_enter: bool,
     clipboard: bool,
     mlx: bool,
     max_duration: int | None,
@@ -150,8 +150,8 @@ def _apply_cli_overrides(
         config.hotkey.key = key
     if language:
         config.stt.language = language
-    if no_enter:
-        config.injection.auto_enter = False
+    if auto_enter:
+        config.injection.auto_enter = True
     if clipboard:
         config.injection.backend = "clipboard"
     if mlx:
@@ -284,9 +284,9 @@ def run(
         Optional[str],
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
-    no_enter: Annotated[
+    auto_enter: Annotated[
         bool,
-        typer.Option("--no-enter", help="Don't press Enter after typing/pasting"),
+        typer.Option("--auto-enter", help="Auto-submit at end of phrase"),
     ] = False,
     clipboard: Annotated[
         bool,
@@ -386,7 +386,7 @@ def run(
         model=model,
         key=key,
         language=language,
-        no_enter=no_enter,
+        auto_enter=auto_enter,
         clipboard=clipboard,
         mlx=mlx,
         max_duration=max_duration,
