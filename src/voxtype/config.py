@@ -109,25 +109,12 @@ class CommandConfig(BaseModel):
         description="Ollama request timeout in seconds",
     )
 
-class ControllerConfig(BaseModel):
-    """Controller device configuration for agent switching."""
+class KeyboardConfig(BaseModel):
+    """Keyboard shortcuts configuration."""
 
-    device: str | None = Field(
-        default=None,
-        description="Controller device name (e.g., 'V012345-Ver---0000 V-tech-USB product')",
-    )
-    type: Literal["presenter", "generic"] = Field(
-        default="presenter",
-        description="Controller type: presenter (clicker remote) or generic (custom key mappings)",
-    )
-    keys: dict[str, str] = Field(
-        default_factory=lambda: {
-            "KEY_ESC": "listening_on",
-            "KEY_B": "listening_off",
-            "KEY_UP": "agent_next",
-            "KEY_DOWN": "agent_prev",
-        },
-        description="Key-to-command mappings (only used with type=generic)",
+    shortcuts: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of keyboard shortcuts with keys, command, and optional args",
     )
 
 class LoggingConfig(BaseModel):
@@ -146,7 +133,7 @@ class Config(BaseModel):
     hotkey: HotkeyConfig = Field(default_factory=HotkeyConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
-    controller: ControllerConfig = Field(default_factory=ControllerConfig)
+    keyboard: KeyboardConfig = Field(default_factory=KeyboardConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     verbose: bool = Field(default=False, description="Enable verbose output")
@@ -377,7 +364,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("hotkey", HotkeyConfig),
         ("output", OutputConfig),
         ("command", CommandConfig),
-        ("controller", ControllerConfig),
+        ("keyboard", KeyboardConfig),
         ("logging", LoggingConfig),
     ]
 
@@ -442,14 +429,16 @@ mode = "transcription" # transcription or command
 ollama_model = "qwen2.5:1.5b"
 ollama_timeout = 5.0
 
-[controller]
-# device = "V012345-Ver---0000 V-tech-USB product"
-
-[controller.keys]
-KEY_ESC = "listening_on"
-KEY_B = "listening_off"
-KEY_UP = "agent_next"
-KEY_DOWN = "agent_prev"
+# Keyboard shortcuts (require modifiers like Ctrl, Alt, Cmd)
+# [[keyboard.shortcuts]]
+# keys = "Ctrl+Shift+L"
+# command = "toggle-listening"
+#
+# [[keyboard.shortcuts]]
+# keys = "Ctrl+Alt+1"
+# command = "switch-to-project"
+# [keyboard.shortcuts.args]
+# name = "macina"
 
 [logging]
 log_file = ""
