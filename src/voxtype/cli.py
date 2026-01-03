@@ -124,23 +124,23 @@ def _apply_cli_overrides(
     model: str | None,
     hotkey: str | None,
     language: str | None,
-    auto_enter: bool | None,
+    auto_enter: bool,
     output: str | None,
     max_duration: int | None,
     verbose: bool | None,
-    commands: bool | None,
+    no_commands: bool,
     typing_delay: int | None,
     ollama_model: str | None,
     silence_ms: int | None,
     wake_word: str | None,
     initial_mode: str | None,
     log_file: str | None,
-    audio_feedback: bool | None,
-    hw_accel: bool | None,
+    no_audio_feedback: bool,
+    no_hw_accel: bool,
 ) -> None:
     """Apply CLI options to config.
 
-    Only overrides if value is explicitly provided (not None for optional, not default for bool).
+    Boolean flags use negative form (--no-X) for features that are ON by default.
     """
     if model:
         config.stt.model_size = model
@@ -148,16 +148,16 @@ def _apply_cli_overrides(
         config.hotkey.key = hotkey
     if language:
         config.stt.language = language
-    if auto_enter is not None:
-        config.output.auto_enter = auto_enter
+    if auto_enter:
+        config.output.auto_enter = True
     if output:
         config.output.method = output
     if max_duration:
         config.audio.max_duration = max_duration
     if verbose is not None:
         config.verbose = verbose
-    if commands is not None:
-        config.command.enabled = commands
+    if no_commands:
+        config.command.enabled = False
     if typing_delay is not None:
         config.output.typing_delay_ms = typing_delay
     if ollama_model:
@@ -170,25 +170,34 @@ def _apply_cli_overrides(
         config.command.mode = initial_mode
     if log_file:
         config.logging.log_file = log_file
-    if audio_feedback is not None:
-        config.audio.audio_feedback = audio_feedback
-    if hw_accel is not None:
-        config.stt.hw_accel = hw_accel
+    if no_audio_feedback:
+        config.audio.audio_feedback = False
+    if no_hw_accel:
+        config.stt.hw_accel = False
 
 def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
     """Create the status panel for the Ready message."""
+    import platform
+
     # Device string - check what will ACTUALLY be used
-    if config.stt.device == "cuda":
+    device_str = "CPU"
+
+    if not config.stt.hw_accel:
+        device_str = "CPU"
+    elif config.stt.device == "cuda":
         # Check if cuDNN is actually available
         from voxtype.cuda_setup import _find_cudnn_path
         if _find_cudnn_path():
             device_str = "[magenta]GPU (CUDA)[/]"
         else:
             device_str = "CPU [dim](GPU detected, cuDNN missing)[/]"
-    elif not config.stt.hw_accel:
-        device_str = "CPU"
-    else:
-        device_str = "CPU"  # Auto-detect didn't find acceleration
+    elif sys.platform == "darwin" and platform.machine() == "arm64":
+        # Apple Silicon - check if MLX is available
+        try:
+            import mlx_whisper  # noqa: F401
+            device_str = "[magenta]MLX (Apple Silicon)[/]"
+        except ImportError:
+            device_str = "CPU [dim](MLX not installed)[/]"
 
     # Output mode
     if agents:
@@ -269,10 +278,10 @@ def run(
         Optional[str],
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
-    hw_accel: Annotated[
-        Optional[bool],
-        typer.Option("--hw-accel", help="Hardware acceleration (true=auto-detect, false=CPU only)"),
-    ] = None,
+    no_hw_accel: Annotated[
+        bool,
+        typer.Option("--no-hw-accel", help="Disable hardware acceleration (force CPU)"),
+    ] = False,
     # Input options
     silence_ms: Annotated[
         Optional[int],
@@ -304,9 +313,9 @@ def run(
         typer.Option("--typing-delay", help="Delay between keystrokes in ms"),
     ] = None,
     auto_enter: Annotated[
-        Optional[bool],
-        typer.Option("--auto-enter/--no-auto-enter", help="Auto-submit after typing"),
-    ] = None,
+        bool,
+        typer.Option("--auto-enter", help="Press Enter after typing to submit"),
+    ] = False,
     # Command options
     wake_word: Annotated[
         Optional[str],
@@ -316,18 +325,13 @@ def run(
         Optional[str],
         typer.Option("--initial-mode", "-M", help="Starting mode: transcription or command"),
     ] = None,
-    commands: Annotated[
-        Optional[bool],
-        typer.Option("--commands", help="Enable voice commands (true/false)"),
-    ] = None,
+    no_commands: Annotated[
+        bool,
+        typer.Option("--no-commands", help="Disable voice commands"),
+    ] = False,
     ollama_model: Annotated[
         Optional[str],
         typer.Option("--ollama-model", "-O", help="Ollama model for command processing"),
-    ] = None,
-    # Controller
-    controller: Annotated[
-        Optional[str],
-        typer.Option("--controller", help="Controller device name for agent switching"),
     ] = None,
     # Debug/logging options
     verbose: Annotated[
@@ -338,10 +342,10 @@ def run(
         Optional[str],
         typer.Option("--log-file", "-L", help="JSONL log file path"),
     ] = None,
-    audio_feedback: Annotated[
-        Optional[bool],
-        typer.Option("--audio-feedback", help="Play beep sounds (true/false)"),
-    ] = None,
+    no_audio_feedback: Annotated[
+        bool,
+        typer.Option("--no-audio-feedback", help="Disable beep sounds"),
+    ] = False,
 ) -> None:
     """Start voxtype voice-to-text.
 
@@ -360,18 +364,18 @@ def run(
         output=output,
         max_duration=max_duration,
         verbose=verbose,
-        commands=commands,
+        no_commands=no_commands,
         typing_delay=typing_delay,
         ollama_model=ollama_model,
         silence_ms=silence_ms,
         wake_word=wake_word,
         initial_mode=initial_mode,
         log_file=log_file,
-        audio_feedback=audio_feedback,
-        hw_accel=hw_accel,
+        no_audio_feedback=no_audio_feedback,
+        no_hw_accel=no_hw_accel,
     )
 
-    # Auto-detect hardware acceleration (unless hw_accel=false)
+    # Auto-detect hardware acceleration (unless --no-hw-accel)
     _auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
 
     # Auto-detect hotkey based on platform (if using default)
@@ -388,22 +392,18 @@ def run(
     # Handle agent mode - parse comma-separated string
     agent_list = [a.strip() for a in agents.split(",")] if agents else None
     output_dir_str = str(output_dir) if output_dir else None
-    controller_device = controller or config.controller.device
 
-    # If agents specified but no output_dir, default to current directory
+    # output_dir only makes sense with agents
     if agent_list and not output_dir_str:
         output_dir_str = "."
-
-    # If output_dir specified but no agents, default to ["voxtype"]
-    if output_dir_str and not agent_list:
-        agent_list = ["voxtype"]
+    elif output_dir_str and not agent_list:
+        output_dir_str = None  # Ignore output_dir without agents
 
     voxtypeapp = VoxtypeApp(
         config,
         logger=logger,
         output_dir=output_dir_str,
         agents=agent_list,
-        controller_device=controller_device,
     )
 
     console.print(_format_status_panel(config, agent_list))
@@ -642,10 +642,10 @@ def transcribe(
         Optional[str],
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
-    hw_accel: Annotated[
-        Optional[bool],
-        typer.Option("--hw-accel", help="Hardware acceleration (true=auto-detect, false=CPU only)"),
-    ] = None,
+    no_hw_accel: Annotated[
+        bool,
+        typer.Option("--no-hw-accel", help="Disable hardware acceleration (force CPU)"),
+    ] = False,
     silence_ms: Annotated[
         int,
         typer.Option("--silence-ms", "-s", help="Silence duration to end recording (ms)"),
@@ -683,8 +683,8 @@ def transcribe(
     config = load_config(config_file)
 
     # Apply CLI override for hw_accel
-    if hw_accel is not None:
-        config.stt.hw_accel = hw_accel
+    if no_hw_accel:
+        config.stt.hw_accel = False
 
     # Suppress progress bars and loading messages unless verbose
     # Redirect stderr during model loading to suppress progress bars
@@ -768,20 +768,18 @@ def devices(
         bool,
         typer.Option("--set-hotkey", "-k", help="Set selected device as hotkey device"),
     ] = False,
-    set_controller: Annotated[
-        bool,
-        typer.Option("--set-controller", "-c", help="Set selected device as controller"),
-    ] = False,
 ) -> None:
-    """List input devices and optionally configure hotkey/controller device.
+    """List input devices and optionally configure hotkey device.
 
     Shows all input devices, prioritizing keyboards at the top.
-    Use --set-hotkey or --set-controller to save selection to config.
+    Use --set-hotkey to save selection to config.
+
+    For dedicated input devices (presenter, macro pad), create a device profile
+    in ~/.config/voxtype/devices/<name>.toml instead.
 
     Example:
         voxtype devices                    # Just list devices
         voxtype devices --set-hotkey       # Select device for hotkey
-        voxtype devices --set-controller   # Select device for controller
     """
     if sys.platform != "linux":
         console.print("[yellow]Device selection is only available on Linux[/]")
@@ -831,10 +829,9 @@ def devices(
     table.add_column("ScrollLock", justify="center", width=10)
     table.add_column("Type", width=12)
 
-    # Add option 0 for disable/auto-detect
-    if set_hotkey or set_controller:
-        label = "[yellow](auto-detect)[/]" if set_hotkey else "[yellow](disabled)[/]"
-        table.add_row("0", label, "—", "—", "—")
+    # Add option 0 for auto-detect
+    if set_hotkey:
+        table.add_row("0", "[yellow](auto-detect)[/]", "—", "—", "—")
 
     for i, dev in enumerate(devices_info, 1):
         keys_icon = "[green]✓[/]" if dev["has_keys"] else "[dim]—[/]"
@@ -845,11 +842,10 @@ def devices(
 
     console.print(table)
 
-    # If setting hotkey or controller, prompt for selection
-    if set_hotkey or set_controller:
+    # If setting hotkey, prompt for selection
+    if set_hotkey:
         console.print()
-        target = "hotkey" if set_hotkey else "controller"
-        prompt = f"Select device for {target} [0=disable, 1-{len(devices_info)}]"
+        prompt = f"Select device for hotkey [0=auto-detect, 1-{len(devices_info)}]"
 
         try:
             choice = typer.prompt(prompt, type=int)
@@ -858,29 +854,19 @@ def devices(
                 raise typer.Exit(1)
 
             if choice == 0:
-                # Disable/clear the device
-                if set_hotkey:
-                    set_config_value("hotkey.device", "")
-                    console.print("[green]✓[/] Hotkey device cleared (auto-detect)")
-                else:
-                    set_config_value("controller.device", "")
-                    console.print("[green]✓[/] Controller disabled")
+                set_config_value("hotkey.device", "")
+                console.print("[green]✓[/] Hotkey device cleared (auto-detect)")
             else:
                 selected = devices_info[choice - 1]
-
-                # Save to config
-                if set_hotkey:
-                    set_config_value("hotkey.device", selected["name"])
-                    console.print(f"[green]✓[/] Hotkey device set to: [cyan]{selected['name']}[/]")
-                else:
-                    set_config_value("controller.device", selected["name"])
-                    console.print(f"[green]✓[/] Controller device set to: [cyan]{selected['name']}[/]")
+                set_config_value("hotkey.device", selected["name"])
+                console.print(f"[green]✓[/] Hotkey device set to: [cyan]{selected['name']}[/]")
 
         except (ValueError, KeyboardInterrupt):
             console.print("\n[yellow]Cancelled[/]")
             raise typer.Exit(0)
     else:
-        console.print("\n[dim]Use --set-hotkey or --set-controller to configure a device[/]")
+        console.print("\n[dim]Use --set-hotkey to configure a device[/]")
+        console.print("[dim]For dedicated devices, create a profile in ~/.config/voxtype/devices/[/]")
 
 def main() -> None:
     """Entry point for the CLI."""
