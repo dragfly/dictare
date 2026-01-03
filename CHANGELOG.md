@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-01-03
+
+### Added
+- **macOS HID device support**: Presenter remotes and macro pads now work on macOS via hidapi
+- **`voxtype devices` on macOS**: Lists HID devices with vendor/product IDs for profile creation
+- **Device profile documentation**: README updated with full device profile guide
+
+### Changed
+- **hidapi package**: Using `hidapi>=0.14.0` which bundles native library (no `brew install` needed)
+
 ## [2.8.0] - 2026-01-03
 
 ### Changed
