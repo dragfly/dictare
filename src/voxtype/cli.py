@@ -967,6 +967,104 @@ def _list_evdev_devices(set_hotkey: bool) -> None:
         console.print("[dim]Use --hid to list HID devices for device profiles[/]")
 
 
+@app.command()
+def cmd(
+    command: Annotated[str, typer.Argument(help="Command to send (e.g., toggle-listening)")],
+) -> None:
+    """Send a command to a running voxtype instance.
+
+    Used by external tools (like Karabiner-Elements) to control voxtype.
+
+    Available commands:
+        toggle-listening, listening-on, listening-off,
+        toggle-mode, project-next, project-prev,
+        submit, discard, repeat
+
+    Example:
+        voxtype cmd toggle-listening
+        voxtype cmd project-next
+    """
+    import socket
+
+    socket_path = "/tmp/voxtype.sock"
+
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(socket_path)
+        sock.send(command.encode())
+        sock.close()
+        # Silent success for scripting
+    except FileNotFoundError:
+        console.print("[red]voxtype is not running (socket not found)[/]")
+        console.print("[dim]Start voxtype first: voxtype run[/]")
+        raise typer.Exit(1)
+    except ConnectionRefusedError:
+        console.print("[red]voxtype is not accepting commands[/]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def backends() -> None:
+    """List available device input backends.
+
+    Shows which backends are available on this system for
+    handling dedicated input devices (presenter remotes, macro pads).
+    """
+    from voxtype.input.backends import get_available_backends
+
+    available = get_available_backends()
+
+    if not available:
+        console.print("[yellow]No device backends available[/]")
+        console.print()
+        console.print("[dim]Install dependencies:[/]")
+        console.print("  macOS: [cyan]pip install hidapi[/] or [cyan]brew install --cask karabiner-elements[/]")
+        console.print("  Linux: [cyan]pip install evdev[/]")
+        raise typer.Exit(1)
+
+    table = Table(title="Device Backends", show_header=True, header_style="bold")
+    table.add_column("Backend", style="cyan")
+    table.add_column("Grab", justify="center")
+    table.add_column("Platform")
+    table.add_column("Status", justify="center")
+
+    backend_info = {
+        "evdev": ("Linux", "Native evdev with exclusive grab"),
+        "hidapi": ("All", "Direct HID access, no grab"),
+        "karabiner": ("macOS", "Karabiner-Elements with exclusive grab"),
+    }
+
+    for name in ["evdev", "karabiner", "hidapi"]:
+        platform, desc = backend_info.get(name, ("?", "?"))
+        is_available = name in available
+
+        if is_available:
+            # Get grab support
+            if name == "evdev":
+                from voxtype.input.backends.evdev_backend import EvdevBackend
+                grab = "[green]✓[/]" if EvdevBackend().supports_grab else "[dim]—[/]"
+            elif name == "karabiner":
+                from voxtype.input.backends.karabiner_backend import KarabinerBackend
+                grab = "[green]✓[/]" if KarabinerBackend().supports_grab else "[dim]—[/]"
+            else:
+                from voxtype.input.backends.hidapi_backend import HIDAPIBackend
+                grab = "[green]✓[/]" if HIDAPIBackend().supports_grab else "[dim]—[/]"
+
+            status = "[green]Available[/]"
+        else:
+            grab = "[dim]—[/]"
+            status = "[dim]Not installed[/]"
+
+        table.add_row(name, grab, platform, status)
+
+    console.print(table)
+    console.print()
+    console.print("[dim]Grab = exclusive device access (recommended for presenter remotes)[/]")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     app()
