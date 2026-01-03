@@ -120,9 +120,47 @@ Priority (highest to lowest):
 
 ## Requirements
 
-- Linux (X11 or Wayland) or macOS (Intel or Apple Silicon)
-- Docker (for building dependencies on Linux)
-- [uv](https://github.com/astral-sh/uv) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+### Core Requirements (both platforms)
+
+| Dependency | Install | Purpose |
+|------------|---------|---------|
+| **Python 3.11+** | System/pyenv | Runtime |
+| **uv** | `curl -LsSf https://astral.sh/uv/install.sh \| sh` | Package manager |
+| **Ollama** (optional) | [ollama.ai](https://ollama.ai) | Voice command processing |
+
+### macOS Dependencies
+
+| Dependency | Install | Purpose | Required? |
+|------------|---------|---------|-----------|
+| **Accessibility** | System Settings → Privacy | Keyboard simulation | ✅ Yes |
+| **hidapi** | Auto-installed | Device profiles | Auto |
+| **Karabiner-Elements** | `brew install --cask karabiner-elements` | Device grab (presenter remotes) | Optional |
+| **MLX** | `uv pip install mlx mlx-whisper` | GPU acceleration (Apple Silicon) | Recommended |
+
+### Linux Dependencies
+
+| Dependency | Install | Purpose | Required? |
+|------------|---------|---------|-----------|
+| **Docker** | [docker.com](https://docker.com) | Build ydotool | ✅ Yes (first install) |
+| **ydotool** | `./install.sh` builds it | Text injection | ✅ Yes |
+| **evdev** | Auto-installed | Hotkey & device profiles | Auto |
+| **input group** | `sudo usermod -aG input $USER` | Device access | ✅ Yes |
+| **CUDA** | NVIDIA driver | GPU acceleration | Recommended |
+
+### Optional: Voice Commands with Ollama
+
+For intelligent voice command processing:
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull a small, fast model
+ollama pull qwen2.5:1.5b
+
+# voxtype will auto-detect Ollama
+voxtype run
+```
 
 ## How It Works
 
@@ -161,7 +199,7 @@ Use dedicated input devices like presenter remotes or macro pads to control voxt
 
 ```bash
 voxtype devices          # List HID devices with vendor/product IDs
-voxtype devices --hid    # Same (explicit HID mode)
+voxtype backends         # Show available input backends
 ```
 
 ### Create a Device Profile
@@ -194,10 +232,55 @@ KEY_ESC = "submit"
 | `discard` | Discard current buffer |
 | `repeat` | Repeat last transcription |
 
+You can also send commands externally via Unix socket:
+
+```bash
+voxtype cmd toggle-listening    # Send command to running voxtype
+```
+
+### Device Input Backends
+
+voxtype uses different backends for device input depending on platform:
+
+| Backend | Platform | Device Grab | Description |
+|---------|----------|-------------|-------------|
+| **evdev** | Linux | ✅ Yes | Native Linux input, exclusive device access |
+| **hidapi** | macOS/Linux | ❌ No | Cross-platform HID, keys pass through to other apps |
+| **karabiner** | macOS | ✅ Yes | Uses Karabiner-Elements for exclusive grab |
+
+Check available backends:
+```bash
+voxtype backends
+```
+
+### Karabiner-Elements Setup (macOS)
+
+For exclusive device grab on macOS (prevents keys from reaching other apps):
+
+1. Install Karabiner-Elements:
+   ```bash
+   brew install --cask karabiner-elements
+   ```
+
+2. Open Karabiner-Elements and grant required permissions
+
+3. Run voxtype with your device profile - it auto-generates Karabiner config:
+   ```bash
+   uv run voxtype run --verbose
+   ```
+
+4. In Karabiner-Elements preferences:
+   - Go to "Complex Modifications"
+   - Click "Add rule"
+   - Enable "voxtype presenter controls"
+
+5. Your presenter remote now works exclusively with voxtype!
+
 ### Platform Support
 
-- **Linux**: Uses evdev (device grabbing supported)
-- **macOS**: Uses hidapi (no device grabbing, but works for dedicated devices)
+- **Linux**: Uses evdev backend with exclusive device grab
+- **macOS (with Karabiner)**: Uses karabiner backend with exclusive device grab
+- **macOS (without Karabiner)**: Uses hidapi backend (no grab, keys pass through)
 
 ## Platform Notes
 
