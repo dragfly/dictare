@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-01-03
+
+### Added
+- **Modular device backend architecture**: Clean separation of input backends in `input/backends/`
+  - `evdev`: Linux-only with exclusive device grab
+  - `hidapi`: Cross-platform HID access (no grab)
+  - `karabiner`: macOS-only using Karabiner-Elements for exclusive device grab
+- **`voxtype cmd`**: Send commands to running voxtype via Unix socket (for external tools like Karabiner)
+- **`voxtype backends`**: List available device input backends on current system
+- **Karabiner-Elements integration**: Auto-generates Karabiner config for device grab on macOS
+
+### Changed
+- **Comprehensive dependency docs**: README now has full tables for Core, macOS, and Linux dependencies
+- **Device profile docs**: Backend table, Karabiner setup instructions, platform support details
+
 ## [2.9.0] - 2026-01-03
 
 ### Added
