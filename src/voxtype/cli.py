@@ -103,12 +103,13 @@ def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
     config.stt.device = "cpu"
 
     if sys.platform == "darwin" and platform.machine() == "arm64":
-        # Apple Silicon: try MLX
+        # Apple Silicon: MLX is auto-detected at engine creation time
+        # Just verify mlx_whisper is available, don't set anything
         try:
             import mlx_whisper  # noqa: F401
-            config.stt.backend = "mlx-whisper"
+            # MLX will be used automatically if hw_accel=true
         except ImportError:
-            pass  # mlx-whisper not installed, use CPU
+            pass  # mlx-whisper not installed, will use CPU
     elif sys.platform == "linux":
         # Linux: try CUDA GPU via ctranslate2 (faster-whisper dependency)
         try:
@@ -725,8 +726,18 @@ def transcribe(
         if language:
             config.stt.language = language
 
-        # Create STT engine
-        if getattr(config.stt, "backend", "faster-whisper") == "mlx-whisper":
+        # Create STT engine - use MLX on Apple Silicon if hw_accel enabled
+        use_mlx = False
+        if sys.platform == "darwin" and config.stt.hw_accel:
+            import platform as plat
+            if plat.machine() == "arm64":
+                try:
+                    import mlx_whisper  # noqa: F401
+                    use_mlx = True
+                except ImportError:
+                    pass
+
+        if use_mlx:
             from voxtype.stt.mlx_whisper import MLXWhisperEngine
             stt_engine = MLXWhisperEngine()
         else:

@@ -1738,21 +1738,6 @@ wheels = [
 ]
 
 [[package]]
-name = "typer"
-version = "0.21.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "rich" },
-    { name = "shellingham" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/85/30/ff9ede605e3bd086b4dd842499814e128500621f7951ca1e5ce84bbf61b1/typer-0.21.0.tar.gz", hash = "sha256:c87c0d2b6eee3b49c5c64649ec92425492c14488096dfbc8a0c2799b2f6f9c53", size = 106781, upload-time = "2025-12-25T09:54:53.651Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/e4/5ebc1899d31d2b1601b32d21cfb4bba022ae6fce323d365f0448031b1660/typer-0.21.0-py3-none-any.whl", hash = "sha256:c79c01ca6b30af9fd48284058a7056ba0d3bf5cf10d0ff3d0c5b11b68c258ac6", size = 47109, upload-time = "2025-12-25T09:54:51.918Z" },
-]
-
-[[package]]
 name = "typer-slim"
 version = "0.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1763,6 +1748,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f9/3b/2f60ce16f578b1db5b8816d37d6a4d9786b33b76407fc8c13b0b86312c31/typer_slim-0.21.0.tar.gz", hash = "sha256:f2dbd150cfa0fead2242e21fa9f654dfc64773763ddf07c6be9a49ad34f79557", size = 106841, upload-time = "2025-12-25T09:54:55.998Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b4/84/e97abf10e4a699194ff07fd586ec7f4cf867d9d04bead559a65f9e7aff84/typer_slim-0.21.0-py3-none-any.whl", hash = "sha256:92aee2188ac6fc2b2924bd75bb61a340b78bd8cd51fd9735533ce5a856812c8e", size = 47174, upload-time = "2025-12-25T09:54:54.609Z" },
+]
+
+[package.optional-dependencies]
+standard = [
+    { name = "rich" },
+    { name = "shellingham" },
 ]
 
 [[package]]
@@ -1797,15 +1788,14 @@ wheels = [
 
 [[package]]
 name = "voxtype"
-version = "1.4.4"
+version = "2.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "faster-whisper" },
     { name = "numpy" },
     { name = "pydantic" },
-    { name = "rich" },
     { name = "sounddevice" },
-    { name = "typer" },
+    { name = "typer-slim", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
@@ -1855,13 +1845,12 @@ requires-dist = [
     { name = "pyobjc-framework-quartz", marker = "extra == 'macos'", specifier = ">=10.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
     { name = "scipy", marker = "extra == 'mlx'", specifier = ">=1.10.0" },
     { name = "sounddevice", specifier = ">=0.5.0" },
     { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.5.0" },
     { name = "tqdm", marker = "extra == 'mlx'", specifier = ">=4.60.0" },
-    { name = "typer", specifier = ">=0.12.0" },
+    { name = "typer-slim", extras = ["standard"], specifier = ">=0.12.0" },
 ]
 provides-extras = ["linux", "dev", "macos", "gpu", "mlx", "tts"]
 
