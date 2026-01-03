@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-01-03
+
+### Changed
+- **Command orchestrator architecture**: Refactored input handling into clean, modular system
+  - `commands/`: AppCommands for app-level commands, CommandSchema for JSON schemas
+  - `executors/`: LLMAgentExecutor (JSONL output), TerminalExecutor (keyboard inject)
+  - `input/`: InputManager, KeyboardShortcutSource, DeviceInputSource
+- **Device profiles**: Configure dedicated devices (presenter, macro pad) via TOML files in `~/.config/voxtype/devices/`
+- **Platform dependencies auto-installed**: pynput/pyobjc on macOS, evdev on Linux - no more optional extras needed
+
+### Removed
+- **Old controller system**: Replaced `presenter_controller.py` and `controller_listener.py` with device profiles
+- **`--set-controller` CLI option**: Use device profiles instead
+
+### Fixed
+- **macOS stability**: Platform dependencies now required, preventing missing pynput issues
+
 ## [2.7.0] - 2026-01-02
 
 ### Added
