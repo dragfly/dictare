@@ -58,3 +58,4 @@ debug-session*.jsonl
 .claude/
 CLAUDE.md
 WORKFLOW.md
+*.voxtype

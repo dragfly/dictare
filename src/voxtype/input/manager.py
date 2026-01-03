@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from voxtype.input.base import InputCallback, InputEvent, InputSource
-from voxtype.input.device import DeviceInputSource, DeviceProfile
+from voxtype.input.device import DeviceInputSource, DeviceProfile, HIDDeviceInputSource
 from voxtype.input.keyboard import KeyBinding, KeyboardShortcutSource
 
 if TYPE_CHECKING:
@@ -73,6 +74,9 @@ class InputManager:
 
         Args:
             devices_dir: Directory containing .toml device profiles
+
+        On Linux: Uses evdev (DeviceInputSource) with device_match
+        On macOS: Uses hidapi (HIDDeviceInputSource) with vendor_id/product_id
         """
         if devices_dir is None:
             devices_dir = Path.home() / ".config" / "voxtype" / "devices"
@@ -82,8 +86,20 @@ class InputManager:
 
         for profile_file in devices_dir.glob("*.toml"):
             profile = DeviceProfile.load_from_file(profile_file)
-            if profile:
+            if not profile:
+                continue
+
+            source: InputSource | None = None
+
+            # Try evdev first on Linux (preferred for device grabbing)
+            if sys.platform == "linux" and profile.device_match:
                 source = DeviceInputSource(profile, verbose=self._verbose)
+
+            # Try hidapi on macOS, or as fallback on Linux if HID IDs configured
+            if source is None and profile.has_hid_ids:
+                source = HIDDeviceInputSource(profile, verbose=self._verbose)
+
+            if source:
                 self._sources.append(source)
                 if self._verbose:
                     print(f"[input] Loaded device profile: {profile.name}")

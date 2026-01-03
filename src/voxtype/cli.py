@@ -789,23 +789,100 @@ def devices(
         bool,
         typer.Option("--set-hotkey", "-k", help="Set selected device as hotkey device"),
     ] = False,
+    hid: Annotated[
+        bool,
+        typer.Option("--hid", "-H", help="List HID devices (for device profiles)"),
+    ] = False,
 ) -> None:
     """List input devices and optionally configure hotkey device.
 
-    Shows all input devices, prioritizing keyboards at the top.
-    Use --set-hotkey to save selection to config.
-
-    For dedicated input devices (presenter, macro pad), create a device profile
-    in ~/.config/voxtype/devices/<name>.toml instead.
+    Shows all input devices. Use --hid to list HID devices with vendor/product IDs
+    for creating device profiles.
 
     Example:
-        voxtype devices                    # Just list devices
+        voxtype devices                    # List input devices
+        voxtype devices --hid              # List HID devices with IDs
         voxtype devices --set-hotkey       # Select device for hotkey
     """
-    if sys.platform != "linux":
-        console.print("[yellow]Device selection is only available on Linux[/]")
+    if hid:
+        _list_hid_devices()
+        return
+
+    if sys.platform == "linux":
+        _list_evdev_devices(set_hotkey)
+    else:
+        # macOS: show HID devices by default
+        _list_hid_devices()
+
+
+def _list_hid_devices() -> None:
+    """List HID devices with vendor/product IDs."""
+    try:
+        import hid
+        devices_list = hid.enumerate()
+    except ImportError:
+        try:
+            # Try hidapi package (cython-based, bundles native lib)
+            import hidapi
+            devices_list = [
+                {
+                    "vendor_id": d.vendor_id,
+                    "product_id": d.product_id,
+                    "manufacturer_string": d.manufacturer_string,
+                    "product_string": d.product_string,
+                }
+                for d in hidapi.enumerate()
+            ]
+        except ImportError:
+            console.print("[red]hidapi package not installed[/]")
+            console.print("This should be installed automatically on macOS.")
+            console.print("Try: [cyan]pip install hidapi[/]")
+            raise typer.Exit(1)
+
+    if not devices_list:
+        console.print("[yellow]No HID devices found[/]")
         raise typer.Exit(1)
 
+    # Group by vendor_id/product_id to deduplicate interfaces
+    seen = set()
+    unique_devices = []
+    for dev in devices_list:
+        key = (dev["vendor_id"], dev["product_id"])
+        if key not in seen and key != (0, 0):
+            seen.add(key)
+            unique_devices.append(dev)
+
+    # Sort by product name
+    unique_devices.sort(key=lambda d: (d.get("product_string") or "").lower())
+
+    table = Table(title="HID Devices", show_header=True, header_style="bold")
+    table.add_column("Vendor ID", style="cyan", width=10)
+    table.add_column("Product ID", style="cyan", width=10)
+    table.add_column("Manufacturer", width=20)
+    table.add_column("Product", style="green", width=30)
+
+    for dev in unique_devices:
+        vendor_id = f"0x{dev['vendor_id']:04x}"
+        product_id = f"0x{dev['product_id']:04x}"
+        manufacturer = dev.get("manufacturer_string") or "[dim]—[/]"
+        product = dev.get("product_string") or "[dim]Unknown[/]"
+
+        table.add_row(vendor_id, product_id, manufacturer, product)
+
+    console.print(table)
+    console.print()
+    console.print("[dim]To use a device, create ~/.config/voxtype/devices/<name>.toml:[/]")
+    console.print()
+    console.print('[dim]  vendor_id = 0x????[/]')
+    console.print('[dim]  product_id = 0x????[/]')
+    console.print('[dim]  [bindings][/]')
+    console.print('[dim]  KEY_PAGEUP = "project-prev"[/]')
+    console.print('[dim]  KEY_PAGEDOWN = "project-next"[/]')
+    console.print('[dim]  KEY_B = "toggle-listening"[/]')
+
+
+def _list_evdev_devices(set_hotkey: bool) -> None:
+    """List evdev devices (Linux only)."""
     try:
         import evdev
     except ImportError:
@@ -887,7 +964,7 @@ def devices(
             raise typer.Exit(0)
     else:
         console.print("\n[dim]Use --set-hotkey to configure a device[/]")
-        console.print("[dim]For dedicated devices, create a profile in ~/.config/voxtype/devices/[/]")
+        console.print("[dim]Use --hid to list HID devices for device profiles[/]")
 
 
 def main() -> None:
