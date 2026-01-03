@@ -21,14 +21,12 @@ class EvdevHotkeyListener(HotkeyListener):
     def __init__(
         self,
         key_name: str = "KEY_SCROLLLOCK",
-        exclude_device: str | None = None,
         target_device: str | None = None,
     ) -> None:
         """Initialize evdev hotkey listener.
 
         Args:
             key_name: evdev key name (e.g., KEY_SCROLLLOCK, KEY_F12).
-            exclude_device: Device name substring to exclude (e.g., controller device).
             target_device: Device name substring to prefer (e.g., specific keyboard).
 
         Raises:
@@ -38,7 +36,6 @@ class EvdevHotkeyListener(HotkeyListener):
         import evdev as _evdev  # noqa: F401
 
         self.key_name = key_name
-        self.exclude_device = exclude_device
         self.target_device = target_device
         self._running = False
         self._thread: threading.Thread | None = None
@@ -65,10 +62,6 @@ class EvdevHotkeyListener(HotkeyListener):
             "virtual", "ydotool", "bluetooth", "presenter", "clicker",
             "remote", "consumer control", "system control"
         ]
-
-        # Also exclude the controller device if specified
-        if self.exclude_device:
-            exclude_keywords.append(self.exclude_device.lower())
 
         user_specified = None     # Priority 0: user-specified device
         keyboard_with_key = None  # Priority 1: has "keyboard" in name + has target key
@@ -218,8 +211,6 @@ class EvdevHotkeyListener(HotkeyListener):
                 "virtual", "ydotool", "bluetooth", "presenter", "clicker",
                 "remote", "consumer control", "system control"
             ]
-            if self.exclude_device:
-                exclude_keywords.append(self.exclude_device.lower())
 
             devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
             found_on_keyboard = False

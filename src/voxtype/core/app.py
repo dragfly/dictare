@@ -47,7 +47,6 @@ class VoxtypeApp:
         logger: JSONLLogger | None = None,
         output_dir: str | None = None,
         agents: list[str] | None = None,
-        controller_device: str | None = None,
     ) -> None:
         """Initialize the application.
 
@@ -56,7 +55,6 @@ class VoxtypeApp:
             logger: Optional JSONL logger for structured logging.
             output_dir: Directory for agent files (<agent>.voxtype).
             agents: List of agent IDs for multi-output mode.
-            controller_device: Device name for controller (for agent switching).
         """
         self.config = config
         # Read settings from config
@@ -64,7 +62,6 @@ class VoxtypeApp:
         self.trigger_phrase = config.command.wake_word or None
         self.output_dir = output_dir
         self.agents = agents or []
-        self.controller_device = controller_device
         self.state = AppState.IDLE
         self._running = False
         self._console = Console()
@@ -73,7 +70,7 @@ class VoxtypeApp:
 
         # Agent state
         self._current_agent_index = 0
-        self._controller = None  # Controller listener
+        self._input_manager = None  # InputManager for keyboard/device inputs
 
         # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
         self._processing_mode = ProcessingMode(config.command.mode)
@@ -168,10 +165,8 @@ class VoxtypeApp:
                 # Get target device from config (if user specified one)
                 target_device = self.config.hotkey.device or None
 
-                # Exclude controller device to avoid conflicts
                 listener = EvdevHotkeyListener(
                     self.config.hotkey.key,
-                    exclude_device=self.controller_device,
                     target_device=target_device,
                 )
 
@@ -185,7 +180,6 @@ class VoxtypeApp:
                         )
                         listener = EvdevHotkeyListener(
                             fallback,
-                            exclude_device=self.controller_device,
                             target_device=target_device,
                         )
 
@@ -418,9 +412,9 @@ class VoxtypeApp:
             if self._hotkey:
                 self._console.print(f"[dim]Toggle hotkey: {self._hotkey.get_key_name()}[/]")
 
-        # Create agent files and initialize controller
+        # Create agent files and initialize input manager
         self._create_agent_files()
-        self._init_controller()
+        self._init_input_manager()
 
         # Pre-initialize audio output for beeps (avoids delay on first beep)
         if self.config.audio.audio_feedback:
@@ -940,63 +934,32 @@ class VoxtypeApp:
                 self._audio = None
         return False
 
-    def _init_controller(self) -> None:
-        """Initialize controller listener for agent switching."""
-        if not self.controller_device:
-            return
+    def _init_input_manager(self) -> None:
+        """Initialize input manager for keyboard shortcuts and device profiles."""
+        from voxtype.commands.app_commands import AppCommands
+        from voxtype.input.manager import InputManager
 
-        if not self.agents:
-            # Controller configured but no agents - show info message (only verbose)
-            if self.config.verbose:
-                self._console.print(
-                    f"[dim]Controller: {self.controller_device} "
-                    f"(inactive - use --agents to enable)[/]"
-                )
-            return
+        # Create app commands handler
+        app_commands = AppCommands(self)
 
-        try:
-            if self.config.controller.type == "presenter":
-                from voxtype.hotkey.presenter_controller import PresenterController
-                self._controller = PresenterController(
-                    device_name=self.controller_device,
-                    verbose=self.config.verbose,
-                )
-            else:
-                from voxtype.hotkey.controller_listener import ControllerListener
-                self._controller = ControllerListener(
-                    device_name=self.controller_device,
-                    key_mappings=self.config.controller.keys,
-                    verbose=self.config.verbose,
-                )
+        # Create input manager
+        self._input_manager = InputManager(
+            app_commands=app_commands,
+            verbose=self.config.verbose,
+        )
 
-            if self._controller.start(self._on_controller_command):
-                if self.config.verbose:
-                    self._console.print(f"[dim]Controller: {self.controller_device} ({self.config.controller.type})[/]")
-            else:
-                self._console.print(f"[yellow]Controller device not found: {self.controller_device}[/]")
-                self._controller = None
-        except ImportError:
-            self._console.print("[yellow]evdev not installed, controller disabled[/]")
-        except Exception as e:
-            self._console.print(f"[yellow]Controller error: {e}[/]")
+        # Load keyboard shortcuts from config
+        if self.config.keyboard.shortcuts:
+            self._input_manager.load_keyboard_shortcuts(self.config.keyboard.shortcuts)
 
-    def _on_controller_command(self, command: str) -> None:
-        """Handle controller command."""
-        if self.config.verbose:
-            self._console.print(f"\n[yellow][DEBUG] Controller command: {command}[/]")
+        # Load device profiles from ~/.config/voxtype/devices/
+        self._input_manager.load_device_profiles()
 
-        if command == "listening_on":
-            self._set_listening(True)
-        elif command == "listening_off":
-            self._set_listening(False)
-        elif command == "agent_next":
-            self._switch_agent(1)
-        elif command == "agent_prev":
-            self._switch_agent(-1)
-        elif command == "discard":
-            self._discard_current()
-        elif command == "send":
-            self._send_submit()
+        # Start all input sources
+        self._input_manager.start()
+
+        if self.config.verbose and self._input_manager.running_sources:
+            self._console.print(f"[dim]Input sources: {', '.join(self._input_manager.running_sources)}[/]")
 
     def _set_listening(self, on: bool) -> None:
         """Set listening state on/off."""
@@ -1037,6 +1000,49 @@ class VoxtypeApp:
 
         # Speak the agent name
         self._speak_agent(new_agent)
+
+    def _switch_to_agent_by_name(self, name: str) -> bool:
+        """Switch to a specific agent by name.
+
+        Args:
+            name: Agent name (case-insensitive, partial match allowed)
+
+        Returns:
+            True if agent was found and switched to
+        """
+        if not self.agents:
+            return False
+
+        name_lower = name.lower()
+
+        # Try exact match first
+        for i, agent in enumerate(self.agents):
+            if agent.lower() == name_lower:
+                self._current_agent_index = i
+                self._injector = self._create_injector()
+                self._console.print(f"[bold cyan]>>> Agent: {agent}[/]")
+                self._speak_agent(agent)
+                return True
+
+        # Try partial match
+        for i, agent in enumerate(self.agents):
+            if name_lower in agent.lower():
+                self._current_agent_index = i
+                self._injector = self._create_injector()
+                self._console.print(f"[bold cyan]>>> Agent: {agent}[/]")
+                self._speak_agent(agent)
+                return True
+
+        self._console.print(f"[yellow]Agent not found: {name}[/]")
+        return False
+
+    def _repeat_last_injection(self) -> None:
+        """Repeat the last injected text."""
+        if self._llm_processor and self._llm_processor.last_injection:
+            self._console.print("[cyan]Repeat[/]")
+            self._inject_text(self._llm_processor.last_injection)
+        else:
+            self._console.print("[yellow]Nothing to repeat[/]")
 
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS (piper preferred, with fallbacks)."""
@@ -1140,8 +1146,8 @@ class VoxtypeApp:
             self._pending_single_tap.cancel()
             self._pending_single_tap = None
 
-        if self._controller:
-            self._controller.stop()
+        if self._input_manager:
+            self._input_manager.stop()
 
         if self._hotkey:
             self._hotkey.stop()

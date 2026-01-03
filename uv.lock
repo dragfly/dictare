@@ -1791,9 +1791,12 @@ name = "voxtype"
 version = "2.7.0"
 source = { editable = "." }
 dependencies = [
+    { name = "evdev", marker = "sys_platform == 'linux'" },
     { name = "faster-whisper" },
     { name = "numpy" },
     { name = "pydantic" },
+    { name = "pynput", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "sounddevice" },
     { name = "typer-slim", extra = ["standard"] },
 ]
@@ -1807,13 +1810,6 @@ dev = [
 ]
 gpu = [
     { name = "nvidia-cudnn-cu12" },
-]
-linux = [
-    { name = "evdev" },
-]
-macos = [
-    { name = "pynput" },
-    { name = "pyobjc-framework-quartz" },
 ]
 mlx = [
     { name = "huggingface-hub" },
@@ -1830,7 +1826,7 @@ tts = [
 
 [package.metadata]
 requires-dist = [
-    { name = "evdev", marker = "extra == 'linux'", specifier = ">=1.7.0" },
+    { name = "evdev", marker = "sys_platform == 'linux'", specifier = ">=1.7.0" },
     { name = "faster-whisper", specifier = ">=1.0.0" },
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
     { name = "mlx", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
@@ -1841,8 +1837,8 @@ requires-dist = [
     { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.2.0" },
     { name = "piper-tts", marker = "extra == 'tts'", specifier = ">=1.2.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pynput", marker = "extra == 'macos'", specifier = ">=1.7.0" },
-    { name = "pyobjc-framework-quartz", marker = "extra == 'macos'", specifier = ">=10.0" },
+    { name = "pynput", marker = "sys_platform == 'darwin'", specifier = ">=1.7.0" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
@@ -1852,7 +1848,7 @@ requires-dist = [
     { name = "tqdm", marker = "extra == 'mlx'", specifier = ">=4.60.0" },
     { name = "typer-slim", extras = ["standard"], specifier = ">=0.12.0" },
 ]
-provides-extras = ["linux", "dev", "macos", "gpu", "mlx", "tts"]
+provides-extras = ["dev", "gpu", "mlx", "tts"]
 
 [[package]]
 name = "wheel"
