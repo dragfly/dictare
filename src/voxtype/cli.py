@@ -305,7 +305,7 @@ def run(
     ] = None,
     auto_enter: Annotated[
         Optional[bool],
-        typer.Option("--auto-enter", help="Auto-submit after typing (true/false)"),
+        typer.Option("--auto-enter/--no-auto-enter", help="Auto-submit after typing"),
     ] = None,
     # Command options
     wake_word: Annotated[
