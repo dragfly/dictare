@@ -37,6 +37,7 @@ dependencies = [
     "evdev>=1.7.0; sys_platform == 'linux'",
     "pynput>=1.7.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
+    "hidapi>=0.14.0; sys_platform == 'darwin'",  # hidapi for device profiles (bundles native lib)
 ]
 
 [project.optional-dependencies]

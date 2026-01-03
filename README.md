@@ -153,6 +153,52 @@ systemctl --user enable ydotoold  # Auto-start on login
 
 On macOS, text injection uses **osascript** (AppleScript) which requires Accessibility permissions.
 
+## Device Profiles (Presenter Remotes, Macro Pads)
+
+Use dedicated input devices like presenter remotes or macro pads to control voxtype.
+
+### List Connected Devices
+
+```bash
+voxtype devices          # List HID devices with vendor/product IDs
+voxtype devices --hid    # Same (explicit HID mode)
+```
+
+### Create a Device Profile
+
+Create `~/.config/voxtype/devices/<name>.toml`:
+
+```toml
+# ~/.config/voxtype/devices/presenter.toml
+vendor_id = 0x1234      # From "voxtype devices" output
+product_id = 0x5678
+
+[bindings]
+KEY_PAGEUP = "project-prev"
+KEY_PAGEDOWN = "project-next"
+KEY_B = "toggle-listening"
+KEY_ESC = "submit"
+```
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `toggle-listening` | Start/stop listening |
+| `listening-on` | Start listening |
+| `listening-off` | Stop listening |
+| `toggle-mode` | Switch transcription/command mode |
+| `project-next` | Next agent (multi-output mode) |
+| `project-prev` | Previous agent |
+| `submit` | Press Enter |
+| `discard` | Discard current buffer |
+| `repeat` | Repeat last transcription |
+
+### Platform Support
+
+- **Linux**: Uses evdev (device grabbing supported)
+- **macOS**: Uses hidapi (no device grabbing, but works for dedicated devices)
+
 ## Platform Notes
 
 ### macOS
