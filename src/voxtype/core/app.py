@@ -644,16 +644,17 @@ class VoxtypeApp:
 
     def _toggle_listening(self) -> None:
         """Toggle listening on/off."""
-        self._listening = not self._listening
-
         if self._listening:
-            # Entering listening mode
-            self._console.print("[bold green]>>> LISTENING ON[/]")
-            self._play_feedback("listening_on")
-        else:
-            # Exiting listening mode
+            # Turning OFF: disable first, then show message
+            self._listening = False
             self._console.print("[bold red]<<< LISTENING OFF[/]")
             self._play_feedback("listening_off")
+        else:
+            # Turning ON: show message first, then enable
+            # This ensures user sees feedback before audio processing starts
+            self._console.print("[bold green]>>> LISTENING ON[/]")
+            self._play_feedback("listening_on")
+            self._listening = True
 
         # Sync LLM processor state if available
         if self._llm_processor:
@@ -768,7 +769,7 @@ class VoxtypeApp:
         """Run in VAD (voice activity detection) mode."""
         self._init_vad_components()
         self._running = True
-        self._listening = True  # Start actively listening
+        # Note: _listening stays False until we're fully ready
 
         # Start hotkey listener for toggle (if available)
         if self._hotkey:
@@ -782,11 +783,13 @@ class VoxtypeApp:
                 if device_info:
                     self._console.print(f"[dim]Hotkey device: {device_info[0]} ({device_info[1]})[/]")
 
-        # Show initial state
+        # IMPORTANT: Show message FIRST, then enable listening, then start streaming
+        # This ensures user sees "LISTENING ON" before any audio can be processed
         mode_name = "TRANSCRIPTION" if self._processing_mode == ProcessingMode.TRANSCRIPTION else "COMMAND"
         self._console.print(f"[bold green]>>> LISTENING ON[/] [dim]({mode_name} mode)[/]")
 
-        # Start continuous audio streaming
+        # Now enable listening and start audio streaming
+        self._listening = True
         if self._audio:
             self._audio.start_streaming(self._on_vad_audio_chunk)
 
@@ -875,12 +878,14 @@ class VoxtypeApp:
         if self._listening == on:
             return
 
-        self._listening = on
-
         if on:
+            # Turning ON: show message first, then enable
             self._console.print("[bold green]>>> LISTENING ON[/]")
             self._play_feedback("listening_on")
+            self._listening = True
         else:
+            # Turning OFF: disable first, then show message
+            self._listening = False
             self._console.print("[bold red]<<< LISTENING OFF[/]")
             self._play_feedback("listening_off")
 
