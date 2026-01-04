@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voxtype"
-version = "2.11.3"
+version = "2.12.0"
 description = "Voice-to-text for your terminal"
 readme = "README.md"
 license = "MIT"
