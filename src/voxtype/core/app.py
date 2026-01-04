@@ -972,6 +972,31 @@ class VoxtypeApp:
         self._console.print(f"[yellow]Agent not found: {name}[/]")
         return False
 
+    def _switch_to_agent_by_index(self, index: int) -> bool:
+        """Switch to a specific agent by index (1-based).
+
+        Args:
+            index: Agent index (1-based, so 1 = first agent)
+
+        Returns:
+            True if agent was found and switched to
+        """
+        if not self.agents:
+            return False
+
+        # Convert 1-based to 0-based
+        idx = index - 1
+        if idx < 0 or idx >= len(self.agents):
+            self._console.print(f"[yellow]Agent #{index} not found (have {len(self.agents)} agents)[/]")
+            return False
+
+        self._current_agent_index = idx
+        agent = self.agents[idx]
+        self._injector = self._create_injector()
+        self._console.print(f"[bold cyan]>>> Agent #{index}: {agent}[/]")
+        self._speak_agent(agent)
+        return True
+
     def _repeat_last_injection(self) -> None:
         """Repeat the last injected text."""
         if self._llm_processor and self._llm_processor.last_injection:

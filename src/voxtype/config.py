@@ -115,11 +115,30 @@ class CommandConfig(BaseModel):
     )
 
 
+def _default_keyboard_shortcuts() -> list[dict[str, Any]]:
+    """Default keyboard shortcuts for agent navigation."""
+    return [
+        # Agent navigation
+        {"keys": "Ctrl+Shift+N", "command": "project-next"},
+        {"keys": "Ctrl+Shift+P", "command": "project-prev"},
+        # Direct agent switching (1-9)
+        {"keys": "Ctrl+Shift+1", "command": "switch-to-project-index", "args": {"index": 1}},
+        {"keys": "Ctrl+Shift+2", "command": "switch-to-project-index", "args": {"index": 2}},
+        {"keys": "Ctrl+Shift+3", "command": "switch-to-project-index", "args": {"index": 3}},
+        {"keys": "Ctrl+Shift+4", "command": "switch-to-project-index", "args": {"index": 4}},
+        {"keys": "Ctrl+Shift+5", "command": "switch-to-project-index", "args": {"index": 5}},
+        {"keys": "Ctrl+Shift+6", "command": "switch-to-project-index", "args": {"index": 6}},
+        {"keys": "Ctrl+Shift+7", "command": "switch-to-project-index", "args": {"index": 7}},
+        {"keys": "Ctrl+Shift+8", "command": "switch-to-project-index", "args": {"index": 8}},
+        {"keys": "Ctrl+Shift+9", "command": "switch-to-project-index", "args": {"index": 9}},
+    ]
+
+
 class KeyboardConfig(BaseModel):
     """Keyboard shortcuts configuration."""
 
     shortcuts: list[dict[str, Any]] = Field(
-        default_factory=list,
+        default_factory=_default_keyboard_shortcuts,
         description="List of keyboard shortcuts with keys, command, and optional args",
     )
 
@@ -449,16 +468,68 @@ mode = "transcription" # transcription or command
 ollama_model = "qwen2.5:1.5b"
 ollama_timeout = 5.0
 
-# Keyboard shortcuts (require modifiers like Ctrl, Alt, Cmd)
-# [[keyboard.shortcuts]]
-# keys = "Ctrl+Shift+L"
-# command = "toggle-listening"
-#
-# [[keyboard.shortcuts]]
-# keys = "Ctrl+Alt+1"
-# command = "switch-to-project"
-# [keyboard.shortcuts.args]
-# name = "macina"
+# Default keyboard shortcuts for agent navigation
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+N"
+command = "project-next"
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+P"
+command = "project-prev"
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+1"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 1
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+2"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 2
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+3"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 3
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+4"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 4
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+5"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 5
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+6"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 6
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+7"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 7
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+8"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 8
+
+[[keyboard.shortcuts]]
+keys = "Ctrl+Shift+9"
+command = "switch-to-project-index"
+[keyboard.shortcuts.args]
+index = 9
 
 [logging]
 log_file = ""

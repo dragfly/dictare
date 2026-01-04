@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   # Terminal 2: Send voice input
   voxtype listen --agents macinanumeri
   ```
+- **Default keyboard shortcuts** for agent navigation:
+  - `Ctrl+Shift+N` → next agent
+  - `Ctrl+Shift+P` → previous agent
+  - `Ctrl+Shift+1..9` → switch to agent #1..9
+- **`switch-to-project-index` command**: Switch to agent by number (1-based)
 
 ### Changed
 - **BREAKING: `voxtype run` renamed to `voxtype listen`**: Symmetric with `voxtype speak`
