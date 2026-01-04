@@ -86,14 +86,13 @@ class QuartzInjector(TextInjector):
 
             # Type each character
             for char in text:
-                # Key down
+                # Key down - this is where the character is typed
                 event_down = CGEventCreateKeyboardEvent(source, 0, True)
                 CGEventKeyboardSetUnicodeString(event_down, len(char), char)
                 CGEventPost(kCGSessionEventTap, event_down)
 
-                # Key up
+                # Key up - just release, no character
                 event_up = CGEventCreateKeyboardEvent(source, 0, False)
-                CGEventKeyboardSetUnicodeString(event_up, len(char), char)
                 CGEventPost(kCGSessionEventTap, event_up)
 
                 if delay_sec > 0:
