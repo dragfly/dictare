@@ -990,8 +990,58 @@ def backends() -> None:
     console.print("[dim]Grab = exclusive device access (recommended for presenter remotes)[/]")
 
 
+def _check_python_environment() -> None:
+    """Check if running in the correct Python environment."""
+    import sys
+    import os
+
+    # Expected Python version for uv tool installation
+    EXPECTED_MAJOR = 3
+    EXPECTED_MINOR = 11
+
+    major, minor = sys.version_info[:2]
+
+    # If running with wrong Python version, likely a PATH/shim issue
+    if major != EXPECTED_MAJOR or minor != EXPECTED_MINOR:
+        # Check if this looks like a pyenv shim issue
+        executable = sys.executable
+        is_pyenv_shim = ".pyenv" in executable
+        is_uv_run = "UV_" in "".join(os.environ.keys()) or ".venv" in executable
+
+        if is_pyenv_shim or is_uv_run:
+            from rich.console import Console
+            from rich.panel import Panel
+
+            console = Console(stderr=True)
+
+            if is_pyenv_shim:
+                msg = (
+                    f"[yellow]⚠ voxtype is running with Python {major}.{minor} via pyenv shim[/]\n\n"
+                    f"voxtype was installed with Python {EXPECTED_MAJOR}.{EXPECTED_MINOR} but pyenv is intercepting the command.\n\n"
+                    "[bold]Quick fix:[/]\n"
+                    "  [cyan]~/.local/bin/voxtype[/]  (use full path)\n\n"
+                    "[bold]Permanent fix:[/]\n"
+                    "  Move [cyan]~/.local/bin[/] AFTER pyenv init in your shell config,\n"
+                    "  so uv tools take precedence over pyenv shims.\n\n"
+                    "[dim]This is a PATH ordering issue, not a voxtype bug.[/]"
+                )
+            else:
+                msg = (
+                    f"[yellow]⚠ voxtype is running with Python {major}.{minor}[/]\n\n"
+                    f"voxtype was installed with Python {EXPECTED_MAJOR}.{EXPECTED_MINOR}.\n"
+                    "It looks like [cyan]uv run[/] is being used instead of the installed binary.\n\n"
+                    "[bold]Fix:[/]\n"
+                    "  Remove any [cyan]voxtype[/] alias from your shell config,\n"
+                    "  or use [cyan]~/.local/bin/voxtype[/] directly."
+                )
+
+            console.print(Panel(msg, title="Python Environment Issue", border_style="yellow"))
+            console.print()
+
+
 def main() -> None:
     """Entry point for the CLI."""
+    _check_python_environment()
     app()
 
 
