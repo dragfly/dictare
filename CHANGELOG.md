@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.2] - 2026-01-04
+
+### Changed
+- **README simplified**: Minimal install/run instructions, advanced features discoverable via `--help` and `docs/`
+- **ARCHITECTURE.md updated**: Reflects current simplified architecture (removed PTT mode, legacy backends)
+- **Code comments cleaned**: Removed outdated references to xdotool, clipboard, push-to-talk
+
+### Fixed
+- **docs/LLM_ARCHITECTURE.md**: Updated model name from llama3.2:1b to qwen2.5:1.5b
+
 ## [2.11.1] - 2026-01-04
 
 ### Added

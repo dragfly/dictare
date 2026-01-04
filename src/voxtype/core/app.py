@@ -270,7 +270,7 @@ class VoxtypeApp:
             return injector
 
     def _init_components(self) -> None:
-        """Initialize all components for push-to-talk mode."""
+        """Initialize all components."""
         self._console.print("[dim]Initializing components...[/]")
 
         self._audio = self._create_audio_capture()

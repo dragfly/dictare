@@ -46,8 +46,7 @@ class TextInjector(ABC):
 
         This creates a new line in the text input without sending/submitting.
         Implementation varies by backend:
-        - Keyboard (ydotool/xdotool): Alt+Enter
-        - Clipboard: \n is included in pasted text
+        - Keyboard (ydotool): Alt+Enter
         - File: \n written to file
 
         Returns:
