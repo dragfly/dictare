@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1] - 2026-01-04
+
+### Added
+- **Python environment check**: Detects when voxtype runs with wrong Python version (e.g., via pyenv shim or uv run alias) and shows helpful UX panel with fix instructions
+
+### Fixed
+- **Double output bug**: Text was typed twice on macOS due to Quartz injector setting Unicode string on both key-down and key-up events
+- **Race condition**: "LISTENING ON" message now appears before audio processing starts, ensuring user sees feedback first
+- **install.sh improvements**:
+  - Uses `--reinstall` for clean upgrades without manual cache cleaning
+  - Fixed ANSI escape codes (use `echo -e` for bold text)
+  - Removed non-existent `--vad` flag from usage suggestions
+
 ## [2.11.0] - 2026-01-03
 
 ### Changed
