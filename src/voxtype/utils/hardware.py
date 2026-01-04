@@ -15,13 +15,17 @@ def is_apple_silicon() -> bool:
     return platform.machine() == "arm64"
 
 def is_mlx_available() -> bool:
-    """Check if MLX is available for Apple Silicon acceleration."""
+    """Check if MLX is available for Apple Silicon acceleration.
+
+    Uses importlib to check package availability without importing it,
+    avoiding the slow import of mlx_whisper during startup.
+    """
     if not is_apple_silicon():
         return False
     try:
-        import mlx_whisper  # noqa: F401
-        return True
-    except ImportError:
+        from importlib.util import find_spec
+        return find_spec("mlx_whisper") is not None
+    except (ImportError, ModuleNotFoundError):
         return False
 
 def is_cuda_available() -> bool:

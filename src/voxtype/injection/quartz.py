@@ -73,9 +73,8 @@ class QuartzInjector(TextInjector):
         # Handle newline based on auto_enter mode
         has_newline = text.endswith("\n")
         send_enter = has_newline and auto_enter
-        if send_enter:
-            text = text[:-1]
-        # If auto_enter=False, keep the \n for visual newline
+        if has_newline:
+            text = text[:-1]  # Always strip \n - can't type it literally
 
         try:
             source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
@@ -116,14 +115,19 @@ class QuartzInjector(TextInjector):
         return "macos-quartz"
 
     def send_newline(self) -> bool:
-        """Send visual newline using Option+Return."""
+        """Send visual newline using Shift+Return.
+
+        Shift+Return is interpreted as newline-without-submit in most apps
+        (Slack, Discord, web forms, etc). In plain terminals it may still
+        act as Enter, but that's unavoidable.
+        """
         try:
             from Quartz import (
                 CGEventCreateKeyboardEvent,
                 CGEventPost,
                 CGEventSetFlags,
                 CGEventSourceCreate,
-                kCGEventFlagMaskAlternate,
+                kCGEventFlagMaskShift,
                 kCGEventSourceStateHIDSystemState,
                 kCGSessionEventTap,
             )
@@ -135,9 +139,9 @@ class QuartzInjector(TextInjector):
             if source is None:
                 return False
 
-            # Key code 36 = Return with Option modifier
+            # Key code 36 = Return with Shift modifier
             event_down = CGEventCreateKeyboardEvent(source, 36, True)
-            CGEventSetFlags(event_down, kCGEventFlagMaskAlternate)
+            CGEventSetFlags(event_down, kCGEventFlagMaskShift)
             CGEventPost(kCGSessionEventTap, event_down)
 
             event_up = CGEventCreateKeyboardEvent(source, 36, False)
