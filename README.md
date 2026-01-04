@@ -26,9 +26,14 @@ voxtype run
 
 ## Requirements
 
-**macOS**: Grant Accessibility permission (System Settings → Privacy → Accessibility)
+**macOS**: Grant Accessibility permission for your terminal app:
+1. System Settings → Privacy & Security → Accessibility
+2. Click **+** and add your terminal (Terminal, iTerm2, etc.)
+3. Restart your terminal
 
-**Linux**: Be in `input` group and run `systemctl --user start ydotoold`
+**Linux**: The installer sets up everything automatically. If needed:
+- Join input group: `sudo usermod -aG input $USER` (then log out/in)
+- Start daemon: `systemctl --user start ydotoold`
 
 ## More
 
