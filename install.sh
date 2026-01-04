@@ -190,11 +190,11 @@ install_macos() {
 
         echo ""
         echo "Development mode active. Run with:"
-        echo "  ${BOLD}source .venv/bin/activate${NC}"
-        echo "  ${BOLD}voxtype run --vad${NC}"
+        echo -e "  ${BOLD}source .venv/bin/activate${NC}"
+        echo -e "  ${BOLD}voxtype run --vad${NC}"
         echo ""
         echo "Or without activating:"
-        echo "  ${BOLD}uv run voxtype run --vad${NC}"
+        echo -e "  ${BOLD}uv run voxtype run --vad${NC}"
     else
         step "Installing voxtype..."
 
@@ -217,7 +217,7 @@ install_macos() {
         info "Installed voxtype"
 
         echo ""
-        echo "Run: ${BOLD}voxtype run --vad${NC}"
+        echo -e "Run: ${BOLD}voxtype run --vad${NC}"
     fi
 
     # 4. Permissions reminder
@@ -225,10 +225,10 @@ install_macos() {
     echo ""
     warn "macOS requires Accessibility permission for keyboard simulation."
     echo ""
-    echo "  1. Open ${BOLD}System Settings → Privacy & Security → Accessibility${NC}"
+    echo -e "  1. Open ${BOLD}System Settings → Privacy & Security → Accessibility${NC}"
     echo "  2. Click '+' and add your terminal app"
     echo "  3. Enable the toggle"
-    echo "  4. ${BOLD}Restart your terminal${NC}"
+    echo -e "  4. ${BOLD}Restart your terminal${NC}"
     echo ""
 }
 
@@ -361,11 +361,11 @@ EOF
 
         echo ""
         echo "Development mode active. Run with:"
-        echo "  ${BOLD}source .venv/bin/activate${NC}"
-        echo "  ${BOLD}voxtype run --vad${NC}"
+        echo -e "  ${BOLD}source .venv/bin/activate${NC}"
+        echo -e "  ${BOLD}voxtype run --vad${NC}"
         echo ""
         echo "Or without activating:"
-        echo "  ${BOLD}uv run voxtype run --vad${NC}"
+        echo -e "  ${BOLD}uv run voxtype run --vad${NC}"
     else
         step "Installing voxtype..."
 
@@ -380,7 +380,7 @@ EOF
         info "Installed voxtype"
 
         echo ""
-        echo "Run: ${BOLD}voxtype run --vad${NC}"
+        echo -e "Run: ${BOLD}voxtype run --vad${NC}"
     fi
 
     echo ""
