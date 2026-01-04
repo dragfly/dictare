@@ -70,9 +70,9 @@ class NoInjectorAvailableError(InjectionError):
 
     def __init__(self) -> None:
         super().__init__(
-            "No text injection method available.\n"
-            "Please install one of:\n"
-            "  - ydotool (recommended): sudo apt install ydotool\n"
-            "  - wtype (Wayland only): sudo apt install wtype\n"
-            "  - xdotool (X11 only): sudo apt install xdotool"
+            "Text injection not available.\n"
+            "On Linux, install ydotool and start ydotoold:\n"
+            "  sudo apt install ydotool\n"
+            "  sudo ydotoold &\n"
+            "On macOS, grant Accessibility permission in System Preferences."
         )
