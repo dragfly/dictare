@@ -176,22 +176,25 @@ class YdotoolInjector(TextInjector):
         return "ydotool"
 
     def send_newline(self) -> bool:
-        """Send visual newline using Alt+Enter."""
+        """Send visual newline using Shift+Enter.
+
+        Shift+Enter is interpreted as newline-without-submit in most apps.
+        """
         if not self._ydotool_path:
             self._ydotool_path = shutil.which("ydotool")
             if not self._ydotool_path:
                 return False
 
         try:
-            # Alt+Enter: Alt down, Enter down, Enter up, Alt up
+            # Shift+Enter: Shift down, Enter down, Enter up, Shift up
             result = subprocess.run(
                 [
                     self._ydotool_path,
                     "key",
-                    f"{KEY_LEFTALT}:1",
+                    f"{KEY_LEFTSHIFT}:1",
                     f"{KEY_ENTER}:1",
                     f"{KEY_ENTER}:0",
-                    f"{KEY_LEFTALT}:0",
+                    f"{KEY_LEFTSHIFT}:0",
                 ],
                 capture_output=True,
                 timeout=5,

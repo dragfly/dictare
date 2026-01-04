@@ -66,6 +66,7 @@ class VoxtypeApp:
         self._running = False
         self._console = Console()
         self._lock = threading.Lock()
+        self._injection_lock = threading.Lock()  # Separate lock for text injection
         self._logger = logger
 
         # Agent state
@@ -286,18 +287,17 @@ class VoxtypeApp:
 
     def _init_vad_components(self) -> None:
         """Initialize components for VAD mode."""
-        if self.config.verbose:
-            self._console.print("[dim]Initializing VAD components...[/]")
+        # Always show loading messages - model loading can take 30+ seconds
+        self._console.print(f"[dim]Loading STT model ({self.config.stt.model_size})...[/]")
 
         self._audio = self._create_audio_capture()
         self._stt = self._create_stt_engine()
         self._injector = self._create_injector()
 
         # Create VAD (Silero VAD via faster-whisper)
+        self._console.print()  # Newline after progress bars
+        self._console.print("[dim]Loading VAD model...[/]")
         from voxtype.audio.vad import SileroVAD, StreamingVAD
-
-        if self.config.verbose:
-            self._console.print("[dim]Loading VAD model (first run may download)...[/]")
         self._vad = SileroVAD(
             threshold=0.5,
             min_silence_ms=self.vad_silence_ms,
@@ -727,15 +727,23 @@ class VoxtypeApp:
 
         if self._injector:
             method = self._injector.get_name()
-            success = self._injector.type_text(
-                inject_text,
-                delay_ms=self.config.output.typing_delay_ms,
-                auto_enter=self.config.output.auto_enter,
-            )
+            if self.config.verbose:
+                self._console.print(f"[dim]Injecting {len(inject_text)} chars via {method}...[/]")
 
-            # When auto_enter=false, send visual newline (Alt+Enter) for separation
-            if success and not self.config.output.auto_enter:
-                self._injector.send_newline()
+            # Lock to prevent concurrent injections from multiple threads
+            with self._injection_lock:
+                success = self._injector.type_text(
+                    inject_text,
+                    delay_ms=self.config.output.typing_delay_ms,
+                    auto_enter=self.config.output.auto_enter,
+                )
+
+                if self.config.verbose:
+                    self._console.print(f"[dim]Injection result: {success}[/]")
+
+                # When auto_enter=false, add visual newline for separation between phrases
+                if success and not self.config.output.auto_enter:
+                    self._injector.send_newline()
 
             # Beep when file write succeeds (so user knows they can switch project)
             if success and method.startswith("file:"):
@@ -762,13 +770,26 @@ class VoxtypeApp:
         if self._streaming_vad and self._running and self._listening:
             self._streaming_vad.process_chunk(chunk)
 
-    def run(self) -> None:
-        """Start the application main loop."""
-        self._run_vad_mode()
+    def run(self, status_panel=None) -> None:
+        """Start the application main loop.
 
-    def _run_vad_mode(self) -> None:
-        """Run in VAD (voice activity detection) mode."""
+        Args:
+            status_panel: Optional Rich Panel to display after loading is complete.
+        """
+        self._run_vad_mode(status_panel=status_panel)
+
+    def _run_vad_mode(self, status_panel=None) -> None:
+        """Run in VAD (voice activity detection) mode.
+
+        Args:
+            status_panel: Optional Rich Panel to display after loading is complete.
+        """
         self._init_vad_components()
+
+        # Show status panel AFTER loading is complete
+        if status_panel:
+            self._console.print(status_panel)
+
         self._running = True
         # Note: _listening stays False until we're fully ready
 
