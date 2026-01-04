@@ -1,4 +1,4 @@
-"""Terminal executor - injects text via keyboard or clipboard."""
+"""Terminal executor - injects text via keyboard simulation."""
 
 from __future__ import annotations
 
@@ -10,8 +10,7 @@ from voxtype.executors.base import CommandEvent, Executor, TargetConfig
 class TerminalExecutor(Executor):
     """Executor for terminal target.
 
-    Injects text directly into the terminal via keyboard simulation
-    or clipboard.
+    Injects text directly into the terminal via keyboard simulation.
     """
 
     VERSION = "1.0.0"

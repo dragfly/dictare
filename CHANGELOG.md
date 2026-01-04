@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-01-03
+
+### Changed
+- **Simplified text injection**: Removed legacy injection backends, keeping only the essential ones:
+  - **Linux**: `ydotool` only (universal, works on X11/Wayland/TTY)
+  - **macOS**: `quartz` only (Quartz events, best Unicode support)
+  - **Agent mode**: `file` injector for inputmux integration
+
+### Removed
+- **Deprecated injection backends**: `wtype`, `xdotool`, `macos` (AppleScript), `clipboard`
+- **Clipboard output mode**: Use `keyboard` or `agent` mode instead
+- **Fallback chain**: Each platform now has one clear injector. If unavailable, clear error with fix instructions.
+
+### Fixed
+- **Hardware detection refactored**: MLX/CUDA detection logic extracted to `utils/hardware.py` for DRY code
+
 ## [2.10.0] - 2026-01-03
 
 ### Added

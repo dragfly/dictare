@@ -111,16 +111,10 @@ class VoxtypeApp:
 
     def _create_stt_engine(self) -> STTEngine:
         """Create and load STT engine."""
+        from voxtype.utils.hardware import is_mlx_available
+
         # Auto-detect MLX on Apple Silicon
-        use_mlx = False
-        if sys.platform == "darwin":
-            import platform
-            if platform.machine() == "arm64" and self.config.stt.hw_accel:
-                try:
-                    import mlx_whisper  # noqa: F401
-                    use_mlx = True
-                except ImportError:
-                    pass
+        use_mlx = self.config.stt.hw_accel and is_mlx_available()
 
         if use_mlx:
             from voxtype.stt.mlx_whisper import MLXWhisperEngine
@@ -214,61 +208,6 @@ class VoxtypeApp:
             f"Install pynput (macOS/X11): pip install pynput"
         )
 
-    def _check_linux_dependencies(self) -> None:
-        """Check Linux-specific dependencies and exit if critical ones missing."""
-        import shutil
-        import subprocess
-
-        # Check if ydotoold is running (required for text injection)
-        if shutil.which("ydotool"):
-            # Check if ydotoold process is running
-            ydotoold_running = False
-            try:
-                result = subprocess.run(
-                    ["pgrep", "-x", "ydotoold"],
-                    capture_output=True,
-                    timeout=5,
-                )
-                ydotoold_running = result.returncode == 0
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                # pgrep not available, try pidof
-                try:
-                    result = subprocess.run(
-                        ["pidof", "ydotoold"],
-                        capture_output=True,
-                        timeout=5,
-                    )
-                    ydotoold_running = result.returncode == 0
-                except (subprocess.TimeoutExpired, FileNotFoundError):
-                    pass
-
-            if not ydotoold_running:
-                self._console.print("\n[red bold]ERROR: ydotoold is not running[/]\n")
-                self._console.print("ydotoold is required for text injection on Linux.")
-                self._console.print("It handles keyboard simulation for both typing and clipboard paste.\n")
-                self._console.print("[yellow]To start it:[/]")
-                self._console.print("  [cyan]systemctl --user start ydotoold[/]\n")
-                self._console.print("[dim]To enable auto-start on login:[/]")
-                self._console.print("  [dim]systemctl --user enable ydotoold[/]\n")
-                raise SystemExit(1)
-
-        # Check for clipboard tools (warning only)
-        session_type = os.environ.get("XDG_SESSION_TYPE", "")
-        is_wayland = os.environ.get("WAYLAND_DISPLAY") or session_type == "wayland"
-
-        if is_wayland:
-            if not shutil.which("wl-copy"):
-                self._console.print(
-                    "[yellow]wl-copy not found (needed for clipboard on Wayland)[/]\n"
-                    "  Install: [bold]sudo apt install wl-clipboard[/]\n"
-                )
-        else:
-            if not shutil.which("xclip") and not shutil.which("xsel"):
-                self._console.print(
-                    "[yellow]xclip/xsel not found (needed for clipboard on X11)[/]\n"
-                    "  Install: [bold]sudo apt install xclip[/]\n"
-                )
-
     def _get_current_output_file(self) -> str | None:
         """Get the current output file path based on agent mode."""
         if self.output_dir and self.agents:
@@ -300,55 +239,35 @@ class VoxtypeApp:
 
     def _create_injector(self) -> TextInjector:
         """Create text injector based on config.output.method."""
-        from voxtype.injection.clipboard import ClipboardInjector
-
         # Agent output mode (writes to <agent>.voxtype files)
         output_path = self._get_current_output_file()
         if output_path or self.config.output.method == "agent":
             from voxtype.injection.file import FileInjector
             return FileInjector(output_path or "voxtype.txt")
 
-        # Clipboard mode
-        if self.config.output.method == "clipboard":
-            return ClipboardInjector()
-
-        # Keyboard mode - auto-detect best available injector
+        # Keyboard mode - platform-specific injector
         if sys.platform == "darwin":
-            from voxtype.injection.macos import MacOSInjector
             from voxtype.injection.quartz import QuartzInjector
 
-            candidates = [
-                QuartzInjector(),
-                MacOSInjector(),
-                ClipboardInjector(),
-            ]
+            injector = QuartzInjector()
+            if not injector.is_available():
+                raise RuntimeError(
+                    "Quartz text injection not available. "
+                    "Grant Accessibility permission in System Preferences > "
+                    "Security & Privacy > Privacy > Accessibility"
+                )
+            return injector
         else:
-            from voxtype.injection.wtype import WtypeInjector
-            from voxtype.injection.xdotool import XdotoolInjector
             from voxtype.injection.ydotool import YdotoolInjector
 
-            # Check Linux dependencies
-            self._check_linux_dependencies()
-
-            candidates = [
-                YdotoolInjector(),
-                WtypeInjector(),
-                XdotoolInjector(),
-                ClipboardInjector(),
-            ]
-
-        for injector in candidates:
-            if injector.is_available():
-                if isinstance(injector, ClipboardInjector):
-                    self._console.print(
-                        "[yellow]Using clipboard mode. "
-                        "Press Ctrl+V to paste after speaking.[/]"
-                    )
-                return injector
-
-        # Last resort: return clipboard even if not available
-        # (will fail gracefully on use)
-        return ClipboardInjector()
+            injector = YdotoolInjector()
+            if not injector.is_available():
+                raise RuntimeError(
+                    "ydotool not available. Ensure ydotoold is running:\n"
+                    "  sudo ydotoold &\n"
+                    "Or install ydotool: apt install ydotool / pacman -S ydotool"
+                )
+            return injector
 
     def _init_components(self) -> None:
         """Initialize all components for push-to-talk mode."""
@@ -807,29 +726,20 @@ class VoxtypeApp:
 
         if self._injector:
             method = self._injector.get_name()
-            if method == "clipboard":
-                # Clipboard mode: always auto-paste (Ctrl+V)
-                success = self._injector.type_text(
-                    inject_text,
-                    delay_ms=self.config.output.typing_delay_ms,
-                    auto_paste=True,
-                    auto_enter=self.config.output.auto_enter,
-                )
-            else:
-                success = self._injector.type_text(
-                    inject_text,
-                    delay_ms=self.config.output.typing_delay_ms,
-                    auto_enter=self.config.output.auto_enter,
-                )
+            success = self._injector.type_text(
+                inject_text,
+                delay_ms=self.config.output.typing_delay_ms,
+                auto_enter=self.config.output.auto_enter,
+            )
 
-                # When auto_enter=false, send visual newline (Alt+Enter) for separation
-                if success and not self.config.output.auto_enter:
-                    self._injector.send_newline()
+            # When auto_enter=false, send visual newline (Alt+Enter) for separation
+            if success and not self.config.output.auto_enter:
+                self._injector.send_newline()
 
-                # Beep when file write succeeds (so user knows they can switch project)
-                if success and method.startswith("file:"):
-                    from voxtype.audio.beep import play_beep_sent
-                    play_beep_sent()
+            # Beep when file write succeeds (so user knows they can switch project)
+            if success and method.startswith("file:"):
+                from voxtype.audio.beep import play_beep_sent
+                play_beep_sent()
 
             # Log injection (include enter_sent status if available)
             if self._logger:

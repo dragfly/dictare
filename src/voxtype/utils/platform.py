@@ -240,43 +240,6 @@ def _check_injection_deps_linux() -> list[CheckResult]:
         )
     )
 
-    # wtype (Wayland)
-    wtype_exists = check_command_exists("wtype")
-    results.append(
-        CheckResult(
-            name="wtype",
-            available=wtype_exists,
-            message="Available" if wtype_exists else "Not installed",
-            required=False,
-            install_hint="sudo apt install wtype" if not wtype_exists else None,
-        )
-    )
-
-    # xdotool (X11)
-    xdotool_exists = check_command_exists("xdotool")
-    results.append(
-        CheckResult(
-            name="xdotool",
-            available=xdotool_exists,
-            message="Available" if xdotool_exists else "Not installed",
-            required=False,
-            install_hint="sudo apt install xdotool" if not xdotool_exists else None,
-        )
-    )
-
-    # Clipboard tools
-    wl_copy = check_command_exists("wl-copy")
-    xclip = check_command_exists("xclip")
-    results.append(
-        CheckResult(
-            name="Clipboard",
-            available=wl_copy or xclip,
-            message="wl-copy" if wl_copy else ("xclip" if xclip else "Not available"),
-            required=False,
-            install_hint="sudo apt install wl-clipboard" if not (wl_copy or xclip) else None,
-        )
-    )
-
     return results
 
 

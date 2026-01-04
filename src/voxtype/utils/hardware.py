@@ -1,0 +1,94 @@
+"""Hardware detection utilities."""
+
+from __future__ import annotations
+
+import ctypes
+import os
+import sys
+from pathlib import Path
+
+
+def is_apple_silicon() -> bool:
+    """Check if running on Apple Silicon."""
+    if sys.platform != "darwin":
+        return False
+    import platform
+    return platform.machine() == "arm64"
+
+
+def is_mlx_available() -> bool:
+    """Check if MLX is available for Apple Silicon acceleration."""
+    if not is_apple_silicon():
+        return False
+    try:
+        import mlx_whisper  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def is_cuda_available() -> bool:
+    """Check if CUDA is available for GPU acceleration."""
+    if sys.platform != "linux":
+        return False
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
+    except (ImportError, RuntimeError, AttributeError):
+        return False
+
+
+def setup_cuda_library_path() -> None:
+    """Set up CUDA libraries by preloading them before ctranslate2.
+
+    This needs to be called before importing ctranslate2 to ensure
+    CUDA libraries are properly loaded.
+    """
+    # Find nvidia packages in site-packages
+    for path in sys.path:
+        nvidia_path = Path(path) / "nvidia"
+        if nvidia_path.exists():
+            # Preload cudnn and cublas libraries
+            lib_files = [
+                ("cudnn", "libcudnn.so.9"),
+                ("cudnn", "libcudnn_ops.so.9"),
+                ("cudnn", "libcudnn_cnn.so.9"),
+                ("cublas", "libcublas.so.12"),
+                ("cublas", "libcublasLt.so.12"),
+            ]
+            for subdir, libname in lib_files:
+                lib_path = nvidia_path / subdir / "lib" / libname
+                if lib_path.exists():
+                    try:
+                        ctypes.CDLL(str(lib_path), mode=ctypes.RTLD_GLOBAL)
+                    except OSError:
+                        pass  # Library already loaded or not needed
+
+            # Also set LD_LIBRARY_PATH for any remaining libs
+            lib_paths = []
+            for subdir in ["cudnn", "cublas", "cuda_runtime"]:
+                lib_dir = nvidia_path / subdir / "lib"
+                if lib_dir.exists():
+                    lib_paths.append(str(lib_dir))
+
+            if lib_paths:
+                current = os.environ.get("LD_LIBRARY_PATH", "")
+                new_paths = ":".join(lib_paths)
+                if current:
+                    os.environ["LD_LIBRARY_PATH"] = f"{new_paths}:{current}"
+                else:
+                    os.environ["LD_LIBRARY_PATH"] = new_paths
+            break
+
+
+def get_best_device() -> str:
+    """Detect the best available device for STT.
+
+    Returns:
+        "mlx" for Apple Silicon with MLX, "cuda" for Linux with CUDA, "cpu" otherwise.
+    """
+    if is_mlx_available():
+        return "mlx"
+    if is_cuda_available():
+        return "cuda"
+    return "cpu"

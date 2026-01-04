@@ -85,7 +85,7 @@ ERROR_GENERIC = "Error: {error}"
 ERROR_YDOTOOLD = """ERROR: ydotoold is not running
 
 ydotoold is required for text injection on Linux.
-It handles keyboard simulation for both typing and clipboard paste.
+It handles keyboard simulation for typing.
 
 To start it:
   systemctl --user start ydotoold
