@@ -168,7 +168,7 @@ def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
         f"STT: [cyan]{config.stt.model_size}[/] on {device_str}\n"
         f"Language: [cyan]{config.stt.language}[/]\n"
         f"Output: {output_str}\n\n"
-        f"[dim][cyan]{hotkey_display}[/] tap: toggle listening | double-tap: switch mode[/]\n"
+        f"[dim]Hotkey: [cyan]{hotkey_display}[/] tap: toggle listening | double-tap: switch mode[/]\n"
         f"Press [bold]Ctrl+C[/] to exit",
         title="Ready",
         border_style="green",
@@ -346,10 +346,11 @@ def run(
         agents=agent_list,
     )
 
-    console.print(_format_status_panel(config, agent_list))
+    # Create status panel to show after loading (not before!)
+    status_panel = _format_status_panel(config, agent_list)
 
     try:
-        voxtypeapp.run()
+        voxtypeapp.run(status_panel=status_panel)
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down...[/]")
         voxtypeapp.stop()
