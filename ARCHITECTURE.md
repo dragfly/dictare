@@ -2,9 +2,7 @@
 
 ## Overview
 
-`voxtype` is a voice-to-text tool designed for terminal applications. It supports two input modes:
-- **VAD mode** (default): Hands-free, automatic speech detection using Silero VAD
-- **Push-to-talk mode**: Hold a hotkey to record, release to transcribe
+`voxtype` is a voice-to-text tool for terminals. It uses VAD (Voice Activity Detection) for hands-free speech detection.
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -13,131 +11,85 @@
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
       │                  │                                      │
       │            ┌─────────────┐                              │
-      │            │  Silero VAD │ (in VAD mode)                │
+      │            │  Silero VAD │                              │
       │            └─────────────┘                              │
       └──────────────────── State Machine ──────────────────────┘
-                    IDLE → RECORDING → TRANSCRIBING → INJECTING
 ```
+
+**Flow:**
+1. **Tap hotkey** → Toggle listening on/off
+2. **Speak** → Silero VAD detects speech, audio captured
+3. **Pause** → VAD detects silence, audio sent to Whisper
+4. **Transcribe** → Text typed into active window
+
+**Double-tap hotkey** → Switch between transcription and command modes.
 
 ## Key Design Decisions
 
 ### 1. Offline-First
 
-All transcription happens locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper), a CTranslate2-optimized implementation of OpenAI's Whisper. No internet connection required, no API keys, no usage limits.
+All transcription happens locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (CPU/CUDA) or [mlx-whisper](https://github.com/ml-explore/mlx-examples) (Apple Silicon). No internet required.
 
-### 2. Input Modes
+### 2. Platform-Specific Backends
 
-**VAD mode** (default):
-- Uses Silero VAD for speech detection
-- Hotkey toggles listening on/off
-- Speech automatically detected and transcribed
-- Double-tap hotkey to switch between transcription/command modes
-
-**Push-to-talk mode** (`--ptt`):
-- Hold key → Start recording
-- Release key → Stop recording, transcribe, type
-- Simpler, more predictable, avoids false activations
-
-### 3. Modular Components
-
-Each component has an abstract base class and multiple implementations:
+Each platform uses native, reliable backends:
 
 ```
 src/voxtype/
 ├── hotkey/
-│   ├── base.py              # Abstract HotkeyListener
-│   ├── evdev_listener.py    # Linux (works everywhere)
-│   └── pynput_listener.py   # macOS, X11 fallback
+│   ├── evdev_listener.py    # Linux (uinput)
+│   └── pynput_listener.py   # macOS (Accessibility API)
 ├── audio/
-│   ├── capture.py           # sounddevice-based recording
-│   ├── vad.py               # Silero VAD for speech detection
-│   └── beep.py              # Audio feedback (beeps, TTS)
+│   ├── capture.py           # sounddevice
+│   └── vad.py               # Silero VAD
 ├── stt/
-│   ├── base.py              # Abstract STTEngine
-│   ├── faster_whisper.py    # Local Whisper (CPU/CUDA)
-│   └── mlx_whisper.py       # Apple Silicon MLX
+│   ├── faster_whisper.py    # CPU/CUDA
+│   └── mlx_whisper.py       # Apple Silicon
 ├── injection/
-│   ├── base.py              # Abstract TextInjector
-│   ├── ydotool.py           # Linux universal
-│   ├── wtype.py             # Wayland
-│   ├── xdotool.py           # X11
-│   ├── macos.py             # macOS (osascript)
+│   ├── ydotool.py           # Linux (uinput)
 │   ├── quartz.py            # macOS (Quartz, Unicode)
-│   └── clipboard.py         # Fallback
-├── llm/
-│   ├── processor.py         # LLM command processing
-│   ├── models.py            # Data models (AppState, Command, etc.)
-│   └── prompts.py           # LLM prompts
+│   └── file.py              # Agent mode (inputmux)
 └── core/
-    ├── app.py               # Orchestrator
-    └── state.py             # AppState, ProcessingMode enums
+    └── app.py               # Orchestrator
 ```
 
-### 4. Graceful Degradation
+### 3. No Fallbacks
 
-If the preferred tool isn't available, fall back to the next best option:
+Each platform has one canonical backend. If it's not available, voxtype fails with a clear error message explaining how to fix it:
 
-**Hotkey detection:**
-- Linux: evdev → pynput
-- macOS: pynput only
-
-**Text injection:**
-- Linux: ydotool → wtype → xdotool → clipboard
-- macOS: osascript → clipboard
+- **Linux**: Requires `ydotoold` running
+- **macOS**: Requires Accessibility permission
 
 ## Speech-to-Text Models
 
-We use OpenAI's Whisper via `faster-whisper` (CPU/CUDA) or `mlx-whisper` (Apple Silicon). Models are downloaded automatically on first use.
+| Model | Size | Speed | Quality |
+|-------|------|-------|---------|
+| `tiny` | 75 MB | Fastest | Basic |
+| `base` | 150 MB | Fast | Good |
+| `small` | 500 MB | Medium | Better |
+| `medium` | 1.5 GB | Slower | Great |
+| `large-v3-turbo` | 1.6 GB | Medium | **Default** |
+| `large-v3` | 3 GB | Slowest | Best |
 
-| Model | Size | RAM | Speed (GPU) | Quality |
-|-------|------|-----|-------------|---------|
-| `tiny` | 75 MB | ~1 GB | ~0.5s | Good for clear speech |
-| `base` | 150 MB | ~1 GB | ~1s | Balanced |
-| `small` | 500 MB | ~2 GB | ~2s | Better accuracy |
-| `medium` | 1.5 GB | ~4 GB | ~4s | Best for non-English |
-| `large-v3` | 3 GB | ~6 GB | ~8s | Maximum accuracy |
-| `large-v3-turbo` | 1.6 GB | ~4 GB | ~3s | **Default**, fast + accurate |
+GPU auto-detection:
+- macOS (Apple Silicon): MLX
+- Linux (NVIDIA): CUDA
 
-**GPU auto-detection:**
-- macOS (Apple Silicon): MLX is auto-detected
-- Linux (NVIDIA): CUDA is auto-detected
-
-## Platform-Specific Details
+## Platform Details
 
 ### Linux
 
-**Hotkey Detection (evdev):**
-- Reads directly from `/dev/input/event*` devices
-- Requires user in `input` group
-- Works on X11, Wayland, and TTY
+**Hotkey** (evdev): Reads `/dev/input/event*` directly. Requires `input` group membership.
 
-**Text Injection (ydotool):**
-- Uses `/dev/uinput` to simulate keyboard
-- Requires `ydotoold` daemon running
-- Universal - works on X11, Wayland, TTY
+**Injection** (ydotool): Uses `/dev/uinput` to simulate keyboard. Requires `ydotoold` daemon.
+
+Both work on X11, Wayland, and TTY.
 
 ### macOS
 
-**Hotkey Detection (pynput):**
-- Uses macOS accessibility APIs
-- Requires Accessibility permission for terminal app
+**Hotkey** (pynput): Uses Accessibility APIs. Requires terminal in Accessibility list.
 
-**Text Injection (osascript):**
-- Uses AppleScript `keystroke` command
-- Also requires Accessibility permission
-
-**Recommended hotkeys** (don't produce terminal escape sequences):
-- `KEY_RIGHTMETA` - Right Command (⌘)
-- `KEY_RIGHTALT` - Right Option (⌥)
-
-## Data Flow
-
-1. **Hotkey pressed** → State changes to RECORDING
-2. **Audio capture** → Samples buffered in memory (16kHz, mono, float32)
-3. **Hotkey released** → State changes to TRANSCRIBING
-4. **Whisper inference** → Audio → text (runs on CPU or GPU if available)
-5. **Text injection** → Simulated keystrokes typed into active window
-6. **State returns to IDLE**
+**Injection** (Quartz): Uses CGEventCreateKeyboardEvent. Full Unicode support.
 
 ## Configuration
 
@@ -145,35 +97,15 @@ Config file: `~/.config/voxtype/config.toml`
 
 ```toml
 [stt]
-model_size = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
-language = "auto"              # or specific: "en", "it", "es", etc.
+model_size = "large-v3-turbo"
+language = "auto"
 
 [hotkey]
-key = "KEY_SCROLLLOCK"   # Linux default
-# key = "KEY_RIGHTMETA"  # macOS recommended
-
-[injection]
-auto_enter = true        # Press Enter after typing (default)
+key = "KEY_SCROLLLOCK"   # Linux
+# key = "KEY_RIGHTMETA"  # macOS (Right Command)
 
 [audio]
-audio_feedback = true    # Beeps and TTS for mode changes
+audio_feedback = true
 ```
 
-## Dependencies
-
-**Python packages:**
-- `faster-whisper` - Speech-to-text engine
-- `sounddevice` - Audio capture
-- `numpy` - Audio buffer handling
-- `typer` + `rich` - CLI framework
-- `pydantic` - Config validation
-
-**Platform-specific:**
-- Linux: `evdev` (hotkey), `ydotool` (typing)
-- macOS: `pynput` (hotkey), `osascript` (typing, built-in)
-
-## Future Enhancements
-
-- **Cloud STT**: Optional OpenAI Whisper API for faster/better transcription
-- **Custom vocabulary**: Boost recognition of technical terms
-- **Streaming transcription**: Real-time partial results during speech
+See `voxtype run --help` for all options.
