@@ -213,7 +213,7 @@ def main_callback(
 
 
 @app.command()
-def run(
+def listen(
     # Config file
     config_file: Annotated[
         Optional[Path],
@@ -297,10 +297,18 @@ def run(
         typer.Option("--no-audio-feedback", help="Disable beep sounds"),
     ] = False,
 ) -> None:
-    """Start voxtype voice-to-text.
+    """Start listening for voice input.
 
     Uses Voice Activity Detection (VAD) to automatically detect when you speak.
     Tap the hotkey to toggle listening on/off, double-tap to switch mode.
+
+    Example with agent:
+
+        # Terminal 1: Start the agent
+        voxtype agent macinanumeri -- claude -c
+
+        # Terminal 2: Listen and send to agent
+        voxtype listen --agents macinanumeri
     """
     config = load_config(config_file)
 
@@ -343,9 +351,9 @@ def run(
     agent_list = [a.strip() for a in agents.split(",")] if agents else None
     output_dir_str = str(output_dir) if output_dir else None
 
-    # output_dir only makes sense with agents
+    # Default output_dir to /tmp when agents specified (matches 'voxtype agent' default)
     if agent_list and not output_dir_str:
-        output_dir_str = "."
+        output_dir_str = "/tmp"
     elif output_dir_str and not agent_list:
         output_dir_str = None  # Ignore output_dir without agents
 
@@ -989,6 +997,52 @@ def backends() -> None:
     console.print(table)
     console.print()
     console.print("[dim]Grab = exclusive device access (recommended for presenter remotes)[/]")
+
+
+@app.command(
+    context_settings={"allow_extra_args": True, "allow_interspersed_args": False}
+)
+def agent(
+    ctx: typer.Context,
+    agent_id: Annotated[
+        str,
+        typer.Argument(help="Agent ID (e.g., 'macinanumeri')"),
+    ],
+    output_dir: Annotated[
+        Optional[Path],
+        typer.Option("--output-dir", "-o", help="Directory for agent files (default: /tmp)"),
+    ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress info messages"),
+    ] = False,
+) -> None:
+    """Run a command with voxtype voice input.
+
+    Wraps any command and feeds it text from voxtype. Use with 'voxtype listen --agents'.
+
+    Example:
+
+        # Terminal 1: Start the agent
+        voxtype agent macinanumeri -- claude -c
+
+        # Terminal 2: Send voice input
+        voxtype listen --agents macinanumeri
+    """
+    from voxtype.agent import run_agent
+
+    # Get command after -- (filter out the -- itself if present)
+    command = [arg for arg in ctx.args if arg != "--"]
+    if not command:
+        console.print("[red]Error: No command specified[/]")
+        console.print()
+        console.print("[dim]Usage: voxtype agent AGENT_ID -- COMMAND...[/]")
+        console.print("[dim]Example: voxtype agent macinanumeri -- claude -c[/]")
+        raise typer.Exit(1)
+
+    output_dir_str = str(output_dir) if output_dir else None
+    exit_code = run_agent(agent_id, command, output_dir=output_dir_str, quiet=quiet)
+    raise typer.Exit(exit_code)
 
 
 def _check_python_environment() -> None:

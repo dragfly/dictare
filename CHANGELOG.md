@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-01-04
+
+### Added
+- **`voxtype agent` command**: Wrap any command with voxtype voice input (integrates inputmux functionality)
+  ```bash
+  # Terminal 1: Start the agent
+  voxtype agent macinanumeri -- claude -c
+
+  # Terminal 2: Send voice input
+  voxtype listen --agents macinanumeri
+  ```
+
+### Changed
+- **BREAKING: `voxtype run` renamed to `voxtype listen`**: Symmetric with `voxtype speak`
+- **Default output_dir is now `/tmp`**: When using `--agents`, files are created in `/tmp/<agent>.voxtype`
+
 ## [2.11.3] - 2026-01-04
 
 ### Fixed
