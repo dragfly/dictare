@@ -105,6 +105,23 @@ class AppCommands:
             lambda name: self._app._switch_to_agent_by_name(name),
         )
 
+        self.register(
+            CommandSchema(
+                name="switch-to-project-index",
+                description="Switch to a specific project by index (1-based)",
+                category="project",
+                params=[
+                    CommandParam(
+                        name="index",
+                        type=ParamType.INTEGER,
+                        description="Project index (1 = first)",
+                        required=True,
+                    )
+                ],
+            ),
+            lambda index: self._app._switch_to_agent_by_index(index),
+        )
+
         # Text operations
         self.register(
             CommandSchema(
