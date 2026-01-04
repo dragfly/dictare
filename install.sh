@@ -198,19 +198,20 @@ install_macos() {
     else
         step "Installing voxtype..."
 
+        # --reinstall ensures clean upgrades without manual cache cleaning
         if [ $IS_LOCAL -eq 1 ]; then
             # Local install from repo
             if [ "$ARCH" = "arm64" ]; then
-                uv tool install --python 3.11 "$SCRIPT_DIR[mlx]"
+                uv tool install --reinstall --python 3.11 "$SCRIPT_DIR[mlx]"
             else
-                uv tool install --python 3.11 "$SCRIPT_DIR"
+                uv tool install --reinstall --python 3.11 "$SCRIPT_DIR"
             fi
         else
             # Remote install from PyPI
             if [ "$ARCH" = "arm64" ]; then
-                uv tool install --python 3.11 "voxtype[mlx]"
+                uv tool install --reinstall --python 3.11 "voxtype[mlx]"
             else
-                uv tool install --python 3.11 "voxtype"
+                uv tool install --reinstall --python 3.11 "voxtype"
             fi
         fi
         info "Installed voxtype"
@@ -368,12 +369,13 @@ EOF
     else
         step "Installing voxtype..."
 
+        # --reinstall ensures clean upgrades without manual cache cleaning
         if [ $IS_LOCAL -eq 1 ]; then
             # Local install from repo
-            uv tool install "$SCRIPT_DIR"
+            uv tool install --reinstall "$SCRIPT_DIR"
         else
             # Remote install from PyPI
-            uv tool install "voxtype"
+            uv tool install --reinstall "voxtype"
         fi
         info "Installed voxtype"
 
