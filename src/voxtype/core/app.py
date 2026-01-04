@@ -984,10 +984,9 @@ class VoxtypeApp:
         if not self.agents:
             return False
 
-        # Convert 1-based to 0-based
+        # Convert 1-based to 0-based (silently ignore invalid index)
         idx = index - 1
         if idx < 0 or idx >= len(self.agents):
-            self._console.print(f"[yellow]Agent #{index} not found (have {len(self.agents)} agents)[/]")
             return False
 
         self._current_agent_index = idx
