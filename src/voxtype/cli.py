@@ -29,47 +29,6 @@ app = typer.Typer(
 )
 console = Console()
 
-def _setup_cuda_library_path() -> None:
-    """Set up CUDA libraries by preloading them before ctranslate2."""
-    import ctypes
-    import os
-
-    # Find nvidia packages in site-packages
-    for path in sys.path:
-        nvidia_path = Path(path) / "nvidia"
-        if nvidia_path.exists():
-            # Preload cudnn and cublas libraries
-            lib_files = [
-                ("cudnn", "libcudnn.so.9"),
-                ("cudnn", "libcudnn_ops.so.9"),
-                ("cudnn", "libcudnn_cnn.so.9"),
-                ("cublas", "libcublas.so.12"),
-                ("cublas", "libcublasLt.so.12"),
-            ]
-            for subdir, libname in lib_files:
-                lib_path = nvidia_path / subdir / "lib" / libname
-                if lib_path.exists():
-                    try:
-                        ctypes.CDLL(str(lib_path), mode=ctypes.RTLD_GLOBAL)
-                    except OSError:
-                        pass  # Library already loaded or not needed
-
-            # Also set LD_LIBRARY_PATH for any remaining libs
-            lib_paths = []
-            for subdir in ["cudnn", "cublas", "cuda_runtime"]:
-                lib_dir = nvidia_path / subdir / "lib"
-                if lib_dir.exists():
-                    lib_paths.append(str(lib_dir))
-
-            if lib_paths:
-                current = os.environ.get("LD_LIBRARY_PATH", "")
-                new_paths = ":".join(lib_paths)
-                if current:
-                    os.environ["LD_LIBRARY_PATH"] = f"{new_paths}:{current}"
-                else:
-                    os.environ["LD_LIBRARY_PATH"] = new_paths
-            break
-
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
@@ -83,7 +42,7 @@ def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
         config: The configuration object to update
         cpu_only: If True, skip detection and force CPU
     """
-    import platform
+    from voxtype.utils.hardware import is_cuda_available, is_mlx_available, setup_cuda_library_path
 
     # If cpu_only flag is set, force CPU and skip detection
     if cpu_only:
@@ -98,25 +57,13 @@ def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
     # Default to CPU if no acceleration found
     config.stt.device = "cpu"
 
-    if sys.platform == "darwin" and platform.machine() == "arm64":
-        # Apple Silicon: MLX is auto-detected at engine creation time
-        # Just verify mlx_whisper is available, don't set anything
-        try:
-            import mlx_whisper  # noqa: F401
-            # MLX will be used automatically if hw_accel=true
-        except ImportError:
-            pass  # mlx-whisper not installed, will use CPU
-    elif sys.platform == "linux":
-        # Linux: try CUDA GPU via ctranslate2 (faster-whisper dependency)
-        try:
-            import ctranslate2
-            cuda_device_count = ctranslate2.get_cuda_device_count()
-            if cuda_device_count > 0:
-                config.stt.device = "cuda"
-                config.stt.compute_type = "float16"
-                _setup_cuda_library_path()
-        except (ImportError, RuntimeError, AttributeError):
-            pass  # ctranslate2 not installed or no CUDA, using CPU
+    if is_mlx_available():
+        # Apple Silicon with MLX: will be used automatically if hw_accel=true
+        pass
+    elif is_cuda_available():
+        config.stt.device = "cuda"
+        config.stt.compute_type = "float16"
+        setup_cuda_library_path()
 
 def _apply_cli_overrides(
     config,
@@ -177,7 +124,7 @@ def _apply_cli_overrides(
 
 def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
     """Create the status panel for the Ready message."""
-    import platform
+    from voxtype.utils.hardware import is_mlx_available
 
     # Device string - check what will ACTUALLY be used
     device_str = "CPU"
@@ -191,19 +138,12 @@ def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
             device_str = "[magenta]GPU (CUDA)[/]"
         else:
             device_str = "CPU [dim](GPU detected, cuDNN missing)[/]"
-    elif sys.platform == "darwin" and platform.machine() == "arm64":
-        # Apple Silicon - check if MLX is available
-        try:
-            import mlx_whisper  # noqa: F401
-            device_str = "[magenta]MLX (Apple Silicon)[/]"
-        except ImportError:
-            device_str = "CPU [dim](MLX not installed)[/]"
+    elif is_mlx_available():
+        device_str = "[magenta]MLX (Apple Silicon)[/]"
 
     # Output mode
     if agents:
         output_str = f"[cyan]agents[/] ({', '.join(agents)})"
-    elif config.output.method == "clipboard":
-        output_str = "[yellow]clipboard[/] (Ctrl+V to paste)"
     elif config.output.method == "agent":
         output_str = "[cyan]agent[/] (single)"
     else:
@@ -298,7 +238,7 @@ def run(
     # Output options
     output: Annotated[
         Optional[str],
-        typer.Option("--output", "-o", help="Output method: keyboard, clipboard, or agent"),
+        typer.Option("--output", "-o", help="Output method: keyboard or agent"),
     ] = None,
     output_dir: Annotated[
         Optional[Path],
@@ -477,24 +417,15 @@ def check() -> None:
                     console.print(f"  [cyan]{hint}[/]")
         raise typer.Exit(1)
 
-    # Check for at least one text injection method (Linux only)
-    # macOS uses osascript/pbcopy which are built-in
+    # Check for text injection method (Linux only)
+    # macOS uses Quartz which is built-in
     if sys.platform == "linux":
-        injection_methods = ["ydotool", "wtype", "xdotool"]
-        has_injection = any(r.available for r in results if r.name in injection_methods)
-        clipboard_available = any(r.available for r in results if r.name == "Clipboard")
-
-        if not has_injection:
-            if clipboard_available:
-                console.print(
-                    "\n[yellow]Warning:[/] No auto-typing tool available. "
-                    "Text will be copied to clipboard instead."
-                )
-            else:
-                console.print(
-                    "\n[red]Warning:[/] No text injection method available. "
-                    "Install ydotool, wtype, or xdotool."
-                )
+        has_ydotool = any(r.available for r in results if r.name == "ydotool")
+        if not has_ydotool:
+            console.print(
+                "\n[red]Warning:[/] ydotool not available. "
+                "Install ydotool and start ydotoold daemon."
+            )
 
 @app.command()
 def init() -> None:
@@ -707,15 +638,8 @@ def transcribe(
             config.stt.language = language
 
         # Create STT engine - use MLX on Apple Silicon if hw_accel enabled
-        use_mlx = False
-        if sys.platform == "darwin" and config.stt.hw_accel:
-            import platform as plat
-            if plat.machine() == "arm64":
-                try:
-                    import mlx_whisper  # noqa: F401
-                    use_mlx = True
-                except ImportError:
-                    pass
+        from voxtype.utils.hardware import is_mlx_available
+        use_mlx = config.stt.hw_accel and is_mlx_available()
 
         if use_mlx:
             from voxtype.stt.mlx_whisper import MLXWhisperEngine

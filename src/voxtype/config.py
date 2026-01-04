@@ -72,9 +72,9 @@ class HotkeyConfig(BaseModel):
 class OutputConfig(BaseModel):
     """Text output configuration."""
 
-    method: Literal["keyboard", "clipboard", "agent"] = Field(
+    method: Literal["keyboard", "agent"] = Field(
         default="keyboard",
-        description="Output method: keyboard (type), clipboard (paste), or agent (file)",
+        description="Output method: keyboard (type) or agent (file for inputmux)",
     )
     typing_delay_ms: int = Field(
         default=5,
@@ -418,7 +418,7 @@ hw_accel = true                # Enable hardware acceleration
 key = "KEY_SCROLLLOCK"  # evdev key name (toggle listening)
 
 [output]
-method = "keyboard"    # keyboard, clipboard, or agent
+method = "keyboard"    # keyboard or agent
 typing_delay_ms = 5
 auto_enter = false     # Visual newline only
 

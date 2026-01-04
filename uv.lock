@@ -1802,7 +1802,7 @@ wheels = [
 
 [[package]]
 name = "voxtype"
-version = "2.8.0"
+version = "2.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "evdev", marker = "sys_platform == 'linux'" },
