@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.3] - 2026-01-04
+
+### Fixed
+- **Injection race condition**: Added `_injection_lock` to serialize CGEventPost calls from concurrent transcription threads
+- **auto_enter=false not working**: Changed visual newline from Option+Return to Shift+Return (compatible with more apps)
+- **30 second startup with no feedback**: Show "Loading STT model..." and "Loading VAD model..." messages during initialization
+- **Ready panel timing**: Status panel now displays AFTER model loading completes, not before
+- **Slow MLX check**: Use `importlib.find_spec` instead of importing mlx_whisper (instant vs 5+ seconds)
+
+### Changed
+- **Status panel UX**: Added "Hotkey:" prefix for clarity
+
 ## [2.11.2] - 2026-01-04
 
 ### Changed
