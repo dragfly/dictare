@@ -557,6 +557,18 @@ def config_path_cmd() -> None:
     console.print(get_config_path())
 
 
+@config_app.command("shortcuts")
+def config_shortcuts() -> None:
+    """Configure keyboard shortcuts interactively.
+
+    Opens an interactive UI to set global keyboard shortcuts for voxtype commands.
+    Shortcuts work system-wide while voxtype is running.
+    """
+    from voxtype.ui import configure_shortcuts
+
+    configure_shortcuts()
+
+
 @app.command()
 def speak(
     text: Annotated[
