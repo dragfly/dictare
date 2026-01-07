@@ -100,6 +100,11 @@ class PynputHotkeyListener(HotkeyListener):
         """Stop listening for hotkey events."""
         if self._listener:
             self._listener.stop()
+            # Wait for listener thread to actually stop (with timeout to avoid hanging)
+            try:
+                self._listener.join(timeout=2.0)
+            except Exception:
+                pass
             self._listener = None
 
         self._on_press = None

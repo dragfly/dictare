@@ -82,6 +82,8 @@ class KeyboardShortcutSource(InputSource):
             if mod:
                 self._current_modifiers.discard(mod)
 
+        # Note: suppress=False allows shortcuts to also reach focused apps, but is much safer
+        # (suppress=True caused complete keyboard freeze if callbacks blocked)
         self._listener = keyboard.Listener(on_press=on_press, on_release=on_release)
         self._listener.start()
         self._running = True
@@ -130,6 +132,11 @@ class KeyboardShortcutSource(InputSource):
         self._running = False
         if self._listener:
             self._listener.stop()
+            # Wait for listener thread to actually stop (with timeout to avoid hanging)
+            try:
+                self._listener.join(timeout=2.0)
+            except Exception:
+                pass
             self._listener = None
 
     @property

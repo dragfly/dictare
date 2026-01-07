@@ -113,7 +113,7 @@ class AppCommands:
                 params=[
                     CommandParam(
                         name="index",
-                        type=ParamType.INTEGER,
+                        type=ParamType.INT,
                         description="Project index (1 = first)",
                         required=True,
                     )
