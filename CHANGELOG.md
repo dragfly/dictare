@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.3] - 2026-01-07
+
+### Added
+- **`mute_mic_during_feedback` option**: Pause listening while playing voice feedback to prevent mic from picking up TTS output (useful when using speakers)
+
+### Fixed
+- **TOML config write format**: `_save_shortcuts` now writes proper TOML syntax instead of Python dict syntax
+- **Keyboard listener cleanup**: Added `join(timeout=2.0)` to properly wait for listener threads to stop
+- **ParamType enum**: Fixed `INTEGER` -> `INT` typo in `switch-to-project-index` command
+
+### Changed
+- **Simplified shortcuts UI**: Replaced Rich TUI with simple text-based interface for reliability
+- **Config command help**: Now shows help by default instead of listing all options
+
 ## [2.12.2] - 2026-01-04
 
 ### Added

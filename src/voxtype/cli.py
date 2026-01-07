@@ -464,15 +464,8 @@ def init() -> None:
 
 
 # Config subcommands
-config_app = typer.Typer(help="Manage configuration")
+config_app = typer.Typer(help="Manage configuration", no_args_is_help=True)
 app.add_typer(config_app, name="config")
-
-
-@config_app.callback(invoke_without_command=True)
-def config_default(ctx: typer.Context) -> None:
-    """Show all configuration (default when no subcommand given)."""
-    if ctx.invoked_subcommand is None:
-        _show_config_list()
 
 
 @config_app.command("list")

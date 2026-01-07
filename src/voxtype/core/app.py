@@ -1005,16 +1005,30 @@ class VoxtypeApp:
             self._console.print("[yellow]Nothing to repeat[/]")
 
     def _speak_agent(self, agent_name: str) -> None:
-        """Speak the agent name using TTS (piper preferred, with fallbacks)."""
+        """Speak the agent name using TTS (piper preferred, with fallbacks).
+
+        If mute_mic_during_feedback is enabled, pauses listening while speaking
+        to prevent the microphone from picking up the voice feedback.
+
+        IMPORTANT: Always runs in background thread to avoid blocking keyboard
+        callbacks (which could freeze the keyboard with pynput).
+        """
         import os
-        import shutil
         import subprocess
         import sys
         import threading
 
         text = f"agent {agent_name}"
+        mute_mic = self.config.audio.mute_mic_during_feedback
 
         def _speak():
+            # Pause listening if mute_mic enabled (do this in the thread)
+            was_listening = False
+            if mute_mic:
+                was_listening = self._listening
+                if was_listening:
+                    self._listening = False
+
             try:
                 if sys.platform == "darwin":
                     subprocess.run(["say", text], capture_output=True, timeout=10)
@@ -1051,7 +1065,12 @@ class VoxtypeApp:
                         continue
             except Exception:
                 pass  # Silently fail if TTS not available
+            finally:
+                # Resume listening if we paused it
+                if mute_mic and was_listening:
+                    self._listening = True
 
+        # Always run in background thread - never block keyboard callbacks
         threading.Thread(target=_speak, daemon=True).start()
 
     def _send_submit(self) -> None:
