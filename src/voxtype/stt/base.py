@@ -30,6 +30,7 @@ class STTEngine(ABC):
         audio: NDArray[np.float32],
         language: str = "auto",
         hotwords: str | None = None,
+        max_repetitions: int = 5,
     ) -> str:
         """Transcribe audio to text.
 
@@ -37,6 +38,7 @@ class STTEngine(ABC):
             audio: Audio samples (float32, mono, 16kHz).
             language: Language code or "auto" for auto-detection.
             hotwords: Comma-separated words to boost recognition.
+            max_repetitions: Max consecutive word repetitions before filtering.
 
         Returns:
             Transcribed text.

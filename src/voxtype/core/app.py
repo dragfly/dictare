@@ -429,6 +429,7 @@ class VoxtypeApp:
                     audio_data,
                     language=self.config.stt.language,
                     hotwords=self._get_hotwords(),
+                    max_repetitions=self.config.stt.max_repetitions,
                 )
 
                 if text:

@@ -185,6 +185,37 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
             _os.environ[var] = value
 
 
+def _filter_repetitions(text: str, max_repeats: int = 5) -> str:
+    """Filter out hallucinated repetitions (e.g., 'la la la la la la...').
+
+    Whisper can hallucinate repetitive patterns when there's background noise
+    or silence. This filter removes excessive consecutive repetitions.
+
+    Args:
+        text: Transcribed text to filter.
+        max_repeats: Maximum allowed consecutive repetitions of a word.
+
+    Returns:
+        Filtered text with repetitions truncated.
+    """
+    words = text.split()
+    if len(words) < max_repeats:
+        return text
+
+    result = []
+    repeat_count = 1
+    for i, word in enumerate(words):
+        if i > 0 and word.lower() == words[i - 1].lower():
+            repeat_count += 1
+            if repeat_count > max_repeats:
+                continue  # Skip excessive repetitions
+        else:
+            repeat_count = 1
+        result.append(word)
+
+    return " ".join(result)
+
+
 class FasterWhisperEngine(STTEngine):
     """STT engine using faster-whisper (CTranslate2-based)."""
 
@@ -281,6 +312,7 @@ class FasterWhisperEngine(STTEngine):
         language: str = "auto",
         hotwords: str | None = None,
         beam_size: int = 5,
+        max_repetitions: int = 5,
     ) -> str:
         """Transcribe audio to text.
 
@@ -289,6 +321,7 @@ class FasterWhisperEngine(STTEngine):
             language: Language code or "auto" for auto-detection.
             hotwords: Comma-separated words to boost recognition.
             beam_size: Beam size for decoding.
+            max_repetitions: Max consecutive word repetitions before filtering.
 
         Returns:
             Transcribed text.
@@ -328,7 +361,10 @@ class FasterWhisperEngine(STTEngine):
         for segment in segments:
             text_parts.append(segment.text.strip())
 
-        return " ".join(text_parts).strip()
+        text = " ".join(text_parts).strip()
+
+        # Filter hallucinated repetitions (e.g., "la la la la la...")
+        return _filter_repetitions(text, max_repeats=max_repetitions)
 
     def is_loaded(self) -> bool:
         """Check if model is loaded."""
