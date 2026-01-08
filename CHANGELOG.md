@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.4] - 2026-01-08
+
+### Added
+- **Anti-hallucination filter**: Filters out repetitive Whisper hallucinations (e.g., "la la la la la...") that occur with background noise or silence
+- **`stt.max_repetitions` config option**: Maximum consecutive word repetitions before filtering (default: 5)
+
 ## [2.12.3] - 2026-01-07
 
 ### Added

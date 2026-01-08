@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from voxtype.stt.base import STTEngine
+from voxtype.stt.faster_whisper import _filter_repetitions
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -56,6 +57,7 @@ class MLXWhisperEngine(STTEngine):
         audio: NDArray[np.float32],
         language: str = "auto",
         hotwords: str | None = None,
+        max_repetitions: int = 5,
     ) -> str:
         """Transcribe audio to text.
 
@@ -63,6 +65,7 @@ class MLXWhisperEngine(STTEngine):
             audio: Audio samples (float32, mono, 16kHz).
             language: Language code or "auto" for auto-detection.
             hotwords: Comma-separated words to boost recognition (not supported by MLX).
+            max_repetitions: Max consecutive word repetitions before filtering.
 
         Returns:
             Transcribed text.
@@ -94,8 +97,10 @@ class MLXWhisperEngine(STTEngine):
         )
 
         # Extract text from result
-        text = result.get("text", "")
-        return text.strip()
+        text = result.get("text", "").strip()
+
+        # Filter hallucinated repetitions (e.g., "la la la la la...")
+        return _filter_repetitions(text, max_repeats=max_repetitions)
 
     def is_loaded(self) -> bool:
         """Check if model is loaded."""
