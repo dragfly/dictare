@@ -60,6 +60,10 @@ class STTConfig(BaseModel):
         default="",
         description="Comma-separated words to boost recognition (e.g., 'voxtype,joshua')",
     )
+    max_repetitions: int = Field(
+        default=5,
+        description="Max consecutive word repetitions before filtering (anti-hallucination)",
+    )
 
 class HotkeyConfig(BaseModel):
     """Hotkey configuration."""
@@ -417,6 +421,7 @@ device = "auto"                # auto, cpu, cuda
 compute_type = "int8"
 beam_size = 5
 hw_accel = true                # Enable hardware acceleration
+max_repetitions = 5            # Anti-hallucination: max consecutive word repeats
 # hotwords = "voxtype,joshua"  # Boost recognition of specific words
 
 [hotkey]
