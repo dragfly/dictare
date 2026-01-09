@@ -38,7 +38,9 @@ class STTEngine(ABC):
             audio: Audio samples (float32, mono, 16kHz).
             language: Language code or "auto" for auto-detection.
             hotwords: Comma-separated words to boost recognition.
+                Note: Optional, may be ignored by some engines (e.g., MLX).
             beam_size: Beam size for decoding (higher = more accurate, slower).
+                Note: Optional, may be ignored by some engines (e.g., MLX).
             max_repetitions: Max consecutive word repetitions before filtering.
 
         Returns:

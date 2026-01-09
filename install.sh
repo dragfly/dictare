@@ -9,7 +9,7 @@
 #
 set -e
 
-VERSION="2.12.5"
+VERSION="2.13.0"
 REPO_URL="https://github.com/dragfly/voxtype"
 
 # Colors
