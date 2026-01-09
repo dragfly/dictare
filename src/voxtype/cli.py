@@ -52,19 +52,24 @@ def _get_shell() -> str:
 
 def _get_completion_script(shell: str) -> str:
     """Generate completion script for shell."""
-    from click.shell_completion import get_completion_class
+    import typer.completion
 
-    # Get the click command from typer app
-    cmd = typer.main.get_command(app)
+    # Map shell names to typer's expected format
+    shell_map = {
+        "bash": "bash",
+        "zsh": "zsh",
+        "fish": "fish",
+    }
 
-    # Get completion class for shell
-    comp_cls = get_completion_class(shell)
-    if comp_cls is None:
+    if shell not in shell_map:
         return ""
 
-    # Generate completion script
-    comp = comp_cls(cmd, {}, "voxtype", "_VOXTYPE_COMPLETE")
-    return comp.source()
+    # Use typer's built-in completion script generation
+    return typer.completion.get_completion_script(
+        prog_name="voxtype",
+        complete_var="_VOXTYPE_COMPLETE",
+        shell=shell_map[shell],
+    )
 
 @completion_app.command("install")
 def completion_install(
