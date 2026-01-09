@@ -10,14 +10,13 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from voxtype.audio.capture import AudioCapture
-from voxtype.core.state import AppState, ProcessingMode
+from voxtype.core.audio_manager import AudioManager
+from voxtype.core.state import AppState, ProcessingMode, StateManager
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.injection.base import TextInjector
 from voxtype.stt.base import STTEngine
 
 if TYPE_CHECKING:
-    from voxtype.audio.vad import SileroVAD, StreamingVAD
     from voxtype.config import Config
     from voxtype.llm import LLMProcessor, LLMResponse
     from voxtype.llm.models import AppState as LLMAppState
@@ -62,11 +61,10 @@ class VoxtypeApp:
         self.trigger_phrase = config.command.wake_word or None
         self.output_dir = output_dir
         self.agents = agents or []
-        self.state = AppState.IDLE
+        self._state_manager = StateManager()
         self._running = False
         self._console = Console()
-        self._lock = threading.Lock()
-        self._injection_lock = threading.Lock()  # Separate lock for text injection
+        self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
 
         # Agent state
@@ -84,14 +82,10 @@ class VoxtypeApp:
         self._pending_single_tap: threading.Timer | None = None
 
         # Initialize components
-        self._audio: AudioCapture | None = None
+        self._audio_manager: AudioManager | None = None
         self._stt: STTEngine | None = None
         self._hotkey: HotkeyListener | None = None
         self._injector: TextInjector | None = None
-
-        # VAD components
-        self._vad: SileroVAD | None = None
-        self._streaming_vad: StreamingVAD | None = None
 
         # LLM processor for command mode
         self._llm_processor: LLMProcessor | None = None
@@ -99,16 +93,10 @@ class VoxtypeApp:
         # Track if speech was ignored (for ready-to-listen feedback)
         self._speech_was_ignored = False
 
-        # Audio queue for buffered speech during transcription
-        self._audio_queue: list = []
-
-    def _create_audio_capture(self) -> AudioCapture:
-        """Create audio capture component."""
-        return AudioCapture(
-            sample_rate=self.config.audio.sample_rate,
-            channels=self.config.audio.channels,
-            device=self.config.audio.device,
-        )
+    @property
+    def state(self) -> AppState:
+        """Get current application state (read-only, use StateManager for transitions)."""
+        return self._state_manager.state
 
     def _create_stt_engine(self) -> STTEngine:
         """Create and load STT engine."""
@@ -270,48 +258,24 @@ class VoxtypeApp:
                 )
             return injector
 
-    def _init_components(self) -> None:
-        """Initialize all components."""
-        self._console.print("[dim]Initializing components...[/]")
-
-        self._audio = self._create_audio_capture()
-        self._stt = self._create_stt_engine()
-        self._hotkey = self._create_hotkey_listener()
-        self._injector = self._create_injector()
-
-        if self.config.verbose:
-            self._console.print(f"[dim]Hotkey: {self._hotkey.get_key_name()}[/]")
-            self._console.print(f"[dim]Injector: {self._injector.get_name()}[/]")
-
-        self._console.print(f"[green]Ready![/] Press {self.config.hotkey.key} to record.")
-
     def _init_vad_components(self) -> None:
         """Initialize components for VAD mode."""
         # Always show loading messages - model loading can take 30+ seconds
         self._console.print(f"[dim]Loading STT model ({self.config.stt.model_size})...[/]")
 
-        self._audio = self._create_audio_capture()
         self._stt = self._create_stt_engine()
         self._injector = self._create_injector()
 
-        # Create VAD (Silero VAD via faster-whisper)
+        # Create audio manager with VAD
         self._console.print()  # Newline after progress bars
-        self._console.print("[dim]Loading VAD model...[/]")
-        from voxtype.audio.vad import SileroVAD, StreamingVAD
-        self._vad = SileroVAD(
-            threshold=0.5,
-            min_silence_ms=self.vad_silence_ms,
-            min_speech_ms=250,
+        self._audio_manager = AudioManager(
+            config=self.config.audio,
+            console=self._console,
+            verbose=self.config.verbose,
         )
-        # Pre-load the model now, not on first speech
-        self._vad._load_model()
-
-        # Create streaming VAD processor
-        self._streaming_vad = StreamingVAD(
-            vad=self._vad,
+        self._audio_manager.initialize(
             on_speech_start=self._on_vad_speech_start,
             on_speech_end=self._on_vad_speech_end,
-            max_speech_seconds=self.config.audio.max_duration,
             on_max_speech=self._on_max_speech_duration,
         )
 
@@ -373,44 +337,40 @@ class VoxtypeApp:
         # Always show "Listening..." when VAD detects speech
         self._console.print("[bold cyan]Listening...[/]", end="\r")
 
-        with self._lock:
-            if self.state != AppState.IDLE:
-                # Debug: show why we're buffering
-                if self.config.verbose:
-                    self._console.print(f"\n[yellow][DEBUG] Speech buffering, state={self.state.name}[/]")
-                # DON'T reset VAD - let it buffer audio for when we're ready
-                return
-            self.state = AppState.RECORDING
+        # Try to transition IDLE → RECORDING
+        if not self._state_manager.try_transition(AppState.RECORDING):
+            # Not idle - buffer audio for when we're ready
+            if self.config.verbose:
+                self._console.print(f"\n[yellow][DEBUG] Speech buffering, state={self.state.name}[/]")
+            return
 
         if self._logger:
             self._logger.log_vad_event("speech_start")
 
     def _on_vad_speech_end(self, audio_data) -> None:
         """Handle VAD speech end detection."""
-        with self._lock:
+        # Try to transition to TRANSCRIBING (valid from IDLE or RECORDING)
+        if not self._state_manager.try_transition(AppState.TRANSCRIBING):
+            # Can't transition - either busy transcribing or in another state
             if self.state == AppState.TRANSCRIBING:
-                # Still busy - queue audio for later
+                # Queue audio for later
                 if self.config.verbose:
                     self._console.print(f"\n[yellow][DEBUG] Queuing speech (transcribing)[/]")
-                self._audio_queue.append(audio_data)
-                return
-            elif self.state in (AppState.IDLE, AppState.RECORDING):
-                # Ready to process
-                self.state = AppState.TRANSCRIBING
-            else:
-                return
+                self._audio_manager.queue_audio(audio_data)
+            return
 
         # Calculate duration
-        duration_ms = len(audio_data) / self.config.audio.sample_rate * 1000
+        sample_rate = self._audio_manager.sample_rate if self._audio_manager else self.config.audio.sample_rate
+        duration_ms = len(audio_data) / sample_rate * 1000
 
         if self._logger:
             self._logger.log_vad_event("speech_end", duration_ms=duration_ms)
 
         # Check minimum duration
-        min_samples = int(self.config.audio.sample_rate * self.MIN_RECORDING_DURATION)
+        min_samples = int(sample_rate * self.MIN_RECORDING_DURATION)
         if len(audio_data) < min_samples:
             self._console.print("[dim]Too short, ignoring.        [/]")
-            self.state = AppState.IDLE
+            self._state_manager.reset()  # TRANSCRIBING → IDLE
             return
 
         self._console.print("[bold yellow]Transcribing...[/]", end="\r")
@@ -472,7 +432,7 @@ class VoxtypeApp:
                     self._logger.log_error(str(e), context="transcribe_and_process")
                 self._console.print(f"[red]Error: {e}[/]")
             finally:
-                self.state = AppState.IDLE
+                self._state_manager.reset()  # Return to IDLE
                 self._signal_ready_to_listen()
                 # Process queued audio if any
                 self._process_queued_audio()
@@ -501,26 +461,28 @@ class VoxtypeApp:
 
     def _process_queued_audio(self) -> None:
         """Process any queued audio from speech that occurred during transcription."""
-        if not self._audio_queue:
+        if not self._audio_manager or not self._audio_manager.has_queued_audio:
             return
 
         # Pop first queued audio
-        audio_data = self._audio_queue.pop(0)
+        audio_data = self._audio_manager.pop_queued_audio()
+        if not audio_data:
+            return
 
         if self.config.verbose:
-            self._console.print(f"[yellow][DEBUG] Processing queued audio ({len(self._audio_queue)} remaining)[/]")
+            self._console.print(f"[yellow][DEBUG] Processing queued audio ({self._audio_manager.queued_count} remaining)[/]")
 
         # Check minimum duration
-        min_samples = int(self.config.audio.sample_rate * self.MIN_RECORDING_DURATION)
+        sample_rate = self._audio_manager.sample_rate
+        min_samples = int(sample_rate * self.MIN_RECORDING_DURATION)
         if len(audio_data) < min_samples:
             self._console.print("[dim]Queued audio too short, ignoring.[/]")
             # Try next in queue
             self._process_queued_audio()
             return
 
-        # Set state and process
-        with self._lock:
-            self.state = AppState.TRANSCRIBING
+        # Set state and process (IDLE → TRANSCRIBING)
+        self._state_manager.transition(AppState.TRANSCRIBING)
 
         self._console.print("[bold yellow]Transcribing (queued)...[/]", end="\r")
         self._transcribe_and_process(audio_data)
@@ -572,8 +534,7 @@ class VoxtypeApp:
 
         if response.action == Action.INJECT:
             if response.text_to_inject:
-                with self._lock:
-                    self.state = AppState.INJECTING
+                self._state_manager.transition(AppState.INJECTING)
                 self._inject_text(response.text_to_inject)
 
     def _enter_listening_mode(self, trigger: str = "voice_command") -> None:
@@ -766,12 +727,6 @@ class VoxtypeApp:
             if not success:
                 self._console.print("[red]Failed to inject text[/]")
 
-    def _on_vad_audio_chunk(self, chunk) -> None:
-        """Process audio chunk through VAD."""
-        # Only process if running AND listening
-        if self._streaming_vad and self._running and self._listening:
-            self._streaming_vad.process_chunk(chunk)
-
     def run(self, status_panel=None) -> None:
         """Start the application main loop.
 
@@ -814,61 +769,24 @@ class VoxtypeApp:
 
         # Now enable listening and start audio streaming
         self._listening = True
-        if self._audio:
-            self._audio.start_streaming(self._on_vad_audio_chunk)
+        if self._audio_manager:
+            self._audio_manager.start_streaming(
+                is_listening=lambda: self._listening,
+                is_running=lambda: self._running,
+            )
 
         # Keep main thread alive, check for device reconnection
         try:
             while self._running:
                 time.sleep(0.1)
-                if self._audio and self._audio.needs_reconnect():
+                if self._audio_manager and self._audio_manager.needs_reconnect():
                     self._console.print("[yellow]Audio device changed, reconnecting...[/]", end="")
-                    if not self._reconnect_audio():
+                    if not self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
                         self._console.print(" [red]FAILED[/]")
                         self._console.print("[red]Could not reconnect audio. Please restart.[/]")
                         break
         except KeyboardInterrupt:
             pass
-
-    def _reconnect_audio(self) -> bool:
-        """Recreate audio capture after device change."""
-        import sounddevice as sd
-
-        # Stop and destroy old audio capture
-        if self._audio:
-            try:
-                self._audio.stop_streaming()
-            except Exception:
-                pass
-            self._audio = None
-
-        # Retry with fresh AudioCapture object using NEW default device
-        for attempt in range(5):
-            self._console.print(f" {attempt + 1}", end="", highlight=False)
-            time.sleep(1.0)
-            try:
-                # Force PortAudio to refresh device list
-                sd._terminate()
-                sd._initialize()
-
-                # Create new AudioCapture with default device (None)
-                self._audio = AudioCapture(
-                    sample_rate=self.config.audio.sample_rate,
-                    channels=self.config.audio.channels,
-                    device=None,  # Always use new default on reconnect
-                )
-                self._audio.start_streaming(self._on_vad_audio_chunk)
-
-                # Show which device we connected to
-                device_info = AudioCapture.get_default_device()
-                if device_info:
-                    self._console.print(f" [green]OK[/] ({device_info['name']})")
-                else:
-                    self._console.print(" [green]OK[/]")
-                return True
-            except Exception:
-                self._audio = None
-        return False
 
     def _init_input_manager(self) -> None:
         """Initialize input manager for keyboard shortcuts and device profiles."""
@@ -1086,17 +1004,15 @@ class VoxtypeApp:
 
     def _discard_current(self) -> None:
         """Discard current recording/transcription."""
-        with self._lock:
+        if self._audio_manager:
             # Clear audio queue
-            self._audio_queue.clear()
-
+            self._audio_manager.clear_queue()
             # Reset VAD if active
-            if self._streaming_vad:
-                self._streaming_vad.flush()
+            self._audio_manager.flush_vad()
 
-            # Reset state if recording
-            if self.state == AppState.RECORDING:
-                self.state = AppState.IDLE
+        # Reset state if recording (RECORDING → IDLE)
+        if self.state == AppState.RECORDING:
+            self._state_manager.transition(AppState.IDLE)
 
         self._console.print("[yellow]Discarded[/]")
 
@@ -1133,10 +1049,6 @@ class VoxtypeApp:
         if self._hotkey:
             self._hotkey.stop()
 
-        if self._audio:
-            if self._audio.is_recording():
-                self._audio.stop_recording()
-            self._audio.stop_streaming()
-
-        if self._streaming_vad:
-            self._streaming_vad.flush()
+        if self._audio_manager:
+            self._audio_manager.stop_streaming()
+            self._audio_manager.flush_vad()
