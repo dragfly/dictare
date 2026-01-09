@@ -500,9 +500,7 @@ def check() -> None:
     """Check system dependencies and configuration."""
     from voxtype.utils.platform import check_dependencies
 
-    console.print()
-    console.print(Panel("[bold]Checking dependencies...[/]", border_style="blue", expand=False))
-    console.print()
+    console.print("[dim]Checking dependencies...[/]")
 
     results = check_dependencies()
 
@@ -624,9 +622,7 @@ def _show_config_list() -> None:
 
         table.add_row(key, value_str, env_var)
 
-    console.print()
     console.print(table)
-    console.print()
 
     if config_path.exists():
         console.print(f"[dim]Config file: {config_path}[/]")
@@ -915,7 +911,6 @@ def _list_hid_devices() -> None:
     # Sort by product name
     unique_devices.sort(key=lambda d: (d.get("product_string") or "").lower())
 
-    console.print()
     table = Table(title="HID Devices", show_header=True, header_style="bold", expand=False)
     table.add_column("Vendor ID", style="cyan", width=10)
     table.add_column("Product ID", style="cyan", width=10)
@@ -981,7 +976,6 @@ def _list_evdev_devices(set_hotkey: bool) -> None:
         raise typer.Exit(1)
 
     # Display table
-    console.print()
     table = Table(title="Input Devices", show_header=True, header_style="bold", expand=False)
     table.add_column("#", style="dim", width=3)
     table.add_column("Device Name", style="cyan")
@@ -1087,7 +1081,6 @@ def backends() -> None:
         console.print("  Linux: [cyan]pip install evdev[/]")
         raise typer.Exit(1)
 
-    console.print()
     table = Table(title="Device Backends", show_header=True, header_style="bold", expand=False)
     table.add_column("Backend", style="cyan")
     table.add_column("Grab", justify="center")
@@ -1219,9 +1212,7 @@ def _check_python_environment() -> None:
                     "  or use [cyan]~/.local/bin/voxtype[/] directly."
                 )
 
-            console.print()
             console.print(Panel(msg, title="Python Environment Issue", border_style="yellow", expand=False))
-            console.print()
 
 
 def main() -> None:
