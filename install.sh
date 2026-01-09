@@ -9,7 +9,7 @@
 #
 set -e
 
-VERSION="2.11.2"
+VERSION="2.12.5"
 REPO_URL="https://github.com/dragfly/voxtype"
 
 # Colors
@@ -191,10 +191,10 @@ install_macos() {
         echo ""
         echo "Development mode active. Run with:"
         echo -e "  ${BOLD}source .venv/bin/activate${NC}"
-        echo -e "  ${BOLD}voxtype run${NC}"
+        echo -e "  ${BOLD}voxtype listen${NC}"
         echo ""
         echo "Or without activating:"
-        echo -e "  ${BOLD}uv run voxtype run${NC}"
+        echo -e "  ${BOLD}uv run voxtype listen${NC}"
     else
         step "Installing voxtype..."
 
@@ -217,7 +217,7 @@ install_macos() {
         info "Installed voxtype"
 
         echo ""
-        echo -e "Run: ${BOLD}voxtype run${NC}"
+        echo -e "Run: ${BOLD}voxtype listen${NC}"
     fi
 
     # 4. Permissions reminder
@@ -362,10 +362,10 @@ EOF
         echo ""
         echo "Development mode active. Run with:"
         echo -e "  ${BOLD}source .venv/bin/activate${NC}"
-        echo -e "  ${BOLD}voxtype run${NC}"
+        echo -e "  ${BOLD}voxtype listen${NC}"
         echo ""
         echo "Or without activating:"
-        echo -e "  ${BOLD}uv run voxtype run${NC}"
+        echo -e "  ${BOLD}uv run voxtype listen${NC}"
     else
         step "Installing voxtype..."
 
@@ -380,7 +380,7 @@ EOF
         info "Installed voxtype"
 
         echo ""
-        echo -e "Run: ${BOLD}voxtype run${NC}"
+        echo -e "Run: ${BOLD}voxtype listen${NC}"
     fi
 
     echo ""
