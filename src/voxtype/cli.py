@@ -26,6 +26,8 @@ app = typer.Typer(
     help="Voice-to-text for your terminal",
     add_completion=True,  # Required for shell completion to work at runtime
     no_args_is_help=True,
+    pretty_exceptions_enable=False,
+    rich_markup_mode=None,  # Disable rich formatting for errors
 )
 
 # Completion subcommand
