@@ -25,7 +25,7 @@ from voxtype.config import (
 app = typer.Typer(
     name="voxtype",
     help="Voice-to-text for your terminal",
-    add_completion=False,
+    add_completion=True,  # Required for shell completion to work at runtime
     no_args_is_help=True,
 )
 
