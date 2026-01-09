@@ -78,6 +78,18 @@ class SileroVAD(VADEngine):
         self._model = get_vad_model()
         self.reset()
 
+    def close(self) -> None:
+        """Release ONNX session resources.
+
+        Call this on shutdown to properly clean up the ONNX session
+        and avoid semaphore leak warnings.
+        """
+        if self._model is not None:
+            # Delete the session to release ONNX resources
+            if hasattr(self._model, 'session'):
+                del self._model.session
+            self._model = None
+
     def reset(self) -> None:
         """Reset VAD hidden state."""
         self._h = np.zeros((1, 1, 128), dtype="float32")
@@ -133,6 +145,8 @@ class StreamingVAD:
         on_speech_end: Callable[[NDArray[np.float32]], None],
         max_speech_seconds: int = 60,
         on_max_speech: Callable[[], None] | None = None,
+        on_partial_audio: Callable[[NDArray[np.float32]], None] | None = None,
+        partial_interval_ms: int = 1000,
     ) -> None:
         """Initialize streaming VAD.
 
@@ -142,12 +156,16 @@ class StreamingVAD:
             on_speech_end: Called when speech ends, with accumulated audio.
             max_speech_seconds: Max duration before forced send (default 60s).
             on_max_speech: Called when max speech duration reached (for beep).
+            on_partial_audio: Called periodically with accumulated audio (for realtime feedback).
+            partial_interval_ms: Interval between partial audio callbacks (default 1000ms).
         """
         self.vad = vad
         self.on_speech_start = on_speech_start
         self.on_speech_end = on_speech_end
         self.max_speech_samples = max_speech_seconds * vad.sample_rate
         self.on_max_speech = on_max_speech
+        self.on_partial_audio = on_partial_audio
+        self._partial_interval_samples = partial_interval_ms * vad.sample_rate // 1000
 
         # State
         self._is_speaking = False
@@ -155,6 +173,7 @@ class StreamingVAD:
         self._silence_samples = 0
         self._speech_samples = 0
         self._total_speech_samples = 0  # Track total for max duration
+        self._samples_since_partial = 0  # Track samples since last partial callback
 
         # Pre-buffer for capturing audio just before speech starts
         self._pre_buffer: list[NDArray[np.float32]] = []
@@ -195,6 +214,14 @@ class StreamingVAD:
             # Currently speaking - accumulate audio
             self._audio_buffer.append(chunk.copy())
             self._total_speech_samples += len(chunk)
+            self._samples_since_partial += len(chunk)
+
+            # Call partial audio callback periodically for realtime feedback
+            if self.on_partial_audio and self._samples_since_partial >= self._partial_interval_samples:
+                self._samples_since_partial = 0
+                if self._audio_buffer:
+                    audio = np.concatenate(self._audio_buffer)
+                    self.on_partial_audio(audio)
 
             # Check max speech duration (send partial, continue listening)
             if self._total_speech_samples >= self.max_speech_samples:
@@ -254,5 +281,6 @@ class StreamingVAD:
         self._silence_samples = 0
         self._speech_samples = 0
         self._total_speech_samples = 0
+        self._samples_since_partial = 0
         self._pre_buffer = []
         self.vad.reset()

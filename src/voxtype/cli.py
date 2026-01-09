@@ -414,6 +414,10 @@ def listen(
         bool,
         typer.Option("--no-audio-feedback", help="Disable beep sounds"),
     ] = False,
+    realtime: Annotated[
+        bool,
+        typer.Option("--realtime", "-R", help="Show transcription in realtime while speaking"),
+    ] = False,
 ) -> None:
     """Start listening for voice input.
 
@@ -480,19 +484,68 @@ def listen(
         logger=logger,
         output_dir=output_dir_str,
         agents=agent_list,
+        realtime=realtime,
     )
 
     # Create status panel to show after loading (not before!)
     status_panel = _format_status_panel(config, agent_list)
 
+    # Setup signal handler for graceful shutdown (KeyboardInterrupt may not work with C extensions)
+    import atexit
+    import signal
+
+    shutdown_attempted = False
+
+    def cleanup():
+        """Cleanup function registered with atexit."""
+        nonlocal shutdown_attempted
+        if shutdown_attempted:
+            return
+        shutdown_attempted = True
+        try:
+            voxtypeapp.stop()
+            if logger:
+                logger.close()
+        except Exception:
+            pass  # Best effort cleanup
+
+    def signal_handler(signum, frame):
+        nonlocal shutdown_attempted
+        if shutdown_attempted:
+            # Second signal - force exit
+            console.print("\n[red]Force exit[/]")
+            import os
+            os._exit(1)
+
+        console.print("\n[yellow]Shutting down...[/]")
+
+        # Set a timeout for graceful shutdown
+        def force_exit():
+            import time
+            time.sleep(3)  # Give 3 seconds for graceful shutdown
+            console.print("\n[red]Shutdown timeout - forcing exit[/]")
+            import os
+            os._exit(1)
+
+        import threading
+        timer = threading.Thread(target=force_exit, daemon=True)
+        timer.start()
+
+        cleanup()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    atexit.register(cleanup)
+
     try:
         voxtypeapp.run(status_panel=status_panel)
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down...[/]")
-        voxtypeapp.stop()
+        cleanup()
     finally:
-        if logger:
-            logger.close()
+        # atexit handles cleanup, no need to duplicate here
+        pass
 
 
 @app.command()

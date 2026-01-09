@@ -141,6 +141,15 @@ class LoggingConfig(BaseModel):
     )
 
 
+class StatsConfig(BaseModel):
+    """Session statistics configuration."""
+
+    typing_wpm: int = Field(
+        default=40,
+        description="Average typing speed in words per minute (for time saved calculation)",
+    )
+
+
 class Config(BaseModel):
     """Main configuration."""
 
@@ -151,6 +160,7 @@ class Config(BaseModel):
     command: CommandConfig = Field(default_factory=CommandConfig)
     keyboard: KeyboardConfig = Field(default_factory=KeyboardConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    stats: StatsConfig = Field(default_factory=StatsConfig)
 
     verbose: bool = Field(default=False, description="Enable verbose output")
 
@@ -371,7 +381,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "hotkey", "output", "command", "keyboard", "logging"):
+        if field_name in ("audio", "stt", "hotkey", "output", "command", "keyboard", "logging", "stats"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -393,6 +403,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("command", CommandConfig),
         ("keyboard", KeyboardConfig),
         ("logging", LoggingConfig),
+        ("stats", StatsConfig),
     ]
 
     for section_name, section_class in sections:
@@ -467,6 +478,9 @@ ollama_timeout = 5.0
 
 [logging]
 log_file = ""
+
+[stats]
+typing_wpm = 40  # Your average typing speed (for time saved calculation)
 
 verbose = false
 """

@@ -53,6 +53,7 @@ class AudioManager:
         self._on_speech_start: Callable[[], None] | None = None
         self._on_speech_end: Callable[[object], None] | None = None
         self._on_max_speech: Callable[[], None] | None = None
+        self._on_partial_audio: Callable[[object], None] | None = None
 
         # Listening state getter (set by start_streaming)
         self._is_listening: Callable[[], bool] | None = None
@@ -63,6 +64,7 @@ class AudioManager:
         on_speech_start: Callable[[], None],
         on_speech_end: Callable[[object], None],
         on_max_speech: Callable[[], None],
+        on_partial_audio: Callable[[object], None] | None = None,
     ) -> None:
         """Initialize audio capture and VAD components.
 
@@ -70,10 +72,12 @@ class AudioManager:
             on_speech_start: Callback when VAD detects speech start
             on_speech_end: Callback when VAD detects speech end (with audio data)
             on_max_speech: Callback when max speech duration reached
+            on_partial_audio: Callback for partial audio during speech (realtime feedback)
         """
         self._on_speech_start = on_speech_start
         self._on_speech_end = on_speech_end
         self._on_max_speech = on_max_speech
+        self._on_partial_audio = on_partial_audio
 
         # Create audio capture
         self._audio = AudioCapture(
@@ -101,6 +105,7 @@ class AudioManager:
             on_speech_end=on_speech_end,
             max_speech_seconds=self._config.max_duration,
             on_max_speech=on_max_speech,
+            on_partial_audio=on_partial_audio,
         )
 
     def start_streaming(
@@ -125,6 +130,18 @@ class AudioManager:
             if self._audio.is_recording():
                 self._audio.stop_recording()
             self._audio.stop_streaming()
+
+    def close(self) -> None:
+        """Clean up all resources.
+
+        Call this on shutdown to release ONNX session resources
+        and avoid semaphore leak warnings.
+        """
+        self.stop_streaming()
+        if self._vad:
+            self._vad.close()
+            self._vad = None
+        self._streaming_vad = None
 
     def _on_audio_chunk(self, chunk: object) -> None:
         """Process audio chunk through VAD."""
