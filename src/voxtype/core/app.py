@@ -353,6 +353,9 @@ class VoxtypeApp:
 
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
+        if self.config.verbose:
+            self._console.print(f"[dim][DEBUG] Speech start: state={self.state.name}, listening={self._listening}[/]")
+
         # Show "Listening:" prefix (aligned with "Transcribed:")
         if self._realtime:
             # Use sys.stdout for proper \r handling (Rich doesn't handle it well)
@@ -525,6 +528,8 @@ class VoxtypeApp:
                 self._console.print(f"[red]Error: {e}[/]")
             finally:
                 self._state_manager.reset()  # Return to IDLE
+                if self.config.verbose:
+                    self._console.print(f"[dim][DEBUG] After transcribe: state={self.state.name}, listening={self._listening}, running={self._running}[/]")
                 self._signal_ready_to_listen()
                 # Process queued audio if any
                 self._process_queued_audio()
