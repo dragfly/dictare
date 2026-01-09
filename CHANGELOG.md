@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.0] - 2026-01-09
+
+### Added
+- **Realtime mode** (`--realtime` / `-R`): Shows transcription progressively while speaking
+- **Session stats**: Display output stats (words, WPM) and timing breakdown on exit
+- **Config option**: `stats.typing_wpm` for time-saved calculation (default 40 WPM)
+
+### Changed
+- **Shutdown**: Proper ONNX cleanup, 3-second timeout, double Ctrl+C force exit
+
 ## [2.14.5] - 2026-01-09
 
 ### Changed
