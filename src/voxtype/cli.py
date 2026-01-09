@@ -296,6 +296,7 @@ def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
         f"Press [bold]Ctrl+C[/] to exit",
         title="Ready",
         border_style="green",
+        expand=False,
     )
 
 
@@ -499,12 +500,13 @@ def check() -> None:
     """Check system dependencies and configuration."""
     from voxtype.utils.platform import check_dependencies
 
-    console.print(Panel("[bold]Checking dependencies...[/]", border_style="blue"))
+    console.print()
+    console.print(Panel("[bold]Checking dependencies...[/]", border_style="blue", expand=False))
     console.print()
 
     results = check_dependencies()
 
-    table = Table(show_header=True, header_style="bold")
+    table = Table(show_header=True, header_style="bold", expand=False)
     table.add_column("Component", style="cyan")
     table.add_column("Status")
     table.add_column("Details")
@@ -601,6 +603,7 @@ def _show_config_list() -> None:
         header_style="bold",
         title="Configuration",
         title_style="bold green",
+        expand=False,
     )
     table.add_column("Key", style="cyan", no_wrap=True)
     table.add_column("Value", style="yellow")
@@ -621,6 +624,7 @@ def _show_config_list() -> None:
 
         table.add_row(key, value_str, env_var)
 
+    console.print()
     console.print(table)
     console.print()
 
@@ -911,7 +915,8 @@ def _list_hid_devices() -> None:
     # Sort by product name
     unique_devices.sort(key=lambda d: (d.get("product_string") or "").lower())
 
-    table = Table(title="HID Devices", show_header=True, header_style="bold")
+    console.print()
+    table = Table(title="HID Devices", show_header=True, header_style="bold", expand=False)
     table.add_column("Vendor ID", style="cyan", width=10)
     table.add_column("Product ID", style="cyan", width=10)
     table.add_column("Manufacturer", width=20)
@@ -976,7 +981,8 @@ def _list_evdev_devices(set_hotkey: bool) -> None:
         raise typer.Exit(1)
 
     # Display table
-    table = Table(title="Input Devices", show_header=True, header_style="bold")
+    console.print()
+    table = Table(title="Input Devices", show_header=True, header_style="bold", expand=False)
     table.add_column("#", style="dim", width=3)
     table.add_column("Device Name", style="cyan")
     table.add_column("Keys", justify="center", width=6)
@@ -1081,7 +1087,8 @@ def backends() -> None:
         console.print("  Linux: [cyan]pip install evdev[/]")
         raise typer.Exit(1)
 
-    table = Table(title="Device Backends", show_header=True, header_style="bold")
+    console.print()
+    table = Table(title="Device Backends", show_header=True, header_style="bold", expand=False)
     table.add_column("Backend", style="cyan")
     table.add_column("Grab", justify="center")
     table.add_column("Platform")
@@ -1212,7 +1219,8 @@ def _check_python_environment() -> None:
                     "  or use [cyan]~/.local/bin/voxtype[/] directly."
                 )
 
-            console.print(Panel(msg, title="Python Environment Issue", border_style="yellow"))
+            console.print()
+            console.print(Panel(msg, title="Python Environment Issue", border_style="yellow", expand=False))
             console.print()
 
 
