@@ -27,7 +27,113 @@ app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
 )
+
+# Completion subcommand
+completion_app = typer.Typer(help="Manage shell completion")
+app.add_typer(completion_app, name="completion")
 console = Console()
+
+# Shell completion paths by shell type
+COMPLETION_PATHS = {
+    "bash": "~/.bash_completion.d/voxtype.bash",
+    "zsh": "~/.zfunc/_voxtype",
+    "fish": "~/.config/fish/completions/voxtype.fish",
+}
+
+def _get_shell() -> str:
+    """Detect current shell."""
+    import os
+    shell_path = os.environ.get("SHELL", "")
+    if "zsh" in shell_path:
+        return "zsh"
+    elif "fish" in shell_path:
+        return "fish"
+    return "bash"
+
+def _get_completion_script(shell: str) -> str:
+    """Generate completion script for shell."""
+    from click.shell_completion import get_completion_class
+
+    # Get the click command from typer app
+    cmd = typer.main.get_command(app)
+
+    # Get completion class for shell
+    comp_cls = get_completion_class(shell)
+    if comp_cls is None:
+        return ""
+
+    # Generate completion script
+    comp = comp_cls(cmd, {}, "voxtype", "_VOXTYPE_COMPLETE")
+    return comp.source()
+
+@completion_app.command("install")
+def completion_install(
+    shell: Annotated[Optional[str], typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
+) -> None:
+    """Install shell completion."""
+    shell = shell or _get_shell()
+
+    if shell not in COMPLETION_PATHS:
+        console.print(f"[red]Unsupported shell: {shell}[/]")
+        console.print("Supported: bash, zsh, fish")
+        raise typer.Exit(1)
+
+    script = _get_completion_script(shell)
+    if not script or "not supported" in script.lower():
+        console.print(f"[red]Could not generate completion script for {shell}[/]")
+        raise typer.Exit(1)
+
+    # Expand path and create parent dirs
+    path = Path(COMPLETION_PATHS[shell]).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write completion script
+    path.write_text(script)
+    console.print(f"[green]Installed completion to {path}[/]")
+
+    # Shell-specific instructions
+    if shell == "zsh":
+        console.print("\nAdd to ~/.zshrc if not already present:")
+        console.print("  [dim]fpath=(~/.zfunc $fpath)[/]")
+        console.print("  [dim]autoload -Uz compinit && compinit[/]")
+    elif shell == "bash":
+        console.print("\nAdd to ~/.bashrc if not already present:")
+        console.print(f"  [dim]source {path}[/]")
+    elif shell == "fish":
+        console.print("\n[green]Fish will load it automatically.[/]")
+
+@completion_app.command("show")
+def completion_show(
+    shell: Annotated[Optional[str], typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
+) -> None:
+    """Show completion script (for manual installation)."""
+    shell = shell or _get_shell()
+    script = _get_completion_script(shell)
+
+    if not script or "not supported" in script.lower():
+        console.print(f"[red]Could not generate completion script for {shell}[/]")
+        raise typer.Exit(1)
+
+    print(script)
+
+@completion_app.command("remove")
+def completion_remove(
+    shell: Annotated[Optional[str], typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
+) -> None:
+    """Remove installed shell completion."""
+    shell = shell or _get_shell()
+
+    if shell not in COMPLETION_PATHS:
+        console.print(f"[red]Unsupported shell: {shell}[/]")
+        raise typer.Exit(1)
+
+    path = Path(COMPLETION_PATHS[shell]).expanduser()
+
+    if path.exists():
+        path.unlink()
+        console.print(f"[green]Removed {path}[/]")
+    else:
+        console.print(f"[yellow]No completion file found at {path}[/]")
 
 def version_callback(value: bool) -> None:
     """Print version and exit."""
