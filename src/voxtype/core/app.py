@@ -45,6 +45,7 @@ class VoxtypeApp:
         logger: JSONLLogger | None = None,
         output_dir: str | None = None,
         agents: list[str] | None = None,
+        realtime: bool = False,
     ) -> None:
         """Initialize the application.
 
@@ -53,8 +54,25 @@ class VoxtypeApp:
             logger: Optional JSONL logger for structured logging.
             output_dir: Directory for agent files (<agent>.voxtype).
             agents: List of agent IDs for multi-output mode.
+            realtime: Enable realtime transcription feedback while speaking.
         """
         self.config = config
+        self._realtime = realtime
+        self._partial_text = ""
+        self._partial_transcribing = False
+
+        # Session stats
+        self._stats_chars = 0
+        self._stats_words = 0
+        self._stats_audio_seconds = 0.0
+        self._stats_transcription_seconds = 0.0
+        self._stats_injection_seconds = 0.0
+        self._stats_count = 0
+        self._stats_start_time: float | None = None
+
+        # Lock for STT engine (MLX is not thread-safe)
+        self._stt_lock = threading.Lock()
+
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
@@ -276,6 +294,7 @@ class VoxtypeApp:
             on_speech_start=self._on_vad_speech_start,
             on_speech_end=self._on_vad_speech_end,
             on_max_speech=self._on_max_speech_duration,
+            on_partial_audio=self._on_partial_audio if self._realtime else None,
         )
 
         # Create LLM processor for command mode
@@ -333,8 +352,14 @@ class VoxtypeApp:
 
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
-        # Always show "Listening..." when VAD detects speech
-        self._console.print("[bold cyan]Listening...[/]", end="\r")
+        # Show "Listening:" prefix (aligned with "Transcribed:")
+        if self._realtime:
+            # Use sys.stdout for proper \r handling (Rich doesn't handle it well)
+            import sys
+            sys.stdout.write("\033[36m\033[1mListening:\033[0m   ")
+            sys.stdout.flush()
+        else:
+            self._console.print("[bold cyan]Listening...[/]", end="\r")
 
         # Try to transition IDLE → RECORDING
         if not self._state_manager.try_transition(AppState.RECORDING):
@@ -345,6 +370,48 @@ class VoxtypeApp:
 
         if self._logger:
             self._logger.log_vad_event("speech_start")
+
+    def _on_partial_audio(self, audio_data) -> None:
+        """Handle partial audio during speech for realtime feedback.
+
+        Args:
+            audio_data: Accumulated audio data so far.
+        """
+        if not self._realtime or self._stt is None:
+            return
+
+        # Skip if a partial transcription is already running (avoid queue buildup)
+        if self._partial_transcribing:
+            return
+
+        # Transcribe in background thread to not block VAD
+        threading.Thread(
+            target=self._transcribe_partial,
+            args=(audio_data.copy(),),
+            daemon=True,
+        ).start()
+
+    def _transcribe_partial(self, audio_data) -> None:
+        """Transcribe partial audio and display (background thread)."""
+        self._partial_transcribing = True
+        try:
+            # Use lock to prevent concurrent MLX calls (not thread-safe)
+            with self._stt_lock:
+                text = self._stt.transcribe(
+                    audio_data,
+                    language=self.config.stt.language,
+                )
+            if text and text != self._partial_text:
+                self._partial_text = text
+                # Clear line and show partial text
+                # Use ANSI: \r = start of line, \033[K = clear to end of line
+                import sys
+                sys.stdout.write(f"\r\033[36m\033[1mListening:\033[0m   \033[2m{text}\033[0m\033[K")
+                sys.stdout.flush()
+        except Exception:
+            pass  # Silently ignore errors on partial transcriptions
+        finally:
+            self._partial_transcribing = False
 
     def _on_vad_speech_end(self, audio_data) -> None:
         """Handle VAD speech end detection."""
@@ -372,30 +439,51 @@ class VoxtypeApp:
             self._state_manager.reset()  # TRANSCRIBING → IDLE
             return
 
-        self._console.print("[bold yellow]Transcribing...[/]", end="\r")
+        # Show transcribing status (skip in realtime mode - we'll show Transcribed: instead)
+        if not self._realtime:
+            self._console.print("[bold yellow]Transcribing...[/]", end="\r")
 
         # Transcribe and process with LLM
         self._transcribe_and_process(audio_data)
 
     def _transcribe_and_process(self, audio_data) -> None:
         """Transcribe audio and process with LLM-first architecture."""
+        # For realtime mode: move to new line after the "Listening:" line
+        if self._realtime:
+            import sys
+            sys.stdout.write("\n")  # New line after partial text
+            sys.stdout.flush()
+            self._partial_text = ""
+
         def do_transcribe():
             try:
                 if not self._stt:
                     return
 
-                text = self._stt.transcribe(
-                    audio_data,
-                    language=self.config.stt.language,
-                    hotwords=self._get_hotwords(),
-                    beam_size=self.config.stt.beam_size,
-                    max_repetitions=self.config.stt.max_repetitions,
-                )
+                # Track transcription time (use lock for thread-safety with MLX)
+                transcribe_start = time.time()
+                with self._stt_lock:
+                    text = self._stt.transcribe(
+                        audio_data,
+                        language=self.config.stt.language,
+                        hotwords=self._get_hotwords(),
+                        beam_size=self.config.stt.beam_size,
+                        max_repetitions=self.config.stt.max_repetitions,
+                    )
+                transcribe_time = time.time() - transcribe_start
 
                 if text:
+                    # Update session stats
+                    audio_duration = len(audio_data) / self.config.audio.sample_rate
+                    self._stats_count += 1
+                    self._stats_chars += len(text)
+                    self._stats_words += len(text.split())
+                    self._stats_audio_seconds += audio_duration
+                    self._stats_transcription_seconds += transcribe_time
+
                     # Log transcription
                     if self._logger:
-                        duration_ms = len(audio_data) / self.config.audio.sample_rate * 1000
+                        duration_ms = audio_duration * 1000
                         self._logger.log_transcription(
                             text=text,
                             duration_ms=duration_ms,
@@ -405,6 +493,10 @@ class VoxtypeApp:
                     # Debug mode: always show full transcription
                     if self.config.verbose:
                         self._console.print(f"[blue][DEBUG][/] {text}")
+
+                    # Realtime mode: show final transcription with "Transcribed:" prefix
+                    if self._realtime:
+                        self._console.print(f"[bold green]Transcribed:[/] {text}")
 
                     # Check listening state first
                     if not self._listening:
@@ -680,9 +772,10 @@ class VoxtypeApp:
         Args:
             text: Text to inject.
         """
-        # Truncate display if too long
-        display_text = text[:60] + "..." if len(text) > 60 else text
-        self._console.print(f"[green]Transcribed:[/] {display_text}        ")
+        # Show transcribed text (skip in realtime mode - already shown with full text)
+        if not self._realtime:
+            display_text = text[:60] + "..." if len(text) > 60 else text
+            self._console.print(f"[green]Transcribed:[/] {display_text}        ")
 
         # Always add newline (for visual separation or Enter key depending on auto_enter)
         inject_text = text + "\n"
@@ -694,11 +787,13 @@ class VoxtypeApp:
 
             # Lock to prevent concurrent injections from multiple threads
             with self._injection_lock:
+                inject_start = time.time()
                 success = self._injector.type_text(
                     inject_text,
                     delay_ms=self.config.output.typing_delay_ms,
                     auto_enter=self.config.output.auto_enter,
                 )
+                self._stats_injection_seconds += time.time() - inject_start
 
                 if self.config.verbose:
                     self._console.print(f"[dim]Injection result: {success}[/]")
@@ -747,6 +842,7 @@ class VoxtypeApp:
             self._console.print(status_panel)
 
         self._running = True
+        self._stats_start_time = time.time()
         # Note: _listening stays False until we're fully ready
 
         # Start hotkey listener for toggle (if available)
@@ -1036,6 +1132,7 @@ class VoxtypeApp:
     def stop(self) -> None:
         """Stop the application."""
         self._running = False
+        self._listening = False  # Stop processing new audio immediately
 
         # Cancel any pending single tap timer
         if self._pending_single_tap:
@@ -1049,5 +1146,90 @@ class VoxtypeApp:
             self._hotkey.stop()
 
         if self._audio_manager:
-            self._audio_manager.stop_streaming()
             self._audio_manager.flush_vad()
+            self._audio_manager.close()  # Clean up ONNX resources
+
+        # Show session stats
+        self._display_session_stats()
+
+    def _display_session_stats(self) -> None:
+        """Display session statistics on exit."""
+        import random
+
+        from rich.table import Table
+
+        # Skip if no transcriptions were made
+        if self._stats_count == 0:
+            return
+
+        # Average typing speed from config (default 40 WPM)
+        typing_wpm = self.config.stats.typing_wpm
+        chars_per_minute = typing_wpm * 5  # ~200 chars/min at 40 WPM
+
+        # Time it would take to type this text
+        typing_time_minutes = self._stats_chars / chars_per_minute
+        # Total voxtype time = audio + STT + injection
+        total_voxtype_seconds = (
+            self._stats_audio_seconds
+            + self._stats_transcription_seconds
+            + self._stats_injection_seconds
+        )
+        total_voxtype_minutes = total_voxtype_seconds / 60
+
+        # Effective WPM = words / total minutes
+        effective_wpm = self._stats_words / total_voxtype_minutes if total_voxtype_minutes > 0 else 0
+
+        # Time saved = typing time - total voxtype time
+        time_saved_minutes = typing_time_minutes - total_voxtype_minutes
+        time_saved_seconds = time_saved_minutes * 60
+
+        # Create two-column stats layout
+        from rich.columns import Columns
+
+        # Left table: human-friendly stats
+        left_table = Table(title="Output", expand=False, show_header=False, box=None)
+        left_table.add_column("Metric", style="dim")
+        left_table.add_column("Value", style="cyan")
+        left_table.add_row("Transcriptions", str(self._stats_count))
+        left_table.add_row("Words", str(self._stats_words))
+        left_table.add_row("Characters", str(self._stats_chars))
+        left_table.add_row("Effective WPM", f"{effective_wpm:.0f}")
+
+        # Right table: technical timing stats
+        right_table = Table(title="Timing", expand=False, show_header=False, box=None)
+        right_table.add_column("Metric", style="dim")
+        right_table.add_column("Value", style="cyan")
+        right_table.add_row("Audio", f"{self._stats_audio_seconds:.1f}s")
+        right_table.add_row("STT", f"{self._stats_transcription_seconds:.1f}s")
+        right_table.add_row("Injection", f"{self._stats_injection_seconds:.1f}s")
+        right_table.add_row("Total", f"{total_voxtype_seconds:.1f}s")
+
+        self._console.print()
+        self._console.print(Columns([left_table, right_table], padding=(0, 4)))
+
+        # Fun phrases for time saved (shown after the table)
+        if time_saved_seconds > 0:
+            time_saved_phrases = [
+                "Saved you [bold]{time}[/]. You're welcome.",
+                "[bold]{time}[/] back in your pocket.",
+                "Time saved: [bold]{time}[/]. My pleasure!",
+                "[bold]{time}[/] extra for coffee.",
+                "[bold]{time}[/] gained. Use them wisely!",
+                "[bold]{time}[/] freed up. Maybe call someone who'd love to hear from you?",
+                "[bold]{time}[/] saved. Pay it forward.",
+                "[bold]{time}[/] reclaimed. Go make someone's day.",
+                "[bold]{time}[/] in your hands. Spend them on something that matters.",
+                "[bold]{time}[/] unlocked. Perfect for a random act of kindness.",
+            ]
+
+            # Format time saved
+            if time_saved_seconds >= 60:
+                time_str = f"{time_saved_minutes:.1f} minutes"
+            else:
+                time_str = f"{time_saved_seconds:.0f} seconds"
+
+            # Pick random phrase and display
+            phrase = random.choice(time_saved_phrases).format(time=time_str)
+            self._console.print()
+            self._console.print(f"[green bold]✨ {phrase} ✨[/]")
+            self._console.print()
