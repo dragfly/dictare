@@ -59,6 +59,7 @@ class MLXWhisperEngine(STTEngine):
         audio: NDArray[np.float32],
         language: str = "auto",
         hotwords: str | None = None,
+        beam_size: int = 5,
         max_repetitions: int = 5,
     ) -> str:
         """Transcribe audio to text.
@@ -67,6 +68,7 @@ class MLXWhisperEngine(STTEngine):
             audio: Audio samples (float32, mono, 16kHz).
             language: Language code or "auto" for auto-detection.
             hotwords: Comma-separated words to boost recognition (not supported by MLX).
+            beam_size: Beam size for decoding (not supported by MLX).
             max_repetitions: Max consecutive word repetitions before filtering.
 
         Returns:
@@ -78,8 +80,8 @@ class MLXWhisperEngine(STTEngine):
         if self._model_path is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
-        # Note: hotwords parameter is ignored by MLX Whisper (not supported)
-        _ = hotwords
+        # Note: hotwords and beam_size are ignored by MLX Whisper (not supported)
+        _ = hotwords, beam_size
 
         import mlx_whisper
         import numpy as np

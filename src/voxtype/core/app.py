@@ -93,7 +93,7 @@ class VoxtypeApp:
         self._vad: SileroVAD | None = None
         self._streaming_vad: StreamingVAD | None = None
 
-        # LLM-first processor (replaces old command processor)
+        # LLM processor for command mode
         self._llm_processor: LLMProcessor | None = None
 
         # Track if speech was ignored (for ready-to-listen feedback)
@@ -315,7 +315,7 @@ class VoxtypeApp:
             on_max_speech=self._on_max_speech_duration,
         )
 
-        # Create LLM processor (replaces old command processor)
+        # Create LLM processor for command mode
         self._init_llm_processor()
 
         # Create hotkey listener for toggle (if available)
@@ -429,6 +429,7 @@ class VoxtypeApp:
                     audio_data,
                     language=self.config.stt.language,
                     hotwords=self._get_hotwords(),
+                    beam_size=self.config.stt.beam_size,
                     max_repetitions=self.config.stt.max_repetitions,
                 )
 

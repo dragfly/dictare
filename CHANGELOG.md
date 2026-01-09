@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.5] - 2026-01-09
+
+### Fixed
+- **Documentation**: Replace stale `voxtype run` with `voxtype listen` in README and install.sh
+- **CLI help**: Remove non-existent `submit` command from `voxtype cmd` help
+- **CLI error**: Fix error message to suggest `voxtype listen` instead of `voxtype run`
+- **Config**: Remove stale `controller` references from config utilities
+- **beam_size**: Connect config option to transcription (was defined but unused)
+
+### Removed
+- Stale `CONTROLLER_*` message constants from messages.py
+
 ## [2.12.4] - 2026-01-08
 
 ### Added

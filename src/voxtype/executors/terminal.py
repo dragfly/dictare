@@ -17,7 +17,7 @@ class TerminalExecutor(Executor):
 
     def __init__(self, config: TargetConfig) -> None:
         super().__init__(config)
-        self._method = config.config.get("method", "keyboard")  # keyboard or clipboard
+        self._method = config.config.get("method", "keyboard")  # keyboard or agent
         self._typing_delay_ms = config.config.get("typing_delay_ms", 5)
         self._auto_submit = config.config.get("auto_submit", False)
         self._injector = None
