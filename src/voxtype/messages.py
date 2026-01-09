@@ -48,12 +48,6 @@ INJECT_FAILED = "Failed to inject text"
 INJECT_SENT = "Sent"
 INJECT_SEND_FAILED = "Send failed"
 
-# Controller messages
-CONTROLLER_FOUND = "Controller: {device}"
-CONTROLLER_NOT_FOUND = "Controller device not found: {device}"
-CONTROLLER_EVDEV_MISSING = "evdev not installed, controller disabled"
-CONTROLLER_AGENT = ">>> Agent: {agent}"
-
 # LLM messages
 LLM_OLLAMA = "LLM processor: ollama ({model})"
 LLM_FALLBACK = "LLM processor: keyword fallback"

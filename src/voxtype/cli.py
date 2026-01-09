@@ -892,7 +892,7 @@ def cmd(
     Available commands:
         toggle-listening, listening-on, listening-off,
         toggle-mode, project-next, project-prev,
-        submit, discard, repeat
+        discard, repeat
 
     Example:
         voxtype cmd toggle-listening
@@ -910,7 +910,7 @@ def cmd(
         # Silent success for scripting
     except FileNotFoundError:
         console.print("[red]voxtype is not running (socket not found)[/]")
-        console.print("[dim]Start voxtype first: voxtype run[/]")
+        console.print("[dim]Start voxtype first: voxtype listen[/]")
         raise typer.Exit(1)
     except ConnectionRefusedError:
         console.print("[red]voxtype is not accepting commands[/]")

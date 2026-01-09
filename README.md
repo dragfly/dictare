@@ -16,7 +16,7 @@ git clone https://github.com/dragfly/voxtype && cd voxtype && ./install.sh
 ## Run
 
 ```bash
-voxtype run
+voxtype listen
 ```
 
 **Tap hotkey** to toggle listening. **Double-tap** to switch mode.
@@ -39,7 +39,7 @@ voxtype run
 
 ```bash
 voxtype --help              # All commands
-voxtype run --help          # All options
+voxtype listen --help          # All options
 voxtype check               # Verify setup
 voxtype devices             # List input devices
 ```

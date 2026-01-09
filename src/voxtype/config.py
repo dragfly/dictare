@@ -319,7 +319,7 @@ def _write_config(config_dict: dict, config_path: Path) -> None:
                     lines.append(f"{key} = {_format_toml_value(value)}\n")
             lines.append("\n")
 
-            # Handle nested dicts as subsections (e.g., controller.keys)
+            # Handle nested dicts as subsections
             for key, value in values.items():
                 if isinstance(value, dict):
                     lines.append(f"[{section}.{key}]\n")
@@ -352,7 +352,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "hotkey", "output", "command", "controller", "logging"):
+        if field_name in ("audio", "stt", "hotkey", "output", "command", "keyboard", "logging"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
