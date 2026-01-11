@@ -82,11 +82,15 @@ class SileroVAD(VADEngine):
         Call this on shutdown to properly clean up the ONNX session
         and avoid semaphore leak warnings.
         """
+        import gc
+
         if self._model is not None:
             # Delete the session to release ONNX resources
             if hasattr(self._model, 'session'):
                 del self._model.session
             self._model = None
+            # Force immediate garbage collection to release ONNX semaphores
+            gc.collect()
 
     def reset(self) -> None:
         """Reset VAD hidden state."""
