@@ -137,11 +137,16 @@ class AudioManager:
         Call this on shutdown to release ONNX session resources
         and avoid semaphore leak warnings.
         """
+        # First, prevent any new callbacks from processing
+        self._streaming_vad = None
+
+        # Stop the audio stream
         self.stop_streaming()
+
+        # Now close the VAD (safe because callbacks can't use it anymore)
         if self._vad:
             self._vad.close()
             self._vad = None
-        self._streaming_vad = None
 
     def _on_audio_chunk(self, chunk: object) -> None:
         """Process audio chunk through VAD."""
@@ -149,8 +154,10 @@ class AudioManager:
         is_running = self._is_running() if self._is_running else True
         is_listening = self._is_listening() if self._is_listening else False
 
-        if self._streaming_vad and is_running and is_listening:
-            self._streaming_vad.process_chunk(chunk)
+        # Check streaming_vad FIRST - if it's None, we're shutting down
+        streaming_vad = self._streaming_vad
+        if streaming_vad and is_running and is_listening:
+            streaming_vad.process_chunk(chunk)
 
     def needs_reconnect(self) -> bool:
         """Check if audio device needs reconnection."""
