@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.1] - 2026-01-11
+
+### Fixed
+- **Self-listening bug**: Mode switch TTS no longer gets transcribed (mic muted during speech)
+- **LLM processor sync**: State now properly synced at startup and mode switch
+- **Semaphore leak**: Improved shutdown synchronization to prevent ONNX semaphore leaks
+
+### Added
+- **Configurable TTS phrases**: Create `~/.config/voxtype/tts_phrases.json` to customize voice feedback
+- **English defaults**: TTS now says "transcription mode", "command mode", "agent" by default
+
 ## [2.15.0] - 2026-01-09
 
 ### Added

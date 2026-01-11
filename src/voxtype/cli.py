@@ -492,8 +492,8 @@ def listen(
             voxtypeapp.stop()
             if logger:
                 logger.close()
-        except Exception:
-            pass  # Best effort cleanup
+        except Exception as e:
+            console.print(f"[red]Cleanup error: {e}[/]")
 
     def signal_handler(signum, frame):
         nonlocal shutdown_attempted
@@ -507,8 +507,11 @@ def listen(
 
         # Set a timeout for graceful shutdown
         def force_exit():
+            import gc
             import time
             time.sleep(3)  # Give 3 seconds for graceful shutdown
+            # Force GC before exit to release any remaining ONNX semaphores
+            gc.collect()
             console.print("\n[red]Shutdown timeout - forcing exit[/]")
             import os
             os._exit(1)

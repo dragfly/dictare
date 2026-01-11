@@ -729,29 +729,119 @@ class VoxtypeApp:
             self._processing_mode = ProcessingMode.TRANSCRIPTION
             self._console.print("[bold cyan]>>> MODE: TRANSCRIPTION (fast)[/]")
 
-        self._play_feedback("mode_switch", mode=self._processing_mode)
+        # Sync LLM processor state if available
+        if self._llm_processor:
+            self._llm_processor.set_listening(self._listening)
+
+        self._speak_mode_with_mute()
+
+    def _load_tts_phrases(self) -> dict:
+        """Load TTS phrases from config file or use defaults.
+
+        Default phrases are in English. To customize, create:
+        ~/.config/voxtype/tts_phrases.json with structure:
+        {
+            "transcription_mode": "transcription mode",
+            "command_mode": "command mode",
+            "agent": "agent",
+            "voice": "Samantha"
+        }
+        """
+        import json
+        from pathlib import Path
+
+        default_phrases = {
+            "transcription_mode": "transcription mode",
+            "command_mode": "command mode",
+            "agent": "agent",
+            "voice": "Samantha",  # macOS voice (Samantha=en, Alice=it)
+        }
+
+        phrases_path = Path.home() / ".config" / "voxtype" / "tts_phrases.json"
+        if phrases_path.exists():
+            try:
+                with open(phrases_path) as f:
+                    custom = json.load(f)
+                # Merge with defaults (custom overrides defaults)
+                return {**default_phrases, **custom}
+            except Exception:
+                pass  # Fall back to defaults on error
+
+        return default_phrases
+
+    def _speak_mode_with_mute(self) -> None:
+        """Speak the current mode using TTS, muting mic to avoid self-listening.
+
+        Uses mute_mic_during_feedback config to temporarily disable listening
+        while speaking, preventing the TTS from being transcribed.
+        """
+        if not self.config.audio.audio_feedback:
+            return
+
+        import subprocess
+        import sys
+
+        mute_mic = self.config.audio.mute_mic_during_feedback
+        phrases = self._load_tts_phrases()
+
+        # Get mode phrase from config (default: English)
+        if self._processing_mode == ProcessingMode.TRANSCRIPTION:
+            text = phrases.get("transcription_mode", "transcription mode")
+        else:
+            text = phrases.get("command_mode", "command mode")
+
+        voice = phrases.get("voice", "Samantha")
+
+        def _speak():
+            # Pause listening if mute_mic enabled
+            was_listening = False
+            if mute_mic:
+                was_listening = self._listening
+                if was_listening:
+                    self._listening = False
+
+            try:
+                if sys.platform == "darwin":
+                    subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
+                else:
+                    # Linux: try espeak-ng, then espeak, then spd-say
+                    for cmd in [
+                        ["espeak-ng", text],
+                        ["espeak", text],
+                        ["spd-say", text],
+                    ]:
+                        try:
+                            subprocess.run(cmd, capture_output=True, timeout=5)
+                            break
+                        except FileNotFoundError:
+                            continue
+            except Exception:
+                pass  # Silently fail if TTS not available
+            finally:
+                # Resume listening if we paused it
+                if mute_mic and was_listening:
+                    self._listening = True
+
+        # Always run in background thread to not block keyboard callbacks
+        threading.Thread(target=_speak, daemon=True).start()
 
     def _play_feedback(self, event: str, mode: ProcessingMode | None = None) -> None:
         """Play audio feedback for state changes.
 
         Args:
-            event: Type of event - 'listening_on', 'listening_off', 'mode_switch'
-            mode: For mode_switch, the new ProcessingMode
+            event: Type of event - 'listening_on', 'listening_off'
+            mode: Unused (kept for API compatibility)
         """
         if not self.config.audio.audio_feedback:
             return
 
         try:
-            from voxtype.audio.beep import play_beep_start, play_beep_stop, speak_mode
+            from voxtype.audio.beep import play_beep_start, play_beep_stop
 
             if event == "listening_on":
                 play_beep_start()
             elif event == "listening_off":
                 play_beep_stop()
-            elif event == "mode_switch" and mode:
-                # Speak the new mode in user's language
-                language = self.config.stt.language or "en"
-                speak_mode(mode.value, language)
         except Exception:
             pass  # Ignore audio feedback errors
 
@@ -869,6 +959,9 @@ class VoxtypeApp:
 
         # Now enable listening and start audio streaming
         self._listening = True
+        # Sync LLM processor state
+        if self._llm_processor:
+            self._llm_processor.set_listening(True)
         if self._audio_manager:
             self._audio_manager.start_streaming(
                 is_listening=lambda: self._listening,
@@ -1025,7 +1118,7 @@ class VoxtypeApp:
             self._console.print("[yellow]Nothing to repeat[/]")
 
     def _speak_agent(self, agent_name: str) -> None:
-        """Speak the agent name using TTS (piper preferred, with fallbacks).
+        """Speak the agent name using TTS.
 
         If mute_mic_during_feedback is enabled, pauses listening while speaking
         to prevent the microphone from picking up the voice feedback.
@@ -1033,12 +1126,13 @@ class VoxtypeApp:
         IMPORTANT: Always runs in background thread to avoid blocking keyboard
         callbacks (which could freeze the keyboard with pynput).
         """
-        import os
         import subprocess
         import sys
-        import threading
 
-        text = f"agent {agent_name}"
+        phrases = self._load_tts_phrases()
+        agent_prefix = phrases.get("agent", "agent")
+        voice = phrases.get("voice", "Samantha")
+        text = f"{agent_prefix} {agent_name}"
         mute_mic = self.config.audio.mute_mic_during_feedback
 
         def _speak():
@@ -1051,38 +1145,19 @@ class VoxtypeApp:
 
             try:
                 if sys.platform == "darwin":
-                    subprocess.run(["say", text], capture_output=True, timeout=10)
-                    return
-
-                # Linux: try piper first (neural TTS, sounds great)
-                piper_model = os.path.expanduser(
-                    "~/.local/share/piper-voices/it_IT-paola-medium.onnx"
-                )
-                if os.path.exists(piper_model):
-                    try:
-                        # Use python -m piper | aplay
-                        subprocess.run(
-                            f'echo "{text}" | {sys.executable} -m piper '
-                            f'--model {piper_model} --output-raw 2>/dev/null | '
-                            f'aplay -r 22050 -f S16_LE -t raw - 2>/dev/null',
-                            shell=True,
-                            timeout=10,
-                        )
-                        return
-                    except Exception:
-                        pass  # Fall through to other TTS
-
-                # Fallback: spd-say, espeak-ng, espeak
-                for cmd in [
-                    ["spd-say", "-w", text],
-                    ["espeak-ng", text],
-                    ["espeak", text],
-                ]:
-                    try:
-                        subprocess.run(cmd, capture_output=True, timeout=5)
-                        return
-                    except FileNotFoundError:
-                        continue
+                    subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
+                else:
+                    # Linux: try espeak-ng, then espeak, then spd-say
+                    for cmd in [
+                        ["espeak-ng", text],
+                        ["espeak", text],
+                        ["spd-say", "-w", text],
+                    ]:
+                        try:
+                            subprocess.run(cmd, capture_output=True, timeout=5)
+                            break
+                        except FileNotFoundError:
+                            continue
             except Exception:
                 pass  # Silently fail if TTS not available
             finally:
@@ -1136,8 +1211,25 @@ class VoxtypeApp:
 
     def stop(self) -> None:
         """Stop the application."""
+        import gc
+
         self._running = False
         self._listening = False  # Stop processing new audio immediately
+
+        # Brief pause to let any in-flight audio callbacks complete
+        # This prevents race condition where callback tries to use VAD after close
+        time.sleep(0.1)
+
+        # Close audio/VAD FIRST to release ONNX resources before anything else
+        # This is critical to avoid semaphore leaks on forced shutdown
+        if self._audio_manager:
+            self._audio_manager.stop_streaming()  # Stop audio callbacks first
+            time.sleep(0.05)  # Brief pause for any final callbacks
+            self._audio_manager.flush_vad()
+            self._audio_manager.close()  # Clean up ONNX resources
+
+        # Force garbage collection to release ONNX semaphores immediately
+        gc.collect()
 
         # Cancel any pending single tap timer
         if self._pending_single_tap:
@@ -1149,10 +1241,6 @@ class VoxtypeApp:
 
         if self._hotkey:
             self._hotkey.stop()
-
-        if self._audio_manager:
-            self._audio_manager.flush_vad()
-            self._audio_manager.close()  # Clean up ONNX resources
 
         # Show session stats
         self._display_session_stats()
