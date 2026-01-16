@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.2] - 2026-01-17
+
+### Fixed
+- **Semaphore leak**: Use threading.Lock to properly synchronize VAD access during shutdown (#23)
+- **Config shortcuts**: Create config directory if missing when saving shortcuts (#24)
+
 ## [2.15.1] - 2026-01-11
 
 ### Fixed
