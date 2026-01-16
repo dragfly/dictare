@@ -1216,17 +1216,10 @@ class VoxtypeApp:
         self._running = False
         self._listening = False  # Stop processing new audio immediately
 
-        # Brief pause to let any in-flight audio callbacks complete
-        # This prevents race condition where callback tries to use VAD after close
-        time.sleep(0.1)
-
-        # Close audio/VAD FIRST to release ONNX resources before anything else
-        # This is critical to avoid semaphore leaks on forced shutdown
+        # Close audio/VAD - AudioManager uses lock to ensure no callbacks are in-flight
         if self._audio_manager:
-            self._audio_manager.stop_streaming()  # Stop audio callbacks first
-            time.sleep(0.05)  # Brief pause for any final callbacks
             self._audio_manager.flush_vad()
-            self._audio_manager.close()  # Clean up ONNX resources
+            self._audio_manager.close()  # Clean up ONNX resources (synchronized with lock)
 
         # Force garbage collection to release ONNX semaphores immediately
         gc.collect()
