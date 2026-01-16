@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import TYPE_CHECKING, Callable
 
@@ -45,6 +46,10 @@ class AudioManager:
         self._audio: AudioCapture | None = None
         self._vad: SileroVAD | None = None
         self._streaming_vad: StreamingVAD | None = None
+
+        # Lock to synchronize VAD access during shutdown
+        # Prevents race condition where callback uses VAD while close() deletes it
+        self._vad_lock = threading.Lock()
 
         # Audio queue for buffered speech during transcription
         self._audio_queue: list = []
@@ -137,11 +142,13 @@ class AudioManager:
         Call this on shutdown to release ONNX session resources
         and avoid semaphore leak warnings.
         """
-        # First, prevent any new callbacks from processing
-        self._streaming_vad = None
-
-        # Stop the audio stream
+        # Stop the audio stream first to prevent new callbacks
         self.stop_streaming()
+
+        # Acquire lock to ensure no callback is currently using VAD
+        # This synchronizes with _on_audio_chunk() which also holds this lock
+        with self._vad_lock:
+            self._streaming_vad = None
 
         # Now close the VAD (safe because callbacks can't use it anymore)
         if self._vad:
@@ -154,10 +161,15 @@ class AudioManager:
         is_running = self._is_running() if self._is_running else True
         is_listening = self._is_listening() if self._is_listening else False
 
-        # Check streaming_vad FIRST - if it's None, we're shutting down
-        streaming_vad = self._streaming_vad
-        if streaming_vad and is_running and is_listening:
-            streaming_vad.process_chunk(chunk)
+        if not (is_running and is_listening):
+            return
+
+        # Use lock to prevent race condition with close()
+        # This ensures VAD isn't deleted while we're using it
+        with self._vad_lock:
+            streaming_vad = self._streaming_vad
+            if streaming_vad:
+                streaming_vad.process_chunk(chunk)
 
     def needs_reconnect(self) -> bool:
         """Check if audio device needs reconnection."""
