@@ -116,6 +116,7 @@ def _save_shortcuts(shortcuts: dict[str, str], config_path: Path) -> None:
         config_data["keyboard"] = {}
     config_data["keyboard"]["shortcuts"] = shortcuts_list
 
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     with open(config_path, "w") as f:
         toml.dump(config_data, f)
 
