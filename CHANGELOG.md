@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.5] - 2026-01-20
+
+### Fixed
+- **Thread safety**: Added `_state_lock` for `_listening`/`_running` flags in app.py
+- **Audio queue race condition**: Replaced raw list with thread-safe `queue.Queue` in AudioManager
+
+### Added
+- **Lifetime stats**: Persistent statistics stored in `~/.local/share/voxtype/stats.json`
+  - Tracks total transcriptions, words, characters, time saved across all sessions
+  - Shows "All time: X hours saved across Y sessions (since DATE)" on exit
+  - First use date recorded automatically
+
 ## [2.16.0] - 2026-01-20
 
 ### Fixed
