@@ -2,7 +2,42 @@
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
+
+
+def sanitize_text_for_injection(text: str) -> str:
+    """Remove ANSI escape sequences and control characters from text.
+
+    This prevents terminal escape sequences like [27;2;13~ from being
+    injected as text, which can happen with certain terminal emulators
+    or text sources.
+
+    Args:
+        text: Text that may contain escape sequences.
+
+    Returns:
+        Cleaned text with only printable characters and common whitespace.
+    """
+    # Remove ANSI escape sequences (ESC [ ... or ESC followed by other sequences)
+    # Pattern matches: ESC [ ... (CSI sequences), ESC ] ... (OSC), etc.
+    text = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)  # CSI sequences
+    text = re.sub(r'\x1b\][^\x07]*\x07', '', text)     # OSC sequences ending with BEL
+    text = re.sub(r'\x1b\][^\x1b]*\x1b\\', '', text)   # OSC sequences ending with ST
+    text = re.sub(r'\x1b[^[]', '', text)               # Other ESC sequences
+
+    # Remove other common terminal control sequences
+    # Pattern for bracketed paste mode and similar: [numbers~
+    text = re.sub(r'\[[0-9;]+~', '', text)
+
+    # Remove all control characters except common whitespace (tab, newline, carriage return)
+    # Keep: \t (09), \n (0A), \r (0D), space and printable chars
+    text = ''.join(
+        char for char in text
+        if char in ('\t', '\n', '\r') or (ord(char) >= 32 and ord(char) != 127)
+    )
+
+    return text
 
 
 class TextInjector(ABC):

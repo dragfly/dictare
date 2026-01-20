@@ -81,7 +81,12 @@ class VoxtypeApp:
         self.agents = agents or []
         self._state_manager = StateManager()
         self._running = False
-        self._console = Console()
+        self._console = Console(
+            force_terminal=None,  # Auto-detect
+            force_interactive=None,  # Auto-detect
+            legacy_windows=False,  # Use modern terminal codes
+            safe_box=True,  # Use safe box drawing chars for compatibility
+        )
         self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
 

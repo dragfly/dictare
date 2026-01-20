@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import time
 
-from voxtype.injection.base import TextInjector
+from voxtype.injection.base import TextInjector, sanitize_text_for_injection
 
 # Key codes for ydotool
 KEY_LEFTCTRL = 29
@@ -101,6 +101,9 @@ class YdotoolInjector(TextInjector):
             self._ydotool_path = shutil.which("ydotool")
             if not self._ydotool_path:
                 return False
+
+        # Sanitize text to remove any escape sequences or control characters
+        text = sanitize_text_for_injection(text)
 
         # Handle newline at end based on auto_enter mode
         has_newline = text.endswith("\n")

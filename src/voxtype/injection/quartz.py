@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 
-from voxtype.injection.base import TextInjector
+from voxtype.injection.base import TextInjector, sanitize_text_for_injection
 
 
 class QuartzInjector(TextInjector):
@@ -71,6 +72,10 @@ class QuartzInjector(TextInjector):
         except ImportError:
             return False
 
+        # Sanitize text to remove any escape sequences or control characters
+        # that might have been captured (e.g., from terminal emulators like Ghostty)
+        text = sanitize_text_for_injection(text)
+
         # Handle newline based on auto_enter mode
         has_newline = text.endswith("\n")
         send_enter = has_newline and auto_enter
@@ -116,11 +121,14 @@ class QuartzInjector(TextInjector):
         return "macos-quartz"
 
     def send_newline(self) -> bool:
-        """Send visual newline using Shift+Return.
+        """Send visual newline using Option+Return (Alt+Enter).
 
-        Shift+Return is interpreted as newline-without-submit in most apps
-        (Slack, Discord, web forms, etc). In plain terminals it may still
-        act as Enter, but that's unavoidable.
+        Option+Return works more reliably across different terminal emulators
+        than Shift+Return, particularly with Ghostty which has issues with
+        programmatic Shift+Return generating escape sequences.
+
+        Works in: iTerm2, Terminal.app, Ghostty, Alacritty, WezTerm, etc.
+        In chat apps (Slack, Discord), may behave differently - test as needed.
         """
         try:
             from Quartz import (
@@ -128,7 +136,7 @@ class QuartzInjector(TextInjector):
                 CGEventPost,
                 CGEventSetFlags,
                 CGEventSourceCreate,
-                kCGEventFlagMaskShift,
+                kCGEventFlagMaskAlternate,
                 kCGEventSourceStateHIDSystemState,
                 kCGSessionEventTap,
             )
@@ -140,9 +148,10 @@ class QuartzInjector(TextInjector):
             if source is None:
                 return False
 
-            # Key code 36 = Return with Shift modifier
+            # Use Option+Return (Alt+Enter) for all terminals
+            # Key code 36 = Return with Option/Alt modifier
             event_down = CGEventCreateKeyboardEvent(source, 36, True)
-            CGEventSetFlags(event_down, kCGEventFlagMaskShift)
+            CGEventSetFlags(event_down, kCGEventFlagMaskAlternate)
             CGEventPost(kCGSessionEventTap, event_down)
 
             event_up = CGEventCreateKeyboardEvent(source, 36, False)
