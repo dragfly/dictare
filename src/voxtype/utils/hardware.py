@@ -80,6 +80,59 @@ def setup_cuda_library_path() -> None:
                     os.environ["LD_LIBRARY_PATH"] = new_paths
             break
 
+def is_virtualized_macos() -> bool:
+    """Detect if running in a virtualized macOS environment (UTM, Parallels, VMware, etc.).
+
+    Returns:
+        True if running in a VM, False otherwise.
+    """
+    if sys.platform != "darwin":
+        return False
+
+    try:
+        import subprocess
+
+        # Check for virtualization using sysctl
+        result = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        cpu_brand = result.stdout.strip().lower()
+
+        # Common virtualization indicators in CPU brand
+        vm_indicators = ["virtual", "qemu", "kvm"]
+        if any(indicator in cpu_brand for indicator in vm_indicators):
+            return True
+
+        # Check for hypervisor using sysctl (macOS-specific)
+        result = subprocess.run(
+            ["sysctl", "-n", "kern.hv_support"],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        # kern.hv_support exists but being in a VM is different
+        # Let's check ioreg for VM devices
+        result = subprocess.run(
+            ["ioreg", "-l"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        ioreg_output = result.stdout.lower()
+
+        # Check for common VM device identifiers
+        vm_devices = ["vmware", "parallels", "virtualbox", "qemu", "utm", "apple virtualization"]
+        if any(device in ioreg_output for device in vm_devices):
+            return True
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+        pass
+
+    return False
+
 def get_best_device() -> str:
     """Detect the best available device for STT.
 
