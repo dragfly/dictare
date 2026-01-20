@@ -1,0 +1,28 @@
+❯ voxtype listen --language it
+Loading STT model (large-v3-turbo)...
+Fetching 4 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00, 63550.06it/s]
+Download complete: : 0.00B [00:00, ?B/s]                                                                                                             | 0/4 [00:00<?, ?it/s]
+
+Loading VAD model...
+╭─────────────────────────────── Ready ───────────────────────────────╮
+│ voxtype v2.15.3                                                     │
+│                                                                     │
+│ Mode: transcription (fast)                                          │
+│ STT: large-v3-turbo on MLX (Apple Silicon)                          │
+│ Language: it                                                        │
+│ Output: keyboard                                                    │
+│                                                                     │
+│ Hotkey: ⌘ (Command) tap: toggle listening | double-tap: switch mode │
+│ Press Ctrl+C to exit                                                │
+╰─────────────────────────────────────────────────────────────────────╯
+>>> LISTENING ON (TRANSCRIPTION mode)
+Error:  Unable to load kernel steel_gemm_fused_nax_nt_float32_float32_bm128_bn128_bk512_wm4_wn4_has_batch_n_use_out_source_n_do_axpby_n_align_M_n_align_N_t_align_K_n
+error: unsupported deferred-static-alloca-size function body in
+_ZN5metal18cooperative_tensorIfNS_7extentsIiJLm18446744073709551615ELm18446744073709551615EEEEN3mpp10tensor_ops17__mutmul2d_detail16__operand_layoutIXtlNS4_19matmul2d_desc
+riptorELi16ELi32ELi16ELb0ELb1ELb1ELNS7_4modeE1EEELNS5_36__matmul2d_cooperative_operand_indexE0ENS_20execution_simdgroupsILm1EEEfffiJEEEEE.MTL_SIZEAS
+error: unsupported deferred-static-alloca-size function body in
+_ZN5metal18cooperative_tensorIfNS_7extentsIiJLm18446744073709551615ELm18446744073709551615EEEEN3mpp10tensor_ops17__mutmul2d_detail16__operand_layoutIXtlNS4_19matmul2d_desc
+riptorELi16ELi32ELi16ELb0ELb1ELb1ELNS7_4modeE1EEELNS5_36__matmul2d_cooperative_operand_indexE1ENS_20execution_simdgroupsILm1EEEfffiJEEEEE.MTL_SIZEAS
+error: unsupported deferred-static-alloca-size function body in
+_ZN5metal18cooperative_tensorIfNS_7extentsIiJLm18446744073709551615ELm18446744073709551615EEEEN3mpp10tensor_ops17__mutmul2d_detail16__operand_layoutIXtlNS4_19matmul2d_desc
+riptorELi16ELi32ELi16ELb0ELb1ELb1ELNS7_4modeE1EEELNS5_36__matmul2d_cooperative_operand_indexE2ENS_20execution_simdgroupsILm1EEEfffiJEEEEE.MTL_SIZEAS

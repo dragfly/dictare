@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.0] - 2026-01-20
+
+### Fixed
+- **Virtualized macOS detection**: Automatically detect and disable MLX acceleration in VM environments (UTM, Parallels, VMware)
+  - Prevents Metal kernel errors (`unsupported deferred-static-alloca-size`)
+  - Shows clear warning message when VM is detected
+- **Ghostty terminal newline**: Changed from Shift+Return to Alt+Return (Option+Return) for visual newlines
+  - Fixes escape sequence bug `[27;2;13~` appearing at end of lines in Ghostty
+  - More reliable across all macOS terminal emulators (iTerm2, Terminal.app, Alacritty, WezTerm)
+- **Terminal compatibility**: Improved Rich Console initialization for better compatibility across terminals
+  - Added `safe_box=True` for safer box drawing characters
+  - Better handling of terminal capabilities
+
+### Added
+- **Escape sequence sanitization**: Defense layer that filters ANSI escape sequences and control characters from injected text
+  - Prevents spurious escape codes from appearing in typed text
+  - Preserves Unicode, whitespace, and newlines
+- **Documentation**: Added `TERMINAL_COMPATIBILITY.md` and `GHOSTTY_NEWLINE_FIX.md` guides
+
 ## [2.15.3] - 2026-01-17
 
 ### Fixed

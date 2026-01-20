@@ -33,7 +33,12 @@ app = typer.Typer(
 # Completion subcommand
 completion_app = typer.Typer(help="Manage shell completion")
 app.add_typer(completion_app, name="completion")
-console = Console()
+console = Console(
+    force_terminal=None,  # Auto-detect
+    force_interactive=None,  # Auto-detect
+    legacy_windows=False,  # Use modern terminal codes
+    safe_box=True,  # Use safe box drawing chars for compatibility
+)
 
 # Shell completion paths by shell type
 COMPLETION_PATHS = {
@@ -155,12 +160,22 @@ def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
         config: The configuration object to update
         cpu_only: If True, skip detection and force CPU
     """
-    from voxtype.utils.hardware import is_cuda_available, is_mlx_available, setup_cuda_library_path
+    from voxtype.utils.hardware import is_cuda_available, is_mlx_available, is_virtualized_macos, setup_cuda_library_path
 
     # If cpu_only flag is set, force CPU and skip detection
     if cpu_only:
         config.stt.device = "cpu"
         config.stt.compute_type = "int8"
+        return
+
+    # Check if running in a VM on macOS - disable MLX if so
+    if is_virtualized_macos():
+        config.stt.device = "cpu"
+        config.stt.compute_type = "int8"
+        config.stt.hw_accel = False
+        # Inform user about VM detection (will be shown before "Ready" panel)
+        console.print("[yellow]⚠ Virtualized macOS detected - hardware acceleration disabled[/]")
+        console.print("[dim]MLX Metal kernels are not compatible with virtualized environments.[/]")
         return
 
     # Only auto-detect if device is "auto"
@@ -1213,7 +1228,13 @@ def _check_python_environment() -> None:
             from rich.console import Console
             from rich.panel import Panel
 
-            console = Console(stderr=True)
+            console = Console(
+                stderr=True,
+                force_terminal=None,
+                force_interactive=None,
+                legacy_windows=False,
+                safe_box=True,
+            )
 
             if is_pyenv_shim:
                 msg = (
