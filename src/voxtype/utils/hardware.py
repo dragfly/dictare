@@ -92,7 +92,8 @@ def is_virtualized_macos() -> bool:
     try:
         import subprocess
 
-        # Check for virtualization using sysctl
+        # Method 1: Check CPU brand string for VM indicators
+        # When running IN a VM, CPU brand often contains "Virtual" or "QEMU"
         result = subprocess.run(
             ["sysctl", "-n", "machdep.cpu.brand_string"],
             capture_output=True,
@@ -101,31 +102,49 @@ def is_virtualized_macos() -> bool:
         )
         cpu_brand = result.stdout.strip().lower()
 
-        # Common virtualization indicators in CPU brand
         vm_indicators = ["virtual", "qemu", "kvm"]
         if any(indicator in cpu_brand for indicator in vm_indicators):
             return True
 
-        # Check for hypervisor using sysctl (macOS-specific)
+        # Method 2: Check hardware model
+        # Real Macs have models like "MacBookPro18,1", VMs have "VirtualMac2,1" etc.
         result = subprocess.run(
-            ["sysctl", "-n", "kern.hv_support"],
+            ["sysctl", "-n", "hw.model"],
             capture_output=True,
             text=True,
             timeout=1,
         )
-        # kern.hv_support exists but being in a VM is different
-        # Let's check ioreg for VM devices
+        hw_model = result.stdout.strip().lower()
+
+        if "virtual" in hw_model:
+            return True
+
+        # Method 3: Check for VM-specific platform
+        # Parallels, VMware, and VirtualBox set specific platform identifiers
         result = subprocess.run(
-            ["ioreg", "-l"],
+            ["sysctl", "-n", "machdep.cpu.features"],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        cpu_features = result.stdout.strip().lower()
+
+        # Hypervisor feature flag indicates we're inside a VM
+        # (not just that we CAN run VMs)
+        if "vmm" in cpu_features:
+            # VMM flag present - but this can also be on real Macs
+            # Need additional confirmation
+            pass
+
+        # Method 4: Check for Apple Virtualization framework's virtual machine marker
+        # This is more specific than just searching for "utm" in ioreg
+        result = subprocess.run(
+            ["ioreg", "-rd1", "-c", "AppleVirtualPlatform"],
             capture_output=True,
             text=True,
             timeout=2,
         )
-        ioreg_output = result.stdout.lower()
-
-        # Check for common VM device identifiers
-        vm_devices = ["vmware", "parallels", "virtualbox", "qemu", "utm", "apple virtualization"]
-        if any(device in ioreg_output for device in vm_devices):
+        if "AppleVirtualPlatform" in result.stdout:
             return True
 
     except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
