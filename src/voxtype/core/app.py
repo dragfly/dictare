@@ -74,6 +74,9 @@ class VoxtypeApp:
         # Lock for STT engine (MLX is not thread-safe)
         self._stt_lock = threading.Lock()
 
+        # Lock for thread-safe access to _listening and _running flags
+        self._state_lock = threading.Lock()
+
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
@@ -710,21 +713,22 @@ class VoxtypeApp:
 
     def _toggle_listening(self) -> None:
         """Toggle listening on/off."""
-        if self._listening:
-            # Turning OFF: disable first, then show message
-            self._listening = False
-            self._console.print("[bold red]<<< LISTENING OFF[/]")
-            self._play_feedback("listening_off")
-        else:
-            # Turning ON: show message first, then enable
-            # This ensures user sees feedback before audio processing starts
-            self._console.print("[bold green]>>> LISTENING ON[/]")
-            self._play_feedback("listening_on")
-            self._listening = True
+        with self._state_lock:
+            if self._listening:
+                # Turning OFF: disable first, then show message
+                self._listening = False
+                self._console.print("[bold red]<<< LISTENING OFF[/]")
+                self._play_feedback("listening_off")
+            else:
+                # Turning ON: show message first, then enable
+                # This ensures user sees feedback before audio processing starts
+                self._console.print("[bold green]>>> LISTENING ON[/]")
+                self._play_feedback("listening_on")
+                self._listening = True
 
-        # Sync LLM processor state if available
-        if self._llm_processor:
-            self._llm_processor.set_listening(self._listening)
+            # Sync LLM processor state if available
+            if self._llm_processor:
+                self._llm_processor.set_listening(self._listening)
 
     def _switch_processing_mode(self) -> None:
         """Switch between transcription and command mode."""
@@ -802,9 +806,10 @@ class VoxtypeApp:
             # Pause listening if mute_mic enabled
             was_listening = False
             if mute_mic:
-                was_listening = self._listening
-                if was_listening:
-                    self._listening = False
+                with self._state_lock:
+                    was_listening = self._listening
+                    if was_listening:
+                        self._listening = False
 
             try:
                 if sys.platform == "darwin":
@@ -826,7 +831,8 @@ class VoxtypeApp:
             finally:
                 # Resume listening if we paused it
                 if mute_mic and was_listening:
-                    self._listening = True
+                    with self._state_lock:
+                        self._listening = True
 
         # Always run in background thread to not block keyboard callbacks
         threading.Thread(target=_speak, daemon=True).start()
@@ -942,7 +948,8 @@ class VoxtypeApp:
         if status_panel:
             self._console.print(status_panel)
 
-        self._running = True
+        with self._state_lock:
+            self._running = True
         self._stats_start_time = time.time()
         # Note: _listening stays False until we're fully ready
 
@@ -964,7 +971,8 @@ class VoxtypeApp:
         self._console.print(f"[bold green]>>> LISTENING ON[/] [dim]({mode_name} mode)[/]")
 
         # Now enable listening and start audio streaming
-        self._listening = True
+        with self._state_lock:
+            self._listening = True
         # Sync LLM processor state
         if self._llm_processor:
             self._llm_processor.set_listening(True)
@@ -1016,23 +1024,24 @@ class VoxtypeApp:
 
     def _set_listening(self, on: bool) -> None:
         """Set listening state on/off."""
-        if self._listening == on:
-            return
+        with self._state_lock:
+            if self._listening == on:
+                return
 
-        if on:
-            # Turning ON: show message first, then enable
-            self._console.print("[bold green]>>> LISTENING ON[/]")
-            self._play_feedback("listening_on")
-            self._listening = True
-        else:
-            # Turning OFF: disable first, then show message
-            self._listening = False
-            self._console.print("[bold red]<<< LISTENING OFF[/]")
-            self._play_feedback("listening_off")
+            if on:
+                # Turning ON: show message first, then enable
+                self._console.print("[bold green]>>> LISTENING ON[/]")
+                self._play_feedback("listening_on")
+                self._listening = True
+            else:
+                # Turning OFF: disable first, then show message
+                self._listening = False
+                self._console.print("[bold red]<<< LISTENING OFF[/]")
+                self._play_feedback("listening_off")
 
-        # Sync LLM processor state if available
-        if self._llm_processor:
-            self._llm_processor.set_listening(on)
+            # Sync LLM processor state if available
+            if self._llm_processor:
+                self._llm_processor.set_listening(on)
 
     def _switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent.
@@ -1145,9 +1154,10 @@ class VoxtypeApp:
             # Pause listening if mute_mic enabled (do this in the thread)
             was_listening = False
             if mute_mic:
-                was_listening = self._listening
-                if was_listening:
-                    self._listening = False
+                with self._state_lock:
+                    was_listening = self._listening
+                    if was_listening:
+                        self._listening = False
 
             try:
                 if sys.platform == "darwin":
@@ -1169,7 +1179,8 @@ class VoxtypeApp:
             finally:
                 # Resume listening if we paused it
                 if mute_mic and was_listening:
-                    self._listening = True
+                    with self._state_lock:
+                        self._listening = True
 
         # Always run in background thread - never block keyboard callbacks
         threading.Thread(target=_speak, daemon=True).start()
@@ -1219,8 +1230,9 @@ class VoxtypeApp:
         """Stop the application."""
         import gc
 
-        self._running = False
-        self._listening = False  # Stop processing new audio immediately
+        with self._state_lock:
+            self._running = False
+            self._listening = False  # Stop processing new audio immediately
 
         # Close audio/VAD - AudioManager uses lock to ensure no callbacks are in-flight
         if self._audio_manager:
@@ -1247,8 +1259,11 @@ class VoxtypeApp:
     def _display_session_stats(self) -> None:
         """Display session statistics on exit."""
         import random
+        from datetime import datetime
 
         from rich.table import Table
+
+        from voxtype.utils.stats import update_stats
 
         # Skip if no transcriptions were made
         if self._stats_count == 0:
@@ -1275,10 +1290,21 @@ class VoxtypeApp:
         time_saved_minutes = typing_time_minutes - total_voxtype_minutes
         time_saved_seconds = time_saved_minutes * 60
 
-        # Create two-column stats layout
+        # Update persistent stats
+        lifetime = update_stats(
+            transcriptions=self._stats_count,
+            words=self._stats_words,
+            chars=self._stats_chars,
+            audio_seconds=self._stats_audio_seconds,
+            transcription_seconds=self._stats_transcription_seconds,
+            injection_seconds=self._stats_injection_seconds,
+            time_saved_seconds=max(0, time_saved_seconds),
+        )
+
+        # Create two-column stats layout (Session | Timing)
         from rich.columns import Columns
 
-        # Left table: human-friendly stats
+        # Left table: session output stats
         left_table = Table(title="Output", expand=False, show_header=False, box=None)
         left_table.add_column("Metric", style="dim")
         left_table.add_column("Value", style="cyan")
@@ -1287,19 +1313,19 @@ class VoxtypeApp:
         left_table.add_row("Characters", str(self._stats_chars))
         left_table.add_row("Effective WPM", f"{effective_wpm:.0f}")
 
-        # Right table: technical timing stats
+        # Right table: timing stats
         right_table = Table(title="Timing", expand=False, show_header=False, box=None)
         right_table.add_column("Metric", style="dim")
         right_table.add_column("Value", style="cyan")
         right_table.add_row("Audio", f"{self._stats_audio_seconds:.1f}s")
         right_table.add_row("STT", f"{self._stats_transcription_seconds:.1f}s")
         right_table.add_row("Injection", f"{self._stats_injection_seconds:.1f}s")
-        right_table.add_row("Total", f"{total_voxtype_seconds:.1f}s")
+        right_table.add_row("Processing", f"{total_voxtype_seconds:.1f}s")
 
         self._console.print()
         self._console.print(Columns([left_table, right_table], padding=(0, 4)))
 
-        # Fun phrases for time saved (shown after the table)
+        # Fun phrases for session time saved
         if time_saved_seconds > 0:
             time_saved_phrases = [
                 "Saved you [bold]{time}[/]. You're welcome.",
@@ -1314,7 +1340,7 @@ class VoxtypeApp:
                 "[bold]{time}[/] unlocked. Perfect for a random act of kindness.",
             ]
 
-            # Format time saved
+            # Format session time saved
             if time_saved_seconds >= 60:
                 time_str = f"{time_saved_minutes:.1f} minutes"
             else:
@@ -1324,4 +1350,31 @@ class VoxtypeApp:
             phrase = random.choice(time_saved_phrases).format(time=time_str)
             self._console.print()
             self._console.print(f"[green bold]✨ {phrase} ✨[/]")
-            self._console.print()
+
+        # Lifetime stats line
+        lifetime_saved = lifetime["total_time_saved_seconds"]
+        if lifetime_saved >= 3600:
+            lifetime_time_str = f"{lifetime_saved / 3600:.1f} hours"
+        elif lifetime_saved >= 60:
+            lifetime_time_str = f"{lifetime_saved / 60:.0f} minutes"
+        else:
+            lifetime_time_str = f"{lifetime_saved:.0f} seconds"
+
+        # Build lifetime summary with first use date if available
+        sessions_str = f"{lifetime['sessions']} session" if lifetime['sessions'] == 1 else f"{lifetime['sessions']} sessions"
+        if lifetime["first_use"]:
+            try:
+                first_use = datetime.fromisoformat(lifetime["first_use"])
+                since_str = first_use.strftime("%b %d, %Y")
+                self._console.print(
+                    f"[dim]All time: [green]{lifetime_time_str}[/] saved across {sessions_str} (since {since_str})[/]"
+                )
+            except ValueError:
+                self._console.print(
+                    f"[dim]All time: [green]{lifetime_time_str}[/] saved across {sessions_str}[/]"
+                )
+        else:
+            self._console.print(
+                f"[dim]All time: [green]{lifetime_time_str}[/] saved across {sessions_str}[/]"
+            )
+        self._console.print()
