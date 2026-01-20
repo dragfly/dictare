@@ -117,7 +117,9 @@ def _read_from_file(filepath: str, master_fd: int, stop_event: threading.Event) 
                         time.sleep(0.01)
                         os.write(master_fd, ENTER)
                 else:
+                    # No new data - refresh file buffer to see new writes
                     time.sleep(0.1)
+                    f.seek(f.tell())
     except (BrokenPipeError, IOError, OSError):
         pass
 

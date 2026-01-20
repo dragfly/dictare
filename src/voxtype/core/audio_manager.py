@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from queue import Empty, Queue
 from typing import TYPE_CHECKING, Callable
 
 from rich.console import Console
@@ -50,8 +51,8 @@ class AudioManager:
         # Prevents race condition where callback uses VAD while close() deletes it
         self._vad_lock = threading.Lock()
 
-        # Audio queue for buffered speech during transcription
-        self._audio_queue: list = []
+        # Audio queue for buffered speech during transcription (thread-safe)
+        self._audio_queue: Queue = Queue()
 
         # Callbacks
         self._on_speech_start: Callable[[], None] | None = None
@@ -232,7 +233,7 @@ class AudioManager:
         Args:
             audio_data: Audio data to queue
         """
-        self._audio_queue.append(audio_data)
+        self._audio_queue.put(audio_data)
 
     def pop_queued_audio(self) -> object | None:
         """Pop first audio from queue.
@@ -240,23 +241,28 @@ class AudioManager:
         Returns:
             Audio data or None if queue is empty
         """
-        if self._audio_queue:
-            return self._audio_queue.pop(0)
-        return None
+        try:
+            return self._audio_queue.get_nowait()
+        except Empty:
+            return None
 
     def clear_queue(self) -> None:
         """Clear audio queue."""
-        self._audio_queue.clear()
+        while True:
+            try:
+                self._audio_queue.get_nowait()
+            except Empty:
+                break
 
     @property
     def has_queued_audio(self) -> bool:
         """Check if there's queued audio."""
-        return bool(self._audio_queue)
+        return not self._audio_queue.empty()
 
     @property
     def queued_count(self) -> int:
         """Get number of queued audio items."""
-        return len(self._audio_queue)
+        return self._audio_queue.qsize()
 
     @property
     def sample_rate(self) -> int:
