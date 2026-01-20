@@ -121,14 +121,22 @@ class QuartzInjector(TextInjector):
         return "macos-quartz"
 
     def send_newline(self) -> bool:
-        """Send visual newline using Option+Return (Alt+Enter).
+        """Send visual newline using Shift+Return.
 
-        Option+Return works more reliably across different terminal emulators
-        than Shift+Return, particularly with Ghostty which has issues with
-        programmatic Shift+Return generating escape sequences.
+        Shift+Return is the standard "newline without submit" in most apps:
+        - Chat apps (Slack, Discord, Teams): newline ✓
+        - LLM UIs (ChatGPT, Claude web): newline ✓
+        - Editors (VSCode, etc.): newline ✓
+        - iTerm2, Terminal.app: newline ✓
 
-        Works in: iTerm2, Terminal.app, Ghostty, Alacritty, WezTerm, etc.
-        In chat apps (Slack, Discord), may behave differently - test as needed.
+        Known limitations:
+        - Ghostty: requires keybind config, and even then programmatic
+          injection may not trigger it. See ISSUE_NEWLINE_ESCAPE.md
+        - Terminals with Option=Meta: may generate ESC prefix
+
+        For terminal prompt use, newline and submit are effectively the same
+        (both execute the command), so this distinction mainly matters for
+        chat apps and editors.
         """
         try:
             from Quartz import (
@@ -136,7 +144,7 @@ class QuartzInjector(TextInjector):
                 CGEventPost,
                 CGEventSetFlags,
                 CGEventSourceCreate,
-                kCGEventFlagMaskAlternate,
+                kCGEventFlagMaskShift,
                 kCGEventSourceStateHIDSystemState,
                 kCGSessionEventTap,
             )
@@ -148,10 +156,9 @@ class QuartzInjector(TextInjector):
             if source is None:
                 return False
 
-            # Use Option+Return (Alt+Enter) for all terminals
-            # Key code 36 = Return with Option/Alt modifier
+            # Shift+Return (keycode 36 with Shift modifier)
             event_down = CGEventCreateKeyboardEvent(source, 36, True)
-            CGEventSetFlags(event_down, kCGEventFlagMaskAlternate)
+            CGEventSetFlags(event_down, kCGEventFlagMaskShift)
             CGEventPost(kCGSessionEventTap, event_down)
 
             event_up = CGEventCreateKeyboardEvent(source, 36, False)
