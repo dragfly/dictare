@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voxtype"
-version = "2.16.0"
+version = "2.16.1"
 description = "Voice-to-text for your terminal"
 readme = "README.md"
 license = "MIT"
@@ -34,6 +34,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "faster-whisper>=1.0.0",
     "toml>=0.10.0",
+    "rich>=13.0.0",  # Console output, tables, progress bars
     # Platform-specific dependencies
     "evdev>=1.7.0; sys_platform == 'linux'",
     "pynput>=1.7.0; sys_platform == 'darwin'",
