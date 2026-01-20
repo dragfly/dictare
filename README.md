@@ -46,6 +46,30 @@ voxtype devices             # List input devices
 
 See [docs/](docs/) for device profiles, configuration, and advanced usage.
 
+## Development
+
+```bash
+git clone https://github.com/dragfly/voxtype && cd voxtype
+
+# macOS Apple Silicon (with MLX GPU acceleration)
+uv sync --python 3.11 --extra mlx
+uv run --python 3.11 voxtype listen
+
+# macOS Intel / Linux
+uv sync --python 3.11
+uv run --python 3.11 voxtype listen
+```
+
+> **Note**: Python 3.11 is required for MLX/torch compatibility. Always use `--python 3.11` explicitly with ALL uv commands (sync, run, etc.).
+
+### Ghostty Terminal
+
+If using Ghostty, add to `~/.config/ghostty/config`:
+```
+keybind = shift+enter=text:\n
+```
+This fixes Shift+Enter for multi-line input. See [TERMINAL_COMPATIBILITY.md](TERMINAL_COMPATIBILITY.md) for details.
+
 ## License
 
 MIT
