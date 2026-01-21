@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voxtype"
-version = "2.18.3"
+dynamic = ["version"]
 description = "Voice-to-text for your terminal"
 readme = "README.md"
 license = "MIT"
@@ -75,6 +75,9 @@ Issues = "https://github.com/dragfly/voxtype/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/voxtype"]
+
+[tool.hatch.version]
+path = "src/voxtype/__init__.py"
 
 [tool.ruff]
 line-length = 100
