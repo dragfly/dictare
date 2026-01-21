@@ -112,21 +112,22 @@ def get_agent_file(agent_id: str, output_dir: str | None = None) -> str:
 
 
 def create_agent_file(agent_id: str, output_dir: str | None = None) -> str:
-    """Create an empty agent file.
+    """Ensure agent file exists (create if missing, preserve if exists).
 
     Args:
         agent_id: Agent identifier.
         output_dir: Directory for agent files.
 
     Returns:
-        Path to the created file.
+        Path to the file.
     """
     filepath = get_agent_file(agent_id, output_dir)
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
-    # Create empty file (or truncate if exists)
-    with open(filepath, "w") as f:
-        pass
+    # Create file only if it doesn't exist - NEVER truncate existing content
+    # The file is written by voxtype listen, we are just a reader
+    if not Path(filepath).exists():
+        Path(filepath).touch()
 
     return filepath
 
@@ -247,6 +248,23 @@ def _read_from_file(
             _log_event(session_path, "reader_error", {"error": str(e)})
 
 
+def _write_all(fd: int, data: bytes) -> int:
+    """Write all bytes to fd, handling short writes.
+
+    os.write() can return fewer bytes than requested if the buffer is full.
+    This function loops until all bytes are written.
+
+    Returns total bytes written, raises on error.
+    """
+    total_written = 0
+    while total_written < len(data):
+        written = os.write(fd, data[total_written:])
+        if written == 0:
+            raise OSError("write() returned 0 - cannot make progress")
+        total_written += written
+    return total_written
+
+
 def _write_to_pty(
     master_fd: int,
     write_queue: queue.Queue,
@@ -275,22 +293,13 @@ def _write_to_pty(
 
         try:
             if msg_type == "raw":
-                # Raw bytes from stdin - write directly
-                os.write(master_fd, data)
+                # Raw bytes from stdin - write directly, handle short writes
+                _write_all(master_fd, data)
             elif msg_type == "msg":
                 msg_count += 1
                 # Parsed JSONL message from file
                 text = data.get("text", "")
-
-                # Log message being sent
-                if session_path:
-                    _log_event(session_path, "msg_sent", {
-                        "seq": msg_count,
-                        "text": text[:50],
-                        "writer_ts": data.get("ts"),
-                        "writer_v": data.get("v"),
-                        "keystrokes": keystroke_counter.count if keystroke_counter else 0,
-                    })
+                bytes_written = 0
 
                 if text:
                     has_visual_newline = text.endswith("\n")
@@ -298,21 +307,37 @@ def _write_to_pty(
                         text = text.rstrip("\n")
 
                     if text:
-                        os.write(master_fd, text.encode())
-                        time.sleep(0.005)
+                        text_bytes = text.encode()
+                        bytes_written += _write_all(master_fd, text_bytes)
+                        # Drain to ensure bytes reach slave side
+                        termios.tcdrain(master_fd)
+                        time.sleep(0.1)  # 100ms delay for Claude Code to process
 
                     # Send Alt+Enter for visual newline
                     if has_visual_newline:
-                        os.write(master_fd, ALT_ENTER)
-                        time.sleep(0.005)
+                        bytes_written += _write_all(master_fd, ALT_ENTER)
+                        termios.tcdrain(master_fd)
+                        time.sleep(0.1)  # 100ms delay
 
                 # Handle submit flag
                 if data.get("submit"):
                     time.sleep(0.01)
-                    os.write(master_fd, ENTER)
+                    bytes_written += _write_all(master_fd, ENTER)
+                    termios.tcdrain(master_fd)
+
+                # Log message AFTER successful write AND drain
+                if session_path:
+                    _log_event(session_path, "msg_sent", {
+                        "seq": msg_count,
+                        "text": data.get("text", "")[:50],
+                        "bytes": bytes_written,
+                        "writer_ts": data.get("ts"),
+                        "writer_v": data.get("v"),
+                        "keystrokes": keystroke_counter.count if keystroke_counter else 0,
+                    })
         except (BrokenPipeError, IOError, OSError) as e:
             if session_path:
-                _log_event(session_path, "writer_error", {"error": str(e)})
+                _log_event(session_path, "writer_error", {"error": str(e), "msg_count": msg_count})
             break
 
 
