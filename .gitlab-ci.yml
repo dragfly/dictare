@@ -18,7 +18,7 @@ cache:
 .python_base:
   image: python:3.11-slim
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends git
+    - apt-get update && apt-get install -y --no-install-recommends git linux-libc-dev
     - pip install uv
     - uv venv .venv
     - . .venv/bin/activate
