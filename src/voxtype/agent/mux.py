@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import pty
+import queue
 import select
 import signal
 import struct
@@ -111,8 +112,10 @@ def create_agent_file(agent_id: str, output_dir: str | None = None) -> str:
     return filepath
 
 
-def _read_from_stdin(master_fd: int, stop_event: threading.Event) -> None:
-    """Read from keyboard in raw mode and send to process via PTY."""
+def _read_from_stdin(
+    write_queue: queue.Queue, stop_event: threading.Event
+) -> None:
+    """Read from keyboard in raw mode and put data in queue."""
     try:
         while not stop_event.is_set():
             r, _, _ = select.select([sys.stdin.fileno()], [], [], 0.1)
@@ -120,86 +123,98 @@ def _read_from_stdin(master_fd: int, stop_event: threading.Event) -> None:
                 data = os.read(sys.stdin.fileno(), 1024)
                 if not data:
                     break
-                os.write(master_fd, data)
+                # Put raw bytes directly in queue
+                write_queue.put(("raw", data))
     except (BrokenPipeError, IOError, OSError):
         pass
 
 
-def _read_from_file(filepath: str, master_fd: int, stop_event: threading.Event) -> None:
-    """Monitor file and send new data to process via PTY.
+def _read_from_file(
+    filepath: str, write_queue: queue.Queue, stop_event: threading.Event
+) -> None:
+    """Monitor file and put parsed messages in queue.
 
     JSONL Protocol from voxtype:
     - {"text": "hello"}                 -> type "hello"
-    - {"text": "hello\\n"}              -> type "hello" + Shift+Enter (visual newline)
+    - {"text": "hello\\n"}              -> type "hello" + Alt+Enter (visual newline)
     - {"text": "hello", "submit": true} -> type "hello" + Enter
     - {"submit": true}                  -> just Enter
 
-    Uses unbuffered I/O (os.read) to avoid Python file buffer caching issues
-    that can cause race conditions when the file is being written to rapidly.
+    Uses simple Python readline() which works reliably for append-only files.
     """
-    # Shift+Enter for visual newline (works in most apps)
-    SHIFT_ENTER = b"\x1b[13;2u"  # CSI sequence for Shift+Enter
-    # Fallback: Alt+Enter (ESC + CR)
+    try:
+        with open(filepath, "r") as f:
+            # Seek to end of file (tail -f style)
+            f.seek(0, os.SEEK_END)
+
+            while not stop_event.is_set():
+                line = f.readline()
+                if line:
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    try:
+                        msg = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    # Put parsed message in queue for processing
+                    write_queue.put(("msg", msg))
+                else:
+                    # No new data - small sleep then retry
+                    time.sleep(0.05)
+    except (BrokenPipeError, IOError, OSError):
+        pass
+
+
+def _write_to_pty(
+    master_fd: int, write_queue: queue.Queue, stop_event: threading.Event
+) -> None:
+    """Consume from queue and write to PTY.
+
+    This is the ONLY thread that writes to master_fd, ensuring serialization.
+    """
+    # Alt+Enter for visual newline (ESC + CR)
     ALT_ENTER = b"\x1b\r"
     ENTER = b"\r"
 
-    # Buffer for incomplete lines (race condition fix: writer may be mid-write)
-    line_buffer = b""
-
-    try:
-        # Use unbuffered I/O to avoid Python's file buffer caching
-        fd = os.open(filepath, os.O_RDONLY)
+    while not stop_event.is_set():
         try:
-            # Seek to end of file (tail -f style)
-            os.lseek(fd, 0, os.SEEK_END)
+            # Block with timeout so we can check stop_event
+            item = write_queue.get(timeout=0.1)
+        except queue.Empty:
+            continue
 
-            while not stop_event.is_set():
-                # Read available data (unbuffered - direct from kernel)
-                chunk = os.read(fd, 4096)
-                if chunk:
-                    line_buffer += chunk
+        msg_type, data = item
 
-                    # Process all complete lines in buffer
-                    while b"\n" in line_buffer:
-                        line_bytes, line_buffer = line_buffer.split(b"\n", 1)
-                        line = line_bytes.decode("utf-8", errors="replace").strip()
+        try:
+            if msg_type == "raw":
+                # Raw bytes from stdin - write directly
+                os.write(master_fd, data)
+            elif msg_type == "msg":
+                # Parsed JSONL message from file
+                text = data.get("text", "")
+                if text:
+                    has_visual_newline = text.endswith("\n")
+                    if has_visual_newline:
+                        text = text.rstrip("\n")
 
-                        if not line:
-                            continue
+                    if text:
+                        os.write(master_fd, text.encode())
+                        time.sleep(0.005)
 
-                        try:
-                            msg = json.loads(line)
-                        except json.JSONDecodeError:
-                            # Should not happen with complete lines
-                            continue
+                    # Send Alt+Enter for visual newline
+                    if has_visual_newline:
+                        os.write(master_fd, ALT_ENTER)
+                        time.sleep(0.005)
 
-                        # Handle text field
-                        text = msg.get("text", "")
-                        if text:
-                            has_visual_newline = text.endswith("\n")
-                            if has_visual_newline:
-                                text = text.rstrip("\n")
-
-                            if text:
-                                os.write(master_fd, text.encode())
-                                time.sleep(0.005)
-
-                            # Send Alt+Enter for visual newline
-                            if has_visual_newline:
-                                os.write(master_fd, ALT_ENTER)
-                                time.sleep(0.005)
-
-                        # Handle submit flag
-                        if msg.get("submit"):
-                            time.sleep(0.01)
-                            os.write(master_fd, ENTER)
-                else:
-                    # No new data - wait a bit before checking again
-                    time.sleep(0.05)
-        finally:
-            os.close(fd)
-    except (BrokenPipeError, IOError, OSError):
-        pass
+                # Handle submit flag
+                if data.get("submit"):
+                    time.sleep(0.01)
+                    os.write(master_fd, ENTER)
+        except (BrokenPipeError, IOError, OSError):
+            break
 
 
 def _set_winsize(fd: int, rows: int, cols: int) -> None:
@@ -301,20 +316,31 @@ def run_agent(
         if old_settings:
             tty.setraw(sys.stdin.fileno())
 
-        # Start input threads
+        # Create thread-safe queue for serialized writes to PTY
+        # This prevents race conditions between stdin and file input
+        write_queue: queue.Queue = queue.Queue()
+
+        # Start producer threads (read from stdin/file, put in queue)
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
-            args=(master_fd, stop_event),
+            args=(write_queue, stop_event),
             daemon=True,
         )
         file_thread = threading.Thread(
             target=_read_from_file,
-            args=(input_file, master_fd, stop_event),
+            args=(input_file, write_queue, stop_event),
+            daemon=True,
+        )
+        # Start consumer thread (read from queue, write to PTY)
+        writer_thread = threading.Thread(
+            target=_write_to_pty,
+            args=(master_fd, write_queue, stop_event),
             daemon=True,
         )
 
         stdin_thread.start()
         file_thread.start()
+        writer_thread.start()
 
         # Read from PTY and write to stdout
         try:
