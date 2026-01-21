@@ -779,10 +779,12 @@ class VoxtypeApp:
         return default_phrases
 
     def _speak_mode_with_mute(self) -> None:
-        """Speak the current mode using TTS, muting mic to avoid self-listening.
+        """Speak the current mode using TTS.
 
-        ALWAYS pauses listening while speaking to prevent the TTS from being
-        transcribed. Runs in background thread to avoid blocking keyboard.
+        Uses PLAYING state to block audio processing during TTS playback,
+        preventing the microphone from transcribing the voice feedback.
+
+        Runs in background thread to avoid blocking keyboard callbacks.
         """
         if not self.config.audio.audio_feedback:
             return
@@ -800,11 +802,9 @@ class VoxtypeApp:
 
         voice = phrases.get("voice", "Samantha")
 
-        # ALWAYS pause listening BEFORE spawning thread to avoid race condition
-        with self._state_lock:
-            was_listening = self._listening
-            if was_listening:
-                self._listening = False
+        # Try to enter PLAYING state (only valid from IDLE)
+        if not self._state_manager.try_transition(AppState.PLAYING):
+            return
 
         def _speak():
             try:
@@ -825,10 +825,8 @@ class VoxtypeApp:
             except Exception:
                 pass  # Silently fail if TTS not available
             finally:
-                # Resume listening after TTS completes
-                if was_listening:
-                    with self._state_lock:
-                        self._listening = True
+                # Return to IDLE state after TTS completes
+                self._state_manager.try_transition(AppState.IDLE)
 
         # Run in background thread - never block keyboard callbacks
         threading.Thread(target=_speak, daemon=True).start()
@@ -973,8 +971,10 @@ class VoxtypeApp:
         if self._llm_processor:
             self._llm_processor.set_listening(True)
         if self._audio_manager:
+            # Audio processing: enabled only when _listening=True AND not in PLAYING state
+            # PLAYING state blocks audio to prevent transcribing TTS feedback
             self._audio_manager.start_streaming(
-                is_listening=lambda: self._listening,
+                is_listening=lambda: self._listening and self.state != AppState.PLAYING,
                 is_running=lambda: self._running,
             )
 
@@ -1131,11 +1131,10 @@ class VoxtypeApp:
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS.
 
-        ALWAYS pauses listening while speaking to prevent the microphone
-        from picking up the voice feedback (would transcribe "agent X").
+        Uses PLAYING state to block audio processing during TTS playback,
+        preventing the microphone from transcribing the voice feedback.
 
-        IMPORTANT: Always runs in background thread to avoid blocking keyboard
-        callbacks (which could freeze the keyboard with pynput).
+        Runs in background thread to avoid blocking keyboard callbacks.
         """
         import subprocess
         import sys
@@ -1145,12 +1144,10 @@ class VoxtypeApp:
         voice = phrases.get("voice", "Samantha")
         text = f"{agent_prefix} {agent_name}"
 
-        # ALWAYS pause listening BEFORE spawning thread to avoid race condition
-        # This ensures no audio is captured while TTS is playing
-        with self._state_lock:
-            was_listening = self._listening
-            if was_listening:
-                self._listening = False
+        # Try to enter PLAYING state (only valid from IDLE)
+        # If we're busy (RECORDING, TRANSCRIBING, etc.), skip TTS
+        if not self._state_manager.try_transition(AppState.PLAYING):
+            return
 
         def _speak():
             try:
@@ -1171,10 +1168,8 @@ class VoxtypeApp:
             except Exception:
                 pass  # Silently fail if TTS not available
             finally:
-                # Resume listening after TTS completes
-                if was_listening:
-                    with self._state_lock:
-                        self._listening = True
+                # Return to IDLE state after TTS completes
+                self._state_manager.try_transition(AppState.IDLE)
 
         # Run in background thread - never block keyboard callbacks
         threading.Thread(target=_speak, daemon=True).start()
