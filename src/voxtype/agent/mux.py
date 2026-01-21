@@ -126,6 +126,9 @@ def _read_from_file(filepath: str, master_fd: int, stop_event: threading.Event) 
     - {"text": "hello\\n"}              -> type "hello" + Shift+Enter (visual newline)
     - {"text": "hello", "submit": true} -> type "hello" + Enter
     - {"submit": true}                  -> just Enter
+
+    Uses unbuffered I/O (os.read) to avoid Python file buffer caching issues
+    that can cause race conditions when the file is being written to rapidly.
     """
     # Shift+Enter for visual newline (works in most apps)
     SHIFT_ENTER = b"\x1b[13;2u"  # CSI sequence for Shift+Enter
@@ -134,61 +137,60 @@ def _read_from_file(filepath: str, master_fd: int, stop_event: threading.Event) 
     ENTER = b"\r"
 
     # Buffer for incomplete lines (race condition fix: writer may be mid-write)
-    line_buffer = ""
+    line_buffer = b""
 
     try:
-        with open(filepath, "r") as f:
+        # Use unbuffered I/O to avoid Python's file buffer caching
+        fd = os.open(filepath, os.O_RDONLY)
+        try:
             # Seek to end of file (tail -f style)
-            f.seek(0, os.SEEK_END)
+            os.lseek(fd, 0, os.SEEK_END)
 
             while not stop_event.is_set():
-                chunk = f.readline()
+                # Read available data (unbuffered - direct from kernel)
+                chunk = os.read(fd, 4096)
                 if chunk:
                     line_buffer += chunk
 
-                    # Only process complete lines (ending with \n)
-                    # This prevents race conditions where we read partial writes
-                    if not line_buffer.endswith("\n"):
-                        # Incomplete line - wait for more data
-                        time.sleep(0.01)
-                        continue
+                    # Process all complete lines in buffer
+                    while b"\n" in line_buffer:
+                        line_bytes, line_buffer = line_buffer.split(b"\n", 1)
+                        line = line_bytes.decode("utf-8", errors="replace").strip()
 
-                    line = line_buffer.strip()
-                    line_buffer = ""  # Reset buffer
+                        if not line:
+                            continue
 
-                    if not line:
-                        continue
+                        try:
+                            msg = json.loads(line)
+                        except json.JSONDecodeError:
+                            # Should not happen with complete lines
+                            continue
 
-                    try:
-                        msg = json.loads(line)
-                    except json.JSONDecodeError:
-                        # Log malformed line for debugging (shouldn't happen with complete lines)
-                        continue
-
-                    # Handle text field
-                    text = msg.get("text", "")
-                    if text:
-                        has_visual_newline = text.endswith("\n")
-                        if has_visual_newline:
-                            text = text.rstrip("\n")
-
+                        # Handle text field
+                        text = msg.get("text", "")
                         if text:
-                            os.write(master_fd, text.encode())
-                            time.sleep(0.005)
+                            has_visual_newline = text.endswith("\n")
+                            if has_visual_newline:
+                                text = text.rstrip("\n")
 
-                        # Send Alt+Enter for visual newline
-                        if has_visual_newline:
-                            os.write(master_fd, ALT_ENTER)
-                            time.sleep(0.005)
+                            if text:
+                                os.write(master_fd, text.encode())
+                                time.sleep(0.005)
 
-                    # Handle submit flag
-                    if msg.get("submit"):
-                        time.sleep(0.01)
-                        os.write(master_fd, ENTER)
+                            # Send Alt+Enter for visual newline
+                            if has_visual_newline:
+                                os.write(master_fd, ALT_ENTER)
+                                time.sleep(0.005)
+
+                        # Handle submit flag
+                        if msg.get("submit"):
+                            time.sleep(0.01)
+                            os.write(master_fd, ENTER)
                 else:
-                    # No new data - refresh file buffer to see new writes
-                    time.sleep(0.1)
-                    f.seek(f.tell())
+                    # No new data - wait a bit before checking again
+                    time.sleep(0.05)
+        finally:
+            os.close(fd)
     except (BrokenPipeError, IOError, OSError):
         pass
 
