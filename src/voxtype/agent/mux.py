@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import pty
 import select
 import signal
@@ -13,11 +14,67 @@ import termios
 import threading
 import time
 import tty
+from datetime import datetime, timezone
 from fcntl import ioctl
 from pathlib import Path
 
+from voxtype import __version__
+
 # Default directory for agent files
 DEFAULT_OUTPUT_DIR = "/tmp"
+
+# Session logs directory
+SESSIONS_DIR = Path.home() / ".local" / "share" / "voxtype" / "sessions"
+
+
+def _get_session_log_path(agent_id: str) -> Path:
+    """Get path for session log file.
+
+    Format: YYYY-MM-DD_HH-MM-SS_voxtype-X.Y.Z_AGENT.session.jsonl
+    """
+    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{timestamp}_voxtype-{__version__}_{agent_id}.session.jsonl"
+    return SESSIONS_DIR / filename
+
+
+def _write_session_start(
+    session_path: Path,
+    agent_id: str,
+    command: list[str],
+    input_file: str,
+) -> None:
+    """Write session start metadata to log file."""
+    metadata = {
+        "event": "session_start",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "voxtype_version": __version__,
+        "agent_id": agent_id,
+        "command": command,
+        "input_file": input_file,
+        "cwd": os.getcwd(),
+        "python_version": platform.python_version(),
+        "platform": platform.system(),
+        "platform_version": platform.release(),
+        "user": os.environ.get("USER", "unknown"),
+        "shell": os.environ.get("SHELL", "unknown"),
+        "term": os.environ.get("TERM", "unknown"),
+    }
+    with open(session_path, "a") as f:
+        f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+        f.flush()
+
+
+def _write_session_end(session_path: Path, exit_code: int) -> None:
+    """Write session end event to log file."""
+    metadata = {
+        "event": "session_end",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "exit_code": exit_code,
+    }
+    with open(session_path, "a") as f:
+        f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+        f.flush()
 
 
 def get_agent_file(agent_id: str, output_dir: str | None = None) -> str:
@@ -183,10 +240,15 @@ def run_agent(
     # Create the agent file
     input_file = create_agent_file(agent_id, output_dir)
 
+    # Create session log
+    session_path = _get_session_log_path(agent_id)
+    _write_session_start(session_path, agent_id, command, input_file)
+
     if not quiet:
-        print(f"[voxtype] Agent: {agent_id}", file=sys.stderr)
-        print(f"[voxtype] File: {input_file}", file=sys.stderr)
-        print(f"[voxtype] Running: {' '.join(command)}", file=sys.stderr)
+        print(f"[voxtype {__version__}] Agent: {agent_id}", file=sys.stderr)
+        print(f"[voxtype {__version__}] File: {input_file}", file=sys.stderr)
+        print(f"[voxtype {__version__}] Session: {session_path}", file=sys.stderr)
+        print(f"[voxtype {__version__}] Running: {' '.join(command)}", file=sys.stderr)
 
     # Save original terminal settings
     old_settings = None
@@ -277,8 +339,13 @@ def run_agent(
         stop_event.set()
 
         if os.WIFEXITED(status):
-            return os.WEXITSTATUS(status)
-        return 1
+            exit_code = os.WEXITSTATUS(status)
+        else:
+            exit_code = 1
+
+        # Log session end
+        _write_session_end(session_path, exit_code)
+        return exit_code
 
     finally:
         # Restore terminal settings
