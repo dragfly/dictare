@@ -308,8 +308,14 @@ class TestFileInjectorRaceConditions:
 
             # Should have 2 lines: text and newline
             assert len(lines) == 2
-            assert json.loads(lines[0]) == {"text": "hello world"}
-            assert json.loads(lines[1]) == {"text": "\n"}
+            msg1 = json.loads(lines[0])
+            msg2 = json.loads(lines[1])
+            # Check essential fields (ignore ts and v metadata)
+            assert msg1["text"] == "hello world"
+            assert msg2["text"] == "\n"
+            # Verify metadata is present
+            assert "ts" in msg1 and "v" in msg1
+            assert "ts" in msg2 and "v" in msg2
 
         finally:
             Path(filepath).unlink(missing_ok=True)

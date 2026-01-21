@@ -5,13 +5,19 @@ JSONL Protocol for inputmux:
 - {"text": "hello", "submit": true} → type "hello" + Enter (submit)
 - {"text": "\\n"}                   → Alt+Enter (visual newline)
 - {"submit": true}                  → just Enter
+
+Each message includes:
+- ts: ISO timestamp when message was written
+- v: voxtype version that wrote the message
 """
 
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
+from voxtype import __version__
 from voxtype.injection.base import TextInjector
 
 
@@ -31,8 +37,11 @@ class FileInjector(TextInjector):
         return True
 
     def _write_message(self, msg: dict) -> bool:
-        """Write a JSONL message to the file."""
+        """Write a JSONL message to the file with timestamp and version."""
         try:
+            # Add metadata for debugging
+            msg["ts"] = datetime.now(timezone.utc).isoformat()
+            msg["v"] = __version__
             with open(self.filepath, "a") as f:
                 f.write(json.dumps(msg, ensure_ascii=False) + "\n")
                 f.flush()
@@ -55,7 +64,8 @@ class FileInjector(TextInjector):
         if text.endswith("\n"):
             text = text.rstrip("\n")
 
-        msg = {"text": text}
+        ts = datetime.now(timezone.utc).isoformat()
+        msg = {"text": text, "ts": ts, "v": __version__}
         if auto_enter:
             msg["submit"] = True
 
@@ -65,7 +75,8 @@ class FileInjector(TextInjector):
             output = json.dumps(msg, ensure_ascii=False) + "\n"
             # When auto_enter=false, include newline in same string
             if not auto_enter:
-                output += json.dumps({"text": "\n"}, ensure_ascii=False) + "\n"
+                newline_msg = {"text": "\n", "ts": ts, "v": __version__}
+                output += json.dumps(newline_msg, ensure_ascii=False) + "\n"
 
             with open(self.filepath, "a") as f:
                 f.write(output)  # Single write = single FS event

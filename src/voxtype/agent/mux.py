@@ -78,6 +78,21 @@ def _write_session_end(session_path: Path, exit_code: int) -> None:
         f.flush()
 
 
+def _log_event(session_path: Path, event: str, data: dict) -> None:
+    """Log an event to the session log file (thread-safe)."""
+    try:
+        log_entry = {
+            "event": event,
+            "ts": datetime.now(timezone.utc).isoformat(),
+            **data,
+        }
+        with open(session_path, "a") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            f.flush()
+    except OSError:
+        pass  # Don't crash if logging fails
+
+
 def get_agent_file(agent_id: str, output_dir: str | None = None) -> str:
     """Get the file path for an agent.
 
@@ -130,7 +145,10 @@ def _read_from_stdin(
 
 
 def _read_from_file(
-    filepath: str, write_queue: queue.Queue, stop_event: threading.Event
+    filepath: str,
+    write_queue: queue.Queue,
+    stop_event: threading.Event,
+    session_path: Path | None = None,
 ) -> None:
     """Monitor file and put parsed messages in queue.
 
@@ -140,8 +158,13 @@ def _read_from_file(
     - {"text": "hello", "submit": true} -> type "hello" + Enter
     - {"submit": true}                  -> just Enter
 
-    Uses simple Python readline() which works reliably for append-only files.
+    CRITICAL: readline() can return partial lines if called mid-write.
+    We must buffer incomplete lines (those without trailing newline)
+    and only process complete lines.
     """
+    msg_count = 0
+    incomplete_line = ""  # Buffer for partial lines
+
     try:
         with open(filepath, "r") as f:
             # Seek to end of file (tail -f style)
@@ -150,6 +173,20 @@ def _read_from_file(
             while not stop_event.is_set():
                 line = f.readline()
                 if line:
+                    # Check if line is complete (has newline)
+                    is_complete = line.endswith("\n")
+
+                    # Prepend any buffered incomplete data
+                    line = incomplete_line + line
+                    incomplete_line = ""
+
+                    if not is_complete:
+                        # Partial read - buffer and wait for more
+                        incomplete_line = line
+                        time.sleep(0.01)  # Brief wait for writer to finish
+                        continue
+
+                    # Now we have a complete line
                     line = line.strip()
                     if not line:
                         continue
@@ -157,27 +194,46 @@ def _read_from_file(
                     try:
                         msg = json.loads(line)
                     except json.JSONDecodeError:
+                        # Log parse error - should not happen with complete lines
+                        if session_path:
+                            _log_event(session_path, "parse_error", {"line": line[:100]})
                         continue
+
+                    msg_count += 1
+                    # Log message read
+                    if session_path:
+                        _log_event(session_path, "msg_read", {
+                            "seq": msg_count,
+                            "text": msg.get("text", "")[:50],
+                            "writer_ts": msg.get("ts"),
+                            "writer_v": msg.get("v"),
+                        })
 
                     # Put parsed message in queue for processing
                     write_queue.put(("msg", msg))
                 else:
                     # No new data - small sleep then retry
                     time.sleep(0.05)
-    except (BrokenPipeError, IOError, OSError):
-        pass
+    except (BrokenPipeError, IOError, OSError) as e:
+        if session_path:
+            _log_event(session_path, "reader_error", {"error": str(e)})
 
 
 def _write_to_pty(
-    master_fd: int, write_queue: queue.Queue, stop_event: threading.Event
+    master_fd: int,
+    write_queue: queue.Queue,
+    stop_event: threading.Event,
+    session_path: Path | None = None,
 ) -> None:
     """Consume from queue and write to PTY.
 
     This is the ONLY thread that writes to master_fd, ensuring serialization.
+    Logs every message sent for debugging.
     """
     # Alt+Enter for visual newline (ESC + CR)
     ALT_ENTER = b"\x1b\r"
     ENTER = b"\r"
+    msg_count = 0
 
     while not stop_event.is_set():
         try:
@@ -193,8 +249,19 @@ def _write_to_pty(
                 # Raw bytes from stdin - write directly
                 os.write(master_fd, data)
             elif msg_type == "msg":
+                msg_count += 1
                 # Parsed JSONL message from file
                 text = data.get("text", "")
+
+                # Log message being sent
+                if session_path:
+                    _log_event(session_path, "msg_sent", {
+                        "seq": msg_count,
+                        "text": text[:50],
+                        "writer_ts": data.get("ts"),
+                        "writer_v": data.get("v"),
+                    })
+
                 if text:
                     has_visual_newline = text.endswith("\n")
                     if has_visual_newline:
@@ -213,7 +280,9 @@ def _write_to_pty(
                 if data.get("submit"):
                     time.sleep(0.01)
                     os.write(master_fd, ENTER)
-        except (BrokenPipeError, IOError, OSError):
+        except (BrokenPipeError, IOError, OSError) as e:
+            if session_path:
+                _log_event(session_path, "writer_error", {"error": str(e)})
             break
 
 
@@ -328,13 +397,13 @@ def run_agent(
         )
         file_thread = threading.Thread(
             target=_read_from_file,
-            args=(input_file, write_queue, stop_event),
+            args=(input_file, write_queue, stop_event, session_path),
             daemon=True,
         )
         # Start consumer thread (read from queue, write to PTY)
         writer_thread = threading.Thread(
             target=_write_to_pty,
-            args=(master_fd, write_queue, stop_event),
+            args=(master_fd, write_queue, stop_event, session_path),
             daemon=True,
         )
 
