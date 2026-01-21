@@ -10,7 +10,7 @@ from voxtype.config import (
     CommandConfig,
     Config,
     HotkeyConfig,
-    InjectionConfig,
+    OutputConfig,
     STTConfig,
     load_config,
 )
@@ -30,23 +30,24 @@ class TestConfigDefaults:
     def test_stt_config_defaults(self) -> None:
         """Test STTConfig has correct defaults."""
         config = STTConfig()
-        assert config.backend == "faster-whisper"
         assert config.model_size == "large-v3-turbo"
         assert config.language == "auto"
-        assert config.device == "cpu"
+        assert config.device == "auto"
+        assert config.compute_type == "int8"
+        assert config.beam_size == 5
 
     def test_hotkey_config_defaults(self) -> None:
         """Test HotkeyConfig has correct defaults."""
         config = HotkeyConfig()
-        assert config.backend == "auto"
         assert config.key == "KEY_SCROLLLOCK"
+        assert config.device == ""
 
-    def test_injection_config_defaults(self) -> None:
-        """Test InjectionConfig has correct defaults."""
-        config = InjectionConfig()
-        assert config.backend == "auto"
-        assert config.auto_enter is True
-        assert config.fallback_to_clipboard is True
+    def test_output_config_defaults(self) -> None:
+        """Test OutputConfig has correct defaults."""
+        config = OutputConfig()
+        assert config.method == "keyboard"
+        assert config.typing_delay_ms == 5
+        assert config.auto_enter is False
 
     def test_command_config_defaults(self) -> None:
         """Test CommandConfig has correct defaults."""
@@ -60,7 +61,7 @@ class TestConfigDefaults:
         assert isinstance(config.audio, AudioConfig)
         assert isinstance(config.stt, STTConfig)
         assert isinstance(config.hotkey, HotkeyConfig)
-        assert isinstance(config.injection, InjectionConfig)
+        assert isinstance(config.output, OutputConfig)
         assert isinstance(config.command, CommandConfig)
 
 
@@ -102,7 +103,7 @@ language = "en"
             assert config.stt.model_size == "base"
             assert config.stt.language == "en"
             # Other values should be defaults
-            assert config.stt.backend == "faster-whisper"
+            assert config.stt.device == "auto"
             assert config.audio.sample_rate == 16000
         finally:
             temp_path.unlink()

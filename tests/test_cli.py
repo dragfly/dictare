@@ -23,13 +23,12 @@ class TestCLIBasics:
         assert result.exit_code == 0
         assert "voxtype" in result.stdout.lower()
 
-    def test_run_help(self) -> None:
-        """Test 'run --help' shows run command help."""
-        result = runner.invoke(app, ["run", "--help"])
+    def test_listen_help(self) -> None:
+        """Test 'listen --help' shows listen command help."""
+        result = runner.invoke(app, ["listen", "--help"])
         assert result.exit_code == 0
         assert "--model" in result.stdout
         assert "--language" in result.stdout
-        assert "--vad" in result.stdout
 
     def test_config_help(self) -> None:
         """Test 'config --help' shows config command help."""
