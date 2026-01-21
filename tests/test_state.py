@@ -23,6 +23,7 @@ class TestAppState:
         assert AppState.RECORDING
         assert AppState.TRANSCRIBING
         assert AppState.INJECTING
+        assert AppState.PLAYING
         assert AppState.LISTENING
 
     def test_str_returns_capitalized_name(self) -> None:
@@ -151,6 +152,20 @@ class TestValidTransitions:
         assert result is True
         assert sm.state == AppState.IDLE
 
+    def test_idle_to_playing(self) -> None:
+        """IDLE → PLAYING is valid (TTS audio feedback)."""
+        sm = StateManager()
+        result = sm.transition(AppState.PLAYING)
+        assert result is True
+        assert sm.state == AppState.PLAYING
+
+    def test_playing_to_idle(self) -> None:
+        """PLAYING → IDLE is valid (TTS complete)."""
+        sm = StateManager(initial_state=AppState.PLAYING)
+        result = sm.transition(AppState.IDLE)
+        assert result is True
+        assert sm.state == AppState.IDLE
+
 
 class TestInvalidTransitions:
     """Test invalid state transitions."""
@@ -192,6 +207,20 @@ class TestInvalidTransitions:
         with pytest.raises(InvalidTransitionError):
             sm.transition(AppState.TRANSCRIBING)
         assert sm.state == AppState.INJECTING
+
+    def test_playing_to_recording_raises(self) -> None:
+        """PLAYING → RECORDING is invalid (must return to IDLE first)."""
+        sm = StateManager(initial_state=AppState.PLAYING)
+        with pytest.raises(InvalidTransitionError):
+            sm.transition(AppState.RECORDING)
+        assert sm.state == AppState.PLAYING
+
+    def test_recording_to_playing_raises(self) -> None:
+        """RECORDING → PLAYING is invalid (can't interrupt recording)."""
+        sm = StateManager(initial_state=AppState.RECORDING)
+        with pytest.raises(InvalidTransitionError):
+            sm.transition(AppState.PLAYING)
+        assert sm.state == AppState.RECORDING
 
 
 class TestTryTransition:

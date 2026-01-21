@@ -11,12 +11,17 @@ if TYPE_CHECKING:
 
 
 class AppState(Enum):
-    """Application states."""
+    """Application states.
+
+    Main workflow: IDLE → RECORDING → TRANSCRIBING → INJECTING → IDLE
+    Audio feedback: IDLE → PLAYING → IDLE (no audio processing during PLAYING)
+    """
 
     IDLE = auto()
     RECORDING = auto()
     TRANSCRIBING = auto()
     INJECTING = auto()
+    PLAYING = auto()  # Playing TTS audio feedback (mic muted)
     LISTENING = auto()  # Continuous transcription mode (no wake word needed)
 
     def __str__(self) -> str:
@@ -50,18 +55,21 @@ class StateManager:
     Valid transitions:
         IDLE → RECORDING (VAD detects speech start)
         IDLE → TRANSCRIBING (processing queued audio)
+        IDLE → PLAYING (TTS audio feedback starts)
         RECORDING → TRANSCRIBING (VAD detects speech end)
         RECORDING → IDLE (audio too short, discarded)
         TRANSCRIBING → INJECTING (LLM decides to inject)
         TRANSCRIBING → IDLE (transcription complete, no inject)
         INJECTING → IDLE (injection complete)
+        PLAYING → IDLE (TTS audio feedback complete)
     """
 
     VALID_TRANSITIONS: dict[AppState, list[AppState]] = {
-        AppState.IDLE: [AppState.RECORDING, AppState.TRANSCRIBING],
+        AppState.IDLE: [AppState.RECORDING, AppState.TRANSCRIBING, AppState.PLAYING],
         AppState.RECORDING: [AppState.TRANSCRIBING, AppState.IDLE],
         AppState.TRANSCRIBING: [AppState.INJECTING, AppState.IDLE],
         AppState.INJECTING: [AppState.IDLE],
+        AppState.PLAYING: [AppState.IDLE],
         AppState.LISTENING: [],  # LISTENING is not used in the state machine
     }
 
