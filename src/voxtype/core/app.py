@@ -782,8 +782,8 @@ class VoxtypeApp:
     def _speak_mode_with_mute(self) -> None:
         """Speak the current mode using TTS, muting mic to avoid self-listening.
 
-        Uses mute_mic_during_feedback config to temporarily disable listening
-        while speaking, preventing the TTS from being transcribed.
+        ALWAYS pauses listening while speaking to prevent the TTS from being
+        transcribed. Runs in background thread to avoid blocking keyboard.
         """
         if not self.config.audio.audio_feedback:
             return
@@ -791,7 +791,6 @@ class VoxtypeApp:
         import subprocess
         import sys
 
-        mute_mic = self.config.audio.mute_mic_during_feedback
         phrases = self._load_tts_phrases()
 
         # Get mode phrase from config (default: English)
@@ -802,15 +801,13 @@ class VoxtypeApp:
 
         voice = phrases.get("voice", "Samantha")
 
-        def _speak():
-            # Pause listening if mute_mic enabled
-            was_listening = False
-            if mute_mic:
-                with self._state_lock:
-                    was_listening = self._listening
-                    if was_listening:
-                        self._listening = False
+        # ALWAYS pause listening BEFORE spawning thread to avoid race condition
+        with self._state_lock:
+            was_listening = self._listening
+            if was_listening:
+                self._listening = False
 
+        def _speak():
             try:
                 if sys.platform == "darwin":
                     subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
@@ -829,12 +826,12 @@ class VoxtypeApp:
             except Exception:
                 pass  # Silently fail if TTS not available
             finally:
-                # Resume listening if we paused it
-                if mute_mic and was_listening:
+                # Resume listening after TTS completes
+                if was_listening:
                     with self._state_lock:
                         self._listening = True
 
-        # Always run in background thread to not block keyboard callbacks
+        # Run in background thread - never block keyboard callbacks
         threading.Thread(target=_speak, daemon=True).start()
 
     def _play_feedback(self, event: str, mode: ProcessingMode | None = None) -> None:
@@ -1135,8 +1132,8 @@ class VoxtypeApp:
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS.
 
-        If mute_mic_during_feedback is enabled, pauses listening while speaking
-        to prevent the microphone from picking up the voice feedback.
+        ALWAYS pauses listening while speaking to prevent the microphone
+        from picking up the voice feedback (would transcribe "agent X").
 
         IMPORTANT: Always runs in background thread to avoid blocking keyboard
         callbacks (which could freeze the keyboard with pynput).
@@ -1148,17 +1145,15 @@ class VoxtypeApp:
         agent_prefix = phrases.get("agent", "agent")
         voice = phrases.get("voice", "Samantha")
         text = f"{agent_prefix} {agent_name}"
-        mute_mic = self.config.audio.mute_mic_during_feedback
+
+        # ALWAYS pause listening BEFORE spawning thread to avoid race condition
+        # This ensures no audio is captured while TTS is playing
+        with self._state_lock:
+            was_listening = self._listening
+            if was_listening:
+                self._listening = False
 
         def _speak():
-            # Pause listening if mute_mic enabled (do this in the thread)
-            was_listening = False
-            if mute_mic:
-                with self._state_lock:
-                    was_listening = self._listening
-                    if was_listening:
-                        self._listening = False
-
             try:
                 if sys.platform == "darwin":
                     subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
@@ -1177,12 +1172,12 @@ class VoxtypeApp:
             except Exception:
                 pass  # Silently fail if TTS not available
             finally:
-                # Resume listening if we paused it
-                if mute_mic and was_listening:
+                # Resume listening after TTS completes
+                if was_listening:
                     with self._state_lock:
                         self._listening = True
 
-        # Always run in background thread - never block keyboard callbacks
+        # Run in background thread - never block keyboard callbacks
         threading.Thread(target=_speak, daemon=True).start()
 
     def _send_submit(self) -> None:
