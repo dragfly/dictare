@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.3] - 2026-01-21
+
+### Fixed
+- **Critical race condition in file reader**: `readline()` could return partial lines when called mid-write, causing JSON parse failures and silent data loss. Now buffers incomplete lines until newline is received.
+- **TTS self-transcription**: Added `PLAYING` state to state machine - audio processing is blocked during TTS playback to prevent transcribing voice feedback.
+
+### Added
+- **Queue-based PTY serialization**: Both stdin and file reader threads now write to a thread-safe queue, with a single consumer thread writing to PTY. Eliminates race conditions from concurrent writes.
+- **Message timestamps and versioning**: Every message in `.voxtype` file now includes `ts` (ISO timestamp) and `v` (voxtype version) for debugging.
+- **Session logging**: Every message read and sent is logged to session file with sequence numbers, timestamps, and writer version.
+- **Keystroke counter**: Tracks keyboard input for voice vs keyboard usage statistics (privacy-preserving - only counts, no content).
+- **Lifetime keystroke stats**: `total_keystrokes` added to persistent stats for long-term voice/keyboard ratio tracking.
+
 ## [2.16.5] - 2026-01-20
 
 ### Fixed
