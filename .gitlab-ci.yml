@@ -1,0 +1,61 @@
+# GitLab CI/CD Pipeline for voxtype
+# Tests installation and runs test suite (no model download)
+
+stages:
+  - test
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+
+# Cache pip and uv downloads between runs
+cache:
+  paths:
+    - .cache/pip
+    - .cache/uv
+    - .venv
+
+.python_base:
+  image: python:3.11-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git
+    - pip install uv
+    - uv venv .venv
+    - source .venv/bin/activate
+
+# Test that the package installs correctly
+test-install:
+  extends: .python_base
+  stage: test
+  script:
+    - uv pip install -e .
+    - voxtype --version
+    - voxtype --help
+    - python -c "from voxtype import __version__; print(f'Version: {__version__}')"
+    - python -c "from voxtype.core.state import StateManager; print('State import OK')"
+    - python -c "from voxtype.agent.mux import run_agent; print('Agent import OK')"
+
+# Run the test suite
+test-unit:
+  extends: .python_base
+  stage: test
+  script:
+    - uv pip install -e ".[dev]"
+    - pytest tests/ -v --tb=short --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    paths:
+      - report.xml
+    expire_in: 1 week
+
+# Test on multiple Python versions
+test-python312:
+  extends: .python_base
+  image: python:3.12-slim
+  stage: test
+  script:
+    - uv pip install -e ".[dev]"
+    - pytest tests/ -v --tb=short
+  allow_failure: true  # Python 3.12 support is best-effort
