@@ -63,12 +63,15 @@ def _write_session_start(
         f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
         f.flush()
 
-def _write_session_end(session_path: Path, exit_code: int) -> None:
+def _write_session_end(
+    session_path: Path, exit_code: int, total_keystrokes: int = 0
+) -> None:
     """Write session end event to log file."""
     metadata = {
         "event": "session_end",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "exit_code": exit_code,
+        "total_keystrokes": total_keystrokes,
     }
     with open(session_path, "a") as f:
         f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
@@ -120,8 +123,26 @@ def create_agent_file(agent_id: str, output_dir: str | None = None) -> str:
 
     return filepath
 
+class KeystrokeCounter:
+    """Thread-safe keystroke counter for session statistics."""
+
+    def __init__(self) -> None:
+        self._count = 0
+        self._lock = threading.Lock()
+
+    def add(self, n: int) -> None:
+        with self._lock:
+            self._count += n
+
+    @property
+    def count(self) -> int:
+        with self._lock:
+            return self._count
+
 def _read_from_stdin(
-    write_queue: queue.Queue, stop_event: threading.Event
+    write_queue: queue.Queue,
+    stop_event: threading.Event,
+    keystroke_counter: KeystrokeCounter | None = None,
 ) -> None:
     """Read from keyboard in raw mode and put data in queue."""
     try:
@@ -131,6 +152,9 @@ def _read_from_stdin(
                 data = os.read(sys.stdin.fileno(), 1024)
                 if not data:
                     break
+                # Count keystrokes (bytes received = approximate keystroke count)
+                if keystroke_counter:
+                    keystroke_counter.add(len(data))
                 # Put raw bytes directly in queue
                 write_queue.put(("raw", data))
     except (BrokenPipeError, IOError, OSError):
@@ -141,6 +165,7 @@ def _read_from_file(
     write_queue: queue.Queue,
     stop_event: threading.Event,
     session_path: Path | None = None,
+    keystroke_counter: KeystrokeCounter | None = None,
 ) -> None:
     """Monitor file and put parsed messages in queue.
 
@@ -192,13 +217,14 @@ def _read_from_file(
                         continue
 
                     msg_count += 1
-                    # Log message read
+                    # Log message read (include keystroke count for voice vs keyboard stats)
                     if session_path:
                         _log_event(session_path, "msg_read", {
                             "seq": msg_count,
                             "text": msg.get("text", "")[:50],
                             "writer_ts": msg.get("ts"),
                             "writer_v": msg.get("v"),
+                            "keystrokes": keystroke_counter.count if keystroke_counter else 0,
                         })
 
                     # Put parsed message in queue for processing
@@ -215,6 +241,7 @@ def _write_to_pty(
     write_queue: queue.Queue,
     stop_event: threading.Event,
     session_path: Path | None = None,
+    keystroke_counter: KeystrokeCounter | None = None,
 ) -> None:
     """Consume from queue and write to PTY.
 
@@ -251,6 +278,7 @@ def _write_to_pty(
                         "text": text[:50],
                         "writer_ts": data.get("ts"),
                         "writer_v": data.get("v"),
+                        "keystrokes": keystroke_counter.count if keystroke_counter else 0,
                     })
 
                 if text:
@@ -377,21 +405,24 @@ def run_agent(
         # This prevents race conditions between stdin and file input
         write_queue: queue.Queue = queue.Queue()
 
+        # Create keystroke counter for session statistics
+        keystroke_counter = KeystrokeCounter()
+
         # Start producer threads (read from stdin/file, put in queue)
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
-            args=(write_queue, stop_event),
+            args=(write_queue, stop_event, keystroke_counter),
             daemon=True,
         )
         file_thread = threading.Thread(
             target=_read_from_file,
-            args=(input_file, write_queue, stop_event, session_path),
+            args=(input_file, write_queue, stop_event, session_path, keystroke_counter),
             daemon=True,
         )
         # Start consumer thread (read from queue, write to PTY)
         writer_thread = threading.Thread(
             target=_write_to_pty,
-            args=(master_fd, write_queue, stop_event, session_path),
+            args=(master_fd, write_queue, stop_event, session_path, keystroke_counter),
             daemon=True,
         )
 
@@ -428,8 +459,8 @@ def run_agent(
         else:
             exit_code = 1
 
-        # Log session end
-        _write_session_end(session_path, exit_code)
+        # Log session end with total keystrokes
+        _write_session_end(session_path, exit_code, keystroke_counter.count)
         return exit_code
 
     finally:
