@@ -14,6 +14,7 @@ class StatsData(TypedDict):
     total_transcriptions: int
     total_words: int
     total_chars: int
+    total_keystrokes: int  # Manual keyboard input (from voxtype agent)
     total_audio_seconds: float
     total_transcription_seconds: float
     total_injection_seconds: float
@@ -46,6 +47,7 @@ def load_stats() -> StatsData:
         "total_transcriptions": 0,
         "total_words": 0,
         "total_chars": 0,
+        "total_keystrokes": 0,
         "total_audio_seconds": 0.0,
         "total_transcription_seconds": 0.0,
         "total_injection_seconds": 0.0,
@@ -105,6 +107,33 @@ def update_stats(
     stats["total_injection_seconds"] += injection_seconds
     stats["total_time_saved_seconds"] += time_saved_seconds
     stats["sessions"] += 1
+
+    # Save updated stats
+    save_stats(stats)
+
+    return stats
+
+def update_keystrokes(keystrokes: int) -> StatsData:
+    """Update persistent stats with keystroke count from voxtype agent.
+
+    Args:
+        keystrokes: Number of keystrokes this agent session.
+
+    Returns:
+        Updated stats data.
+    """
+    stats = load_stats()
+
+    # Ensure total_keystrokes exists (for backwards compatibility)
+    if "total_keystrokes" not in stats:
+        stats["total_keystrokes"] = 0
+
+    # Set first_use if this is the first use ever
+    if not stats["first_use"]:
+        stats["first_use"] = datetime.now().isoformat()
+
+    # Accumulate keystrokes
+    stats["total_keystrokes"] += keystrokes
 
     # Save updated stats
     save_stats(stats)
