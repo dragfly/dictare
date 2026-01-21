@@ -83,21 +83,36 @@ def _read_from_file(filepath: str, master_fd: int, stop_event: threading.Event) 
     ALT_ENTER = b"\x1b\r"
     ENTER = b"\r"
 
+    # Buffer for incomplete lines (race condition fix: writer may be mid-write)
+    line_buffer = ""
+
     try:
         with open(filepath, "r") as f:
             # Seek to end of file (tail -f style)
             f.seek(0, os.SEEK_END)
 
             while not stop_event.is_set():
-                line = f.readline()
-                if line:
-                    line = line.strip()
+                chunk = f.readline()
+                if chunk:
+                    line_buffer += chunk
+
+                    # Only process complete lines (ending with \n)
+                    # This prevents race conditions where we read partial writes
+                    if not line_buffer.endswith("\n"):
+                        # Incomplete line - wait for more data
+                        time.sleep(0.01)
+                        continue
+
+                    line = line_buffer.strip()
+                    line_buffer = ""  # Reset buffer
+
                     if not line:
                         continue
 
                     try:
                         msg = json.loads(line)
                     except json.JSONDecodeError:
+                        # Log malformed line for debugging (shouldn't happen with complete lines)
                         continue
 
                     # Handle text field
