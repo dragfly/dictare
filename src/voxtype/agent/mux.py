@@ -20,6 +20,7 @@ from fcntl import ioctl
 from pathlib import Path
 
 from voxtype import __version__
+from voxtype.utils.stats import update_keystrokes
 
 # Default directory for agent files
 DEFAULT_OUTPUT_DIR = "/tmp"
@@ -461,6 +462,10 @@ def run_agent(
 
         # Log session end with total keystrokes
         _write_session_end(session_path, exit_code, keystroke_counter.count)
+
+        # Update lifetime stats with keystroke count
+        if keystroke_counter.count > 0:
+            update_keystrokes(keystroke_counter.count)
         return exit_code
 
     finally:
