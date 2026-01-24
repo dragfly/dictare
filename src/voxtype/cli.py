@@ -8,10 +8,10 @@ from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from voxtype import __version__
+from voxtype.ui.status import LiveStatusPanel
 from voxtype.config import (
     create_default_config,
     get_config_path,
@@ -250,59 +250,6 @@ def _apply_cli_overrides(
     if no_hw_accel:
         config.stt.hw_accel = False
 
-def _format_status_panel(config, agents: list[str] | None = None) -> Panel:
-    """Create the status panel for the Ready message."""
-    from voxtype.utils.hardware import is_mlx_available
-
-    # Device string - check what will ACTUALLY be used
-    device_str = "CPU"
-
-    if not config.stt.hw_accel:
-        device_str = "CPU"
-    elif config.stt.device == "cuda":
-        # Check if cuDNN is actually available
-        from voxtype.cuda_setup import _find_cudnn_path
-        if _find_cudnn_path():
-            device_str = "[magenta]GPU (CUDA)[/]"
-        else:
-            device_str = "CPU [dim](GPU detected, cuDNN missing)[/]"
-    elif is_mlx_available():
-        device_str = "[magenta]MLX (Apple Silicon)[/]"
-
-    # Output mode
-    if agents:
-        output_str = f"[cyan]agents[/] ({', '.join(agents)})"
-    elif config.output.method == "agent":
-        output_str = "[cyan]agent[/] (single)"
-    else:
-        output_str = config.output.method
-
-    mode_str = "[cyan]transcription[/] (fast)" if config.command.mode == "transcription" else "[yellow]command[/] (LLM)"
-    wake_str = f"Wake word: [cyan]{config.command.wake_word}[/]\n" if config.command.wake_word else ""
-
-    # Format the hotkey nicely
-    hotkey = config.hotkey.key
-    if hotkey in ("KEY_LEFTMETA", "KEY_RIGHTMETA"):
-        hotkey_display = "⌘ (Command)" if sys.platform == "darwin" else "Super/Meta"
-    elif hotkey == "KEY_SCROLLLOCK":
-        hotkey_display = "Scroll Lock"
-    else:
-        hotkey_display = hotkey.replace("KEY_", "")
-
-    return Panel(
-        f"[bold green]voxtype[/] v{__version__}\n\n"
-        f"{wake_str}"
-        f"Mode: {mode_str}\n"
-        f"STT: [cyan]{config.stt.model_size}[/] on {device_str}\n"
-        f"Language: [cyan]{config.stt.language}[/]\n"
-        f"Output: {output_str}\n\n"
-        f"[dim]Hotkey: [cyan]{hotkey_display}[/] tap: toggle listening | double-tap: switch mode[/]\n"
-        f"Press [bold]Ctrl+C[/] to exit",
-        title="Ready",
-        border_style="green",
-        expand=False,
-    )
-
 def _create_logger(config):
     """Create JSONL logger if log file is specified in config."""
     if not config.logging.log_file:
@@ -488,8 +435,8 @@ def listen(
         realtime=realtime,
     )
 
-    # Create status panel to show after loading (not before!)
-    status_panel = _format_status_panel(config, agent_list)
+    # Create live status panel (will be started after loading)
+    status_panel = LiveStatusPanel(config, console, agents=agent_list)
 
     # Setup signal handler for graceful shutdown (KeyboardInterrupt may not work with C extensions)
     import atexit
