@@ -7,8 +7,6 @@ import time
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Callable
 
-from rich.console import Console
-
 from voxtype.audio.capture import AudioCapture
 
 if TYPE_CHECKING:
@@ -24,23 +22,23 @@ class AudioManager:
     - SileroVAD and StreamingVAD for voice activity detection
     - Audio device reconnection logic
     - Audio queue for buffered speech during transcription
+
+    This class is UI-agnostic. Use event callbacks to receive notifications
+    about loading progress, reconnection attempts, etc.
     """
 
     def __init__(
         self,
         config: AudioConfig,
-        console: Console,
         verbose: bool = False,
     ) -> None:
         """Initialize audio manager.
 
         Args:
             config: Audio configuration (sample_rate, channels, device, silence_ms, etc.)
-            console: Rich console for output
             verbose: Enable verbose logging
         """
         self._config = config
-        self._console = console
         self._verbose = verbose
 
         # Audio components
@@ -55,11 +53,16 @@ class AudioManager:
         # Audio queue for buffered speech during transcription (thread-safe)
         self._audio_queue: Queue = Queue()
 
-        # Callbacks
+        # VAD callbacks
         self._on_speech_start: Callable[[], None] | None = None
         self._on_speech_end: Callable[[object], None] | None = None
         self._on_max_speech: Callable[[], None] | None = None
         self._on_partial_audio: Callable[[object], None] | None = None
+
+        # Status callbacks (for UI notifications)
+        self._on_vad_loading: Callable[[], None] | None = None
+        self._on_reconnect_attempt: Callable[[int], None] | None = None
+        self._on_reconnect_success: Callable[[str | None], None] | None = None
 
         # Listening state getter (set by start_streaming)
         self._is_listening: Callable[[], bool] | None = None
@@ -71,6 +74,7 @@ class AudioManager:
         on_speech_end: Callable[[object], None],
         on_max_speech: Callable[[], None],
         on_partial_audio: Callable[[object], None] | None = None,
+        on_vad_loading: Callable[[], None] | None = None,
     ) -> None:
         """Initialize audio capture and VAD components.
 
@@ -79,11 +83,13 @@ class AudioManager:
             on_speech_end: Callback when VAD detects speech end (with audio data)
             on_max_speech: Callback when max speech duration reached
             on_partial_audio: Callback for partial audio during speech (realtime feedback)
+            on_vad_loading: Callback when VAD model starts loading
         """
         self._on_speech_start = on_speech_start
         self._on_speech_end = on_speech_end
         self._on_max_speech = on_max_speech
         self._on_partial_audio = on_partial_audio
+        self._on_vad_loading = on_vad_loading
 
         # Create audio capture
         self._audio = AudioCapture(
@@ -92,8 +98,11 @@ class AudioManager:
             device=self._config.device,
         )
 
+        # Notify VAD loading start
+        if self._on_vad_loading:
+            self._on_vad_loading()
+
         # Create VAD components
-        self._console.print("[dim]Loading VAD model...[/]")
         from voxtype.audio.vad import SileroVAD, StreamingVAD
 
         self._vad = SileroVAD(
@@ -113,6 +122,20 @@ class AudioManager:
             on_max_speech=on_max_speech,
             on_partial_audio=on_partial_audio,
         )
+
+    def set_reconnect_callbacks(
+        self,
+        on_attempt: Callable[[int], None] | None = None,
+        on_success: Callable[[str | None], None] | None = None,
+    ) -> None:
+        """Set callbacks for device reconnection events.
+
+        Args:
+            on_attempt: Callback when reconnection attempt starts (receives attempt number 1-5)
+            on_success: Callback when reconnection succeeds (receives device name or None)
+        """
+        self._on_reconnect_attempt = on_attempt
+        self._on_reconnect_success = on_success
 
     def start_streaming(
         self,
@@ -197,7 +220,8 @@ class AudioManager:
 
         # Retry with fresh AudioCapture object using NEW default device
         for attempt in range(5):
-            self._console.print(f" {attempt + 1}", end="", highlight=False)
+            if self._on_reconnect_attempt:
+                self._on_reconnect_attempt(attempt + 1)
             time.sleep(1.0)
             try:
                 # Force PortAudio to refresh device list
@@ -212,12 +236,11 @@ class AudioManager:
                 )
                 self._audio.start_streaming(on_chunk_callback)
 
-                # Show which device we connected to
-                device_info = AudioCapture.get_default_device()
-                if device_info:
-                    self._console.print(f" [green]OK[/] ({device_info['name']})")
-                else:
-                    self._console.print(" [green]OK[/]")
+                # Notify success with device name
+                if self._on_reconnect_success:
+                    device_info = AudioCapture.get_default_device()
+                    device_name = device_info['name'] if device_info else None
+                    self._on_reconnect_success(device_name)
                 return True
             except Exception:
                 self._audio = None

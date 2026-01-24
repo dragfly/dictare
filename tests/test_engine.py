@@ -1,0 +1,684 @@
+"""Tests for VoxtypeEngine core logic."""
+
+from __future__ import annotations
+
+import threading
+import time
+from typing import Any
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from voxtype.core.engine import VoxtypeEngine
+from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
+from voxtype.core.state import AppState, ProcessingMode
+
+
+class MockConfig:
+    """Mock config for testing."""
+
+    def __init__(self) -> None:
+        self.verbose = False
+
+        # STT config
+        self.stt = MagicMock()
+        self.stt.hw_accel = False
+        self.stt.model_size = "tiny"
+        self.stt.device = "cpu"
+        self.stt.compute_type = "int8"
+        self.stt.language = "en"
+        self.stt.hotwords = None
+        self.stt.beam_size = 5
+        self.stt.max_repetitions = 3
+
+        # Audio config
+        self.audio = MagicMock()
+        self.audio.silence_ms = 1200
+        self.audio.sample_rate = 16000
+        self.audio.max_duration = 30
+        self.audio.audio_feedback = False
+        self.audio.headphones_mode = True
+
+        # Command config
+        self.command = MagicMock()
+        self.command.wake_word = None
+        self.command.mode = "transcription"
+        self.command.ollama_model = "llama3.2"
+        self.command.ollama_timeout = 30
+
+        # Output config
+        self.output = MagicMock()
+        self.output.method = "agent"
+        self.output.typing_delay_ms = 0
+        self.output.auto_enter = True
+
+        # Hotkey config
+        self.hotkey = MagicMock()
+        self.hotkey.key = "F18"
+        self.hotkey.device = None
+
+        # Keyboard config
+        self.keyboard = MagicMock()
+        self.keyboard.shortcuts = {}
+
+        # Stats config
+        self.stats = MagicMock()
+        self.stats.typing_wpm = 40
+
+
+class MockEventHandler:
+    """Mock event handler that records all events."""
+
+    def __init__(self) -> None:
+        self.events: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+        self.state_changes: list[tuple[AppState, AppState, str]] = []
+        self.transcriptions: list[TranscriptionResult] = []
+        self.injections: list[InjectionResult] = []
+        self.mode_changes: list[ProcessingMode] = []
+        self.agent_changes: list[tuple[str, int]] = []
+        self.errors: list[tuple[str, str]] = []
+        self.partial_transcriptions: list[str] = []
+
+    def on_state_change(
+        self, old: AppState, new: AppState, trigger: str
+    ) -> None:
+        self.state_changes.append((old, new, trigger))
+
+    def on_transcription(self, result: TranscriptionResult) -> None:
+        self.transcriptions.append(result)
+
+    def on_injection(self, result: InjectionResult) -> None:
+        self.injections.append(result)
+
+    def on_mode_change(self, mode: ProcessingMode) -> None:
+        self.mode_changes.append(mode)
+
+    def on_agent_change(self, agent_name: str, index: int) -> None:
+        self.agent_changes.append((agent_name, index))
+
+    def on_error(self, message: str, context: str) -> None:
+        self.errors.append((message, context))
+
+    def on_partial_transcription(self, text: str) -> None:
+        self.partial_transcriptions.append(text)
+
+    def on_recording_start(self) -> None:
+        pass
+
+    def on_recording_end(self, duration_ms: float) -> None:
+        pass
+
+    def on_max_duration_reached(self) -> None:
+        pass
+
+
+class TestVoxtypeEngineInit:
+    """Test VoxtypeEngine initialization."""
+
+    def test_initial_state_is_off(self) -> None:
+        """Engine starts in OFF state."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        assert engine.state == AppState.OFF
+
+    def test_initial_mode_from_config(self) -> None:
+        """Processing mode comes from config."""
+        config = MockConfig()
+        config.command.mode = "transcription"
+        engine = VoxtypeEngine(config=config)
+        assert engine.mode == ProcessingMode.TRANSCRIPTION
+
+        config.command.mode = "command"
+        engine = VoxtypeEngine(config=config)
+        assert engine.mode == ProcessingMode.COMMAND
+
+    def test_is_off_initially(self) -> None:
+        """is_off returns True initially."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        assert engine.is_off is True
+        assert engine.is_listening is False
+
+    def test_agents_stored(self) -> None:
+        """Agents list is stored."""
+        config = MockConfig()
+        agents = ["claude", "cursor", "vscode"]
+        engine = VoxtypeEngine(config=config, agents=agents)
+        assert engine.agents == agents
+        assert engine.current_agent == "claude"
+        assert engine.current_agent_index == 0
+
+    def test_no_agents_returns_none(self) -> None:
+        """No agents means current_agent is None."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        assert engine.current_agent is None
+
+    def test_events_handler_stored(self) -> None:
+        """Event handler is stored."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+        assert engine._events is events
+
+
+class TestVoxtypeEngineProperties:
+    """Test VoxtypeEngine properties."""
+
+    def test_state_property(self) -> None:
+        """state property returns current state."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        assert engine.state == AppState.OFF
+
+    def test_mode_property(self) -> None:
+        """mode property returns processing mode."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        assert engine.mode == ProcessingMode.TRANSCRIPTION
+
+    def test_stats_properties_initially_zero(self) -> None:
+        """Stats are zero initially."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        assert engine.stats_chars == 0
+        assert engine.stats_words == 0
+        assert engine.stats_count == 0
+        assert engine.stats_audio_seconds == 0.0
+        assert engine.stats_transcription_seconds == 0.0
+        assert engine.stats_injection_seconds == 0.0
+        assert engine.stats_start_time is None
+
+
+class TestEventEmission:
+    """Test event emission."""
+
+    def test_emit_calls_handler(self) -> None:
+        """_emit calls the event handler method."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._emit("on_error", "test message", "test context")
+        assert len(events.errors) == 1
+        assert events.errors[0] == ("test message", "test context")
+
+    def test_emit_without_handler_does_not_crash(self) -> None:
+        """_emit with no handler doesn't crash."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config, events=None)
+        # Should not raise
+        engine._emit("on_error", "test", "test")
+
+    def test_emit_nonexistent_event_does_not_crash(self) -> None:
+        """_emit with nonexistent event doesn't crash."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+        # Should not raise
+        engine._emit("nonexistent_event", "arg1", "arg2")
+
+    def test_emit_swallows_handler_exceptions(self) -> None:
+        """_emit doesn't crash if handler raises."""
+        config = MockConfig()
+        events = MockEventHandler()
+        events.on_error = MagicMock(side_effect=Exception("Handler error"))
+        engine = VoxtypeEngine(config=config, events=events)
+
+        # Should not raise
+        engine._emit("on_error", "test", "test")
+
+
+class TestStateControl:
+    """Test state control methods."""
+
+    def test_toggle_listening_off_to_listening(self) -> None:
+        """Toggle from OFF to LISTENING."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._toggle_listening()
+        assert engine.state == AppState.LISTENING
+        assert len(events.state_changes) == 1
+        assert events.state_changes[0] == (AppState.OFF, AppState.LISTENING, "hotkey_toggle")
+
+    def test_toggle_listening_listening_to_off(self) -> None:
+        """Toggle from LISTENING to OFF."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        # First toggle ON
+        engine._toggle_listening()
+        # Then toggle OFF
+        engine._toggle_listening()
+        assert engine.state == AppState.OFF
+        assert len(events.state_changes) == 2
+        assert events.state_changes[1] == (AppState.LISTENING, AppState.OFF, "hotkey_toggle")
+
+    def test_set_listening_on(self) -> None:
+        """_set_listening(True) turns on listening."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._set_listening(True)
+        assert engine.state == AppState.LISTENING
+
+    def test_set_listening_off(self) -> None:
+        """_set_listening(False) turns off listening."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._set_listening(True)
+        engine._set_listening(False)
+        assert engine.state == AppState.OFF
+
+    def test_set_listening_noop_when_already_on(self) -> None:
+        """_set_listening(True) is noop when already listening."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._set_listening(True)
+        events.state_changes.clear()
+        engine._set_listening(True)  # Already on
+        assert len(events.state_changes) == 0
+
+
+class TestModeSwitch:
+    """Test processing mode switching."""
+
+    def test_switch_mode_transcription_to_command(self) -> None:
+        """Switch from transcription to command mode."""
+        config = MockConfig()
+        config.command.mode = "transcription"
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._switch_processing_mode()
+        assert engine.mode == ProcessingMode.COMMAND
+        assert len(events.mode_changes) == 1
+        assert events.mode_changes[0] == ProcessingMode.COMMAND
+
+    def test_switch_mode_command_to_transcription(self) -> None:
+        """Switch from command to transcription mode."""
+        config = MockConfig()
+        config.command.mode = "command"
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._switch_processing_mode()
+        assert engine.mode == ProcessingMode.TRANSCRIPTION
+        assert events.mode_changes[0] == ProcessingMode.TRANSCRIPTION
+
+
+class TestAgentSwitch:
+    """Test agent switching."""
+
+    def test_switch_agent_next(self) -> None:
+        """Switch to next agent."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude", "cursor", "vscode"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        engine._switch_agent(1)
+        assert engine.current_agent == "cursor"
+        assert engine.current_agent_index == 1
+        assert events.agent_changes[0] == ("cursor", 1)
+
+    def test_switch_agent_previous(self) -> None:
+        """Switch to previous agent."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude", "cursor", "vscode"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        engine._switch_agent(-1)  # Wraps to last
+        assert engine.current_agent == "vscode"
+        assert engine.current_agent_index == 2
+
+    def test_switch_agent_wraps_around(self) -> None:
+        """Agent switching wraps around."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude", "cursor"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        engine._switch_agent(1)  # cursor
+        engine._switch_agent(1)  # wraps to claude
+        assert engine.current_agent == "claude"
+        assert engine.current_agent_index == 0
+
+    def test_switch_agent_no_agents(self) -> None:
+        """Switch with no agents does nothing."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._switch_agent(1)  # Should not crash
+        assert len(events.agent_changes) == 0
+
+    def test_switch_to_agent_by_name_exact(self) -> None:
+        """Switch to agent by exact name match."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude", "cursor", "vscode"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        result = engine._switch_to_agent_by_name("cursor")
+        assert result is True
+        assert engine.current_agent == "cursor"
+
+    def test_switch_to_agent_by_name_case_insensitive(self) -> None:
+        """Switch to agent by name is case-insensitive."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude", "cursor", "vscode"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        result = engine._switch_to_agent_by_name("CURSOR")
+        assert result is True
+        assert engine.current_agent == "cursor"
+
+    def test_switch_to_agent_by_name_partial(self) -> None:
+        """Switch to agent by partial name match."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude-code", "cursor", "vscode"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        result = engine._switch_to_agent_by_name("code")
+        assert result is True
+        assert engine.current_agent == "claude-code"
+
+    def test_switch_to_agent_by_name_not_found(self) -> None:
+        """Switch to agent by name returns False if not found."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude", "cursor"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        result = engine._switch_to_agent_by_name("vscode")
+        assert result is False
+
+    def test_switch_to_agent_by_index(self) -> None:
+        """Switch to agent by index (1-based)."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude", "cursor", "vscode"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        result = engine._switch_to_agent_by_index(2)  # 1-based
+        assert result is True
+        assert engine.current_agent == "cursor"
+        assert engine.current_agent_index == 1
+
+    def test_switch_to_agent_by_index_out_of_range(self) -> None:
+        """Switch to agent by invalid index returns False."""
+        config = MockConfig()
+        events = MockEventHandler()
+        agents = ["claude", "cursor"]
+        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+
+        result = engine._switch_to_agent_by_index(10)
+        assert result is False
+
+
+class TestDoubleTabDetection:
+    """Test hotkey double-tap detection."""
+
+    def test_double_tap_switches_mode(self) -> None:
+        """Rapid double tap switches processing mode."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        # Simulate rapid double tap
+        engine._on_hotkey_toggle()
+        engine._last_tap_time = time.time() - 0.1  # 100ms ago
+        engine._on_hotkey_toggle()
+
+        # Should have switched mode
+        assert len(events.mode_changes) == 1
+
+    def test_single_tap_toggles_listening_after_delay(self) -> None:
+        """Single tap toggles listening after threshold delay."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._on_hotkey_toggle()
+
+        # Wait for threshold
+        time.sleep(engine.DOUBLE_TAP_THRESHOLD + 0.1)
+
+        # Should have toggled listening
+        assert engine.state == AppState.LISTENING
+
+
+class TestHotwords:
+    """Test hotwords building."""
+
+    def test_get_hotwords_from_config(self) -> None:
+        """Hotwords from config."""
+        config = MockConfig()
+        config.stt.hotwords = "voxtype,hey claude"
+        engine = VoxtypeEngine(config=config)
+
+        result = engine._get_hotwords()
+        assert result == "voxtype,hey claude"
+
+    def test_get_hotwords_with_trigger_phrase(self) -> None:
+        """Hotwords includes trigger phrase."""
+        config = MockConfig()
+        config.command.wake_word = "hey joshua"
+        engine = VoxtypeEngine(config=config)
+
+        result = engine._get_hotwords()
+        assert result == "hey joshua"
+
+    def test_get_hotwords_both(self) -> None:
+        """Hotwords combines config and trigger phrase."""
+        config = MockConfig()
+        config.stt.hotwords = "voxtype"
+        config.command.wake_word = "hey joshua"
+        engine = VoxtypeEngine(config=config)
+
+        result = engine._get_hotwords()
+        assert "voxtype" in result
+        assert "hey joshua" in result
+
+    def test_get_hotwords_none(self) -> None:
+        """No hotwords returns None."""
+        config = MockConfig()
+        config.stt.hotwords = None
+        config.command.wake_word = None
+        engine = VoxtypeEngine(config=config)
+
+        result = engine._get_hotwords()
+        assert result is None
+
+
+class TestOutputFile:
+    """Test output file path generation."""
+
+    def test_get_current_output_file_with_agents(self) -> None:
+        """Output file path with agents."""
+        config = MockConfig()
+        agents = ["claude", "cursor"]
+        engine = VoxtypeEngine(
+            config=config,
+            agents=agents,
+            output_dir="/tmp/test",
+        )
+
+        result = engine._get_current_output_file()
+        assert result == "/tmp/test/claude.voxtype"
+
+    def test_get_current_output_file_after_switch(self) -> None:
+        """Output file path changes after agent switch."""
+        config = MockConfig()
+        agents = ["claude", "cursor"]
+        engine = VoxtypeEngine(
+            config=config,
+            agents=agents,
+            output_dir="/tmp/test",
+        )
+
+        engine._switch_agent(1)
+        result = engine._get_current_output_file()
+        assert result == "/tmp/test/cursor.voxtype"
+
+    def test_get_current_output_file_no_agents(self) -> None:
+        """Output file is None without agents."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+
+        result = engine._get_current_output_file()
+        assert result is None
+
+
+class TestThreadSafety:
+    """Test thread safety of engine operations."""
+
+    def test_concurrent_state_toggles(self) -> None:
+        """Concurrent state toggles don't corrupt state."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        errors = []
+
+        def toggle_many_times() -> None:
+            try:
+                for _ in range(50):
+                    engine._toggle_listening()
+                    time.sleep(0.001)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=toggle_many_times) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # No exceptions
+        assert len(errors) == 0
+        # State should be valid
+        assert engine.state in AppState
+
+    def test_concurrent_mode_switches(self) -> None:
+        """Concurrent mode switches don't corrupt mode."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        errors = []
+
+        def switch_many_times() -> None:
+            try:
+                for _ in range(50):
+                    engine._switch_processing_mode()
+                    time.sleep(0.001)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=switch_many_times) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # No exceptions
+        assert len(errors) == 0
+        # Mode should be valid
+        assert engine.mode in ProcessingMode
+
+    def test_concurrent_agent_switches(self) -> None:
+        """Concurrent agent switches don't corrupt index."""
+        config = MockConfig()
+        agents = ["a", "b", "c", "d", "e"]
+        engine = VoxtypeEngine(config=config, agents=agents)
+        errors = []
+
+        def switch_agents() -> None:
+            try:
+                for _ in range(50):
+                    engine._switch_agent(1)
+                    time.sleep(0.001)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=switch_agents) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # No exceptions
+        assert len(errors) == 0
+        # Index should be valid
+        assert 0 <= engine.current_agent_index < len(agents)
+
+
+class TestVADCallbacks:
+    """Test VAD callback methods."""
+
+    def test_on_vad_speech_start_emits_event(self) -> None:
+        """VAD speech start emits recording_start event."""
+        config = MockConfig()
+        events = MockEventHandler()
+        recording_started = []
+        events.on_recording_start = lambda: recording_started.append(True)
+        engine = VoxtypeEngine(config=config, events=events)
+
+        # Need to be in LISTENING state first
+        engine._state_manager.transition(AppState.LISTENING)
+        engine._on_vad_speech_start()
+
+        assert len(recording_started) == 1
+        assert engine.state == AppState.RECORDING
+
+    def test_on_vad_speech_start_ignored_when_off(self) -> None:
+        """VAD speech start ignored when OFF."""
+        config = MockConfig()
+        events = MockEventHandler()
+        recording_started = []
+        events.on_recording_start = lambda: recording_started.append(True)
+        engine = VoxtypeEngine(config=config, events=events)
+
+        # State is OFF
+        engine._on_vad_speech_start()
+
+        assert len(recording_started) == 0
+        assert engine.state == AppState.OFF
+
+    def test_on_max_speech_duration_emits_event(self) -> None:
+        """Max speech duration emits event."""
+        config = MockConfig()
+        events = MockEventHandler()
+        max_reached = []
+        events.on_max_duration_reached = lambda: max_reached.append(True)
+        engine = VoxtypeEngine(config=config, events=events)
+
+        engine._on_max_speech_duration()
+
+        assert len(max_reached) == 1
+
+
+class TestDiscardCurrent:
+    """Test discarding current recording."""
+
+    def test_discard_current_resets_to_listening(self) -> None:
+        """Discard while recording resets to listening."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+
+        # Simulate being in RECORDING state
+        engine._state_manager.transition(AppState.LISTENING)
+        engine._state_manager.transition(AppState.RECORDING)
+
+        engine._discard_current()
+
+        assert engine.state == AppState.LISTENING
