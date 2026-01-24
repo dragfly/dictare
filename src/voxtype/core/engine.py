@@ -590,7 +590,7 @@ class VoxtypeEngine:
 
     def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
         """Execute the action decided by the LLM."""
-        from voxtype.llm.models import Action, Command
+        from voxtype.llm.models import Action
 
         # Log the LLM decision
         if self._logger:

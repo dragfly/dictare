@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from voxtype.commands.schema import CommandParam, CommandSchema, ParamType
 
@@ -26,7 +27,7 @@ class AppCommands:
     not commands sent to targets.
     """
 
-    def __init__(self, app: "VoxtypeApp") -> None:
+    def __init__(self, app: VoxtypeApp) -> None:
         self._app = app
         self._commands: dict[str, CommandHandler] = {}
         self._register_builtin()

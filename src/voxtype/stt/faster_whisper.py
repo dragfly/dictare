@@ -8,9 +8,8 @@ from typing import TYPE_CHECKING
 from voxtype.stt.base import STTEngine
 
 if TYPE_CHECKING:
-    from numpy.typing import NDArray
-
     import numpy as np
+    from numpy.typing import NDArray
 
 # Model sizes and their Hugging Face repo names
 # Note: turbo models use None - handled natively by faster-whisper
@@ -135,13 +134,13 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
             progress.update(task, completed=True)
 
         if console:
-            console.print(f"[green]Model downloaded successfully[/]")
+            console.print("[green]Model downloaded successfully[/]")
 
         return local_path
 
     except RepositoryNotFoundError as e:
         if console:
-            console.print(f"\n[red bold]Download failed: Model not found[/]")
+            console.print("\n[red bold]Download failed: Model not found[/]")
             console.print(f"[yellow]Repository: {repo_id}[/]")
             if "401" in str(e) or "Unauthorized" in str(e):
                 console.print("\n[yellow]Authentication error - invalid cached credentials.[/]")
@@ -155,7 +154,7 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
 
     except HfHubHTTPError as e:
         if console:
-            console.print(f"\n[red bold]Download failed: Network error[/]")
+            console.print("\n[red bold]Download failed: Network error[/]")
             if "401" in str(e) or "Unauthorized" in str(e):
                 console.print("\n[yellow]Authentication error - invalid cached credentials.[/]")
                 console.print("[dim]The Whisper models are public and don't require login.[/]")
@@ -171,7 +170,7 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
 
     except Exception as e:
         if console:
-            console.print(f"\n[red bold]Download failed[/]")
+            console.print("\n[red bold]Download failed[/]")
             console.print(f"[dim]Error: {e}[/]")
             console.print("\n[yellow]Troubleshooting:[/]")
             console.print("[dim]1. Check your internet connection[/]")

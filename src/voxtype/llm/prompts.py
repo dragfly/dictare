@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from voxtype.llm.models import AppState, LLMRequest
+from voxtype.llm.models import LLMRequest
 
 SYSTEM_PROMPT = """You are Joshua, a voice assistant for voxtype.
 You analyze transcribed speech and decide what action to take.

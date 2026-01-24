@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import os
-import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
+import tomllib
 from pydantic import BaseModel, Field
 
 # Environment variable prefix
@@ -222,11 +222,11 @@ def _key_to_env_var(key: str) -> str:
 
 def _parse_value(value: str, current_type: type) -> Any:
     """Parse string value to appropriate type."""
-    if current_type == bool:
+    if current_type is bool:
         return value.lower() in ("true", "1", "yes", "on")
-    elif current_type == int:
+    elif current_type is int:
         return int(value)
-    elif current_type == float:
+    elif current_type is float:
         return float(value)
     else:
         return value

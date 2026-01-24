@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 import threading
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from voxtype.input.backends.base import DeviceBackend
 
@@ -49,7 +49,7 @@ class EvdevBackend(DeviceBackend):
         if sys.platform != "linux":
             return False
         try:
-            import evdev
+            import evdev  # noqa: F401
             return True
         except ImportError:
             return False

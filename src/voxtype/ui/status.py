@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from rich.live import Live
 from rich.panel import Panel
-from rich.text import Text
 
 from voxtype import __version__
 

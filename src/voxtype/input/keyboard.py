@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-import threading
 from dataclasses import dataclass
 
 from voxtype.input.base import InputCallback, InputEvent, InputSource
@@ -94,7 +93,6 @@ class KeyboardShortcutSource(InputSource):
     def _key_to_modifier(self, key) -> str | None:
         """Convert pynput key to canonical modifier name."""
         try:
-            from pynput.keyboard import Key
 
             key_name = key.name if hasattr(key, "name") else str(key)
 

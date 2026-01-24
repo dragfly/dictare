@@ -8,9 +8,8 @@ from voxtype.stt.base import STTEngine
 from voxtype.stt.faster_whisper import _filter_repetitions
 
 if TYPE_CHECKING:
-    from numpy.typing import NDArray
-
     import numpy as np
+    from numpy.typing import NDArray
 
 
 # Model mapping for mlx-community hub
