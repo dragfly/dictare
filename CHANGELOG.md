@@ -5,18 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.22.2] - 2026-01-24
+## [2.22.3] - 2026-01-24
 
 ### Added
 - **Live status panel**: New Rich Live-based UI that updates in-place without scrolling
   - Fixed-width panel (72 chars) prevents resizing on content change
   - Color-coded status: OFF (dim), LISTENING (green), RECORDING (cyan), TRANSCRIBING (yellow), INJECTING (magenta), PLAYING (blue)
   - Shows last transcribed text (truncated to 55 chars)
-  - Title shows version: "voxtype v2.22.2"
+  - Title shows version: "voxtype vX.Y.Z"
 - **`--force` flag for install.sh**: Force rebuild from source even with same version (for developers)
 
 ### Fixed
 - **Duplicate panel on Ctrl+C**: Panel was rendered twice on shutdown. Now stopped in `app.stop()` before any console output.
+- **Consistent Python 3.11 on Linux**: Linux install was missing `--python 3.11`, now matches macOS for identical UX.
 
 ## [2.22.0] - 2026-01-24
 
