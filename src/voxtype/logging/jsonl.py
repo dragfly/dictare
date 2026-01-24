@@ -1,27 +1,57 @@
-"""JSONL (newline-delimited JSON) structured logger."""
+"""JSONL (newline-delimited JSON) structured logger with log levels."""
 
 from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from enum import IntEnum
 from pathlib import Path
 from typing import Any, Optional
 
+class LogLevel(IntEnum):
+    """Log levels for structured logging."""
+
+    ERROR = 10
+    INFO = 20
+    DEBUG = 30
+
+# Default log directory
+DEFAULT_LOG_DIR = Path.home() / ".local" / "share" / "voxtype" / "logs"
+
+def get_default_log_path(name: str = "listen") -> Path:
+    """Get default log file path.
+
+    Args:
+        name: Log name (e.g., "listen" or "agent.myagent")
+
+    Returns:
+        Path to log file in default log directory.
+    """
+    return DEFAULT_LOG_DIR / f"{name}.jsonl"
+
 class JSONLLogger:
-    """Structured logger that writes JSONL format.
+    """Structured logger that writes JSONL format with log levels.
 
     Each log entry is a JSON object on a single line, making it easy
     to parse and analyze programmatically.
 
-    Example output:
-    {"ts":"2024-12-30T10:30:00Z","event":"transcription","text":"hello world",...}
-    {"ts":"2024-12-30T10:30:01Z","event":"wake_word_check","found":true,...}
+    Log levels control what is logged:
+    - ERROR: Only errors
+    - INFO: Metadata only (counts, durations) - no text content for privacy
+    - DEBUG: Everything including text content
+
+    Example output (INFO level):
+    {"ts":"2024-12-30T10:30:00Z","level":"INFO","event":"transcription","chars":12,"duration_ms":1500}
+
+    Example output (DEBUG level):
+    {"ts":"2024-12-30T10:30:00Z","level":"DEBUG","event":"transcription","text":"hello world","chars":11,"duration_ms":1500}
     """
 
     def __init__(
         self,
         log_path: Path | str,
         version: str,
+        level: LogLevel = LogLevel.INFO,
         params: Optional[dict] = None,
     ) -> None:
         """Initialize the JSONL logger.
@@ -29,10 +59,12 @@ class JSONLLogger:
         Args:
             log_path: Path to the log file.
             version: Application version for logging.
+            level: Log level (ERROR, INFO, DEBUG).
             params: Optional startup parameters to log.
         """
         self.log_path = Path(log_path)
         self.version = version
+        self.level = level
         self._file = None
 
         # Ensure parent directory exists
@@ -45,20 +77,22 @@ class JSONLLogger:
         session_data = {"version": version}
         if params:
             session_data.update(params)
-        self.log("session_start", **session_data)
+        self._log_internal("session_start", LogLevel.INFO, **session_data)
 
-    def log(self, event: str, **data: Any) -> None:
-        """Log an event with structured data.
+    def _log_internal(self, event: str, level: LogLevel, **data: Any) -> None:
+        """Internal log method with level.
 
         Args:
             event: Event type (e.g., "transcription", "command", "state_change").
+            level: Log level for this event.
             **data: Additional key-value data to include.
         """
-        if not self._file:
+        if not self._file or level > self.level:
             return
 
         entry = {
             "ts": datetime.now(timezone.utc).isoformat(),
+            "level": level.name,
             "event": event,
             **data,
         }
@@ -69,19 +103,64 @@ class JSONLLogger:
         except Exception:
             pass  # Don't crash on logging errors
 
+    def log(self, event: str, **data: Any) -> None:
+        """Log an event at INFO level.
+
+        Args:
+            event: Event type (e.g., "transcription", "command", "state_change").
+            **data: Additional key-value data to include.
+        """
+        self._log_internal(event, LogLevel.INFO, **data)
+
+    def debug(self, event: str, **data: Any) -> None:
+        """Log an event at DEBUG level.
+
+        Args:
+            event: Event type.
+            **data: Additional key-value data to include.
+        """
+        self._log_internal(event, LogLevel.DEBUG, **data)
+
+    def error(self, event: str, **data: Any) -> None:
+        """Log an event at ERROR level.
+
+        Args:
+            event: Event type.
+            **data: Additional key-value data to include.
+        """
+        self._log_internal(event, LogLevel.ERROR, **data)
+
     def log_transcription(
         self,
         text: str,
         duration_ms: Optional[float] = None,
         language: Optional[str] = None,
     ) -> None:
-        """Log a transcription event."""
-        self.log(
+        """Log a transcription event.
+
+        At INFO level: logs only metadata (chars, word count, duration)
+        At DEBUG level: also logs the actual text
+        """
+        chars = len(text)
+        words = len(text.split())
+
+        # INFO level: metadata only (privacy)
+        self._log_internal(
             "transcription",
-            text=text,
+            LogLevel.INFO,
+            chars=chars,
+            words=words,
             duration_ms=duration_ms,
             language=language,
         )
+
+        # DEBUG level: include text content
+        if self.level >= LogLevel.DEBUG:
+            self._log_internal(
+                "transcription_text",
+                LogLevel.DEBUG,
+                text=text,
+            )
 
     def log_wake_word_check(
         self,
@@ -92,8 +171,10 @@ class JSONLLogger:
         filtered_text: Optional[str] = None,
     ) -> None:
         """Log a wake word check."""
-        self.log(
+        # Always log at DEBUG (contains text)
+        self._log_internal(
             "wake_word_check",
+            LogLevel.DEBUG,
             text=text,
             wake_word=wake_word,
             found=found,
@@ -109,13 +190,21 @@ class JSONLLogger:
         executed: bool,
     ) -> None:
         """Log a command classification/execution."""
-        self.log(
+        # INFO: metadata only
+        self._log_internal(
             "command",
-            text=text,
+            LogLevel.INFO,
             intent=intent,
             confidence=confidence,
             executed=executed,
         )
+        # DEBUG: include text
+        if self.level >= LogLevel.DEBUG:
+            self._log_internal(
+                "command_text",
+                LogLevel.DEBUG,
+                text=text,
+            )
 
     def log_state_change(
         self,
@@ -124,8 +213,9 @@ class JSONLLogger:
         trigger: str,
     ) -> None:
         """Log a state change."""
-        self.log(
+        self._log_internal(
             "state_change",
+            LogLevel.DEBUG,
             old_state=old_state,
             new_state=new_state,
             trigger=trigger,
@@ -140,14 +230,24 @@ class JSONLLogger:
         enter_sent: bool | None = None,
     ) -> None:
         """Log a text injection."""
-        self.log(
+        chars = len(text)
+        # INFO: metadata only
+        self._log_internal(
             "injection",
-            text=text,  # Full text for debugging
+            LogLevel.INFO,
+            chars=chars,
             method=method,
             success=success,
             auto_enter=auto_enter,
             enter_sent=enter_sent,
         )
+        # DEBUG: include text
+        if self.level >= LogLevel.DEBUG:
+            self._log_internal(
+                "injection_text",
+                LogLevel.DEBUG,
+                text=text,
+            )
 
     def log_vad_event(
         self,
@@ -155,16 +255,18 @@ class JSONLLogger:
         duration_ms: Optional[float] = None,
     ) -> None:
         """Log a VAD event (speech start/end)."""
-        self.log(
+        self._log_internal(
             "vad",
+            LogLevel.DEBUG,
             type=event_type,
             duration_ms=duration_ms,
         )
 
     def log_error(self, error: str, context: Optional[str] = None) -> None:
         """Log an error."""
-        self.log(
+        self._log_internal(
             "error",
+            LogLevel.ERROR,
             error=error,
             context=context,
         )
@@ -172,7 +274,7 @@ class JSONLLogger:
     def close(self) -> None:
         """Close the log file."""
         if self._file:
-            self.log("session_end")
+            self._log_internal("session_end", LogLevel.INFO)
             self._file.close()
             self._file = None
 
