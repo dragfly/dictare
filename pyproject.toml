@@ -28,7 +28,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "sounddevice>=0.5.0",
+    "sounddevice>=0.5.0,<0.5.4",  # 0.5.4 has finished_callback bug
     "numpy>=1.24.0",
     "typer-slim[standard]>=0.12.0",
     "pydantic>=2.0.0",

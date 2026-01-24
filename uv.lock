@@ -1811,7 +1811,6 @@ wheels = [
 
 [[package]]
 name = "voxtype"
-version = "2.16.6"
 source = { editable = "." }
 dependencies = [
     { name = "evdev", marker = "sys_platform == 'linux'" },
@@ -1871,7 +1870,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
     { name = "scipy", marker = "extra == 'mlx'", specifier = ">=1.10.0" },
-    { name = "sounddevice", specifier = ">=0.5.0" },
+    { name = "sounddevice", specifier = ">=0.5.0,<0.5.4" },
     { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.5.0" },
     { name = "toml", specifier = ">=0.10.0" },
     { name = "tqdm", marker = "extra == 'mlx'", specifier = ">=4.60.0" },

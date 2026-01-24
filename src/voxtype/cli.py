@@ -528,7 +528,16 @@ def listen(
         nonlocal shutdown_attempted
         if shutdown_attempted:
             # Second signal - force exit
+            # Clean up multiprocessing resources before force exit to avoid semaphore leak warnings
             console.print("\n[red]Force exit[/]")
+            import gc
+            import multiprocessing.resource_tracker
+            gc.collect()
+            try:
+                # Explicitly clear tracked resources to avoid leak warnings
+                multiprocessing.resource_tracker._resource_tracker._stop()
+            except Exception:
+                pass
             import os
             os._exit(1)
 
@@ -537,10 +546,16 @@ def listen(
         # Set a timeout for graceful shutdown
         def force_exit():
             import gc
+            import multiprocessing.resource_tracker
             import time
             time.sleep(3)  # Give 3 seconds for graceful shutdown
             # Force GC before exit to release any remaining ONNX semaphores
             gc.collect()
+            try:
+                # Explicitly clear tracked resources to avoid leak warnings
+                multiprocessing.resource_tracker._resource_tracker._stop()
+            except Exception:
+                pass
             console.print("\n[red]Shutdown timeout - forcing exit[/]")
             import os
             os._exit(1)
