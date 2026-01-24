@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.4] - 2026-01-24
+
+### Added
+- **VoxtypeEngine**: New core engine class (`src/voxtype/core/engine.py`) with all business logic and NO UI dependencies
+- **EngineEvents protocol**: Event-based architecture (`src/voxtype/core/events.py`) for decoupling core from UI
+  - `on_state_change`, `on_transcription`, `on_injection`, `on_mode_change`, `on_agent_change`
+  - `on_vad_loading`, `on_device_reconnect_attempt`, `on_device_reconnect_success`
+- **Unit tests for engine**: 47 new tests in `tests/test_engine.py`
+
+### Changed
+- **VoxtypeApp refactored**: Now a thin wrapper (~550 lines) that implements `EngineEvents` and handles UI only
+- **AudioManager UI-free**: Removed `console` parameter, added event callbacks instead (`on_vad_loading`, `on_reconnect_attempt`, `on_reconnect_success`)
+
+### Fixed
+- **Stuck in TRANSCRIBING**: Engine now emits `on_state_change` event after `reset_to_listening()` so UI updates correctly
+- **Graceful cleanup**: Added try/except for `rich.columns` import during session stats display
+
 ## [2.23.0] - 2026-01-24
 
 ### Changed
