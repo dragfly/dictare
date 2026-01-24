@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from voxtype.llm import LLMProcessor, LLMResponse
     from voxtype.llm.models import AppState as LLMAppState
     from voxtype.logging.jsonl import JSONLLogger
+    from voxtype.ui.status import LiveStatusPanel
 
 
 class VoxtypeApp:
@@ -117,6 +118,9 @@ class VoxtypeApp:
 
         # Track if speech was ignored (for ready-to-listen feedback)
         self._speech_was_ignored = False
+
+        # Live status panel (set in run())
+        self._status_panel: LiveStatusPanel | None = None
 
     @property
     def state(self) -> AppState:
@@ -383,21 +387,16 @@ class VoxtypeApp:
         if self.config.verbose:
             self._console.print(f"[dim][DEBUG] Speech start: state={self.state.name}, listening={self.is_listening}[/]")
 
-        # Show "Listening:" prefix (aligned with "Transcribed:")
-        if self._realtime:
-            # Use sys.stdout for proper \r handling (Rich doesn't handle it well)
-            import sys
-            sys.stdout.write("\033[36m\033[1mListening:\033[0m   ")
-            sys.stdout.flush()
-        else:
-            self._console.print("[bold cyan]Listening...[/]", end="\r")
-
         # Try to transition IDLE → RECORDING
         if not self._state_manager.try_transition(AppState.RECORDING):
             # Not idle - buffer audio for when we're ready
             if self.config.verbose:
                 self._console.print(f"\n[yellow][DEBUG] Speech buffering, state={self.state.name}[/]")
             return
+
+        # Update status panel
+        if self._status_panel:
+            self._status_panel.update_state("RECORDING")
 
         if self._logger:
             self._logger.log_vad_event("speech_start")
@@ -464,6 +463,10 @@ class VoxtypeApp:
                 self._audio_manager.queue_audio(audio_data)
             return
 
+        # Update status panel
+        if self._status_panel:
+            self._status_panel.update_state("TRANSCRIBING")
+
         # Calculate duration
         sample_rate = self._audio_manager.sample_rate if self._audio_manager else self.config.audio.sample_rate
         duration_ms = len(audio_data) / sample_rate * 1000
@@ -474,13 +477,10 @@ class VoxtypeApp:
         # Check minimum duration
         min_samples = int(sample_rate * self.MIN_RECORDING_DURATION)
         if len(audio_data) < min_samples:
-            self._console.print("[dim]Too short, ignoring.        [/]")
             self._state_manager.reset_to_listening()  # TRANSCRIBING → IDLE
+            if self._status_panel:
+                self._status_panel.update_state("LISTENING")
             return
-
-        # Show transcribing status (skip in realtime mode - we'll show Transcribed: instead)
-        if not self._realtime:
-            self._console.print("[bold yellow]Transcribing...[/]", end="\r")
 
         # Transcribe and process with LLM
         self._transcribe_and_process(audio_data)
@@ -555,14 +555,18 @@ class VoxtypeApp:
                         # Fallback: just inject
                         self._inject_text(text)
                 else:
-                    self._console.print("[dim]No speech detected.                    [/]")
+                    pass  # No speech detected - status panel still shows last text
             except Exception as e:
                 # Log error
                 if self._logger:
                     self._logger.log_error(str(e), context="transcribe_and_process")
-                self._console.print(f"[red]Error: {e}[/]")
+                if self.config.verbose:
+                    self._console.print(f"[red]Error: {e}[/]")
             finally:
                 self._state_manager.reset_to_listening()  # Return to IDLE
+                # Update status panel back to LISTENING (or OFF if not listening)
+                if self._status_panel:
+                    self._status_panel.update_state("LISTENING" if self.is_listening else "OFF")
                 if self.config.verbose:
                     self._console.print(f"[dim][DEBUG] After transcribe: state={self.state.name}, listening={self.is_listening}, running={self._running}[/]")
                 self._signal_ready_to_listen()
@@ -675,12 +679,14 @@ class VoxtypeApp:
         Args:
             trigger: What triggered the state change (voice_command, hotkey_toggle).
         """
-        # Play beep FIRST before any console output
+        # Play beep FIRST before any panel updates
         if self.config.audio.audio_feedback:
             from voxtype.audio.beep import play_beep_start
             play_beep_start()
 
-        self._console.print("[bold green]>>> LISTENING MODE[/]")
+        # Update status panel
+        if self._status_panel:
+            self._status_panel.update_state("LISTENING")
 
         if self._logger:
             self._logger.log_state_change(
@@ -695,12 +701,14 @@ class VoxtypeApp:
         Args:
             trigger: What triggered the state change (voice_command, hotkey_toggle).
         """
-        # Play beep FIRST before any console output
+        # Play beep FIRST before any panel updates
         if self.config.audio.audio_feedback:
             from voxtype.audio.beep import play_beep_stop
             play_beep_stop()
 
-        self._console.print("[bold yellow]<<< LISTENING MODE OFF[/]")
+        # Update status panel
+        if self._status_panel:
+            self._status_panel.update_state("OFF")
 
         if self._logger:
             self._logger.log_state_change(
@@ -745,12 +753,14 @@ class VoxtypeApp:
         if current == AppState.LISTENING:
             # LISTENING → OFF
             if self._state_manager.try_transition(AppState.OFF):
-                self._console.print("[bold red]<<< LISTENING OFF[/]")
+                if self._status_panel:
+                    self._status_panel.update_state("OFF")
                 self._play_feedback("listening_off")
         elif current == AppState.OFF:
             # OFF → LISTENING
             if self._state_manager.try_transition(AppState.LISTENING):
-                self._console.print("[bold green]>>> LISTENING ON[/]")
+                if self._status_panel:
+                    self._status_panel.update_state("LISTENING")
                 self._play_feedback("listening_on")
         # else: busy (RECORDING, TRANSCRIBING, etc.) - ignore toggle
 
@@ -762,10 +772,12 @@ class VoxtypeApp:
         """Switch between transcription and command mode."""
         if self._processing_mode == ProcessingMode.TRANSCRIPTION:
             self._processing_mode = ProcessingMode.COMMAND
-            self._console.print("[bold yellow]>>> MODE: COMMAND (LLM)[/]")
+            if self._status_panel:
+                self._status_panel.update_mode("command")
         else:
             self._processing_mode = ProcessingMode.TRANSCRIPTION
-            self._console.print("[bold cyan]>>> MODE: TRANSCRIPTION (fast)[/]")
+            if self._status_panel:
+                self._status_panel.update_mode("transcription")
 
         # Sync LLM processor state if available
         if self._llm_processor:
@@ -850,12 +862,17 @@ class VoxtypeApp:
             if not self._state_manager.try_transition(AppState.PLAYING):
                 return  # Can't enter PLAYING, skip TTS
 
+            if self._status_panel:
+                self._status_panel.update_state("PLAYING")
+
             def _speak_and_resume():
                 _do_tts()
                 # Flush VAD to clear any residual echo
                 if self._audio_manager:
                     self._audio_manager.flush_vad()
                 self._state_manager.try_transition(AppState.LISTENING)
+                if self._status_panel:
+                    self._status_panel.update_state("LISTENING")
 
             threading.Thread(target=_speak_and_resume, daemon=True).start()
         else:
@@ -904,10 +921,10 @@ class VoxtypeApp:
         Args:
             text: Text to inject.
         """
-        # Show transcribed text (skip in realtime mode - already shown with full text)
-        if not self._realtime:
-            display_text = text[:60] + "..." if len(text) > 60 else text
-            self._console.print(f"[green]Transcribed:[/] {display_text}        ")
+        # Update status panel with the transcribed text
+        if self._status_panel:
+            self._status_panel.update_text(text)
+            self._status_panel.update_state("INJECTING")
 
         # Always add newline (for visual separation or Enter key depending on auto_enter)
         inject_text = text + "\n"
@@ -953,71 +970,59 @@ class VoxtypeApp:
             if not success:
                 self._console.print("[red]Failed to inject text[/]")
 
-    def run(self, status_panel=None) -> None:
+    def run(self, status_panel: LiveStatusPanel | None = None) -> None:
         """Start the application main loop.
 
         Args:
-            status_panel: Optional Rich Panel to display after loading is complete.
+            status_panel: Optional LiveStatusPanel for live status updates.
         """
-        self._run_vad_mode(status_panel=status_panel)
+        self._status_panel = status_panel
+        self._run_vad_mode()
 
-    def _run_vad_mode(self, status_panel=None) -> None:
-        """Run in VAD (voice activity detection) mode.
-
-        Args:
-            status_panel: Optional Rich Panel to display after loading is complete.
-        """
+    def _run_vad_mode(self) -> None:
+        """Run in VAD (voice activity detection) mode."""
         self._init_vad_components()
-
-        # Show status panel AFTER loading is complete
-        if status_panel:
-            self._console.print(status_panel)
 
         self._running = True
         self._stats_start_time = time.time()
 
-        # Start hotkey listener for toggle (if available)
-        if self._hotkey:
-            self._hotkey.start(
-                on_press=self._on_hotkey_toggle,
-                on_release=lambda: None,  # No action on release for toggle mode
-            )
-            # Show device info (verbose only, evdev only)
-            if self.config.verbose and hasattr(self._hotkey, "get_selected_device_info"):
-                device_info = self._hotkey.get_selected_device_info()
-                if device_info:
-                    self._console.print(f"[dim]Hotkey device: {device_info[0]} ({device_info[1]})[/]")
+        # Start live status panel AFTER loading is complete
+        if self._status_panel:
+            self._status_panel.start()
 
-        # IMPORTANT: Show message FIRST, then transition to LISTENING, then start streaming
-        mode_name = "TRANSCRIPTION" if self._processing_mode == ProcessingMode.TRANSCRIPTION else "COMMAND"
-        self._console.print(f"[bold green]>>> LISTENING ON[/] [dim]({mode_name} mode)[/]")
-
-        # Transition OFF → LISTENING
-        self._state_manager.transition(AppState.LISTENING)
-
-        # Sync LLM processor state
-        if self._llm_processor:
-            self._llm_processor.set_listening(True)
-
-        if self._audio_manager:
-            # Audio processing: enabled when state is LISTENING or RECORDING
-            self._audio_manager.start_streaming(
-                is_listening=lambda: self._state_manager.should_process_audio,
-                is_running=lambda: self._running,
-            )
-
-        # Keep main thread alive, check for device reconnection
         try:
+            # Start hotkey listener for toggle (if available)
+            if self._hotkey:
+                self._hotkey.start(
+                    on_press=self._on_hotkey_toggle,
+                    on_release=lambda: None,  # No action on release for toggle mode
+                )
+
+            # Transition OFF → LISTENING and update panel
+            self._state_manager.transition(AppState.LISTENING)
+            if self._status_panel:
+                self._status_panel.update_state("LISTENING")
+
+            # Sync LLM processor state
+            if self._llm_processor:
+                self._llm_processor.set_listening(True)
+
+            if self._audio_manager:
+                # Audio processing: enabled when state is LISTENING or RECORDING
+                self._audio_manager.start_streaming(
+                    is_listening=lambda: self._state_manager.should_process_audio,
+                    is_running=lambda: self._running,
+                )
+
+            # Keep main thread alive, check for device reconnection
             while self._running:
                 time.sleep(0.1)
                 if self._audio_manager and self._audio_manager.needs_reconnect():
-                    self._console.print("[yellow]Audio device changed, reconnecting...[/]", end="")
                     if not self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
-                        self._console.print(" [red]FAILED[/]")
-                        self._console.print("[red]Could not reconnect audio. Please restart.[/]")
                         break
         except KeyboardInterrupt:
             pass
+        # Note: status_panel.stop() is called in stop() to prevent duplicate rendering
 
     def _init_input_manager(self) -> None:
         """Initialize input manager for keyboard shortcuts and device profiles."""
@@ -1051,12 +1056,14 @@ class VoxtypeApp:
         if on and self.is_off:
             # OFF → LISTENING
             if self._state_manager.try_transition(AppState.LISTENING):
-                self._console.print("[bold green]>>> LISTENING ON[/]")
+                if self._status_panel:
+                    self._status_panel.update_state("LISTENING")
                 self._play_feedback("listening_on")
         elif not on and self.is_listening:
             # LISTENING → OFF
             if self._state_manager.try_transition(AppState.OFF):
-                self._console.print("[bold red]<<< LISTENING OFF[/]")
+                if self._status_panel:
+                    self._status_panel.update_state("OFF")
                 self._play_feedback("listening_off")
 
         # Sync LLM processor state if available
@@ -1187,12 +1194,17 @@ class VoxtypeApp:
             if not self._state_manager.try_transition(AppState.PLAYING):
                 return  # Can't enter PLAYING, skip TTS
 
+            if self._status_panel:
+                self._status_panel.update_state("PLAYING")
+
             def _speak_and_resume():
                 _do_tts()
                 # Flush VAD to clear any residual echo
                 if self._audio_manager:
                     self._audio_manager.flush_vad()
                 self._state_manager.try_transition(AppState.LISTENING)
+                if self._status_panel:
+                    self._status_panel.update_state("LISTENING")
 
             threading.Thread(target=_speak_and_resume, daemon=True).start()
         else:
@@ -1216,11 +1228,11 @@ class VoxtypeApp:
             # Reset VAD if active
             self._audio_manager.flush_vad()
 
-        # Reset state if recording (RECORDING → IDLE)
+        # Reset state if recording (RECORDING → LISTENING)
         if self.state == AppState.RECORDING:
             self._state_manager.transition(AppState.LISTENING)
-
-        self._console.print("[yellow]Discarded[/]")
+            if self._status_panel:
+                self._status_panel.update_state("LISTENING")
 
     def _create_agent_files(self) -> None:
         """Create agent output files (empty, so inputmux can find them)."""
@@ -1245,6 +1257,12 @@ class VoxtypeApp:
         import gc
 
         self._running = False
+
+        # Stop status panel FIRST to prevent duplicate rendering
+        if self._status_panel:
+            self._status_panel.stop()
+            self._status_panel = None
+
         # Force transition to OFF to stop audio processing immediately
         self._state_manager.transition(AppState.OFF, force=True)
 
