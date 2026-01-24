@@ -395,7 +395,7 @@ class TestStateManagerRaceConditions:
 
     def test_rapid_toggle_stress(self) -> None:
         """Rapid state toggles should not corrupt state."""
-        sm = StateManager()
+        sm = StateManager(initial_state=AppState.LISTENING)
         errors = []
         iterations = 1000
 
@@ -405,7 +405,7 @@ class TestStateManagerRaceConditions:
                     # Try to go through a workflow
                     if sm.try_transition(AppState.RECORDING):
                         sm.try_transition(AppState.TRANSCRIBING)
-                        sm.try_transition(AppState.IDLE)
+                        sm.try_transition(AppState.LISTENING)
                 except Exception as e:
                     errors.append(e)
 
@@ -420,7 +420,7 @@ class TestStateManagerRaceConditions:
 
     def test_reset_during_workflow(self) -> None:
         """Reset during workflow should not corrupt state."""
-        sm = StateManager()
+        sm = StateManager(initial_state=AppState.LISTENING)
         errors = []
 
         def workflow():
@@ -430,13 +430,13 @@ class TestStateManagerRaceConditions:
                     time.sleep(0.001)
                     sm.try_transition(AppState.TRANSCRIBING)
                     time.sleep(0.001)
-                    sm.try_transition(AppState.IDLE)
+                    sm.try_transition(AppState.LISTENING)
                 except Exception as e:
                     errors.append(e)
 
         def resetter():
             for _ in range(100):
-                sm.reset()
+                sm.reset_to_listening()
                 time.sleep(0.002)
 
         t1 = threading.Thread(target=workflow)
@@ -448,12 +448,11 @@ class TestStateManagerRaceConditions:
         t2.join()
 
         assert len(errors) == 0
-        # Final state should be valid (likely IDLE from reset)
+        # Final state should be valid (likely LISTENING from reset)
         assert sm.state in AppState
 
     def test_callback_under_contention(self) -> None:
         """Callbacks should be called correctly under contention."""
-        sm = StateManager()
         transitions = []
         lock = threading.Lock()
 
@@ -461,13 +460,13 @@ class TestStateManagerRaceConditions:
             with lock:
                 transitions.append((from_state, to_state))
 
-        sm = StateManager(on_transition=on_transition)
+        sm = StateManager(initial_state=AppState.LISTENING, on_transition=on_transition)
 
         def worker():
             for _ in range(50):
                 if sm.try_transition(AppState.RECORDING):
                     sm.try_transition(AppState.TRANSCRIBING)
-                    sm.try_transition(AppState.IDLE)
+                    sm.try_transition(AppState.LISTENING)
                 time.sleep(0.001)
 
         threads = [threading.Thread(target=worker) for _ in range(5)]
@@ -549,7 +548,7 @@ class TestIntegrationRaceConditions:
 
     def test_state_transitions_during_injection(self) -> None:
         """State transitions while injecting should be safe."""
-        sm = StateManager()
+        sm = StateManager(initial_state=AppState.LISTENING)
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             filepath = f.name
@@ -564,7 +563,7 @@ class TestIntegrationRaceConditions:
                         if sm.try_transition(AppState.RECORDING):
                             sm.try_transition(AppState.TRANSCRIBING)
                             sm.try_transition(AppState.INJECTING)
-                            sm.try_transition(AppState.IDLE)
+                            sm.try_transition(AppState.LISTENING)
                     except Exception as e:
                         errors.append(e)
                     time.sleep(0.001)

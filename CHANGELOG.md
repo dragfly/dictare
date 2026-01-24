@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.0] - 2026-01-24
+
+### Added
+- **Open source readiness**: Project is now ready for public contribution
+  - `CONTRIBUTING.md`: Development setup, testing, code style, and PR process
+  - `CODE_OF_CONDUCT.md`: Community guidelines
+  - `SECURITY.md`: Vulnerability reporting policy
+  - `.github/ISSUE_TEMPLATE/`: Bug report and feature request templates
+  - `.github/PULL_REQUEST_TEMPLATE.md`: PR template
+  - `.github/workflows/ci.yml`: GitHub Actions CI (tests + linting on push/PR)
+
+### Fixed
+- **Test suite**: Updated tests to use new state machine API (`OFF`/`LISTENING` instead of `IDLE`, `reset_to_listening()` instead of `reset()`)
+- **Dev dependencies**: Added `typer` to dev dependencies for CLI tests
+
 ## [2.21.2] - 2026-01-24
 
 ### Fixed
