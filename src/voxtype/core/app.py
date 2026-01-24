@@ -809,9 +809,9 @@ class VoxtypeApp:
     def _speak_mode_with_mute(self) -> None:
         """Speak the current mode using TTS.
 
-        Behavior depends on config.audio.tts_pauses_listening:
-        - True (speakers): Transition to PLAYING state, mute mic during TTS
-        - False (headphones): Fire and forget, don't change state
+        Behavior depends on config.audio.headphones_mode:
+        - False (speakers): Transition to PLAYING state, pause mic during TTS
+        - True (headphones): Fire and forget, keep listening
         """
         if not self.config.audio.audio_feedback:
             return
@@ -843,7 +843,8 @@ class VoxtypeApp:
             except Exception:
                 pass
 
-        if self.config.audio.tts_pauses_listening:
+        # Pause listening during TTS unless in headphones mode
+        if not self.config.audio.headphones_mode:
             # Speakers mode: pause listening during TTS
             if not self._state_manager.try_transition(AppState.PLAYING):
                 return  # Can't enter PLAYING, skip TTS
@@ -1153,9 +1154,9 @@ class VoxtypeApp:
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS.
 
-        Behavior depends on config.audio.tts_pauses_listening:
-        - True (speakers): Transition to PLAYING state, mute mic during TTS
-        - False (headphones): Fire and forget, don't change state
+        Behavior depends on config.audio.headphones_mode:
+        - False (speakers): Transition to PLAYING state, pause mic during TTS
+        - True (headphones): Fire and forget, keep listening
         """
         import subprocess
         import sys
@@ -1179,7 +1180,8 @@ class VoxtypeApp:
             except Exception:
                 pass
 
-        if self.config.audio.tts_pauses_listening:
+        # Pause listening during TTS unless in headphones mode
+        if not self.config.audio.headphones_mode:
             # Speakers mode: pause listening during TTS
             if not self._state_manager.try_transition(AppState.PLAYING):
                 return  # Can't enter PLAYING, skip TTS
