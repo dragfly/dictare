@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.23.0] - 2026-01-24
+
+### Changed
+- **TTS code deduplicated**: New `_speak_text()` helper method replaces ~40 lines of duplicate code in `_speak_mode_with_mute()` and `_speak_agent()`
+- **Queue processing iterative**: Converted `_process_queued_audio()` from recursive to iterative loop (fixes #26)
+
+### Fixed
+- **Partial transcription logging**: Errors in realtime transcription are now logged in verbose mode instead of being silently swallowed (fixes #27)
+
+### Removed
+- **Dead code cleanup**: Removed unused `_speech_was_ignored` variable and `_signal_ready_to_listen()` method (~20 lines) - variable was never set to `True` (fixes #25)
+
 ## [2.22.3] - 2026-01-24
 
 ### Added
