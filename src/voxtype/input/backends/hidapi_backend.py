@@ -12,6 +12,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
+from typing import Any
 
 from voxtype.input.backends.base import DeviceBackend
 from voxtype.input.constants import HID_KEY_MAP
@@ -27,13 +28,13 @@ class HIDAPIBackend(DeviceBackend):
         self._verbose = verbose
         self._debounce_ms = debounce_ms
         self._running = False
-        self._device = None
+        self._device: Any = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._last_command_time: float = 0
-        self._on_command: Callable[[str, dict], None] | None = None
+        self._on_command: Callable[[str, dict[str, Any]], None] | None = None
         self._bindings: dict[str, str] = {}
-        self._hid_module = None
+        self._hid_module: Any = None
 
     @property
     def name(self) -> str:

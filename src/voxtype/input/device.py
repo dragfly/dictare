@@ -7,6 +7,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from voxtype.input.base import InputCallback, InputEvent, InputSource
 from voxtype.input.constants import HID_KEY_MAP
@@ -74,7 +75,7 @@ class DeviceInputSource(InputSource):
         self._profile = profile
         self._verbose = verbose
         self._running = False
-        self._device = None
+        self._device: Any = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._last_command_time: float = 0
@@ -219,7 +220,8 @@ class HIDDeviceInputSource(InputSource):
         self._profile = profile
         self._verbose = verbose
         self._running = False
-        self._device = None
+        self._device: Any = None
+        self._hid_module: Any = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._last_command_time: float = 0
@@ -233,13 +235,14 @@ class HIDDeviceInputSource(InputSource):
             return False
 
         # Try hid package first, then hidapi
-        hid_module = None
+        hid_module: Any = None
         try:
             import hid
             hid_module = hid
         except ImportError:
             try:
-                import hidapi as hid_module
+                import hidapi
+                hid_module = hidapi
             except ImportError:
                 if self._verbose:
                     print(f"[hid] {self._profile.name}: no HID package installed")

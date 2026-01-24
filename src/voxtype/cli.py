@@ -846,6 +846,8 @@ def transcribe(
         from voxtype.utils.hardware import is_mlx_available
         use_mlx = config.stt.hw_accel and is_mlx_available()
 
+        from voxtype.stt.base import STTEngine
+        stt_engine: STTEngine
         if use_mlx:
             from voxtype.stt.mlx_whisper import MLXWhisperEngine
             stt_engine = MLXWhisperEngine()

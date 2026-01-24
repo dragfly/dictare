@@ -48,6 +48,9 @@ def get_best_backend(prefer_grab: bool = True) -> DeviceBackend | None:
     """
     import sys
 
+    from voxtype.input.backends.base import DeviceBackend
+
+    backend: DeviceBackend
     if sys.platform == "linux":
         try:
             from voxtype.input.backends.evdev_backend import EvdevBackend

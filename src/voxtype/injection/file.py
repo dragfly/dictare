@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from voxtype import __version__
 from voxtype.injection.base import TextInjector
@@ -30,12 +31,13 @@ class FileInjector(TextInjector):
 
     def __init__(self, filepath: str | Path) -> None:
         self.filepath = Path(filepath)
+        self._newline_sent = False
 
     def is_available(self) -> bool:
         """Always available - files always work."""
         return True
 
-    def _write_message(self, msg: dict) -> bool:
+    def _write_message(self, msg: dict[str, Any]) -> bool:
         """Write a JSONL message to the file with timestamp and version."""
         try:
             # Add metadata for debugging
@@ -64,7 +66,7 @@ class FileInjector(TextInjector):
             text = text.rstrip("\n")
 
         ts = datetime.now(timezone.utc).isoformat()
-        msg = {"text": text, "ts": ts, "v": __version__}
+        msg: dict[str, Any] = {"text": text, "ts": ts, "v": __version__}
         if auto_enter:
             msg["submit"] = True
 
