@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -1025,7 +1025,7 @@ def _list_evdev_devices(set_hotkey: bool) -> None:
         raise typer.Exit(1)
 
     # Collect all devices with their info
-    devices_info = []
+    devices_info: list[dict[str, Any]] = []
     for path in evdev.list_devices():
         try:
             device = evdev.InputDevice(path)

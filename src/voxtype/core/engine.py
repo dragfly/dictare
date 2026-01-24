@@ -241,21 +241,21 @@ class VoxtypeEngine:
                 # Get target device from config (if user specified one)
                 target_device = self.config.hotkey.device or None
 
-                listener = EvdevHotkeyListener(
+                evdev_listener: HotkeyListener = EvdevHotkeyListener(
                     self.config.hotkey.key,
                     target_device=target_device,
                 )
 
                 # Check if key is available, suggest fallback if not
-                if not listener.is_key_available():
+                if not evdev_listener.is_key_available():
                     fallback = EvdevHotkeyListener.suggest_fallback_key()
                     if fallback and fallback != self.config.hotkey.key:
-                        listener = EvdevHotkeyListener(
+                        evdev_listener = EvdevHotkeyListener(
                             fallback,
                             target_device=target_device,
                         )
 
-                return listener
+                return evdev_listener
             except ImportError:
                 errors.append("evdev not installed (pip install evdev)")
             except Exception as e:
@@ -265,9 +265,9 @@ class VoxtypeEngine:
         try:
             from voxtype.hotkey.pynput_listener import PynputHotkeyListener
 
-            listener = PynputHotkeyListener(self.config.hotkey.key)
-            if listener.is_key_available():
-                return listener
+            pynput_listener: HotkeyListener = PynputHotkeyListener(self.config.hotkey.key)
+            if pynput_listener.is_key_available():
+                return pynput_listener
             else:
                 errors.append(f"pynput: key {self.config.hotkey.key} not supported")
         except ImportError:
