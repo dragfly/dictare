@@ -27,9 +27,9 @@ class AudioConfig(BaseModel):
         default=1200,
         description="VAD silence duration to end speech in milliseconds",
     )
-    tts_pauses_listening: bool = Field(
-        default=True,
-        description="Pause listening while playing TTS feedback (set to false when using headphones)",
+    headphones_mode: bool = Field(
+        default=False,
+        description="Set to true when using headphones (TTS won't pause listening)",
     )
 
 class STTConfig(BaseModel):
@@ -422,7 +422,7 @@ channels = 1
 # device = "default"  # Uncomment to specify audio device
 audio_feedback = true  # Play beep on listening mode toggle
 silence_ms = 1200      # VAD silence threshold in ms
-tts_pauses_listening = true  # Set to false when using headphones (TTS won't interfere with mic)
+headphones_mode = false  # Set to true when using headphones (TTS won't pause listening)
 
 [stt]
 model_size = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
