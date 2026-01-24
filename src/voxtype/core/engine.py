@@ -45,7 +45,6 @@ class VoxtypeEngine:
         config: Config,
         events: EngineEvents | None = None,
         logger: JSONLLogger | None = None,
-        output_dir: str | None = None,
         agents: list[str] | None = None,
         realtime: bool = False,
     ) -> None:
@@ -55,8 +54,7 @@ class VoxtypeEngine:
             config: Application configuration.
             events: Optional event handler for UI callbacks.
             logger: Optional JSONL logger for structured logging.
-            output_dir: Directory for agent files (<agent>.voxtype).
-            agents: List of agent IDs for multi-output mode.
+            agents: List of agent IDs for multi-output mode (socket-based).
             realtime: Enable realtime transcription feedback while speaking.
         """
         self.config = config
@@ -83,7 +81,6 @@ class VoxtypeEngine:
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
-        self.output_dir = output_dir
         self.agents = agents or []
         # State machine handles all state (OFF/LISTENING/RECORDING/etc)
         self._state_manager = StateManager(initial_state=AppState.OFF)
@@ -285,11 +282,10 @@ class VoxtypeEngine:
             f"Install pynput (macOS/X11): pip install pynput"
         )
 
-    def _get_current_output_file(self) -> str | None:
-        """Get the current output file path based on agent mode."""
-        if self.output_dir and self.agents:
-            agent = self.agents[self._current_agent_index]
-            return f"{self.output_dir}/{agent}.voxtype"
+    def _get_current_agent_id(self) -> str | None:
+        """Get the current agent ID for socket-based injection."""
+        if self.agents:
+            return self.agents[self._current_agent_index]
         return None
 
     def _get_hotwords(self) -> str | None:
@@ -310,11 +306,11 @@ class VoxtypeEngine:
 
     def _create_injector(self) -> TextInjector:
         """Create text injector based on config.output.method."""
-        # Agent output mode (writes to <agent>.voxtype files)
-        output_path = self._get_current_output_file()
-        if output_path or self.config.output.method == "agent":
-            from voxtype.injection.file import FileInjector
-            return FileInjector(output_path or "voxtype.txt")
+        # Agent output mode - send OpenVIP messages via Unix socket
+        agent_id = self._get_current_agent_id()
+        if agent_id or self.config.output.method == "agent":
+            from voxtype.injection.socket import SocketInjector
+            return SocketInjector(agent_id or "default")
 
         # Keyboard mode - platform-specific injector
         if sys.platform == "darwin":
@@ -385,9 +381,6 @@ class VoxtypeEngine:
             self._hotkey = self._create_hotkey_listener()
         except RuntimeError:
             self._hotkey = None
-
-        # Create agent files
-        self._create_agent_files()
 
     def _init_llm_processor(self) -> None:
         """Initialize the LLM-first processor."""
@@ -858,21 +851,6 @@ class VoxtypeEngine:
 
         if self.state == AppState.RECORDING:
             self._state_manager.transition(AppState.LISTENING)
-
-    def _create_agent_files(self) -> None:
-        """Create agent output files."""
-        if not self.output_dir or not self.agents:
-            return
-
-        import os
-        from pathlib import Path
-
-        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
-
-        for agent in self.agents:
-            filepath = f"{self.output_dir}/{agent}.voxtype"
-            if not os.path.exists(filepath):
-                Path(filepath).touch()
 
     # -------------------------------------------------------------------------
     # Lifecycle

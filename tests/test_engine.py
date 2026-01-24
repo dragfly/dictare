@@ -492,42 +492,40 @@ class TestHotwords:
         result = engine._get_hotwords()
         assert result is None
 
-class TestOutputFile:
-    """Test output file path generation."""
+class TestAgentId:
+    """Test agent ID retrieval for socket-based injection."""
 
-    def test_get_current_output_file_with_agents(self) -> None:
-        """Output file path with agents."""
+    def test_get_current_agent_id_with_agents(self) -> None:
+        """Agent ID with agents configured."""
         config = MockConfig()
         agents = ["claude", "cursor"]
         engine = VoxtypeEngine(
             config=config,
             agents=agents,
-            output_dir="/tmp/test",
         )
 
-        result = engine._get_current_output_file()
-        assert result == "/tmp/test/claude.voxtype"
+        result = engine._get_current_agent_id()
+        assert result == "claude"
 
-    def test_get_current_output_file_after_switch(self) -> None:
-        """Output file path changes after agent switch."""
+    def test_get_current_agent_id_after_switch(self) -> None:
+        """Agent ID changes after agent switch."""
         config = MockConfig()
         agents = ["claude", "cursor"]
         engine = VoxtypeEngine(
             config=config,
             agents=agents,
-            output_dir="/tmp/test",
         )
 
         engine._switch_agent(1)
-        result = engine._get_current_output_file()
-        assert result == "/tmp/test/cursor.voxtype"
+        result = engine._get_current_agent_id()
+        assert result == "cursor"
 
-    def test_get_current_output_file_no_agents(self) -> None:
-        """Output file is None without agents."""
+    def test_get_current_agent_id_no_agents(self) -> None:
+        """Agent ID is None without agents."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
 
-        result = engine._get_current_output_file()
+        result = engine._get_current_agent_id()
         assert result is None
 
 class TestThreadSafety:
