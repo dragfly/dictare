@@ -12,16 +12,25 @@ if TYPE_CHECKING:
 class AppState(Enum):
     """Application states.
 
-    Main workflow: IDLE → RECORDING → TRANSCRIBING → INJECTING → IDLE
-    Audio feedback: IDLE → PLAYING → IDLE (no audio processing during PLAYING)
+    State machine:
+        OFF ↔ LISTENING (hotkey toggle)
+        LISTENING → RECORDING (VAD speech start)
+        LISTENING → PLAYING (TTS feedback, if tts_pauses_listening=true)
+        LISTENING → TRANSCRIBING (processing queued audio)
+        RECORDING → TRANSCRIBING (VAD speech end)
+        RECORDING → LISTENING (audio too short)
+        TRANSCRIBING → INJECTING (text to inject)
+        TRANSCRIBING → LISTENING (no injection)
+        INJECTING → LISTENING
+        PLAYING → LISTENING (TTS complete)
     """
 
-    IDLE = auto()
-    RECORDING = auto()
-    TRANSCRIBING = auto()
-    INJECTING = auto()
-    PLAYING = auto()  # Playing TTS audio feedback (mic muted)
-    LISTENING = auto()  # Continuous transcription mode (no wake word needed)
+    OFF = auto()          # Mic disabled, not listening
+    LISTENING = auto()    # Mic active, waiting for speech
+    RECORDING = auto()    # VAD detected speech, recording
+    TRANSCRIBING = auto() # Processing audio with Whisper
+    INJECTING = auto()    # Injecting text
+    PLAYING = auto()      # Playing TTS feedback (mic ignored)
 
     def __str__(self) -> str:
         """Return human-readable state name."""
@@ -46,38 +55,26 @@ class InvalidTransitionError(Exception):
         super().__init__(f"Invalid transition: {from_state} → {to_state}")
 
 class StateManager:
-    """Thread-safe state machine with validated transitions.
-
-    Valid transitions:
-        IDLE → RECORDING (VAD detects speech start)
-        IDLE → TRANSCRIBING (processing queued audio)
-        IDLE → PLAYING (TTS audio feedback starts)
-        RECORDING → TRANSCRIBING (VAD detects speech end)
-        RECORDING → IDLE (audio too short, discarded)
-        TRANSCRIBING → INJECTING (LLM decides to inject)
-        TRANSCRIBING → IDLE (transcription complete, no inject)
-        INJECTING → IDLE (injection complete)
-        PLAYING → IDLE (TTS audio feedback complete)
-    """
+    """Thread-safe state machine with validated transitions."""
 
     VALID_TRANSITIONS: dict[AppState, list[AppState]] = {
-        AppState.IDLE: [AppState.RECORDING, AppState.TRANSCRIBING, AppState.PLAYING],
-        AppState.RECORDING: [AppState.TRANSCRIBING, AppState.IDLE],
-        AppState.TRANSCRIBING: [AppState.INJECTING, AppState.IDLE],
-        AppState.INJECTING: [AppState.IDLE],
-        AppState.PLAYING: [AppState.IDLE],
-        AppState.LISTENING: [],  # LISTENING is not used in the state machine
+        AppState.OFF: [AppState.LISTENING],
+        AppState.LISTENING: [AppState.RECORDING, AppState.TRANSCRIBING, AppState.PLAYING, AppState.OFF],
+        AppState.RECORDING: [AppState.TRANSCRIBING, AppState.LISTENING],
+        AppState.TRANSCRIBING: [AppState.INJECTING, AppState.LISTENING],
+        AppState.INJECTING: [AppState.LISTENING],
+        AppState.PLAYING: [AppState.LISTENING],
     }
 
     def __init__(
         self,
-        initial_state: AppState = AppState.IDLE,
+        initial_state: AppState = AppState.OFF,
         on_transition: Callable[[AppState, AppState], None] | None = None,
     ) -> None:
         """Initialize state manager.
 
         Args:
-            initial_state: Starting state (default: IDLE)
+            initial_state: Starting state (default: OFF)
             on_transition: Optional callback(from_state, to_state) on successful transitions
         """
         self._state = initial_state
@@ -91,14 +88,24 @@ class StateManager:
             return self._state
 
     @property
-    def is_idle(self) -> bool:
-        """Check if in IDLE state."""
-        return self.state == AppState.IDLE
+    def is_listening(self) -> bool:
+        """Check if in LISTENING state (mic active, waiting for speech)."""
+        return self.state == AppState.LISTENING
 
     @property
-    def is_busy(self) -> bool:
-        """Check if busy (not IDLE)."""
-        return self.state != AppState.IDLE
+    def is_off(self) -> bool:
+        """Check if in OFF state (mic disabled)."""
+        return self.state == AppState.OFF
+
+    @property
+    def is_active(self) -> bool:
+        """Check if actively processing (not OFF or LISTENING)."""
+        return self.state not in (AppState.OFF, AppState.LISTENING)
+
+    @property
+    def should_process_audio(self) -> bool:
+        """Check if audio should be processed (LISTENING or RECORDING)."""
+        return self.state in (AppState.LISTENING, AppState.RECORDING)
 
     def transition(self, to_state: AppState, *, force: bool = False) -> bool:
         """Attempt state transition.
@@ -150,9 +157,9 @@ class StateManager:
         except InvalidTransitionError:
             return False
 
-    def reset(self) -> None:
-        """Force reset to IDLE state."""
-        self.transition(AppState.IDLE, force=True)
+    def reset_to_listening(self) -> None:
+        """Force reset to LISTENING state."""
+        self.transition(AppState.LISTENING, force=True)
 
     def can_transition_to(self, to_state: AppState) -> bool:
         """Check if transition to target state is valid from current state."""
