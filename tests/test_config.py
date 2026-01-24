@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from voxtype.config import (
     AudioConfig,
     CommandConfig,

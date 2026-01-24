@@ -5,10 +5,11 @@ from __future__ import annotations
 import sys
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from voxtype.input.base import InputCallback, InputEvent, InputSource
+from voxtype.input.constants import HID_KEY_MAP
 
 @dataclass
 class DeviceProfile:
@@ -88,7 +89,7 @@ class DeviceInputSource(InputSource):
             return False
 
         try:
-            import evdev
+            import evdev  # noqa: F401
         except ImportError:
             if self._verbose:
                 print(f"[device] {self._profile.name}: evdev not installed")
@@ -207,8 +208,6 @@ class DeviceInputSource(InputSource):
     @property
     def is_running(self) -> bool:
         return self._running
-
-from voxtype.input.constants import HID_KEY_MAP
 
 class HIDDeviceInputSource(InputSource):
     """Input source for HID devices using hidapi (cross-platform).

@@ -6,9 +6,8 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from numpy.typing import NDArray
-
     import numpy as np
+    from numpy.typing import NDArray
 
 class STTEngine(ABC):
     """Abstract base class for Speech-to-Text engines."""

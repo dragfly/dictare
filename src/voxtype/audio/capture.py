@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import queue
 import threading
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import numpy as np
 import sounddevice as sd
@@ -128,7 +129,7 @@ class AudioCapture:
 
         return input_devices
 
-    def start_streaming(self, callback: Callable[["NDArray[np.float32]"], None]) -> None:
+    def start_streaming(self, callback: Callable[[NDArray[np.float32]], None]) -> None:
         """Start continuous audio streaming with callback.
 
         Args:
@@ -204,7 +205,7 @@ class AudioCapture:
             return True
         return False
 
-    def reconnect_streaming(self, callback: Callable[["NDArray[np.float32]"], None]) -> bool:
+    def reconnect_streaming(self, callback: Callable[[NDArray[np.float32]], None]) -> bool:
         """Reconnect audio stream after device change."""
         import time
 

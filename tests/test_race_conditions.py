@@ -11,9 +11,6 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from queue import Queue
-
-import pytest
 
 from voxtype.core.state import AppState, StateManager
 from voxtype.injection.file import FileInjector
@@ -41,7 +38,7 @@ class TestMuxFileReaderRaceConditions:
         line_buffer = ""
         start_time = time.time()
 
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             f.seek(0, os.SEEK_END)
 
             while not stop_event.is_set():
@@ -302,7 +299,7 @@ class TestFileInjectorRaceConditions:
 
             # Read the file
             content = Path(filepath).read_text()
-            lines = [l for l in content.strip().split("\n") if l]
+            lines = [line for line in content.strip().split("\n") if line]
 
             # Should have 2 lines: text and newline
             assert len(lines) == 2
@@ -333,7 +330,7 @@ class TestFileInjectorRaceConditions:
             injector.send_newline()
 
             content = Path(filepath).read_text()
-            lines = [l for l in content.strip().split("\n") if l]
+            lines = [line for line in content.strip().split("\n") if line]
 
             # Should still have only 2 lines, not 3
             assert len(lines) == 2
@@ -367,7 +364,7 @@ class TestFileInjectorRaceConditions:
 
             # Read and verify
             content = Path(filepath).read_text()
-            lines = [l for l in content.strip().split("\n") if l]
+            lines = [line for line in content.strip().split("\n") if line]
 
             expected = num_threads * messages_per_thread
             assert len(lines) == expected, (
@@ -497,7 +494,7 @@ class TestIntegrationRaceConditions:
             # Reader (simulating mux.py logic)
             def reader():
                 line_buffer = ""
-                with open(filepath, "r") as f:
+                with open(filepath) as f:
                     f.seek(0, os.SEEK_END)
                     while not stop_event.is_set():
                         chunk = f.readline()
@@ -584,7 +581,7 @@ class TestIntegrationRaceConditions:
 
             # Verify file integrity
             content = Path(filepath).read_text()
-            lines = [l for l in content.strip().split("\n") if l]
+            lines = [line for line in content.strip().split("\n") if line]
             for line in lines:
                 json.loads(line)  # Should not raise
 

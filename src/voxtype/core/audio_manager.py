@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from queue import Empty, Queue
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from voxtype.audio.capture import AudioCapture
 

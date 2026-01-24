@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timezone
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 class LogLevel(IntEnum):
     """Log levels for structured logging."""
@@ -52,7 +52,7 @@ class JSONLLogger:
         log_path: Path | str,
         version: str,
         level: LogLevel = LogLevel.INFO,
-        params: Optional[dict] = None,
+        params: dict | None = None,
     ) -> None:
         """Initialize the JSONL logger.
 
@@ -133,8 +133,8 @@ class JSONLLogger:
     def log_transcription(
         self,
         text: str,
-        duration_ms: Optional[float] = None,
-        language: Optional[str] = None,
+        duration_ms: float | None = None,
+        language: str | None = None,
     ) -> None:
         """Log a transcription event.
 
@@ -167,8 +167,8 @@ class JSONLLogger:
         text: str,
         wake_word: str,
         found: bool,
-        separator: Optional[str] = None,
-        filtered_text: Optional[str] = None,
+        separator: str | None = None,
+        filtered_text: str | None = None,
     ) -> None:
         """Log a wake word check."""
         # Always log at DEBUG (contains text)
@@ -252,7 +252,7 @@ class JSONLLogger:
     def log_vad_event(
         self,
         event_type: str,
-        duration_ms: Optional[float] = None,
+        duration_ms: float | None = None,
     ) -> None:
         """Log a VAD event (speech start/end)."""
         self._log_internal(
@@ -262,7 +262,7 @@ class JSONLLogger:
             duration_ms=duration_ms,
         )
 
-    def log_error(self, error: str, context: Optional[str] = None) -> None:
+    def log_error(self, error: str, context: str | None = None) -> None:
         """Log an error."""
         self._log_internal(
             "error",
@@ -278,7 +278,7 @@ class JSONLLogger:
             self._file.close()
             self._file = None
 
-    def __enter__(self) -> "JSONLLogger":
+    def __enter__(self) -> JSONLLogger:
         """Context manager entry."""
         return self
 

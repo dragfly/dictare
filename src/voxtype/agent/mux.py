@@ -135,7 +135,7 @@ def _read_from_stdin(
                     keystroke_counter.add(len(data))
                 # Put raw bytes directly in queue
                 write_queue.put(("raw", data))
-    except (BrokenPipeError, IOError, OSError):
+    except (BrokenPipeError, OSError):
         pass
 
 def _read_from_socket(
@@ -226,7 +226,7 @@ def _read_from_socket(
 
                 write_queue.put(("msg", msg))
 
-    except (BrokenPipeError, IOError, OSError) as e:
+    except (BrokenPipeError, OSError) as e:
         if session_path:
             _log_event(session_path, "reader_error", {"error": str(e)})
     finally:
@@ -263,8 +263,8 @@ def _write_to_pty(
     Logs every message sent for debugging.
     """
     # Alt+Enter for visual newline (ESC + CR)
-    ALT_ENTER = b"\x1b\r"
-    ENTER = b"\r"
+    alt_enter = b"\x1b\r"
+    enter_key = b"\r"
     msg_count = 0
 
     while not stop_event.is_set():
@@ -300,14 +300,14 @@ def _write_to_pty(
 
                     # Send Alt+Enter for visual newline
                     if has_visual_newline:
-                        bytes_written += _write_all(master_fd, ALT_ENTER)
+                        bytes_written += _write_all(master_fd, alt_enter)
                         termios.tcdrain(master_fd)
                         time.sleep(0.1)  # 100ms delay
 
                 # Handle submit flag
                 if data.get("submit"):
                     time.sleep(0.01)
-                    bytes_written += _write_all(master_fd, ENTER)
+                    bytes_written += _write_all(master_fd, enter_key)
                     termios.tcdrain(master_fd)
 
                 # Log message AFTER successful write AND drain
@@ -320,7 +320,7 @@ def _write_to_pty(
                         "writer_v": data.get("v"),
                         "keystrokes": keystroke_counter.count if keystroke_counter else 0,
                     })
-        except (BrokenPipeError, IOError, OSError) as e:
+        except (BrokenPipeError, OSError) as e:
             if session_path:
                 _log_event(session_path, "writer_error", {"error": str(e), "msg_count": msg_count})
             break
@@ -330,7 +330,7 @@ def _set_winsize(fd: int, rows: int, cols: int) -> None:
     try:
         winsize = struct.pack("HHHH", rows, cols, 0, 0)
         ioctl(fd, termios.TIOCSWINSZ, winsize)
-    except (OSError, IOError):
+    except OSError:
         pass
 
 def _get_winsize() -> tuple[int, int]:
@@ -340,7 +340,7 @@ def _get_winsize() -> tuple[int, int]:
         result = ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, winsize)
         rows, cols, _, _ = struct.unpack("HHHH", result)
         return rows, cols
-    except (OSError, IOError):
+    except OSError:
         return 24, 80
 
 def run_agent(

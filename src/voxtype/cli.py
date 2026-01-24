@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from voxtype import __version__
-from voxtype.ui.status import LiveStatusPanel
 from voxtype.config import (
     create_default_config,
     get_config_path,
@@ -20,6 +19,7 @@ from voxtype.config import (
     load_config,
     set_config_value,
 )
+from voxtype.ui.status import LiveStatusPanel
 
 app = typer.Typer(
     name="voxtype",
@@ -80,7 +80,7 @@ def _get_completion_script(shell: str) -> str:
 
 @completion_app.command("install")
 def completion_install(
-    shell: Annotated[Optional[str], typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
+    shell: Annotated[str | None, typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
 ) -> None:
     """Install shell completion."""
     shell = shell or _get_shell()
@@ -116,7 +116,7 @@ def completion_install(
 
 @completion_app.command("show")
 def completion_show(
-    shell: Annotated[Optional[str], typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
+    shell: Annotated[str | None, typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
 ) -> None:
     """Show completion script (for manual installation)."""
     shell = shell or _get_shell()
@@ -130,7 +130,7 @@ def completion_show(
 
 @completion_app.command("remove")
 def completion_remove(
-    shell: Annotated[Optional[str], typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
+    shell: Annotated[str | None, typer.Argument(help="Shell type (bash/zsh/fish)")] = None,
 ) -> None:
     """Remove installed shell completion."""
     shell = shell or _get_shell()
@@ -160,7 +160,12 @@ def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
         config: The configuration object to update
         cpu_only: If True, skip detection and force CPU
     """
-    from voxtype.utils.hardware import is_cuda_available, is_mlx_available, is_virtualized_macos, setup_cuda_library_path
+    from voxtype.utils.hardware import (
+        is_cuda_available,
+        is_mlx_available,
+        is_virtualized_macos,
+        setup_cuda_library_path,
+    )
 
     # If cpu_only flag is set, force CPU and skip detection
     if cpu_only:
@@ -307,7 +312,7 @@ def _create_logger(config, agents: list[str] | None = None):
 @app.callback()
 def main_callback(
     version: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option("--version", "-V", callback=version_callback, is_eager=True),
     ] = None,
 ) -> None:
@@ -318,16 +323,16 @@ def main_callback(
 def listen(
     # Config file
     config_file: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--config", "-c", help="Path to config file"),
     ] = None,
     # STT options
     model: Annotated[
-        Optional[str],
-        typer.Option("--model", "-m", help="Whisper model (tiny/base/small/medium/large-v3/large-v3-turbo)"),
+        str | None,
+        typer.Option("--model", "-m", help="Whisper model (tiny/base/small/medium/large-v3)"),
     ] = None,
     language: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
     no_hw_accel: Annotated[
@@ -336,28 +341,28 @@ def listen(
     ] = False,
     # Input options
     silence_ms: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--silence-ms", "-s", help="VAD silence duration to end speech (ms)"),
     ] = None,
     hotkey: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--hotkey", "-k", help="Toggle listening key (default: SCROLLLOCK)"),
     ] = None,
     max_duration: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--max-duration", "-d", help="Max recording duration in seconds"),
     ] = None,
     # Output options
     output: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--output", "-o", help="Output method: keyboard or agent"),
     ] = None,
     agents: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--agents", "-A", help="Agent IDs comma-separated (e.g., 'claude,pippo')"),
     ] = None,
     typing_delay: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--typing-delay", help="Delay between keystrokes in ms"),
     ] = None,
     auto_enter: Annotated[
@@ -366,11 +371,11 @@ def listen(
     ] = False,
     # Command options
     wake_word: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--wake-word", "-w", help="Wake word to activate (e.g., 'hey joshua')"),
     ] = None,
     initial_mode: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--initial-mode", "-M", help="Starting mode: transcription or command"),
     ] = None,
     no_commands: Annotated[
@@ -378,16 +383,16 @@ def listen(
         typer.Option("--no-commands", help="Disable voice commands"),
     ] = False,
     ollama_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--ollama-model", "-O", help="Ollama model for command processing"),
     ] = None,
     # Debug/logging options
     verbose: Annotated[
-        Optional[bool],
-        typer.Option("--verbose", "-v", help="Verbose output: show device info, transcriptions, debug messages"),
+        bool | None,
+        typer.Option("--verbose", "-v", help="Verbose output: device info, transcriptions, debug"),
     ] = None,
     log_file: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--log-file", "-L", help="JSONL log file path"),
     ] = None,
     no_audio_feedback: Annotated[
@@ -400,7 +405,7 @@ def listen(
     ] = False,
     # Webhook/SSE options
     webhook: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--webhook", "-W", help="Webhook URL to POST transcriptions to"),
     ] = None,
     sse: Annotated[
@@ -408,7 +413,7 @@ def listen(
         typer.Option("--sse", help="Enable SSE server for streaming events"),
     ] = False,
     sse_port: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--sse-port", help="Port for SSE server (default: 8765)"),
     ] = None,
 ) -> None:
@@ -503,8 +508,8 @@ def listen(
         if shutdown_attempted:
             # Second signal - force exit
             console.print("\n[red]Force exit[/]")
-            # Kill the resource_tracker subprocess to prevent "leaked semaphore" warnings
-            # The tracker is a separate process that prints warnings when resources aren't cleaned up
+            # Kill resource_tracker subprocess to prevent "leaked semaphore" warnings
+            # The tracker prints warnings when resources aren't cleaned up
             import os
             import signal as sig
             try:
@@ -762,15 +767,15 @@ def speak(
 @app.command()
 def transcribe(
     config_file: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--config", "-c", help="Path to config file"),
     ] = None,
     model: Annotated[
-        Optional[str],
-        typer.Option("--model", "-m", help="Whisper model size (tiny/base/small/medium/large-v3/large-v3-turbo)"),
+        str | None,
+        typer.Option("--model", "-m", help="Whisper model size (tiny/base/small/medium/large-v3)"),
     ] = None,
     language: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--language", "-l", help="Language code or 'auto'"),
     ] = None,
     no_hw_accel: Annotated[
@@ -786,7 +791,7 @@ def transcribe(
         typer.Option("--max-duration", "-d", help="Max recording duration in seconds"),
     ] = 60,
     output_file: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--output", "-o", help="Output file (default: stdout)"),
     ] = None,
     quiet: Annotated[
@@ -1120,7 +1125,10 @@ def backends() -> None:
         console.print("[yellow]No device backends available[/]")
         console.print()
         console.print("[dim]Install dependencies:[/]")
-        console.print("  macOS: [cyan]pip install hidapi[/] or [cyan]brew install --cask karabiner-elements[/]")
+        console.print(
+            "  macOS: [cyan]pip install hidapi[/] or "
+            "[cyan]brew install --cask karabiner-elements[/]"
+        )
         console.print("  Linux: [cyan]pip install evdev[/]")
         raise typer.Exit(1)
 
@@ -1286,7 +1294,7 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
             return None
 
     # Read existing lines
-    with open(log_path, "r") as f:
+    with open(log_path) as f:
         all_lines = f.readlines()
 
     # Show last N lines
@@ -1310,7 +1318,7 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
     console.print("[dim]--- Following (Ctrl+C to stop) ---[/]")
 
     try:
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             # Seek to end
             f.seek(0, 2)
 
@@ -1394,7 +1402,7 @@ def log_agent(
 @log_app.command("path")
 def log_path_cmd(
     agent_name: Annotated[
-        Optional[str],
+        str | None,
         typer.Argument(help="Agent name (optional)"),
     ] = None,
 ) -> None:
@@ -1464,17 +1472,17 @@ def log_list() -> None:
 
 def _check_python_environment() -> None:
     """Check if running in the correct Python environment."""
-    import sys
     import os
+    import sys
 
     # Expected Python version for uv tool installation
-    EXPECTED_MAJOR = 3
-    EXPECTED_MINOR = 11
+    expected_major = 3
+    expected_minor = 11
 
     major, minor = sys.version_info[:2]
 
     # If running with wrong Python version, likely a PATH/shim issue
-    if major != EXPECTED_MAJOR or minor != EXPECTED_MINOR:
+    if major != expected_major or minor != expected_minor:
         # Check if this looks like a pyenv shim issue
         executable = sys.executable
         is_pyenv_shim = ".pyenv" in executable
@@ -1494,8 +1502,10 @@ def _check_python_environment() -> None:
 
             if is_pyenv_shim:
                 msg = (
-                    f"[yellow]⚠ voxtype is running with Python {major}.{minor} via pyenv shim[/]\n\n"
-                    f"voxtype was installed with Python {EXPECTED_MAJOR}.{EXPECTED_MINOR} but pyenv is intercepting the command.\n\n"
+                    f"[yellow]⚠ voxtype is running with Python {major}.{minor} "
+                    "via pyenv shim[/]\n\n"
+                    f"voxtype was installed with Python {expected_major}.{expected_minor} "
+                    "but pyenv is intercepting the command.\n\n"
                     "[bold]Quick fix:[/]\n"
                     "  [cyan]~/.local/bin/voxtype[/]  (use full path)\n\n"
                     "[bold]Permanent fix:[/]\n"
@@ -1506,7 +1516,7 @@ def _check_python_environment() -> None:
             else:
                 msg = (
                     f"[yellow]⚠ voxtype is running with Python {major}.{minor}[/]\n\n"
-                    f"voxtype was installed with Python {EXPECTED_MAJOR}.{EXPECTED_MINOR}.\n"
+                    f"voxtype was installed with Python {expected_major}.{expected_minor}.\n"
                     "It looks like [cyan]uv run[/] is being used instead of the installed binary.\n\n"
                     "[bold]Fix:[/]\n"
                     "  Remove any [cyan]voxtype[/] alias from your shell config,\n"
