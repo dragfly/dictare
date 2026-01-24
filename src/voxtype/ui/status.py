@@ -46,6 +46,7 @@ class LiveStatusPanel:
         config: Config,
         console: Console,
         agents: list[str] | None = None,
+        log_path: str | None = None,
     ) -> None:
         """Initialize the status panel.
 
@@ -53,10 +54,12 @@ class LiveStatusPanel:
             config: Application configuration.
             console: Rich console for output.
             agents: List of agent IDs (for multi-output mode).
+            log_path: Path to the log file (displayed in panel).
         """
         self._config = config
         self._console = console
         self._agents = agents or []
+        self._log_path = log_path
         self._state = "OFF"
         self._last_text = ""
         self._live: Live | None = None
@@ -67,6 +70,7 @@ class LiveStatusPanel:
         self._lang = config.stt.language
         self._output_str = self._compute_output_str()
         self._hotkey_str = self._compute_hotkey_str()
+        self._log_str = self._compute_log_str()
 
     def _compute_mode_str(self) -> str:
         """Compute the mode display string."""
@@ -114,6 +118,21 @@ class LiveStatusPanel:
 
         return f"[cyan]{hotkey_display}[/] tap: toggle | double-tap: switch mode"
 
+    def _compute_log_str(self) -> str:
+        """Compute the log file display string."""
+        if not self._log_path:
+            return "[dim]disabled[/]"
+        # Shorten path for display
+        from pathlib import Path
+
+        path = Path(self._log_path)
+        home = Path.home()
+        try:
+            rel_path = path.relative_to(home)
+            return f"[dim]~/{rel_path}[/]"
+        except ValueError:
+            return f"[dim]{self._log_path}[/]"
+
     def _format_state(self) -> str:
         """Format the current state with appropriate styling."""
         label, style = self.STATE_STYLES.get(self._state, (self._state, "dim"))
@@ -136,6 +155,7 @@ class LiveStatusPanel:
             f"Language: [cyan]{self._lang}[/]\n"
             f"Output: {self._output_str}\n"
             f"Hotkey: {self._hotkey_str}\n"
+            f"Log: {self._log_str}\n"
             f"\n"
             f"Status: {self._format_state()}\n"
             f"Last: {self._format_last_text()}"

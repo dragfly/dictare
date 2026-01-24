@@ -132,6 +132,40 @@ class KeyboardConfig(BaseModel):
     )
 
 
+class WebhookConfig(BaseModel):
+    """Webhook configuration."""
+
+    url: str = Field(
+        default="",
+        description="Webhook URL to POST transcriptions to",
+    )
+    timeout: float = Field(
+        default=5.0,
+        description="Request timeout in seconds",
+    )
+    include_metadata: bool = Field(
+        default=True,
+        description="Include timing and language metadata in webhook payload",
+    )
+
+
+class SSEConfig(BaseModel):
+    """Server-Sent Events configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable SSE server for streaming events",
+    )
+    host: str = Field(
+        default="localhost",
+        description="Host to bind SSE server to",
+    )
+    port: int = Field(
+        default=8765,
+        description="Port for SSE server",
+    )
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
@@ -159,6 +193,8 @@ class Config(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
     keyboard: KeyboardConfig = Field(default_factory=KeyboardConfig)
+    webhook: WebhookConfig = Field(default_factory=WebhookConfig)
+    sse: SSEConfig = Field(default_factory=SSEConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     stats: StatsConfig = Field(default_factory=StatsConfig)
 
@@ -381,7 +417,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "hotkey", "output", "command", "keyboard", "logging", "stats"):
+        if field_name in ("audio", "stt", "hotkey", "output", "command", "keyboard", "webhook", "sse", "logging", "stats"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -402,6 +438,8 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("output", OutputConfig),
         ("command", CommandConfig),
         ("keyboard", KeyboardConfig),
+        ("webhook", WebhookConfig),
+        ("sse", SSEConfig),
         ("logging", LoggingConfig),
         ("stats", StatsConfig),
     ]

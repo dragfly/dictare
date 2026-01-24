@@ -47,12 +47,37 @@ class MLXWhisperEngine(STTEngine):
         self._model_path = MLX_MODELS.get(model_size, f"mlx-community/whisper-{model_size}")
         self._model_size = model_size
 
+        # Check if model is already cached - if so, disable progress bars
+        if self._is_model_cached(self._model_path):
+            try:
+                from huggingface_hub import disable_progress_bars
+                disable_progress_bars()
+            except ImportError:
+                pass
+
         # Pre-load the model now (downloads if needed)
         # Use ModelHolder so the model is cached and reused by transcribe()
         # Default is fp16=True, so use float16 to match transcribe()
         import mlx.core as mx
         from mlx_whisper.transcribe import ModelHolder
         ModelHolder.get_model(self._model_path, mx.float16)
+
+    def _is_model_cached(self, repo_id: str) -> bool:
+        """Check if a HuggingFace model is already cached.
+
+        Args:
+            repo_id: HuggingFace repo ID (e.g., "mlx-community/whisper-large-v3-turbo")
+
+        Returns:
+            True if model files are cached locally.
+        """
+        try:
+            from huggingface_hub import try_to_load_from_cache
+            # Check if the config file is cached (good indicator the model is downloaded)
+            result = try_to_load_from_cache(repo_id, "config.json")
+            return result is not None
+        except Exception:
+            return False
 
     def transcribe(
         self,
