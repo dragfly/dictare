@@ -116,9 +116,6 @@ class VoxtypeApp:
         # LLM processor for command mode
         self._llm_processor: LLMProcessor | None = None
 
-        # Track if speech was ignored (for ready-to-listen feedback)
-        self._speech_was_ignored = False
-
         # Live status panel (set in run())
         self._status_panel: LiveStatusPanel | None = None
 
@@ -448,8 +445,10 @@ class VoxtypeApp:
                     import sys
                     sys.stdout.write(f"\r\033[36m\033[1mListening:\033[0m   \033[2m{text}\033[0m\033[K")
                     sys.stdout.flush()
-            except Exception:
-                pass  # Silently ignore errors on partial transcriptions
+            except Exception as e:
+                # Log errors in verbose mode to help debug realtime transcription issues
+                if self.config.verbose:
+                    self._console.print(f"\n[red][DEBUG] Partial transcription error: {e}[/]")
 
     def _on_vad_speech_end(self, audio_data) -> None:
         """Handle VAD speech end detection."""
@@ -569,59 +568,39 @@ class VoxtypeApp:
                     self._status_panel.update_state("LISTENING" if self.is_listening else "OFF")
                 if self.config.verbose:
                     self._console.print(f"[dim][DEBUG] After transcribe: state={self.state.name}, listening={self.is_listening}, running={self._running}[/]")
-                self._signal_ready_to_listen()
                 # Process queued audio if any
                 self._process_queued_audio()
 
         thread = threading.Thread(target=do_transcribe, daemon=True)
         thread.start()
 
-    def _signal_ready_to_listen(self) -> None:
-        """Signal ready to listen after transcription (only if speech was ignored)."""
-        if not self._speech_was_ignored:
-            return
-
-        if self.is_off:
-            self._speech_was_ignored = False
-            return
-
-        # Delay before ready signal
-        time.sleep(0.75)
-
-        self._console.print("[green]Ready to listen[/]")
-        if self.config.audio.audio_feedback:
-            from voxtype.audio.beep import play_beep_start
-            play_beep_start()
-
-        self._speech_was_ignored = False
-
     def _process_queued_audio(self) -> None:
         """Process any queued audio from speech that occurred during transcription."""
-        if not self._audio_manager or not self._audio_manager.has_queued_audio:
+        if not self._audio_manager:
             return
 
-        # Pop first queued audio
-        audio_data = self._audio_manager.pop_queued_audio()
-        if not audio_data:
-            return
-
-        if self.config.verbose:
-            self._console.print(f"[yellow][DEBUG] Processing queued audio ({self._audio_manager.queued_count} remaining)[/]")
-
-        # Check minimum duration
         sample_rate = self._audio_manager.sample_rate
         min_samples = int(sample_rate * self.MIN_RECORDING_DURATION)
-        if len(audio_data) < min_samples:
-            self._console.print("[dim]Queued audio too short, ignoring.[/]")
-            # Try next in queue
-            self._process_queued_audio()
-            return
 
-        # Set state and process (IDLE → TRANSCRIBING)
-        self._state_manager.transition(AppState.TRANSCRIBING)
+        # Iteratively process queue until we find valid audio or queue is empty
+        while self._audio_manager.has_queued_audio:
+            audio_data = self._audio_manager.pop_queued_audio()
+            if not audio_data:
+                continue
 
-        self._console.print("[bold yellow]Transcribing (queued)...[/]", end="\r")
-        self._transcribe_and_process(audio_data)
+            if self.config.verbose:
+                self._console.print(f"[yellow][DEBUG] Processing queued audio ({self._audio_manager.queued_count} remaining)[/]")
+
+            # Check minimum duration
+            if len(audio_data) < min_samples:
+                self._console.print("[dim]Queued audio too short, ignoring.[/]")
+                continue  # Try next in queue (no recursion)
+
+            # Found valid audio - process it and return
+            self._state_manager.transition(AppState.TRANSCRIBING)
+            self._console.print("[bold yellow]Transcribing (queued)...[/]", end="\r")
+            self._transcribe_and_process(audio_data)
+            return  # _transcribe_and_process will call us again when done
 
     def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
         """Execute the action decided by the LLM.
@@ -819,12 +798,15 @@ class VoxtypeApp:
 
         return default_phrases
 
-    def _speak_mode_with_mute(self) -> None:
-        """Speak the current mode using TTS.
+    def _speak_text(self, text: str) -> None:
+        """Speak text using TTS with mic muting in speaker mode.
 
         Behavior depends on config.audio.headphones_mode:
         - False (speakers): Transition to PLAYING state, pause mic during TTS
         - True (headphones): Fire and forget, keep listening
+
+        Args:
+            text: Text to speak.
         """
         if not self.config.audio.audio_feedback:
             return
@@ -833,13 +815,6 @@ class VoxtypeApp:
         import sys
 
         phrases = self._load_tts_phrases()
-
-        # Get mode phrase from config (default: English)
-        if self._processing_mode == ProcessingMode.TRANSCRIPTION:
-            text = phrases.get("transcription_mode", "transcription mode")
-        else:
-            text = phrases.get("command_mode", "command mode")
-
         voice = phrases.get("voice", "Samantha")
 
         def _do_tts():
@@ -847,7 +822,7 @@ class VoxtypeApp:
                 if sys.platform == "darwin":
                     subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
                 else:
-                    for cmd in [["espeak-ng", text], ["espeak", text], ["spd-say", text]]:
+                    for cmd in [["espeak-ng", text], ["espeak", text], ["spd-say", "-w", text]]:
                         try:
                             subprocess.run(cmd, capture_output=True, timeout=5)
                             break
@@ -878,6 +853,15 @@ class VoxtypeApp:
         else:
             # Headphones mode: fire and forget
             threading.Thread(target=_do_tts, daemon=True).start()
+
+    def _speak_mode_with_mute(self) -> None:
+        """Speak the current mode using TTS."""
+        phrases = self._load_tts_phrases()
+        if self._processing_mode == ProcessingMode.TRANSCRIPTION:
+            text = phrases.get("transcription_mode", "transcription mode")
+        else:
+            text = phrases.get("command_mode", "command mode")
+        self._speak_text(text)
 
     def _play_feedback(self, event: str, mode: ProcessingMode | None = None) -> None:
         """Play audio feedback for state changes.
@@ -1162,54 +1146,12 @@ class VoxtypeApp:
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS.
 
-        Behavior depends on config.audio.headphones_mode:
-        - False (speakers): Transition to PLAYING state, pause mic during TTS
-        - True (headphones): Fire and forget, keep listening
+        Args:
+            agent_name: Name of the agent to announce.
         """
-        import subprocess
-        import sys
-
         phrases = self._load_tts_phrases()
         agent_prefix = phrases.get("agent", "agent")
-        voice = phrases.get("voice", "Samantha")
-        text = f"{agent_prefix} {agent_name}"
-
-        def _do_tts():
-            try:
-                if sys.platform == "darwin":
-                    subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
-                else:
-                    for cmd in [["espeak-ng", text], ["espeak", text], ["spd-say", "-w", text]]:
-                        try:
-                            subprocess.run(cmd, capture_output=True, timeout=5)
-                            break
-                        except FileNotFoundError:
-                            continue
-            except Exception:
-                pass
-
-        # Pause listening during TTS unless in headphones mode
-        if not self.config.audio.headphones_mode:
-            # Speakers mode: pause listening during TTS
-            if not self._state_manager.try_transition(AppState.PLAYING):
-                return  # Can't enter PLAYING, skip TTS
-
-            if self._status_panel:
-                self._status_panel.update_state("PLAYING")
-
-            def _speak_and_resume():
-                _do_tts()
-                # Flush VAD to clear any residual echo
-                if self._audio_manager:
-                    self._audio_manager.flush_vad()
-                self._state_manager.try_transition(AppState.LISTENING)
-                if self._status_panel:
-                    self._status_panel.update_state("LISTENING")
-
-            threading.Thread(target=_speak_and_resume, daemon=True).start()
-        else:
-            # Headphones mode: fire and forget
-            threading.Thread(target=_do_tts, daemon=True).start()
+        self._speak_text(f"{agent_prefix} {agent_name}")
 
     def _send_submit(self) -> None:
         """Send submit (Enter key) to the target."""
