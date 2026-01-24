@@ -26,7 +26,7 @@ class SSEHandler(BaseHTTPRequestHandler):
     """HTTP handler for SSE connections."""
 
     # Reference to SSEServer instance (set by server)
-    sse_server: "SSEServer | None" = None
+    sse_server: SSEServer | None = None
 
     def log_message(self, format: str, *args: Any) -> None:
         """Suppress HTTP request logging."""
@@ -238,7 +238,7 @@ class SSEServer:
 
         self._broadcast("message", self._openvip_message("message", **kwargs))
 
-    def send_transcription_result(self, result: "TranscriptionResult", language: str | None = None) -> None:
+    def send_transcription_result(self, result: TranscriptionResult, language: str | None = None) -> None:
         """Send a TranscriptionResult event.
 
         Args:
@@ -252,7 +252,7 @@ class SSEServer:
             transcription_ms=result.transcription_seconds * 1000,
         )
 
-    def send_state_change(self, old: "AppState", new: "AppState", trigger: str) -> None:
+    def send_state_change(self, old: AppState, new: AppState, trigger: str) -> None:
         """Send a state change event (OpenVIP type: state).
 
         Args:
@@ -270,7 +270,7 @@ class SSEServer:
         openvip_state = state_map.get(new.name, "idle")
         self._broadcast("state", self._openvip_message("state", state=openvip_state))
 
-    def send_mode_change(self, mode: "ProcessingMode") -> None:
+    def send_mode_change(self, mode: ProcessingMode) -> None:
         """Send a mode change event.
 
         Note: Processing mode is voxtype-specific, sent as x_ extension.

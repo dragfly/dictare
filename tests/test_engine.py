@@ -5,12 +5,10 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from voxtype.core.engine import VoxtypeEngine
-from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
+from voxtype.core.events import InjectionResult, TranscriptionResult
 from voxtype.core.state import AppState, ProcessingMode
 
 class MockConfig:

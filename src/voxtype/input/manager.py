@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
-from voxtype.input.base import InputCallback, InputEvent, InputSource
+from voxtype.input.base import InputEvent, InputSource
 from voxtype.input.device import DeviceInputSource, DeviceProfile, HIDDeviceInputSource
 from voxtype.input.keyboard import KeyBinding, KeyboardShortcutSource
 
@@ -22,7 +23,7 @@ class InputManager:
 
     def __init__(
         self,
-        app_commands: "AppCommands",
+        app_commands: AppCommands,
         verbose: bool = False,
     ) -> None:
         self._app_commands = app_commands

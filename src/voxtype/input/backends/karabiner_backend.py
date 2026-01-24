@@ -20,8 +20,8 @@ import os
 import socket
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from voxtype.input.backends.base import DeviceBackend
 
@@ -107,7 +107,7 @@ class KarabinerBackend(DeviceBackend):
         if config_path:
             if self._verbose:
                 print(f"[karabiner] Config written to: {config_path}")
-                print(f"[karabiner] Enable 'voxtype' rules in Karabiner-Elements preferences")
+                print("[karabiner] Enable 'voxtype' rules in Karabiner-Elements preferences")
 
         # Start socket server
         if not self._start_socket_server():
@@ -226,7 +226,7 @@ class KarabinerBackend(DeviceBackend):
                         print(f"[karabiner] Received: {data}")
                     self._on_command(data, {})
 
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except Exception as e:
                 if self._running and self._verbose:

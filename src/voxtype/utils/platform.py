@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 @dataclass
 class CheckResult:
@@ -272,7 +272,7 @@ def _check_gpu_deps() -> list[CheckResult]:
     if is_linux():
         # Check for NVIDIA GPU
         try:
-            from voxtype.cuda_setup import check_gpu_available, _find_cudnn_path
+            from voxtype.cuda_setup import _find_cudnn_path, check_gpu_available
 
             gpu_ok, gpu_count = check_gpu_available()
 

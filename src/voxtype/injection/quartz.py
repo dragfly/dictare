@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 
@@ -27,7 +26,7 @@ class QuartzInjector(TextInjector):
             return self._available
 
         try:
-            from Quartz import (
+            from Quartz import (  # noqa: F401
                 CGEventCreateKeyboardEvent,
                 CGEventKeyboardSetUnicodeString,
                 CGEventPost,

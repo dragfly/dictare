@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from voxtype.input.backends.base import DeviceBackend
-
 from voxtype.input.constants import HID_KEY_MAP
 
 class HIDAPIBackend(DeviceBackend):
@@ -47,12 +46,12 @@ class HIDAPIBackend(DeviceBackend):
     def is_available(self) -> bool:
         """Check if hidapi is available."""
         try:
-            import hidapi
+            import hidapi  # noqa: F401
             return True
         except ImportError:
             pass
         try:
-            import hid
+            import hid  # noqa: F401
             return True
         except ImportError:
             pass
@@ -151,7 +150,7 @@ class HIDAPIBackend(DeviceBackend):
 
         if self._verbose:
             print(f"[hidapi] Connected to {manufacturer} {product}")
-            print(f"[hidapi] WARNING: No device grab - keys also go to focused app")
+            print("[hidapi] WARNING: No device grab - keys also go to focused app")
 
         return True
 
