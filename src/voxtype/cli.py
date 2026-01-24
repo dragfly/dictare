@@ -514,36 +514,35 @@ def listen(
         nonlocal shutdown_attempted
         if shutdown_attempted:
             # Second signal - force exit
-            # Clean up multiprocessing resources before force exit to avoid semaphore leak warnings
             console.print("\n[red]Force exit[/]")
-            import gc
-            import multiprocessing.resource_tracker
-            gc.collect()
+            # Kill the resource_tracker subprocess to prevent "leaked semaphore" warnings
+            # The tracker is a separate process that prints warnings when resources aren't cleaned up
+            import os
+            import signal as sig
             try:
-                # Explicitly clear tracked resources to avoid leak warnings
-                multiprocessing.resource_tracker._resource_tracker._stop()
+                from multiprocessing.resource_tracker import _resource_tracker
+                if _resource_tracker._pid:
+                    os.kill(_resource_tracker._pid, sig.SIGKILL)
             except Exception:
                 pass
-            import os
             os._exit(1)
 
         console.print("\n[yellow]Shutting down...[/]")
 
         # Set a timeout for graceful shutdown
         def force_exit():
-            import gc
-            import multiprocessing.resource_tracker
+            import os
+            import signal as sig
             import time
             time.sleep(3)  # Give 3 seconds for graceful shutdown
-            # Force GC before exit to release any remaining ONNX semaphores
-            gc.collect()
+            console.print("\n[red]Shutdown timeout - forcing exit[/]")
+            # Kill the resource_tracker subprocess to prevent "leaked semaphore" warnings
             try:
-                # Explicitly clear tracked resources to avoid leak warnings
-                multiprocessing.resource_tracker._resource_tracker._stop()
+                from multiprocessing.resource_tracker import _resource_tracker
+                if _resource_tracker._pid:
+                    os.kill(_resource_tracker._pid, sig.SIGKILL)
             except Exception:
                 pass
-            console.print("\n[red]Shutdown timeout - forcing exit[/]")
-            import os
             os._exit(1)
 
         import threading
