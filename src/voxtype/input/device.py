@@ -148,9 +148,11 @@ class DeviceInputSource(InputSource):
                 if event.type != evdev.ecodes.EV_KEY or event.value != 1:
                     continue
 
-                key_name = evdev.ecodes.KEY.get(event.code)
-                if not key_name:
+                key_result = evdev.ecodes.KEY.get(event.code)
+                if not key_result:
                     continue
+                # KEY.get() can return str or tuple[str] for keys with multiple names
+                key_name = key_result[0] if isinstance(key_result, tuple) else key_result
 
                 # Debounce
                 now = time.time() * 1000
