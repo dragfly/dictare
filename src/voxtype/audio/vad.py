@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -63,12 +63,12 @@ class SileroVAD(VADEngine):
         self.sample_rate = sample_rate
 
         # Model will be loaded lazily
-        self._model = None
+        self._model: Any = None
 
         # State for streaming VAD
-        self._h = None
-        self._c = None
-        self._context = None
+        self._h: Any = None
+        self._c: Any = None
+        self._context: Any = None
 
     def _load_model(self) -> None:
         """Load the Silero VAD model."""

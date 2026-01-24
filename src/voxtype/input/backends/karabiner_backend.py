@@ -217,6 +217,8 @@ class KarabinerBackend(DeviceBackend):
     def _socket_loop(self) -> None:
         """Listen for commands on Unix socket."""
         while self._running:
+            if self._socket is None:
+                break
             try:
                 conn, _ = self._socket.accept()
                 data = conn.recv(1024).decode().strip()

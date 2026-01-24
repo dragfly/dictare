@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 from queue import Empty, Queue
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from voxtype.audio.capture import AudioCapture
 
@@ -180,7 +180,7 @@ class AudioManager:
             self._vad.close()
             self._vad = None
 
-    def _on_audio_chunk(self, chunk: object) -> None:
+    def _on_audio_chunk(self, chunk: Any) -> None:
         """Process audio chunk through VAD."""
         # Only process if running AND listening
         is_running = self._is_running() if self._is_running else True
@@ -200,7 +200,7 @@ class AudioManager:
         """Check if audio device needs reconnection."""
         return self._audio is not None and self._audio.needs_reconnect()
 
-    def reconnect(self, on_chunk_callback: Callable[[object], None]) -> bool:
+    def reconnect(self, on_chunk_callback: Callable[[Any], None]) -> bool:
         """Attempt to reconnect audio device.
 
         Args:
@@ -260,7 +260,7 @@ class AudioManager:
         """
         self._audio_queue.put(audio_data)
 
-    def pop_queued_audio(self) -> object | None:
+    def pop_queued_audio(self) -> Any | None:
         """Pop first audio from queue.
 
         Returns:

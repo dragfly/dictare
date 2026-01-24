@@ -314,7 +314,7 @@ class LLMProcessor:
         # This should not happen in normal flow since we check LISTENING above
         return LLMResponse.ignore("Not in LISTENING mode", backend="keyword")
 
-    def _find_trigger_phrase(self, text_lower: str, trigger: str) -> tuple[bool, str]:
+    def _find_trigger_phrase(self, text_lower: str, trigger: str | None) -> tuple[bool, str]:
         """Find trigger phrase anywhere in text (fallback mode - exact match only).
 
         Note: This is used for keyword fallback only. The LLM handles phonetic
@@ -322,11 +322,13 @@ class LLMProcessor:
 
         Args:
             text_lower: Lowercase text to search.
-            trigger: Trigger phrase to find.
+            trigger: Trigger phrase to find (None means no trigger configured).
 
         Returns:
             Tuple of (found, text_after_trigger).
         """
+        if not trigger:
+            return False, text_lower
         trigger_lower = trigger.lower()
         if trigger_lower in text_lower:
             pos = text_lower.find(trigger_lower)

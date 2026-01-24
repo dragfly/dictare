@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import sounddevice as sd
@@ -45,6 +45,7 @@ class AudioCapture:
         self._recording = False
         self._lock = threading.Lock()
         self._needs_reconnect = False
+        self._streaming_callback: Callable[[Any], None] | None = None
 
     def _audio_callback(
         self,
@@ -163,7 +164,7 @@ class AudioCapture:
             # Device error detected - schedule reconnect
             self._needs_reconnect = True
             return
-        if hasattr(self, "_streaming_callback") and self._streaming_callback:
+        if self._streaming_callback is not None:
             self._streaming_callback(indata.flatten().copy())
 
     def stop_streaming(self) -> None:

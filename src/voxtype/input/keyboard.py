@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from typing import Any
 
 from voxtype.input.base import InputCallback, InputEvent, InputSource
 
@@ -15,7 +16,7 @@ class KeyBinding:
     modifiers: frozenset[str]  # e.g., {"ctrl", "shift"}
     key: str  # e.g., "l", "f1", "space"
     command: str
-    args: dict | None = None
+    args: dict[str, Any] | None = None
 
 
 class KeyboardShortcutSource(InputSource):
@@ -48,7 +49,7 @@ class KeyboardShortcutSource(InputSource):
                 )
         self._bindings = bindings
         self._running = False
-        self._listener = None
+        self._listener: Any = None
         self._on_input: InputCallback | None = None
         self._current_modifiers: set[str] = set()
 
@@ -69,7 +70,7 @@ class KeyboardShortcutSource(InputSource):
         except ImportError:
             return False
 
-        def on_press(key):
+        def on_press(key: Any) -> None:
             mod = self._key_to_modifier(key)
             if mod:
                 self._current_modifiers.add(mod)
@@ -78,7 +79,7 @@ class KeyboardShortcutSource(InputSource):
                 if key_name:
                     self._check_bindings(key_name)
 
-        def on_release(key):
+        def on_release(key: Any) -> None:
             mod = self._key_to_modifier(key)
             if mod:
                 self._current_modifiers.discard(mod)
@@ -90,7 +91,7 @@ class KeyboardShortcutSource(InputSource):
         self._running = True
         return True
 
-    def _key_to_modifier(self, key) -> str | None:
+    def _key_to_modifier(self, key: Any) -> str | None:
         """Convert pynput key to canonical modifier name."""
         try:
 
@@ -103,7 +104,7 @@ class KeyboardShortcutSource(InputSource):
             pass
         return None
 
-    def _key_to_name(self, key) -> str | None:
+    def _key_to_name(self, key: Any) -> str | None:
         """Convert pynput key to key name."""
         try:
             if hasattr(key, "char") and key.char:

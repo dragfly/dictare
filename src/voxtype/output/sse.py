@@ -111,15 +111,18 @@ class SSEServer:
         self,
         host: str = "localhost",
         port: int = 8765,
+        agent: str | None = None,
     ) -> None:
         """Initialize SSE server.
 
         Args:
             host: Host to bind to.
             port: Port to listen on.
+            agent: Optional agent name for context.
         """
         self.host = host
         self.port = port
+        self.agent = agent
         self._server: HTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._running = False
