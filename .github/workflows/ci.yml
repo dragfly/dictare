@@ -36,8 +36,6 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
-    # TODO: Fix mypy errors and remove continue-on-error
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

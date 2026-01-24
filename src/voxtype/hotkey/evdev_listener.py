@@ -151,11 +151,14 @@ class EvdevHotkeyListener(HotkeyListener):
         import evdev
 
         self._device = self._find_keyboard_device()
+        if self._device is None:
+            raise RuntimeError("No keyboard device found")
         target_key = getattr(evdev.ecodes, self.key_name)
         self._running = True
         self._stop_event.clear()
 
         def listen_loop() -> None:
+            assert self._device is not None
             try:
                 for event in self._device.read_loop():
                     if self._stop_event.is_set():

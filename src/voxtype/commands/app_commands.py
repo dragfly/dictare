@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from voxtype.commands.schema import CommandParam, CommandSchema, ParamType
 
@@ -142,7 +142,7 @@ class AppCommands:
             lambda: self._app._discard_current(),
         )
 
-    def register(self, schema: CommandSchema, handler: Callable[..., None]) -> None:
+    def register(self, schema: CommandSchema, handler: Callable[..., Any]) -> None:
         """Register a command."""
         self._commands[schema.name] = CommandHandler(schema=schema, handler=handler)
 

@@ -424,7 +424,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     for section_name, section_class in sections:
         section_config = section_class()
-        for field_name, field_info in section_class.model_fields.items():
+        for field_name, field_info in section_class.model_fields.items():  # type: ignore[attr-defined]
             key = f"{section_name}.{field_name}"
             value = getattr(section_config, field_name)
             env_var = _key_to_env_var(key)

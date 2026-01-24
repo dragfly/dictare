@@ -90,7 +90,7 @@ class VoxtypeEngine:
 
         # Agent state
         self._current_agent_index = 0
-        self._input_manager = None  # InputManager for keyboard/device inputs
+        self._input_manager: Any = None  # InputManager for keyboard/device inputs
 
         # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
         self._processing_mode = ProcessingMode(config.command.mode)
@@ -210,6 +210,7 @@ class VoxtypeEngine:
         # Auto-detect MLX on Apple Silicon
         use_mlx = self.config.stt.hw_accel and is_mlx_available()
 
+        engine: STTEngine
         if use_mlx:
             from voxtype.stt.mlx_whisper import MLXWhisperEngine
             engine = MLXWhisperEngine()
@@ -438,6 +439,7 @@ class VoxtypeEngine:
             # Transcribe the latest chunk
             try:
                 with self._stt_lock:
+                    assert self._stt is not None
                     text = self._stt.transcribe(
                         audio_data,
                         language=self.config.stt.language,
@@ -453,7 +455,7 @@ class VoxtypeEngine:
         # Try to transition to TRANSCRIBING (valid from IDLE or RECORDING)
         if not self._state_manager.try_transition(AppState.TRANSCRIBING):
             # Can't transition - queue audio if busy transcribing
-            if self.state == AppState.TRANSCRIBING:
+            if self.state == AppState.TRANSCRIBING and self._audio_manager:
                 self._audio_manager.queue_audio(audio_data)
             return
 

@@ -65,7 +65,7 @@ def _capture_shortcut() -> str | None:
 
     return result[0]
 
-AVAILABLE_COMMANDS = [
+AVAILABLE_COMMANDS: list[dict[str, Any]] = [
     {"command": "project-next", "description": "Switch to next agent", "display": "project-next"},
     {"command": "project-prev", "description": "Switch to previous agent", "display": "project-prev"},
     {"command": "switch-to-project-index", "description": "Switch to agent #1", "args": {"index": 1}, "display": "switch-to-project #1"},
@@ -79,7 +79,7 @@ AVAILABLE_COMMANDS = [
     {"command": "discard", "description": "Discard current recording", "display": "discard"},
 ]
 
-def _command_key(cmd: dict) -> str:
+def _command_key(cmd: dict[str, Any]) -> str:
     if cmd.get("args"):
         return f"{cmd['command']}:{cmd['args']}"
     return cmd["command"]
@@ -95,7 +95,7 @@ def _get_current_shortcuts(config) -> dict[str, str]:
     return shortcuts
 
 def _save_shortcuts(shortcuts: dict[str, str], config_path: Path) -> None:
-    import toml
+    import toml  # type: ignore[import-untyped]
 
     config_data = {}
     if config_path.exists():
