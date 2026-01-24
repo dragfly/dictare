@@ -28,7 +28,7 @@ class TerminalExecutor(Executor):
     def _get_injector(self):
         """Lazy-load the text injector."""
         if self._injector is None:
-            from voxtype.output.injector import TextInjector
+            from voxtype.injection.base import TextInjector
 
             self._injector = TextInjector(
                 method=self._method,
