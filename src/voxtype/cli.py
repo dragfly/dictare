@@ -212,6 +212,9 @@ def _apply_cli_overrides(
     log_file: str | None,
     no_audio_feedback: bool,
     no_hw_accel: bool,
+    webhook: str | None,
+    sse: bool,
+    sse_port: int | None,
 ) -> None:
     """Apply CLI options to config.
 
@@ -249,24 +252,57 @@ def _apply_cli_overrides(
         config.audio.audio_feedback = False
     if no_hw_accel:
         config.stt.hw_accel = False
+    if webhook:
+        config.webhook.url = webhook
+    if sse:
+        config.sse.enabled = True
+    if sse_port is not None:
+        config.sse.port = sse_port
 
-def _create_logger(config):
-    """Create JSONL logger if log file is specified in config."""
-    if not config.logging.log_file:
-        return None
+def _create_logger(config, agents: list[str] | None = None):
+    """Create JSONL logger for session.
 
-    from voxtype.logging.jsonl import JSONLLogger
+    Logging is always enabled by default to ~/.local/share/voxtype/logs/.
+    - INFO level (default): metadata only (chars, duration) - no text content
+    - DEBUG level (--verbose): includes actual text content
+
+    Args:
+        config: Application configuration.
+        agents: Optional list of agent IDs (affects log file name).
+
+    Returns:
+        JSONLLogger instance.
+    """
+    from voxtype.logging.jsonl import JSONLLogger, LogLevel, get_default_log_path
+
+    # Determine log level from verbose flag
+    level = LogLevel.DEBUG if config.verbose else LogLevel.INFO
+
+    # Determine log file path
+    if config.logging.log_file:
+        # User specified a custom log file
+        log_path = Path(config.logging.log_file)
+    else:
+        # Use default path based on mode
+        if agents:
+            # Multi-agent: use first agent name
+            log_path = get_default_log_path(f"agent.{agents[0]}")
+        else:
+            log_path = get_default_log_path("listen")
 
     log_params = {
         "input_mode": "vad",  # PTT mode removed in v2.2.0
         "trigger_phrase": config.command.wake_word,
-        "verbose": config.verbose,
+        "log_level": level.name,
         "silence_ms": config.audio.silence_ms,
         "stt_model": config.stt.model_size,
         "stt_language": config.stt.language,
         "output_method": config.output.method,
     }
-    return JSONLLogger(Path(config.logging.log_file), __version__, params=log_params)
+    if agents:
+        log_params["agents"] = agents
+
+    return JSONLLogger(log_path, __version__, level=level, params=log_params)
 
 @app.callback()
 def main_callback(
@@ -366,6 +402,19 @@ def listen(
         bool,
         typer.Option("--realtime", "-R", help="Show transcription in realtime while speaking"),
     ] = False,
+    # Webhook/SSE options
+    webhook: Annotated[
+        Optional[str],
+        typer.Option("--webhook", "-W", help="Webhook URL to POST transcriptions to"),
+    ] = None,
+    sse: Annotated[
+        bool,
+        typer.Option("--sse", help="Enable SSE server for streaming events"),
+    ] = False,
+    sse_port: Annotated[
+        Optional[int],
+        typer.Option("--sse-port", help="Port for SSE server (default: 8765)"),
+    ] = None,
 ) -> None:
     """Start listening for voice input.
 
@@ -401,6 +450,9 @@ def listen(
         log_file=log_file,
         no_audio_feedback=no_audio_feedback,
         no_hw_accel=no_hw_accel,
+        webhook=webhook,
+        sse=sse,
+        sse_port=sse_port,
     )
 
     # Auto-detect hardware acceleration (unless --no-hw-accel)
@@ -414,11 +466,12 @@ def listen(
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
 
-    # Create JSONL logger if requested
-    logger = _create_logger(config)
-
     # Handle agent mode - parse comma-separated string
     agent_list = [a.strip() for a in agents.split(",")] if agents else None
+
+    # Create JSONL logger (always enabled by default)
+    logger = _create_logger(config, agents=agent_list)
+
     output_dir_str = str(output_dir) if output_dir else None
 
     # Default output_dir to /tmp when agents specified (matches 'voxtype agent' default)
@@ -436,7 +489,8 @@ def listen(
     )
 
     # Create live status panel (will be started after loading)
-    status_panel = LiveStatusPanel(config, console, agents=agent_list)
+    log_path_str = str(logger.log_path) if logger else None
+    status_panel = LiveStatusPanel(config, console, agents=agent_list, log_path=log_path_str)
 
     # Setup signal handler for graceful shutdown (KeyboardInterrupt may not work with C extensions)
     import atexit
@@ -1166,6 +1220,265 @@ def agent(
     output_dir_str = str(output_dir) if output_dir else None
     exit_code = run_agent(agent_id, command, output_dir=output_dir_str, quiet=quiet)
     raise typer.Exit(exit_code)
+
+# Log subcommand for viewing logs
+log_app = typer.Typer(help="View voxtype logs")
+app.add_typer(log_app, name="log")
+
+def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) -> None:
+    """Tail a log file with optional follow mode.
+
+    Args:
+        log_path: Path to the JSONL log file.
+        follow: If True, continuously follow the file.
+        json_output: If True, output raw JSON; otherwise format for readability.
+        lines: Number of lines to show initially.
+    """
+    import json
+    import time
+    from datetime import datetime
+
+    if not log_path.exists():
+        console.print(f"[yellow]Log file not found: {log_path}[/]")
+        console.print("[dim]Start voxtype first to create logs.[/]")
+        raise typer.Exit(1)
+
+    def format_line(line: str) -> str | None:
+        """Format a JSONL line for display."""
+        try:
+            entry = json.loads(line)
+            ts = entry.get("ts", "")
+            level = entry.get("level", "INFO")
+            event = entry.get("event", "")
+
+            # Parse and format timestamp
+            if ts:
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    ts_str = dt.strftime("%H:%M:%S")
+                except Exception:
+                    ts_str = ts[:8]
+            else:
+                ts_str = "??:??:??"
+
+            # Color by level
+            level_colors = {"ERROR": "red", "INFO": "green", "DEBUG": "dim"}
+            level_color = level_colors.get(level, "white")
+
+            # Format event-specific info
+            extra = ""
+            if event == "session_start":
+                version = entry.get("version", "?")
+                model = entry.get("stt_model", "?")
+                extra = f"v{version} model={model}"
+            elif event == "session_end":
+                extra = ""
+            elif event == "transcription":
+                chars = entry.get("chars", 0)
+                words = entry.get("words", 0)
+                duration = entry.get("duration_ms", 0)
+                extra = f"{words}w {chars}c {duration:.0f}ms"
+            elif event == "transcription_text":
+                text = entry.get("text", "")[:60]
+                extra = f'"{text}"' + ("..." if len(entry.get("text", "")) > 60 else "")
+            elif event == "injection":
+                chars = entry.get("chars", 0)
+                method = entry.get("method", "?")
+                success = "ok" if entry.get("success") else "fail"
+                extra = f"{chars}c via {method} [{success}]"
+            elif event == "state_change":
+                old = entry.get("old_state", "?")
+                new = entry.get("new_state", "?")
+                trigger = entry.get("trigger", "?")
+                extra = f"{old} -> {new} ({trigger})"
+            elif event == "error":
+                error = entry.get("error", "")[:50]
+                extra = error
+            elif event == "vad":
+                vad_type = entry.get("type", "?")
+                duration = entry.get("duration_ms")
+                extra = vad_type + (f" {duration:.0f}ms" if duration else "")
+
+            return f"[dim]{ts_str}[/] [{level_color}]{level:5}[/] [cyan]{event:20}[/] {extra}"
+        except json.JSONDecodeError:
+            return None
+
+    # Read existing lines
+    with open(log_path, "r") as f:
+        all_lines = f.readlines()
+
+    # Show last N lines
+    start_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+
+    for line in start_lines:
+        line = line.strip()
+        if not line:
+            continue
+        if json_output:
+            print(line)
+        else:
+            formatted = format_line(line)
+            if formatted:
+                console.print(formatted)
+
+    if not follow:
+        return
+
+    # Follow mode: watch for new lines
+    console.print("[dim]--- Following (Ctrl+C to stop) ---[/]")
+
+    try:
+        with open(log_path, "r") as f:
+            # Seek to end
+            f.seek(0, 2)
+
+            while True:
+                line = f.readline()
+                if line:
+                    line = line.strip()
+                    if json_output:
+                        print(line)
+                    else:
+                        formatted = format_line(line)
+                        if formatted:
+                            console.print(formatted)
+                else:
+                    time.sleep(0.1)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Stopped.[/]")
+
+@log_app.command("listen")
+def log_listen(
+    follow: Annotated[
+        bool,
+        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", "-j", help="Output raw JSON lines"),
+    ] = False,
+    lines: Annotated[
+        int,
+        typer.Option("--lines", "-n", help="Number of lines to show"),
+    ] = 20,
+) -> None:
+    """View logs from voxtype listen sessions.
+
+    Shows recent log entries from ~/.local/share/voxtype/logs/listen.jsonl
+
+    Examples:
+        voxtype log listen              # Show last 20 entries
+        voxtype log listen -f           # Follow live
+        voxtype log listen -n 50        # Show last 50 entries
+        voxtype log listen --json       # Output raw JSON
+    """
+    from voxtype.logging.jsonl import get_default_log_path
+
+    log_path = get_default_log_path("listen")
+    _tail_log(log_path, follow, json_output, lines)
+
+@log_app.command("agent")
+def log_agent(
+    agent_name: Annotated[
+        str,
+        typer.Argument(help="Agent name to view logs for"),
+    ],
+    follow: Annotated[
+        bool,
+        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", "-j", help="Output raw JSON lines"),
+    ] = False,
+    lines: Annotated[
+        int,
+        typer.Option("--lines", "-n", help="Number of lines to show"),
+    ] = 20,
+) -> None:
+    """View logs for a specific agent.
+
+    Shows recent log entries from ~/.local/share/voxtype/logs/agent.<name>.jsonl
+
+    Examples:
+        voxtype log agent claude        # Show logs for claude agent
+        voxtype log agent claude -f     # Follow live
+    """
+    from voxtype.logging.jsonl import get_default_log_path
+
+    log_path = get_default_log_path(f"agent.{agent_name}")
+    _tail_log(log_path, follow, json_output, lines)
+
+@log_app.command("path")
+def log_path_cmd(
+    agent_name: Annotated[
+        Optional[str],
+        typer.Argument(help="Agent name (optional)"),
+    ] = None,
+) -> None:
+    """Show log file path.
+
+    Examples:
+        voxtype log path           # Show listen log path
+        voxtype log path claude    # Show claude agent log path
+    """
+    from voxtype.logging.jsonl import get_default_log_path
+
+    if agent_name:
+        log_path = get_default_log_path(f"agent.{agent_name}")
+    else:
+        log_path = get_default_log_path("listen")
+
+    console.print(str(log_path))
+
+@log_app.command("list")
+def log_list() -> None:
+    """List available log files.
+
+    Shows all log files in ~/.local/share/voxtype/logs/
+    """
+    from voxtype.logging.jsonl import DEFAULT_LOG_DIR
+
+    if not DEFAULT_LOG_DIR.exists():
+        console.print(f"[yellow]Log directory not found: {DEFAULT_LOG_DIR}[/]")
+        console.print("[dim]Start voxtype first to create logs.[/]")
+        raise typer.Exit(1)
+
+    log_files = list(DEFAULT_LOG_DIR.glob("*.jsonl"))
+
+    if not log_files:
+        console.print("[yellow]No log files found.[/]")
+        raise typer.Exit(0)
+
+    # Sort by modification time (newest first)
+    log_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    table = Table(show_header=True, header_style="bold", expand=False)
+    table.add_column("Log File", style="cyan")
+    table.add_column("Size", justify="right")
+    table.add_column("Last Modified")
+
+    for log_file in log_files:
+        stat = log_file.stat()
+        size = stat.st_size
+        if size < 1024:
+            size_str = f"{size} B"
+        elif size < 1024 * 1024:
+            size_str = f"{size / 1024:.1f} KB"
+        else:
+            size_str = f"{size / 1024 / 1024:.1f} MB"
+
+        from datetime import datetime
+
+        mtime = datetime.fromtimestamp(stat.st_mtime)
+        mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
+
+        # Extract name from filename
+        name = log_file.stem  # e.g., "listen" or "agent.claude"
+        table.add_row(name, size_str, mtime_str)
+
+    console.print(table)
+    console.print(f"\n[dim]Log directory: {DEFAULT_LOG_DIR}[/]")
 
 def _check_python_environment() -> None:
     """Check if running in the correct Python environment."""

@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.25.0] - 2026-01-24
+
+### Added
+- **Logging enabled by default**: All sessions now log to `~/.local/share/voxtype/logs/` automatically
+  - `listen.jsonl` for normal sessions
+  - `agent.<name>.jsonl` for agent sessions
+- **Log levels**: INFO (default) and DEBUG (`--verbose`)
+  - INFO: Metadata only (chars, words, duration) - no text content for privacy
+  - DEBUG: Includes actual transcription text
+- **`voxtype log` command**: View logs like `docker logs` or `kubectl logs`
+  - `voxtype log listen [-f] [-n N] [--json]` - View listen session logs
+  - `voxtype log agent NAME [-f] [-n N] [--json]` - View agent logs
+  - `voxtype log list` - List all log files
+  - `voxtype log path [NAME]` - Show log file path
+- **Log path in status panel**: Shows current log file location in the UI
+- **Webhooks**: POST transcriptions to HTTP endpoints (`--webhook URL`)
+  - OpenVox-compatible JSON format with metadata
+  - Async sending (non-blocking)
+  - Configurable timeout via `webhook.timeout`
+- **Server-Sent Events (SSE)**: Stream events to clients (`--sse`)
+  - Real-time event streaming at `http://localhost:8765/events`
+  - Events: transcription, state_change, mode_change, agent_change, partial_transcription, error
+  - OpenVox-compatible message format
+  - Configurable port via `--sse-port`
+
+### Changed
+- **JSONLLogger**: Added `LogLevel` enum (ERROR, INFO, DEBUG) with privacy-aware logging
+  - Transcriptions at INFO level log only metadata (chars, words, duration)
+  - Text content requires DEBUG level (`--verbose`)
+- **Status panel**: New "Log:" line shows log file path (shortened with ~/)
+
 ## [2.24.4] - 2026-01-24
 
 ### Added

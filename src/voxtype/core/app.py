@@ -14,6 +14,8 @@ from voxtype.core.state import AppState, ProcessingMode
 if TYPE_CHECKING:
     from voxtype.config import Config
     from voxtype.logging.jsonl import JSONLLogger
+    from voxtype.output.sse import SSEServer
+    from voxtype.output.webhook import WebhookSender
     from voxtype.ui.status import LiveStatusPanel
 
 class VoxtypeApp(EngineEvents):
@@ -57,6 +59,12 @@ class VoxtypeApp(EngineEvents):
 
         # Live status panel (set in run())
         self._status_panel: LiveStatusPanel | None = None
+
+        # Webhook sender (set in run() if configured)
+        self._webhook: WebhookSender | None = None
+
+        # SSE server (set in run() if configured)
+        self._sse: SSEServer | None = None
 
         # Create engine with self as event handler
         self._engine = VoxtypeEngine(
@@ -109,6 +117,10 @@ class VoxtypeApp(EngineEvents):
         if self._status_panel:
             self._status_panel.update_state(new.name)
 
+        # Send to SSE if running
+        if self._sse:
+            self._sse.send_state_change(old, new, trigger)
+
         # Play audio feedback
         if new == AppState.LISTENING and old == AppState.OFF:
             self._play_feedback("listening_on")
@@ -122,6 +134,14 @@ class VoxtypeApp(EngineEvents):
 
         if self._realtime:
             self._console.print(f"[bold green]Transcribed:[/] {result.text}")
+
+        # Send to webhook if configured
+        if self._webhook:
+            self._webhook.send_transcription(result, language=self.config.stt.language)
+
+        # Send to SSE if running
+        if self._sse:
+            self._sse.send_transcription_result(result, language=self.config.stt.language)
 
     def on_injection(self, result: InjectionResult) -> None:
         """Handle text injection completion."""
@@ -145,11 +165,20 @@ class VoxtypeApp(EngineEvents):
         if self._status_panel:
             self._status_panel.update_mode(mode.value)
 
+        # Send to SSE if running
+        if self._sse:
+            self._sse.send_mode_change(mode)
+
         self._speak_mode_with_mute()
 
     def on_agent_change(self, agent_name: str, index: int) -> None:
         """Handle agent change."""
         self._console.print(f"[bold cyan]>>> Agent: {agent_name}[/]")
+
+        # Send to SSE if running
+        if self._sse:
+            self._sse.send_agent_change(agent_name, index)
+
         self._speak_agent(agent_name)
 
     def on_error(self, message: str, context: str) -> None:
@@ -157,11 +186,19 @@ class VoxtypeApp(EngineEvents):
         if self.config.verbose:
             self._console.print(f"[red]Error in {context}: {message}[/]")
 
+        # Send to SSE if running
+        if self._sse:
+            self._sse.send_error(message, context)
+
     def on_partial_transcription(self, text: str) -> None:
         """Handle partial transcription (realtime mode)."""
         import sys
         sys.stdout.write(f"\r\033[36m\033[1mListening:\033[0m   \033[2m{text}\033[0m\033[K")
         sys.stdout.flush()
+
+        # Send to SSE if running
+        if self._sse:
+            self._sse.send_partial_transcription(text)
 
     def on_recording_start(self) -> None:
         """Handle recording start."""
@@ -486,6 +523,33 @@ class VoxtypeApp(EngineEvents):
                 filepath = f"{self._engine.output_dir}/{agent}.voxtype"
                 self._console.print(f"[dim]Output: {filepath}[/]")
 
+        # Initialize webhook if configured
+        if self.config.webhook.url:
+            from voxtype.output.webhook import WebhookSender
+
+            self._webhook = WebhookSender(
+                url=self.config.webhook.url,
+                timeout=self.config.webhook.timeout,
+                include_metadata=self.config.webhook.include_metadata,
+                agent=self._engine.current_agent,
+            )
+            self._webhook.set_error_callback(
+                lambda msg: self._console.print(f"[red]{msg}[/]") if self.config.verbose else None
+            )
+            self._console.print(f"[dim]Webhook: {self.config.webhook.url}[/]")
+
+        # Initialize SSE server if enabled
+        if self.config.sse.enabled:
+            from voxtype.output.sse import SSEServer
+
+            self._sse = SSEServer(
+                host=self.config.sse.host,
+                port=self.config.sse.port,
+                agent=self._engine.current_agent,
+            )
+            self._sse.start()
+            self._console.print(f"[dim]SSE server: {self._sse.url}[/]")
+
         # Initialize input manager
         self._init_input_manager()
 
@@ -560,6 +624,14 @@ class VoxtypeApp(EngineEvents):
         if self._status_panel:
             self._status_panel.stop()
             self._status_panel = None
+
+        # Stop SSE server
+        if self._sse:
+            self._sse.stop()
+            self._sse = None
+
+        # Clear webhook
+        self._webhook = None
 
         # Stop engine
         self._engine.stop()
