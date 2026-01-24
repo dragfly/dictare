@@ -40,10 +40,12 @@ fi
 
 # Parse arguments
 ACTION="install"
+FORCE_MODE=0
 for arg in "$@"; do
     case $arg in
         uninstall|remove) ACTION="uninstall" ;;
         --dev) DEV_MODE=1 ;;
+        --force) FORCE_MODE=1 ;;
         --help|-h) ACTION="help" ;;
     esac
 done
@@ -57,11 +59,13 @@ voxtype installer v${VERSION}
 
 Usage:
   ./install.sh              Install voxtype globally (uv tool)
+  ./install.sh --force      Force rebuild from source (ignore cache)
   ./install.sh --dev        Install in development mode (editable, in .venv)
   ./install.sh uninstall    Remove voxtype and dependencies
   curl ... | sh             Install from remote
 
 Options:
+  --force     Force rebuild from source, even if same version (for developers)
   --dev       Development mode: creates .venv with editable install
   uninstall   Remove voxtype, ydotool service, and cleanup
 
@@ -198,20 +202,27 @@ install_macos() {
     else
         step "Installing voxtype..."
 
-        # --reinstall ensures clean upgrades without manual cache cleaning
+        # Build install flags
+        # --reinstall: upgrade even if installed
+        # --force: rebuild from source (ignore cached wheel)
+        INSTALL_FLAGS="--reinstall --python 3.11"
+        if [ $FORCE_MODE -eq 1 ]; then
+            INSTALL_FLAGS="$INSTALL_FLAGS --force"
+        fi
+
         if [ $IS_LOCAL -eq 1 ]; then
             # Local install from repo
             if [ "$ARCH" = "arm64" ]; then
-                uv tool install --reinstall --python 3.11 "$SCRIPT_DIR[mlx]"
+                uv tool install $INSTALL_FLAGS "$SCRIPT_DIR[mlx]"
             else
-                uv tool install --reinstall --python 3.11 "$SCRIPT_DIR"
+                uv tool install $INSTALL_FLAGS "$SCRIPT_DIR"
             fi
         else
             # Remote install from PyPI
             if [ "$ARCH" = "arm64" ]; then
-                uv tool install --reinstall --python 3.11 "voxtype[mlx]"
+                uv tool install $INSTALL_FLAGS "voxtype[mlx]"
             else
-                uv tool install --reinstall --python 3.11 "voxtype"
+                uv tool install $INSTALL_FLAGS "voxtype"
             fi
         fi
         info "Installed voxtype"
@@ -369,13 +380,18 @@ EOF
     else
         step "Installing voxtype..."
 
-        # --reinstall ensures clean upgrades without manual cache cleaning
+        # Build install flags
+        INSTALL_FLAGS="--reinstall"
+        if [ $FORCE_MODE -eq 1 ]; then
+            INSTALL_FLAGS="$INSTALL_FLAGS --force"
+        fi
+
         if [ $IS_LOCAL -eq 1 ]; then
             # Local install from repo
-            uv tool install --reinstall "$SCRIPT_DIR"
+            uv tool install $INSTALL_FLAGS "$SCRIPT_DIR"
         else
             # Remote install from PyPI
-            uv tool install --reinstall "voxtype"
+            uv tool install $INSTALL_FLAGS "voxtype"
         fi
         info "Installed voxtype"
 
