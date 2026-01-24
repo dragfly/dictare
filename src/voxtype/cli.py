@@ -365,10 +365,6 @@ def listen(
         Optional[str],
         typer.Option("--output", "-o", help="Output method: keyboard or agent"),
     ] = None,
-    output_dir: Annotated[
-        Optional[Path],
-        typer.Option("--output-dir", "-D", help="Directory for agent files (<agent>.voxtype)"),
-    ] = None,
     agents: Annotated[
         Optional[str],
         typer.Option("--agents", "-A", help="Agent IDs comma-separated (e.g., 'claude,pippo')"),
@@ -485,18 +481,9 @@ def listen(
     # Create JSONL logger (always enabled by default)
     logger = _create_logger(config, agents=agent_list)
 
-    output_dir_str = str(output_dir) if output_dir else None
-
-    # Default output_dir to /tmp when agents specified (matches 'voxtype agent' default)
-    if agent_list and not output_dir_str:
-        output_dir_str = "/tmp"
-    elif output_dir_str and not agent_list:
-        output_dir_str = None  # Ignore output_dir without agents
-
     voxtypeapp = VoxtypeApp(
         config,
         logger=logger,
-        output_dir=output_dir_str,
         agents=agent_list,
         realtime=realtime,
     )
@@ -1213,28 +1200,24 @@ def agent(
     ctx: typer.Context,
     agent_id: Annotated[
         str,
-        typer.Argument(help="Agent ID (e.g., 'macinanumeri')"),
+        typer.Argument(help="Agent ID (e.g., 'claude')"),
     ],
-    output_dir: Annotated[
-        Optional[Path],
-        typer.Option("--output-dir", "-o", help="Directory for agent files (default: /tmp)"),
-    ] = None,
     quiet: Annotated[
         bool,
         typer.Option("--quiet", "-q", help="Suppress info messages"),
     ] = False,
 ) -> None:
-    """Run a command with voxtype voice input.
+    """Run a command with voxtype voice input via OpenVIP.
 
-    Wraps any command and feeds it text from voxtype. Use with 'voxtype listen --agents'.
+    Listens on a Unix socket for OpenVIP messages from 'voxtype listen --agents'.
 
     Example:
 
-        # Terminal 1: Start the agent
-        voxtype agent macinanumeri -- claude -c
+        # Terminal 1: Start the agent wrapper
+        voxtype agent claude -- claude
 
-        # Terminal 2: Send voice input
-        voxtype listen --agents macinanumeri
+        # Terminal 2: Send voice input via OpenVIP
+        voxtype listen --agents claude
     """
     from voxtype.agent import run_agent
 
@@ -1244,11 +1227,10 @@ def agent(
         console.print("[red]Error: No command specified[/]")
         console.print()
         console.print("[dim]Usage: voxtype agent AGENT_ID -- COMMAND...[/]")
-        console.print("[dim]Example: voxtype agent macinanumeri -- claude -c[/]")
+        console.print("[dim]Example: voxtype agent claude -- claude[/]")
         raise typer.Exit(1)
 
-    output_dir_str = str(output_dir) if output_dir else None
-    exit_code = run_agent(agent_id, command, output_dir=output_dir_str, quiet=quiet)
+    exit_code = run_agent(agent_id, command, quiet=quiet)
     raise typer.Exit(exit_code)
 
 

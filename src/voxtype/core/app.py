@@ -36,7 +36,6 @@ class VoxtypeApp(EngineEvents):
         self,
         config: Config,
         logger: JSONLLogger | None = None,
-        output_dir: str | None = None,
         agents: list[str] | None = None,
         realtime: bool = False,
     ) -> None:
@@ -45,8 +44,7 @@ class VoxtypeApp(EngineEvents):
         Args:
             config: Application configuration.
             logger: Optional JSONL logger for structured logging.
-            output_dir: Directory for agent files (<agent>.voxtype).
-            agents: List of agent IDs for multi-output mode.
+            agents: List of agent IDs for socket-based multi-output mode.
             realtime: Enable realtime transcription feedback while speaking.
         """
         self.config = config
@@ -72,7 +70,6 @@ class VoxtypeApp(EngineEvents):
             config=config,
             events=self,
             logger=logger,
-            output_dir=output_dir,
             agents=agents,
             realtime=realtime,
         )
@@ -518,11 +515,12 @@ class VoxtypeApp(EngineEvents):
             if self._engine._hotkey:
                 self._console.print(f"[dim]Toggle hotkey: {self._engine._hotkey.get_key_name()}[/]")
 
-        # Show agent files
-        if self._engine.output_dir and self._engine.agents:
+        # Show agent sockets (OpenVIP)
+        if self._engine.agents:
+            from voxtype.injection.socket import get_socket_path
             for agent in self._engine.agents:
-                filepath = f"{self._engine.output_dir}/{agent}.voxtype"
-                self._console.print(f"[dim]Output: {filepath}[/]")
+                socket_path = get_socket_path(agent)
+                self._console.print(f"[dim]Socket: {socket_path}[/]")
 
         # Initialize webhook if configured
         if self.config.webhook.url:
@@ -531,8 +529,6 @@ class VoxtypeApp(EngineEvents):
             self._webhook = WebhookSender(
                 url=self.config.webhook.url,
                 timeout=self.config.webhook.timeout,
-                include_metadata=self.config.webhook.include_metadata,
-                agent=self._engine.current_agent,
             )
             self._webhook.set_error_callback(
                 lambda msg: self._console.print(f"[red]{msg}[/]") if self.config.verbose else None
