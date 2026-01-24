@@ -536,9 +536,9 @@ class VoxtypeApp:
                     if self._realtime:
                         self._console.print(f"[bold green]Transcribed:[/] {text}")
 
-                    # Check listening state first (thread-safe)
-                    if not self.is_listening:
-                        # Not listening: ignore transcription
+                    # Check if user has turned off listening
+                    if self.is_off:
+                        # Mic disabled: ignore transcription
                         self._console.print("[dim]Not listening, ignoring.[/]")
                         return
 
@@ -576,7 +576,7 @@ class VoxtypeApp:
         if not self._speech_was_ignored:
             return
 
-        if not self.is_listening:
+        if self.is_off:
             self._speech_was_ignored = False
             return
 
