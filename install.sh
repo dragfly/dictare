@@ -361,7 +361,7 @@ EOF
         step "Installing voxtype (development mode)..."
         cd "$SCRIPT_DIR"
 
-        uv sync
+        uv sync --python 3.11
 
         # Install pre-built evdev if available
         if ls "$SCRIPT_DIR/build/evdev-"*.whl &>/dev/null; then
@@ -381,7 +381,10 @@ EOF
         step "Installing voxtype..."
 
         # Build install flags
-        INSTALL_FLAGS="--reinstall"
+        # --reinstall: upgrade even if installed
+        # --python 3.11: consistent Python version across platforms
+        # --force: rebuild from source (ignore cached wheel)
+        INSTALL_FLAGS="--reinstall --python 3.11"
         if [ $FORCE_MODE -eq 1 ]; then
             INSTALL_FLAGS="$INSTALL_FLAGS --force"
         fi
