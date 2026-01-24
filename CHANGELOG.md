@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.21.0] - 2026-01-24
+
+### Changed
+- **Unified state machine**: The `_listening` boolean flag is now part of the state machine. States: `OFF` (mic disabled), `LISTENING` (mic active), `RECORDING`, `TRANSCRIBING`, `INJECTING`, `PLAYING`. This eliminates race conditions between the flag and state transitions.
+- **Renamed `IDLE` → `OFF`**: The idle state is now called `OFF` to clearly indicate the mic is disabled. `LISTENING` is the new "ready" state.
+- **Conditional TTS behavior**: New config `audio.tts_pauses_listening` (default `true`):
+  - `true` (speakers): TTS transitions to `PLAYING` state, pausing mic to prevent echo capture
+  - `false` (headphones): TTS fires in background, mic keeps listening
+- **VAD flush after TTS**: When returning from `PLAYING` to `LISTENING`, VAD is flushed to clear any residual echo in the audio buffer.
+
+### Fixed
+- **TTS echo capture bug**: When using speakers, the TTS feedback (e.g., "agent pippo") was being picked up by the mic and transcribed. Now properly blocked via the `PLAYING` state.
+
+### Removed
+- **`_listening` flag**: Replaced by state machine. Use `is_listening` property or check `state == AppState.LISTENING`.
+- **`_state_lock`**: State synchronization now handled entirely by `StateManager`.
+
 ## [2.20.1] - 2026-01-24
 
 ### Fixed
