@@ -128,6 +128,12 @@ class VoxtypeApp:
         """Get current application state (read-only, use StateManager for transitions)."""
         return self._state_manager.state
 
+    @property
+    def is_listening(self) -> bool:
+        """Thread-safe check of listening state."""
+        with self._state_lock:
+            return self._listening
+
     def _create_stt_engine(self) -> STTEngine:
         """Create and load STT engine."""
         from voxtype.utils.hardware import is_mlx_available
@@ -532,8 +538,8 @@ class VoxtypeApp:
                     if self._realtime:
                         self._console.print(f"[bold green]Transcribed:[/] {text}")
 
-                    # Check listening state first
-                    if not self._listening:
+                    # Check listening state first (thread-safe)
+                    if not self.is_listening:
                         # Not listening: ignore transcription
                         self._console.print("[dim]Not listening, ignoring.[/]")
                         return
@@ -572,7 +578,7 @@ class VoxtypeApp:
         if not self._speech_was_ignored:
             return
 
-        if not self._listening:
+        if not self.is_listening:
             self._speech_was_ignored = False
             return
 
@@ -763,7 +769,7 @@ class VoxtypeApp:
 
         # Sync LLM processor state if available
         if self._llm_processor:
-            self._llm_processor.set_listening(self._listening)
+            self._llm_processor.set_listening(self.is_listening)
 
         self._speak_mode_with_mute()
 
@@ -994,10 +1000,10 @@ class VoxtypeApp:
         if self._llm_processor:
             self._llm_processor.set_listening(True)
         if self._audio_manager:
-            # Audio processing: enabled only when _listening=True AND not in PLAYING state
+            # Audio processing: enabled only when listening=True AND not in PLAYING state
             # PLAYING state blocks audio to prevent transcribing TTS feedback
             self._audio_manager.start_streaming(
-                is_listening=lambda: self._listening and self.state != AppState.PLAYING,
+                is_listening=lambda: self.is_listening and self.state != AppState.PLAYING,
                 is_running=lambda: self._running,
             )
 
