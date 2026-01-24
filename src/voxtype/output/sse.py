@@ -1,18 +1,26 @@
-"""Server-Sent Events (SSE) server for voxtype - stream events to clients."""
+"""Server-Sent Events (SSE) server for voxtype - stream events to clients.
+
+Implements OpenVIP (Open Voice Input Protocol) v1.0.
+See: https://open-voice-input.org
+"""
 
 from __future__ import annotations
 
 import json
 import threading
+import uuid
 from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any
 
 from voxtype import __version__
 
 if TYPE_CHECKING:
-    from voxtype.core.events import TranscriptionResult, InjectionResult
+    from voxtype.core.events import TranscriptionResult
     from voxtype.core.state import AppState, ProcessingMode
+
+# OpenVIP protocol version
+OPENVIP_VERSION = "1.0"
 
 
 class SSEHandler(BaseHTTPRequestHandler):
@@ -87,33 +95,31 @@ class SSEHandler(BaseHTTPRequestHandler):
 class SSEServer:
     """Server-Sent Events server for streaming voxtype events.
 
-    Clients connect to http://localhost:port/events and receive events as:
+    Clients connect to http://localhost:port/events and receive OpenVIP messages:
 
-        event: transcription
-        data: {"openvox": "1.0", "type": "message", "text": "hello world", ...}
+        event: message
+        data: {"openvip": "1.0", "type": "message", "id": "...", "text": "hello", ...}
 
-        event: state_change
-        data: {"old": "LISTENING", "new": "RECORDING", "trigger": "vad_speech_start"}
+        event: state
+        data: {"openvip": "1.0", "type": "state", "id": "...", "state": "listening", ...}
 
-    Events are OpenVox-compatible where applicable.
+    All events follow the OpenVIP v1.0 specification.
+    See: https://open-voice-input.org
     """
 
     def __init__(
         self,
         host: str = "localhost",
         port: int = 8765,
-        agent: str | None = None,
     ) -> None:
         """Initialize SSE server.
 
         Args:
             host: Host to bind to.
             port: Port to listen on.
-            agent: Optional agent name for context.
         """
         self.host = host
         self.port = port
-        self.agent = agent
         self._server: HTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._running = False
@@ -189,6 +195,26 @@ class SSEServer:
 
     # Event methods - called by engine/app
 
+    def _openvip_message(self, msg_type: str, **kwargs: Any) -> dict[str, Any]:
+        """Create an OpenVIP message.
+
+        Args:
+            msg_type: Message type (message, partial, start, end, state, error).
+            **kwargs: Additional fields for the message.
+
+        Returns:
+            OpenVIP message dict.
+        """
+        message: dict[str, Any] = {
+            "openvip": OPENVIP_VERSION,
+            "type": msg_type,
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": f"voxtype/{__version__}",
+        }
+        message.update(kwargs)
+        return message
+
     def send_transcription(
         self,
         text: str,
@@ -196,7 +222,7 @@ class SSEServer:
         audio_duration_ms: float | None = None,
         transcription_ms: float | None = None,
     ) -> None:
-        """Send a transcription event.
+        """Send a transcription event (OpenVIP type: message).
 
         Args:
             text: Transcribed text.
@@ -204,28 +230,15 @@ class SSEServer:
             audio_duration_ms: Audio duration in milliseconds.
             transcription_ms: Transcription time in milliseconds.
         """
-        data: dict[str, Any] = {
-            "openvox": "1.0",
-            "type": "message",
-            "text": text,
-            "metadata": {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            },
-            "context": {
-                "source": "voxtype",
-                "source_version": __version__,
-            },
-        }
+        kwargs: dict[str, Any] = {"text": text}
         if language:
-            data["metadata"]["language"] = language
+            kwargs["language"] = language
         if audio_duration_ms is not None:
-            data["metadata"]["audio_duration_ms"] = audio_duration_ms
+            kwargs["audio_duration_ms"] = int(audio_duration_ms)
         if transcription_ms is not None:
-            data["metadata"]["transcription_ms"] = transcription_ms
-        if self.agent:
-            data["context"]["agent"] = self.agent
+            kwargs["transcription_ms"] = int(transcription_ms)
 
-        self._broadcast("transcription", data)
+        self._broadcast("message", self._openvip_message("message", **kwargs))
 
     def send_transcription_result(self, result: "TranscriptionResult", language: str | None = None) -> None:
         """Send a TranscriptionResult event.
@@ -242,64 +255,67 @@ class SSEServer:
         )
 
     def send_state_change(self, old: "AppState", new: "AppState", trigger: str) -> None:
-        """Send a state change event.
+        """Send a state change event (OpenVIP type: state).
 
         Args:
             old: Previous state.
             new: New state.
             trigger: What triggered the change.
         """
-        self._broadcast("state_change", {
-            "old": old.name,
-            "new": new.name,
-            "trigger": trigger,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        # Map voxtype states to OpenVIP states
+        state_map = {
+            "OFF": "idle",
+            "LISTENING": "listening",
+            "RECORDING": "listening",
+            "TRANSCRIBING": "processing",
+        }
+        openvip_state = state_map.get(new.name, "idle")
+        self._broadcast("state", self._openvip_message("state", state=openvip_state))
 
     def send_mode_change(self, mode: "ProcessingMode") -> None:
         """Send a mode change event.
 
-        Args:
-            mode: New processing mode.
+        Note: Processing mode is voxtype-specific, sent as x_ extension.
         """
-        self._broadcast("mode_change", {
-            "mode": mode.value,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._broadcast("state", self._openvip_message(
+            "state",
+            state="listening",
+            x_mode=mode.value,
+        ))
 
     def send_agent_change(self, agent_name: str, index: int) -> None:
         """Send an agent change event.
 
-        Args:
-            agent_name: Name of the new active agent.
-            index: Index of the new active agent.
+        Note: Agent is voxtype-specific, sent as x_ extension.
         """
-        self._broadcast("agent_change", {
-            "agent": agent_name,
-            "index": index,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._broadcast("state", self._openvip_message(
+            "state",
+            state="listening",
+            x_agent=agent_name,
+            x_agent_index=index,
+        ))
 
     def send_partial_transcription(self, text: str) -> None:
-        """Send a partial transcription event (realtime).
+        """Send a partial transcription event (OpenVIP type: partial).
 
         Args:
             text: Partial transcription text so far.
         """
-        self._broadcast("partial_transcription", {
-            "text": text,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._broadcast("partial", self._openvip_message("partial", text=text))
 
     def send_error(self, message: str, context: str) -> None:
-        """Send an error event.
+        """Send an error event (OpenVIP type: error).
 
         Args:
             message: Error message.
             context: Context where the error occurred.
         """
-        self._broadcast("error", {
-            "message": message,
-            "context": context,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._broadcast("error", self._openvip_message("error", error=message, code=context))
+
+    def send_start(self) -> None:
+        """Send a start event (recording started)."""
+        self._broadcast("start", self._openvip_message("start"))
+
+    def send_end(self) -> None:
+        """Send an end event (recording ended)."""
+        self._broadcast("end", self._openvip_message("end"))
