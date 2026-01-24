@@ -25,7 +25,7 @@ class LLMProcessor:
     This processor handles:
     - Trigger phrase detection (anywhere in the text)
     - Command classification
-    - State management (IDLE ↔ LISTENING)
+    - State management (OFF ↔ LISTENING)
     - Text formatting for injection
     """
 
@@ -51,7 +51,7 @@ class LLMProcessor:
         self.ollama_model = ollama_model
         self.ollama_timeout = ollama_timeout
         self._console = console
-        self._state = AppState.IDLE
+        self._state = AppState.OFF
         self._history: list[str] = []
         self._last_injection: str | None = None
         self._ollama_available: bool | None = None
@@ -208,7 +208,7 @@ class LLMProcessor:
         """Validate response against current state, fallback to keywords if invalid."""
         if request.current_state == AppState.LISTENING:
             return self._validate_listening_response(response, request)
-        elif request.current_state == AppState.IDLE and request.trigger_phrase:
+        elif request.current_state == AppState.OFF and request.trigger_phrase:
             return self._validate_idle_response(response, request)
         return response
 
@@ -252,14 +252,14 @@ class LLMProcessor:
     def _validate_idle_response(
         self, response: LLMResponse, request: LLMRequest
     ) -> LLMResponse:
-        """Validate response when in IDLE mode with trigger phrase."""
+        """Validate response when in OFF mode with trigger phrase."""
         text_lower = request.text.lower()
         trigger_found, _ = self._find_trigger_phrase(text_lower, request.trigger_phrase)
 
         # Cannot change state without trigger phrase
         if not trigger_found and response.action == Action.CHANGE_STATE:
             if self._console:
-                self._console.print("[yellow]IDLE: state change without trigger phrase[/]")
+                self._console.print("[yellow]OFF: state change without trigger phrase[/]")
             return LLMResponse.ignore("No trigger phrase for state change", backend="ollama")
 
         return response
@@ -281,7 +281,7 @@ class LLMProcessor:
             # Otherwise inject the text
             return LLMResponse.inject(request.text)
 
-        # In IDLE mode - need trigger phrase
+        # In OFF mode - need trigger phrase
         if request.trigger_phrase:
             trigger_found, text_after = self._find_trigger_phrase(text_lower, request.trigger_phrase)
 
@@ -310,7 +310,7 @@ class LLMProcessor:
             return LLMResponse.ignore("Trigger phrase only, no command")
 
         # No trigger phrase configured
-        # In IDLE mode: ignore (user must toggle back to LISTENING via hotkey)
+        # In OFF mode: ignore (user must toggle back to LISTENING via hotkey)
         # This should not happen in normal flow since we check LISTENING above
         return LLMResponse.ignore("Not in LISTENING mode", backend="keyword")
 
@@ -370,7 +370,7 @@ class LLMProcessor:
 
     def reset(self) -> None:
         """Reset processor state."""
-        self._state = AppState.IDLE
+        self._state = AppState.OFF
         self._history.clear()
         self._last_injection = None
 
@@ -378,18 +378,18 @@ class LLMProcessor:
         """Set listening state.
 
         Args:
-            listening: True to set LISTENING, False to set IDLE.
+            listening: True to set LISTENING, False to set OFF.
         """
-        self._state = AppState.LISTENING if listening else AppState.IDLE
+        self._state = AppState.LISTENING if listening else AppState.OFF
 
     def toggle_listening(self) -> AppState:
-        """Toggle between IDLE and LISTENING states.
+        """Toggle between OFF and LISTENING states.
 
         Returns:
             The new state after toggling.
         """
-        if self._state == AppState.IDLE:
+        if self._state == AppState.OFF:
             self._state = AppState.LISTENING
         else:
-            self._state = AppState.IDLE
+            self._state = AppState.OFF
         return self._state

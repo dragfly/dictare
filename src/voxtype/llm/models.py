@@ -73,10 +73,10 @@ class LLMResponse:
 
     @classmethod
     def exit_listening(cls, backend: str = "keyword") -> LLMResponse:
-        """Create a response to exit LISTENING mode."""
+        """Create a response to exit LISTENING mode (go to OFF)."""
         return cls(
             action=Action.CHANGE_STATE,
-            new_state=AppState.IDLE,
+            new_state=AppState.OFF,
             user_feedback="Listening mode deactivated",
             backend=backend,
         )

@@ -78,15 +78,13 @@ class VoxtypeApp:
         # Lock for STT engine (MLX is not thread-safe)
         self._stt_lock = threading.Lock()
 
-        # Lock for thread-safe access to _listening and _running flags
-        self._state_lock = threading.Lock()
-
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
         self.output_dir = output_dir
         self.agents = agents or []
-        self._state_manager = StateManager()
+        # State machine handles all state (OFF/LISTENING/RECORDING/etc)
+        self._state_manager = StateManager(initial_state=AppState.OFF)
         self._running = False
         self._console = Console(
             force_terminal=None,  # Auto-detect
@@ -103,9 +101,6 @@ class VoxtypeApp:
 
         # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
         self._processing_mode = ProcessingMode(config.command.mode)
-
-        # Listening state: True = actively listening, False = paused
-        self._listening = False
 
         # Double-tap detection
         self._last_tap_time: float = 0.0
@@ -125,14 +120,18 @@ class VoxtypeApp:
 
     @property
     def state(self) -> AppState:
-        """Get current application state (read-only, use StateManager for transitions)."""
+        """Get current application state."""
         return self._state_manager.state
 
     @property
     def is_listening(self) -> bool:
-        """Thread-safe check of listening state."""
-        with self._state_lock:
-            return self._listening
+        """Check if in LISTENING state (mic active, waiting for speech)."""
+        return self._state_manager.is_listening
+
+    @property
+    def is_off(self) -> bool:
+        """Check if in OFF state (mic disabled)."""
+        return self._state_manager.is_off
 
     def _create_stt_engine(self) -> STTEngine:
         """Create and load STT engine."""
@@ -382,7 +381,7 @@ class VoxtypeApp:
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
         if self.config.verbose:
-            self._console.print(f"[dim][DEBUG] Speech start: state={self.state.name}, listening={self._listening}[/]")
+            self._console.print(f"[dim][DEBUG] Speech start: state={self.state.name}, listening={self.is_listening}[/]")
 
         # Show "Listening:" prefix (aligned with "Transcribed:")
         if self._realtime:
@@ -476,7 +475,7 @@ class VoxtypeApp:
         min_samples = int(sample_rate * self.MIN_RECORDING_DURATION)
         if len(audio_data) < min_samples:
             self._console.print("[dim]Too short, ignoring.        [/]")
-            self._state_manager.reset()  # TRANSCRIBING → IDLE
+            self._state_manager.reset_to_listening()  # TRANSCRIBING → IDLE
             return
 
         # Show transcribing status (skip in realtime mode - we'll show Transcribed: instead)
@@ -563,9 +562,9 @@ class VoxtypeApp:
                     self._logger.log_error(str(e), context="transcribe_and_process")
                 self._console.print(f"[red]Error: {e}[/]")
             finally:
-                self._state_manager.reset()  # Return to IDLE
+                self._state_manager.reset_to_listening()  # Return to IDLE
                 if self.config.verbose:
-                    self._console.print(f"[dim][DEBUG] After transcribe: state={self.state.name}, listening={self._listening}, running={self._running}[/]")
+                    self._console.print(f"[dim][DEBUG] After transcribe: state={self.state.name}, listening={self.is_listening}, running={self._running}[/]")
                 self._signal_ready_to_listen()
                 # Process queued audio if any
                 self._process_queued_audio()
@@ -655,9 +654,9 @@ class VoxtypeApp:
             return
 
         if response.action == Action.CHANGE_STATE:
-            if response.new_state == LLMAppState.LISTENING:
+            if response.new_state == AppState.LISTENING:
                 self._enter_listening_mode()
-            elif response.new_state == LLMAppState.IDLE:
+            elif response.new_state == AppState.OFF:
                 self._exit_listening_mode()
             return
 
@@ -740,23 +739,24 @@ class VoxtypeApp:
         self._pending_single_tap.start()
 
     def _toggle_listening(self) -> None:
-        """Toggle listening on/off."""
-        with self._state_lock:
-            if self._listening:
-                # Turning OFF: disable first, then show message
-                self._listening = False
+        """Toggle listening on/off using state machine."""
+        current = self.state
+
+        if current == AppState.LISTENING:
+            # LISTENING → OFF
+            if self._state_manager.try_transition(AppState.OFF):
                 self._console.print("[bold red]<<< LISTENING OFF[/]")
                 self._play_feedback("listening_off")
-            else:
-                # Turning ON: show message first, then enable
-                # This ensures user sees feedback before audio processing starts
+        elif current == AppState.OFF:
+            # OFF → LISTENING
+            if self._state_manager.try_transition(AppState.LISTENING):
                 self._console.print("[bold green]>>> LISTENING ON[/]")
                 self._play_feedback("listening_on")
-                self._listening = True
+        # else: busy (RECORDING, TRANSCRIBING, etc.) - ignore toggle
 
-            # Sync LLM processor state if available
-            if self._llm_processor:
-                self._llm_processor.set_listening(self._listening)
+        # Sync LLM processor state if available
+        if self._llm_processor:
+            self._llm_processor.set_listening(self.is_listening)
 
     def _switch_processing_mode(self) -> None:
         """Switch between transcription and command mode."""
@@ -810,10 +810,9 @@ class VoxtypeApp:
     def _speak_mode_with_mute(self) -> None:
         """Speak the current mode using TTS.
 
-        Uses PLAYING state to block audio processing during TTS playback,
-        preventing the microphone from transcribing the voice feedback.
-
-        Runs in background thread to avoid blocking keyboard callbacks.
+        Behavior depends on config.audio.tts_pauses_listening:
+        - True (speakers): Transition to PLAYING state, mute mic during TTS
+        - False (headphones): Fire and forget, don't change state
         """
         if not self.config.audio.audio_feedback:
             return
@@ -831,34 +830,36 @@ class VoxtypeApp:
 
         voice = phrases.get("voice", "Samantha")
 
-        # Try to enter PLAYING state (only valid from IDLE)
-        if not self._state_manager.try_transition(AppState.PLAYING):
-            return
-
-        def _speak():
+        def _do_tts():
             try:
                 if sys.platform == "darwin":
                     subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
                 else:
-                    # Linux: try espeak-ng, then espeak, then spd-say
-                    for cmd in [
-                        ["espeak-ng", text],
-                        ["espeak", text],
-                        ["spd-say", text],
-                    ]:
+                    for cmd in [["espeak-ng", text], ["espeak", text], ["spd-say", text]]:
                         try:
                             subprocess.run(cmd, capture_output=True, timeout=5)
                             break
                         except FileNotFoundError:
                             continue
             except Exception:
-                pass  # Silently fail if TTS not available
-            finally:
-                # Return to IDLE state after TTS completes
-                self._state_manager.try_transition(AppState.IDLE)
+                pass
 
-        # Run in background thread - never block keyboard callbacks
-        threading.Thread(target=_speak, daemon=True).start()
+        if self.config.audio.tts_pauses_listening:
+            # Speakers mode: pause listening during TTS
+            if not self._state_manager.try_transition(AppState.PLAYING):
+                return  # Can't enter PLAYING, skip TTS
+
+            def _speak_and_resume():
+                _do_tts()
+                # Flush VAD to clear any residual echo
+                if self._audio_manager:
+                    self._audio_manager.flush_vad()
+                self._state_manager.try_transition(AppState.LISTENING)
+
+            threading.Thread(target=_speak_and_resume, daemon=True).start()
+        else:
+            # Headphones mode: fire and forget
+            threading.Thread(target=_do_tts, daemon=True).start()
 
     def _play_feedback(self, event: str, mode: ProcessingMode | None = None) -> None:
         """Play audio feedback for state changes.
@@ -971,10 +972,8 @@ class VoxtypeApp:
         if status_panel:
             self._console.print(status_panel)
 
-        with self._state_lock:
-            self._running = True
+        self._running = True
         self._stats_start_time = time.time()
-        # Note: _listening stays False until we're fully ready
 
         # Start hotkey listener for toggle (if available)
         if self._hotkey:
@@ -988,22 +987,21 @@ class VoxtypeApp:
                 if device_info:
                     self._console.print(f"[dim]Hotkey device: {device_info[0]} ({device_info[1]})[/]")
 
-        # IMPORTANT: Show message FIRST, then enable listening, then start streaming
-        # This ensures user sees "LISTENING ON" before any audio can be processed
+        # IMPORTANT: Show message FIRST, then transition to LISTENING, then start streaming
         mode_name = "TRANSCRIPTION" if self._processing_mode == ProcessingMode.TRANSCRIPTION else "COMMAND"
         self._console.print(f"[bold green]>>> LISTENING ON[/] [dim]({mode_name} mode)[/]")
 
-        # Now enable listening and start audio streaming
-        with self._state_lock:
-            self._listening = True
+        # Transition OFF → LISTENING
+        self._state_manager.transition(AppState.LISTENING)
+
         # Sync LLM processor state
         if self._llm_processor:
             self._llm_processor.set_listening(True)
+
         if self._audio_manager:
-            # Audio processing: enabled only when listening=True AND not in PLAYING state
-            # PLAYING state blocks audio to prevent transcribing TTS feedback
+            # Audio processing: enabled when state is LISTENING or RECORDING
             self._audio_manager.start_streaming(
-                is_listening=lambda: self.is_listening and self.state != AppState.PLAYING,
+                is_listening=lambda: self._state_manager.should_process_audio,
                 is_running=lambda: self._running,
             )
 
@@ -1048,25 +1046,21 @@ class VoxtypeApp:
             self._console.print(f"[dim]Input sources: {', '.join(self._input_manager.running_sources)}[/]")
 
     def _set_listening(self, on: bool) -> None:
-        """Set listening state on/off."""
-        with self._state_lock:
-            if self._listening == on:
-                return
-
-            if on:
-                # Turning ON: show message first, then enable
+        """Set listening state on/off using state machine."""
+        if on and self.is_off:
+            # OFF → LISTENING
+            if self._state_manager.try_transition(AppState.LISTENING):
                 self._console.print("[bold green]>>> LISTENING ON[/]")
                 self._play_feedback("listening_on")
-                self._listening = True
-            else:
-                # Turning OFF: disable first, then show message
-                self._listening = False
+        elif not on and self.is_listening:
+            # LISTENING → OFF
+            if self._state_manager.try_transition(AppState.OFF):
                 self._console.print("[bold red]<<< LISTENING OFF[/]")
                 self._play_feedback("listening_off")
 
-            # Sync LLM processor state if available
-            if self._llm_processor:
-                self._llm_processor.set_listening(on)
+        # Sync LLM processor state if available
+        if self._llm_processor:
+            self._llm_processor.set_listening(self.is_listening)
 
     def _switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent.
@@ -1160,10 +1154,9 @@ class VoxtypeApp:
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS.
 
-        Uses PLAYING state to block audio processing during TTS playback,
-        preventing the microphone from transcribing the voice feedback.
-
-        Runs in background thread to avoid blocking keyboard callbacks.
+        Behavior depends on config.audio.tts_pauses_listening:
+        - True (speakers): Transition to PLAYING state, mute mic during TTS
+        - False (headphones): Fire and forget, don't change state
         """
         import subprocess
         import sys
@@ -1173,35 +1166,36 @@ class VoxtypeApp:
         voice = phrases.get("voice", "Samantha")
         text = f"{agent_prefix} {agent_name}"
 
-        # Try to enter PLAYING state (only valid from IDLE)
-        # If we're busy (RECORDING, TRANSCRIBING, etc.), skip TTS
-        if not self._state_manager.try_transition(AppState.PLAYING):
-            return
-
-        def _speak():
+        def _do_tts():
             try:
                 if sys.platform == "darwin":
                     subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
                 else:
-                    # Linux: try espeak-ng, then espeak, then spd-say
-                    for cmd in [
-                        ["espeak-ng", text],
-                        ["espeak", text],
-                        ["spd-say", "-w", text],
-                    ]:
+                    for cmd in [["espeak-ng", text], ["espeak", text], ["spd-say", "-w", text]]:
                         try:
                             subprocess.run(cmd, capture_output=True, timeout=5)
                             break
                         except FileNotFoundError:
                             continue
             except Exception:
-                pass  # Silently fail if TTS not available
-            finally:
-                # Return to IDLE state after TTS completes
-                self._state_manager.try_transition(AppState.IDLE)
+                pass
 
-        # Run in background thread - never block keyboard callbacks
-        threading.Thread(target=_speak, daemon=True).start()
+        if self.config.audio.tts_pauses_listening:
+            # Speakers mode: pause listening during TTS
+            if not self._state_manager.try_transition(AppState.PLAYING):
+                return  # Can't enter PLAYING, skip TTS
+
+            def _speak_and_resume():
+                _do_tts()
+                # Flush VAD to clear any residual echo
+                if self._audio_manager:
+                    self._audio_manager.flush_vad()
+                self._state_manager.try_transition(AppState.LISTENING)
+
+            threading.Thread(target=_speak_and_resume, daemon=True).start()
+        else:
+            # Headphones mode: fire and forget
+            threading.Thread(target=_do_tts, daemon=True).start()
 
     def _send_submit(self) -> None:
         """Send submit (Enter key) to the target."""
@@ -1222,7 +1216,7 @@ class VoxtypeApp:
 
         # Reset state if recording (RECORDING → IDLE)
         if self.state == AppState.RECORDING:
-            self._state_manager.transition(AppState.IDLE)
+            self._state_manager.transition(AppState.LISTENING)
 
         self._console.print("[yellow]Discarded[/]")
 
@@ -1248,9 +1242,9 @@ class VoxtypeApp:
         """Stop the application."""
         import gc
 
-        with self._state_lock:
-            self._running = False
-            self._listening = False  # Stop processing new audio immediately
+        self._running = False
+        # Force transition to OFF to stop audio processing immediately
+        self._state_manager.transition(AppState.OFF, force=True)
 
         # Stop partial transcription worker
         if self._partial_worker:
