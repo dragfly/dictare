@@ -6,6 +6,7 @@ import os
 import sys
 import threading
 import time
+from queue import Empty, Queue
 from typing import TYPE_CHECKING
 
 from rich.console import Console
@@ -59,7 +60,10 @@ class VoxtypeApp:
         self.config = config
         self._realtime = realtime
         self._partial_text = ""
-        self._partial_transcribing = False
+        # Partial transcription: queue + single worker (avoids race conditions)
+        self._partial_queue: Queue = Queue()
+        self._partial_worker: threading.Thread | None = None
+        self._partial_stop = threading.Event()
 
         # Session stats
         self._stats_chars = 0
@@ -305,6 +309,16 @@ class VoxtypeApp:
             on_partial_audio=self._on_partial_audio if self._realtime else None,
         )
 
+        # Start partial transcription worker if realtime mode
+        if self._realtime:
+            self._partial_stop.clear()
+            self._partial_worker = threading.Thread(
+                target=self._partial_worker_loop,
+                daemon=True,
+                name="partial-transcription-worker",
+            )
+            self._partial_worker.start()
+
         # Create LLM processor for command mode
         self._init_llm_processor()
 
@@ -391,38 +405,46 @@ class VoxtypeApp:
         if not self._realtime or self._stt is None:
             return
 
-        # Skip if a partial transcription is already running (avoid queue buildup)
-        if self._partial_transcribing:
-            return
+        # Put chunk in queue - single worker will process it
+        # No race condition: worker is single-threaded, queue is thread-safe
+        self._partial_queue.put(audio_data.copy())
 
-        # Transcribe in background thread to not block VAD
-        threading.Thread(
-            target=self._transcribe_partial,
-            args=(audio_data.copy(),),
-            daemon=True,
-        ).start()
+    def _partial_worker_loop(self) -> None:
+        """Single worker thread for partial transcriptions.
 
-    def _transcribe_partial(self, audio_data) -> None:
-        """Transcribe partial audio and display (background thread)."""
-        self._partial_transcribing = True
-        try:
-            # Use lock to prevent concurrent MLX calls (not thread-safe)
-            with self._stt_lock:
-                text = self._stt.transcribe(
-                    audio_data,
-                    language=self.config.stt.language,
-                )
-            if text and text != self._partial_text:
-                self._partial_text = text
-                # Clear line and show partial text
-                # Use ANSI: \r = start of line, \033[K = clear to end of line
-                import sys
-                sys.stdout.write(f"\r\033[36m\033[1mListening:\033[0m   \033[2m{text}\033[0m\033[K")
-                sys.stdout.flush()
-        except Exception:
-            pass  # Silently ignore errors on partial transcriptions
-        finally:
-            self._partial_transcribing = False
+        Consumes audio chunks from the queue and transcribes them.
+        Drains the queue to always process the latest chunk (avoids lag).
+        """
+        while not self._partial_stop.is_set():
+            try:
+                # Block with timeout to allow clean shutdown
+                audio_data = self._partial_queue.get(timeout=0.1)
+            except Empty:
+                continue
+
+            # Drain queue: keep only the latest chunk to avoid lag
+            while True:
+                try:
+                    audio_data = self._partial_queue.get_nowait()
+                except Empty:
+                    break
+
+            # Transcribe the latest chunk
+            try:
+                with self._stt_lock:
+                    text = self._stt.transcribe(
+                        audio_data,
+                        language=self.config.stt.language,
+                    )
+                if text and text != self._partial_text:
+                    self._partial_text = text
+                    # Clear line and show partial text
+                    # Use ANSI: \r = start of line, \033[K = clear to end of line
+                    import sys
+                    sys.stdout.write(f"\r\033[36m\033[1mListening:\033[0m   \033[2m{text}\033[0m\033[K")
+                    sys.stdout.flush()
+            except Exception:
+                pass  # Silently ignore errors on partial transcriptions
 
     def _on_vad_speech_end(self, audio_data) -> None:
         """Handle VAD speech end detection."""
@@ -1222,6 +1244,12 @@ class VoxtypeApp:
         with self._state_lock:
             self._running = False
             self._listening = False  # Stop processing new audio immediately
+
+        # Stop partial transcription worker
+        if self._partial_worker:
+            self._partial_stop.set()
+            self._partial_worker.join(timeout=1.0)
+            self._partial_worker = None
 
         # Close audio/VAD - AudioManager uses lock to ensure no callbacks are in-flight
         if self._audio_manager:
