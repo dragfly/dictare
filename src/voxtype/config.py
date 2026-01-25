@@ -74,12 +74,19 @@ class STTConfig(BaseModel):
     )
 
 
+def _default_hotkey() -> str:
+    """Return platform-specific default hotkey."""
+    import sys
+    # macOS: Command key, Linux: Scroll Lock
+    return "KEY_LEFTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
+
+
 class HotkeyConfig(BaseModel):
     """Hotkey configuration."""
 
     key: str = Field(
-        default="KEY_SCROLLLOCK",
-        description="Toggle listening key (evdev key name)",
+        default_factory=_default_hotkey,
+        description="Toggle listening key (evdev key name). Default: Command on macOS, Scroll Lock on Linux",
     )
     device: str = Field(
         default="",
@@ -498,12 +505,19 @@ def create_default_config() -> Path:
     Returns:
         Path to the created config file.
     """
+    import sys
+
     config_dir = get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
 
     config_path = config_dir / "config.toml"
 
-    default_config = """\
+    # Platform-specific defaults
+    hotkey = "KEY_LEFTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
+    hotkey_comment = "Command key" if sys.platform == "darwin" else "Scroll Lock"
+    newline_keys = "shift+enter" if sys.platform == "darwin" else "alt+enter"
+
+    default_config = f"""\
 # voxtype configuration
 
 [audio]
@@ -525,12 +539,14 @@ max_repetitions = 5            # Anti-hallucination: max consecutive word repeat
 # hotwords = "voxtype,joshua"  # Boost recognition of specific words
 
 [hotkey]
-key = "KEY_SCROLLLOCK"  # evdev key name (toggle listening)
+key = "{hotkey}"  # {hotkey_comment} (toggle listening)
 
 [output]
 method = "keyboard"    # keyboard or agent
 typing_delay_ms = 5
 auto_enter = false     # Visual newline only
+# submit_keys = "enter"         # Keys for submit (when auto_enter=true)
+# newline_keys = "{newline_keys}"  # Keys for visual newline (when auto_enter=false)
 
 [command]
 enabled = true
