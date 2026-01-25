@@ -8,19 +8,15 @@ from __future__ import annotations
 
 import json
 import threading
-import uuid
-from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any
 
 from voxtype import __version__
+from voxtype.core.openvip import create_event
 
 if TYPE_CHECKING:
     from voxtype.core.events import TranscriptionResult
     from voxtype.core.state import AppState, ProcessingMode
-
-# OpenVIP protocol version
-OPENVIP_VERSION = "1.0"
 
 
 class SSEHandler(BaseHTTPRequestHandler):
@@ -198,25 +194,17 @@ class SSEServer:
 
     # Event methods - called by engine/app
 
-    def _openvip_message(self, msg_type: str, **kwargs: Any) -> dict[str, Any]:
-        """Create an OpenVIP message.
+    def send_message(self, message: dict[str, Any]) -> None:
+        """Broadcast a pre-built OpenVIP message.
+
+        This is the preferred method - engine creates message with ID,
+        transport forwards it transparently.
 
         Args:
-            msg_type: Message type (message, partial, start, end, state, error).
-            **kwargs: Additional fields for the message.
-
-        Returns:
-            OpenVIP message dict.
+            message: Complete OpenVIP message dict.
         """
-        message: dict[str, Any] = {
-            "openvip": OPENVIP_VERSION,
-            "type": msg_type,
-            "id": str(uuid.uuid4()),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "source": f"voxtype/{__version__}",
-        }
-        message.update(kwargs)
-        return message
+        event_type = message.get("type", "message")
+        self._broadcast(event_type, message)
 
     def send_transcription(
         self,
@@ -241,7 +229,7 @@ class SSEServer:
         if transcription_ms is not None:
             kwargs["transcription_ms"] = int(transcription_ms)
 
-        self._broadcast("message", self._openvip_message("message", **kwargs))
+        self._broadcast("message", create_event("message", **kwargs))
 
     def send_transcription_result(self, result: TranscriptionResult, language: str | None = None) -> None:
         """Send a TranscriptionResult event.
@@ -273,14 +261,14 @@ class SSEServer:
             "TRANSCRIBING": "processing",
         }
         openvip_state = state_map.get(new.name, "idle")
-        self._broadcast("state", self._openvip_message("state", state=openvip_state))
+        self._broadcast("state", create_event("state", state=openvip_state))
 
     def send_mode_change(self, mode: ProcessingMode) -> None:
         """Send a mode change event.
 
         Note: Processing mode is voxtype-specific, sent as x_ extension.
         """
-        self._broadcast("state", self._openvip_message(
+        self._broadcast("state", create_event(
             "state",
             state="listening",
             x_mode=mode.value,
@@ -291,7 +279,7 @@ class SSEServer:
 
         Note: Agent is voxtype-specific, sent as x_ extension.
         """
-        self._broadcast("state", self._openvip_message(
+        self._broadcast("state", create_event(
             "state",
             state="listening",
             x_agent=agent_name,
@@ -304,7 +292,7 @@ class SSEServer:
         Args:
             text: Partial transcription text so far.
         """
-        self._broadcast("partial", self._openvip_message("partial", text=text))
+        self._broadcast("partial", create_event("partial", text=text))
 
     def send_error(self, message: str, context: str) -> None:
         """Send an error event (OpenVIP type: error).
@@ -313,12 +301,12 @@ class SSEServer:
             message: Error message.
             context: Context where the error occurred.
         """
-        self._broadcast("error", self._openvip_message("error", error=message, code=context))
+        self._broadcast("error", create_event("error", error=message, code=context))
 
     def send_start(self) -> None:
         """Send a start event (recording started)."""
-        self._broadcast("start", self._openvip_message("start"))
+        self._broadcast("start", create_event("start"))
 
     def send_end(self) -> None:
         """Send an end event (recording ended)."""
-        self._broadcast("end", self._openvip_message("end"))
+        self._broadcast("end", create_event("end"))

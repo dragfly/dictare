@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from voxtype.core.audio_manager import AudioManager
 from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
+from voxtype.core.openvip import create_message
 from voxtype.core.state import AppState, ProcessingMode, StateManager
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.injection.base import TextInjector
@@ -655,16 +656,12 @@ class VoxtypeEngine:
         success = False
         method = "unknown"
 
-        # Build OpenVIP message
-        message: dict[str, Any] = {
-            "openvip": "1.0",
-            "type": "message",
-            "text": text,
-        }
-        if auto_enter:
-            message["x_submit"] = True
-        else:
-            message["x_visual_newline"] = True
+        # Build OpenVIP message with unique ID (created once, forwarded by all transports)
+        message = create_message(
+            text,
+            submit=auto_enter,
+            visual_newline=not auto_enter,
+        )
 
         # Lock to prevent concurrent injections
         with self._injection_lock:
@@ -675,15 +672,20 @@ class VoxtypeEngine:
                 method = "local:keyboard"
                 success = self._local_receiver.send(message)
             elif self._injector:
-                # Agent mode - send via socket
+                # Agent mode - send pre-built message via socket
                 method = self._injector.get_name()
-                success = self._injector.type_text(
-                    text,
-                    delay_ms=self.config.output.typing_delay_ms,
-                    auto_enter=auto_enter,
-                    submit_keys=self.config.output.submit_keys,
-                    newline_keys=self.config.output.newline_keys,
-                )
+                if hasattr(self._injector, "send_message"):
+                    # Preferred: forward complete message with ID
+                    success = self._injector.send_message(message)
+                else:
+                    # Fallback for injectors without send_message
+                    success = self._injector.type_text(
+                        text,
+                        delay_ms=self.config.output.typing_delay_ms,
+                        auto_enter=auto_enter,
+                        submit_keys=self.config.output.submit_keys,
+                        newline_keys=self.config.output.newline_keys,
+                    )
 
             self._stats_injection_seconds += time.time() - inject_start
 

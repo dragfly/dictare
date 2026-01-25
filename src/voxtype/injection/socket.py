@@ -4,15 +4,11 @@ from __future__ import annotations
 
 import json
 import socket
-import uuid
-from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
-from voxtype import __version__
+from voxtype.core.openvip import create_message
 from voxtype.injection.base import TextInjector
-
-# OpenVIP protocol version
-OPENVIP_VERSION = "1.0"
 
 
 def get_socket_path(agent_id: str) -> Path:
@@ -31,6 +27,7 @@ class SocketInjector(TextInjector):
     """Sends OpenVIP messages to a Unix socket.
 
     The agent (consumer) listens on the socket and receives messages.
+    Transports are transparent: they forward pre-built messages without modification.
     """
 
     def __init__(self, agent_id: str) -> None:
@@ -41,8 +38,15 @@ class SocketInjector(TextInjector):
         """Check if the agent socket exists."""
         return self.socket_path.exists()
 
-    def _send_message(self, msg: dict) -> bool:
-        """Send an OpenVIP message to the socket."""
+    def _send_raw(self, msg: dict[str, Any]) -> bool:
+        """Send a message dict to the socket.
+
+        Args:
+            msg: OpenVIP message dict to send.
+
+        Returns:
+            True if sent successfully.
+        """
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
                 sock.connect(str(self.socket_path))
@@ -52,17 +56,19 @@ class SocketInjector(TextInjector):
         except (OSError, ConnectionRefusedError):
             return False
 
-    def _openvip_message(self, msg_type: str, **kwargs) -> dict:
-        """Create an OpenVIP message."""
-        msg = {
-            "openvip": OPENVIP_VERSION,
-            "type": msg_type,
-            "id": str(uuid.uuid4()),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "source": f"voxtype/{__version__}",
-        }
-        msg.update(kwargs)
-        return msg
+    def send_message(self, message: dict[str, Any]) -> bool:
+        """Send a pre-built OpenVIP message.
+
+        This is the preferred method - engine creates message with ID,
+        transport forwards it transparently.
+
+        Args:
+            message: Complete OpenVIP message dict.
+
+        Returns:
+            True if sent successfully.
+        """
+        return self._send_raw(message)
 
     def type_text(
         self,
@@ -74,9 +80,8 @@ class SocketInjector(TextInjector):
     ) -> bool:
         """Send text as OpenVIP message.
 
-        The receiver (mux.py) handles message termination:
-        - x_submit=true: text + Enter (submit)
-        - x_visual_newline=true: text + Alt+Enter (visual newline)
+        Note: Prefer send_message() when you have a pre-built message.
+        This method creates a new message (for backward compatibility).
 
         Args:
             text: Text to send (without trailing newline).
@@ -88,13 +93,8 @@ class SocketInjector(TextInjector):
         Returns:
             True if successful.
         """
-        msg = self._openvip_message("message", text=text)
-        if auto_enter:
-            msg["x_submit"] = True
-        else:
-            msg["x_visual_newline"] = True
-
-        return self._send_message(msg)
+        msg = create_message(text, submit=auto_enter, visual_newline=not auto_enter)
+        return self._send_raw(msg)
 
     def get_name(self) -> str:
         """Get the name of this injector."""
@@ -102,10 +102,10 @@ class SocketInjector(TextInjector):
 
     def send_newline(self) -> bool:
         """Send a standalone visual newline."""
-        msg = self._openvip_message("message", text="\n")
-        return self._send_message(msg)
+        msg = create_message("\n")
+        return self._send_raw(msg)
 
     def send_submit(self) -> bool:
         """Send a submit message (Enter key)."""
-        msg = self._openvip_message("message", text="", x_submit=True)
-        return self._send_message(msg)
+        msg = create_message("", submit=True)
+        return self._send_raw(msg)

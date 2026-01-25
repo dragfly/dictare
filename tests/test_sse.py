@@ -9,7 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from voxtype.output.sse import OPENVIP_VERSION, SSEHandler, SSEServer
+from voxtype.core.openvip import OPENVIP_VERSION, create_event
+from voxtype.output.sse import SSEHandler, SSEServer
 
 
 class TestSSEServerInit:
@@ -166,12 +167,11 @@ class TestSSEServerClientManagement:
 
 
 class TestOpenVIPMessage:
-    """Test OpenVIP message creation."""
+    """Test OpenVIP message creation via create_event factory."""
 
     def test_message_has_required_fields(self) -> None:
         """OpenVIP messages have required fields."""
-        server = SSEServer()
-        msg = server._openvip_message("message", text="hello")
+        msg = create_event("message", text="hello")
 
         assert msg["openvip"] == OPENVIP_VERSION
         assert msg["type"] == "message"
@@ -184,8 +184,7 @@ class TestOpenVIPMessage:
         """Message ID is a valid UUID string."""
         import uuid
 
-        server = SSEServer()
-        msg = server._openvip_message("message")
+        msg = create_event("message")
 
         # Should not raise
         uuid.UUID(msg["id"])
@@ -194,8 +193,7 @@ class TestOpenVIPMessage:
         """Timestamp is ISO 8601 format."""
         from datetime import datetime
 
-        server = SSEServer()
-        msg = server._openvip_message("message")
+        msg = create_event("message")
 
         # Should parse without error
         datetime.fromisoformat(msg["timestamp"].replace("Z", "+00:00"))
@@ -204,15 +202,13 @@ class TestOpenVIPMessage:
         """Source includes voxtype version."""
         from voxtype import __version__
 
-        server = SSEServer()
-        msg = server._openvip_message("message")
+        msg = create_event("message")
 
         assert msg["source"] == f"voxtype/{__version__}"
 
     def test_extra_kwargs_added(self) -> None:
         """Extra kwargs are added to message."""
-        server = SSEServer()
-        msg = server._openvip_message(
+        msg = create_event(
             "message",
             text="hello",
             language="en",
