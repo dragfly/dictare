@@ -81,21 +81,23 @@ class LiveStatusPanel:
         """Compute the STT engine display string."""
         from voxtype.utils.hardware import is_mlx_available
 
-        device_str = "CPU"
+        device_str = "[bold yellow on red] CPU [/]"
+        gpu_hint = ""
 
         if not self._config.stt.hw_accel:
-            device_str = "CPU"
+            device_str = "[bold yellow on red] CPU [/]"
         elif self._config.stt.device == "cuda":
             from voxtype.cuda_setup import _find_cudnn_path
 
             if _find_cudnn_path():
-                device_str = "[magenta]GPU (CUDA)[/]"
+                device_str = "[bold green]GPU (CUDA)[/]"
             else:
-                device_str = "CPU [dim](GPU detected, cuDNN missing)[/]"
+                device_str = "[bold yellow on red] CPU [/]"
+                gpu_hint = " [dim](GPU detected, run: ./install.sh --gpu)[/]"
         elif is_mlx_available():
-            device_str = "[magenta]MLX (Apple Silicon)[/]"
+            device_str = "[bold green]MLX (Apple Silicon)[/]"
 
-        return f"[cyan]{self._config.stt.model_size}[/] on {device_str}"
+        return f"[cyan]{self._config.stt.model_size}[/] on {device_str}{gpu_hint}"
 
     def _compute_output_str(self) -> str:
         """Compute the output mode display string."""

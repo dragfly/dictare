@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.27.3] - 2026-01-25
+
+### Added
+- **GPU install flag**: `./install.sh --gpu` installs CUDA/cuDNN on Linux (MLX already auto-enabled on macOS)
+- **CPU warning in UI**: STT running on CPU now shows bold yellow on red background with hint to run `./install.sh --gpu`
+- **GPU success indicator**: STT running on GPU/MLX shows in green
+
+### Fixed
+- **Installer version**: Updated install.sh version from 2.22.3 to current
+
 ## [2.27.2] - 2026-01-25
 
 ### Improved

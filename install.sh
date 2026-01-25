@@ -9,7 +9,7 @@
 #
 set -e
 
-VERSION="2.22.3"
+VERSION="2.27.3"
 REPO_URL="https://github.com/dragfly/voxtype"
 
 # Colors
@@ -41,11 +41,13 @@ fi
 # Parse arguments
 ACTION="install"
 FORCE_MODE=0
+GPU_MODE=0
 for arg in "$@"; do
     case $arg in
         uninstall|remove) ACTION="uninstall" ;;
         --dev) DEV_MODE=1 ;;
         --force) FORCE_MODE=1 ;;
+        --gpu) GPU_MODE=1 ;;
         --help|-h) ACTION="help" ;;
     esac
 done
@@ -59,12 +61,14 @@ voxtype installer v${VERSION}
 
 Usage:
   ./install.sh              Install voxtype globally (uv tool)
+  ./install.sh --gpu        Install with GPU support (Linux: CUDA, macOS: MLX)
   ./install.sh --force      Force rebuild from source (ignore cache)
   ./install.sh --dev        Install in development mode (editable, in .venv)
   ./install.sh uninstall    Remove voxtype and dependencies
   curl ... | sh             Install from remote
 
 Options:
+  --gpu       Install with GPU acceleration (cuDNN on Linux, MLX on macOS)
   --force     Force rebuild from source, even if same version (for developers)
   --dev       Development mode: creates .venv with editable install
   uninstall   Remove voxtype, ydotool service, and cleanup
@@ -73,6 +77,10 @@ What gets installed:
   - voxtype command (via uv tool or .venv)
   - ydotool + ydotoold (Linux only, for keyboard simulation)
   - System dependencies (portaudio, etc.)
+
+GPU support:
+  Linux:  --gpu installs nvidia-cudnn-cu12 (requires CUDA 12 drivers)
+  macOS:  --gpu installs mlx-whisper (Apple Silicon only, auto-enabled)
 EOF
     exit 0
 }
@@ -361,7 +369,11 @@ EOF
         step "Installing voxtype (development mode)..."
         cd "$SCRIPT_DIR"
 
-        uv sync --python 3.11
+        if [ $GPU_MODE -eq 1 ]; then
+            uv sync --python 3.11 --extra gpu
+        else
+            uv sync --python 3.11
+        fi
 
         # Install pre-built evdev if available
         if ls "$SCRIPT_DIR/build/evdev-"*.whl &>/dev/null; then
@@ -389,13 +401,22 @@ EOF
             INSTALL_FLAGS="$INSTALL_FLAGS --force"
         fi
 
+        # Determine package spec (with or without gpu extra)
         if [ $IS_LOCAL -eq 1 ]; then
-            # Local install from repo
-            uv tool install $INSTALL_FLAGS "$SCRIPT_DIR"
+            if [ $GPU_MODE -eq 1 ]; then
+                PKG_SPEC="$SCRIPT_DIR[gpu]"
+            else
+                PKG_SPEC="$SCRIPT_DIR"
+            fi
         else
-            # Remote install from PyPI
-            uv tool install $INSTALL_FLAGS "voxtype"
+            if [ $GPU_MODE -eq 1 ]; then
+                PKG_SPEC="voxtype[gpu]"
+            else
+                PKG_SPEC="voxtype"
+            fi
         fi
+
+        uv tool install $INSTALL_FLAGS "$PKG_SPEC"
         info "Installed voxtype"
 
         echo ""
