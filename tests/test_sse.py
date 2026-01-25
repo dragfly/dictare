@@ -7,8 +7,6 @@ import threading
 import time
 from unittest.mock import MagicMock
 
-import pytest
-
 from voxtype.core.openvip import OPENVIP_VERSION, create_event
 from voxtype.output.sse import SSEHandler, SSEServer
 
@@ -481,7 +479,7 @@ class TestSSEHandler:
         assert written.endswith("\n\n")
 
         # Parse the data
-        data_line = [l for l in written.split("\n") if l.startswith("data: ")][0]
+        data_line = [line for line in written.split("\n") if line.startswith("data: ")][0]
         data = json.loads(data_line[6:])  # Strip "data: "
         assert data["text"] == "hello"
 
