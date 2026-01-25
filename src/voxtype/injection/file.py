@@ -31,7 +31,6 @@ class FileInjector(TextInjector):
 
     def __init__(self, filepath: str | Path) -> None:
         self.filepath = Path(filepath)
-        self._newline_sent = False
 
     def is_available(self) -> bool:
         """Always available - files always work."""
@@ -53,28 +52,26 @@ class FileInjector(TextInjector):
     def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
         """Write text as JSONL message.
 
+        The consumer handles message termination:
+        - submit=true: text + Enter
+        - text ends with \\n: visual newline (Alt+Enter)
+
         Args:
-            text: Text to write.
+            text: Text to write (without trailing newline).
             delay_ms: Ignored for file output.
-            auto_enter: If True, add submit flag for Enter.
+            auto_enter: If True, add submit flag. If False, add visual newline.
 
         Returns:
             True if successful.
         """
-        # Strip trailing newline - we handle newlines below
-        if text.endswith("\n"):
-            text = text.rstrip("\n")
-
         ts = datetime.now(timezone.utc).isoformat()
         msg: dict[str, Any] = {"text": text, "ts": ts, "v": __version__}
         if auto_enter:
             msg["submit"] = True
 
-        # Write atomically: build full output string FIRST, then single write()
-        # Multiple f.write() calls can trigger separate FS events even in same block
         try:
             output = json.dumps(msg, ensure_ascii=False) + "\n"
-            # When auto_enter=false, include newline in same string
+            # When auto_enter=false, include visual newline message atomically
             if not auto_enter:
                 newline_msg = {"text": "\n", "ts": ts, "v": __version__}
                 output += json.dumps(newline_msg, ensure_ascii=False) + "\n"
@@ -82,7 +79,6 @@ class FileInjector(TextInjector):
             with open(self.filepath, "a") as f:
                 f.write(output)  # Single write = single FS event
                 f.flush()
-            self._newline_sent = not auto_enter  # Track so send_newline() can skip
             return True
         except OSError:
             return False
@@ -92,16 +88,7 @@ class FileInjector(TextInjector):
         return f"file:{self.filepath}"
 
     def send_newline(self) -> bool:
-        """Write a visual newline (text with trailing \\n).
-
-        Note: When type_text() is called with auto_enter=false, the newline
-        is already included atomically. This method checks _newline_sent
-        to avoid duplicates.
-        """
-        # Skip if newline was already sent atomically by type_text()
-        if getattr(self, '_newline_sent', False):
-            self._newline_sent = False  # Reset for next call
-            return True
+        """Write a standalone visual newline."""
         return self._write_message({"text": "\n"})
 
     def send_submit(self) -> bool:

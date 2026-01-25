@@ -50,10 +50,10 @@ class QuartzInjector(TextInjector):
         """Type text using Quartz keyboard events.
 
         Args:
-            text: Text to type.
+            text: Text to type (without trailing newline).
             delay_ms: Delay between characters in milliseconds.
-            auto_enter: If True and text ends with \\n, press Enter key.
-                        If False, type literal newline.
+            auto_enter: If True, press Enter after text (submit).
+                        If False, press Shift+Enter (visual newline).
 
         Returns:
             True if successful.
@@ -63,7 +63,9 @@ class QuartzInjector(TextInjector):
                 CGEventCreateKeyboardEvent,
                 CGEventKeyboardSetUnicodeString,
                 CGEventPost,
+                CGEventSetFlags,
                 CGEventSourceCreate,
+                kCGEventFlagMaskShift,
                 kCGEventSourceStateHIDSystemState,
                 kCGSessionEventTap,
             )
@@ -73,12 +75,6 @@ class QuartzInjector(TextInjector):
         # Sanitize text to remove any escape sequences or control characters
         # that might have been captured (e.g., from terminal emulators like Ghostty)
         text = sanitize_text_for_injection(text)
-
-        # Handle newline based on auto_enter mode
-        has_newline = text.endswith("\n")
-        send_enter = has_newline and auto_enter
-        if has_newline:
-            text = text[:-1]  # Always strip \n - can't type it literally
 
         try:
             source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
@@ -101,14 +97,21 @@ class QuartzInjector(TextInjector):
                 if delay_sec > 0:
                     time.sleep(delay_sec)
 
-            # Send Enter if needed
-            if send_enter:
-                time.sleep(0.1)
-                # Key code 36 = Return
+            # Send terminator
+            time.sleep(0.1)
+            if auto_enter:
+                # Enter key (submit)
                 enter_down = CGEventCreateKeyboardEvent(source, 36, True)
                 CGEventPost(kCGSessionEventTap, enter_down)
                 enter_up = CGEventCreateKeyboardEvent(source, 36, False)
                 CGEventPost(kCGSessionEventTap, enter_up)
+            else:
+                # Shift+Enter (visual newline)
+                event_down = CGEventCreateKeyboardEvent(source, 36, True)
+                CGEventSetFlags(event_down, kCGEventFlagMaskShift)
+                CGEventPost(kCGSessionEventTap, event_down)
+                event_up = CGEventCreateKeyboardEvent(source, 36, False)
+                CGEventPost(kCGSessionEventTap, event_up)
 
             return True
         except (ImportError, OSError):

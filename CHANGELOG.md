@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.26.0] - 2026-01-25
+
+### Fixed
+- **Hotkey works during RECORDING**: Pressing hotkey now correctly turns off listening from any active state (RECORDING, TRANSCRIBING, INJECTING, PLAYING), not just LISTENING/OFF
+- **Double newline in socket output**: Fixed duplicate visual newlines when using `auto_enter=false` with socket/file injectors
+
+### Changed
+- **Injector termination refactor**: Each injector now handles message termination internally:
+  - `auto_enter=true`: text + Enter (keyboard) / `x_submit` (socket)
+  - `auto_enter=false`: text + Shift+Enter (keyboard) / `x_visual_newline` (socket)
+  - Engine no longer adds `\n` to text or calls `send_newline()` - the receiver decides how to terminate
+
 ## [2.25.0] - 2026-01-24
 
 ### Added

@@ -34,7 +34,6 @@ class SocketInjector(TextInjector):
     def __init__(self, agent_id: str) -> None:
         self.agent_id = agent_id
         self.socket_path = get_socket_path(agent_id)
-        self._newline_sent = False
 
     def is_available(self) -> bool:
         """Check if the agent socket exists."""
@@ -66,28 +65,23 @@ class SocketInjector(TextInjector):
     def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
         """Send text as OpenVIP message.
 
+        The receiver (mux.py) handles message termination:
+        - x_submit=true: text + Enter (submit)
+        - x_visual_newline=true: text + Alt+Enter (visual newline)
+
         Args:
-            text: Text to send.
+            text: Text to send (without trailing newline).
             delay_ms: Ignored for socket output.
-            auto_enter: If True, include submit flag.
+            auto_enter: If True, receiver sends Enter. If False, sends visual newline.
 
         Returns:
             True if successful.
         """
-        # Handle trailing newline
-        has_visual_newline = text.endswith("\n")
-        if has_visual_newline:
-            text = text.rstrip("\n")
-
-        # Build message with voxtype-specific extension for submit
         msg = self._openvip_message("message", text=text)
         if auto_enter:
             msg["x_submit"] = True
-        if has_visual_newline and not auto_enter:
-            msg["x_visual_newline"] = True
-            self._newline_sent = True  # Track so send_newline() can skip
         else:
-            self._newline_sent = False
+            msg["x_visual_newline"] = True
 
         return self._send_message(msg)
 
@@ -96,16 +90,7 @@ class SocketInjector(TextInjector):
         return f"socket:{self.agent_id}"
 
     def send_newline(self) -> bool:
-        """Send a visual newline.
-
-        Note: When type_text() is called with auto_enter=false, the newline
-        is already included via x_visual_newline flag. This method checks
-        _newline_sent to avoid duplicates.
-        """
-        # Skip if newline was already sent by type_text()
-        if self._newline_sent:
-            self._newline_sent = False  # Reset for next call
-            return True
+        """Send a standalone visual newline."""
         msg = self._openvip_message("message", text="\n")
         return self._send_message(msg)
 
