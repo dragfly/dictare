@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.28.0] - 2026-01-25
+
+### Added
+- **OpenVIP message factory**: New `src/voxtype/core/openvip.py` module
+  - `create_message()`: Creates injection messages with UUID, timestamp, source
+  - `create_event()`: Creates event messages (state, partial, error, etc.)
+  - Single point of message creation for consistent IDs across transports
+
+### Fixed
+- **LocalReceiver thread safety**: Fixed race condition on `_injector` access between main and worker threads
+- **LocalReceiver crash handling**: Worker thread now catches exceptions and logs them instead of dying silently
+- **End-to-end message tracing**: Same OpenVIP ID preserved from engine through socket to mux.py
+
+### Changed
+- **Unified transport architecture**: Engine creates message once, all transports forward transparently
+  - `SocketInjector.send_message()`: Forwards pre-built OpenVIP messages
+  - `SSEServer.send_message()`: Broadcasts pre-built OpenVIP messages
+  - `mux.py`: Preserves `openvip_id` and `openvip_ts` in session logs
+
+### Tests
+- Added 58 new tests for `LocalReceiver` and `SSEServer`
+
 ## [2.27.5] - 2026-01-25
 
 ### Changed
