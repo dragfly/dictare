@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import queue
 import sys
 import threading
@@ -13,6 +14,8 @@ if TYPE_CHECKING:
 # OpenVIP message type
 OpenVIPMessage = dict[str, Any]
 
+logger = logging.getLogger(__name__)
+
 class LocalReceiver:
     """Receives OpenVIP messages from in-memory queue and injects via keyboard.
 
@@ -21,6 +24,10 @@ class LocalReceiver:
     - LocalReceiver consumes them and injects via keyboard
 
     This allows a uniform message-based architecture regardless of transport.
+
+    Thread-safety:
+    - _injector is protected by _injector_lock (accessed from main + worker thread)
+    - Worker thread catches exceptions to prevent silent crashes
     """
 
     def __init__(self, config: Config) -> None:
@@ -34,6 +41,7 @@ class LocalReceiver:
         self._worker: threading.Thread | None = None
         self._running = False
         self._injector: Any = None
+        self._injector_lock = threading.Lock()
 
     def _create_injector(self) -> Any:
         """Create keyboard injector for current platform."""
@@ -65,7 +73,8 @@ class LocalReceiver:
         if self._running:
             return
 
-        self._injector = self._create_injector()
+        with self._injector_lock:
+            self._injector = self._create_injector()
         self._running = True
         self._worker = threading.Thread(
             target=self._worker_loop,
@@ -73,6 +82,7 @@ class LocalReceiver:
             name="local-receiver",
         )
         self._worker.start()
+        logger.debug("LocalReceiver started")
 
     def stop(self) -> None:
         """Stop the receiver worker thread."""
@@ -86,6 +96,10 @@ class LocalReceiver:
         if self._worker:
             self._worker.join(timeout=1.0)
             self._worker = None
+
+        with self._injector_lock:
+            self._injector = None
+        logger.debug("LocalReceiver stopped")
 
     def send(self, message: OpenVIPMessage) -> bool:
         """Send an OpenVIP message to be injected.
@@ -102,7 +116,11 @@ class LocalReceiver:
         return True
 
     def _worker_loop(self) -> None:
-        """Worker thread that consumes messages and injects."""
+        """Worker thread that consumes messages and injects.
+
+        Catches all exceptions from _process_message() to prevent
+        the worker from dying silently.
+        """
         while self._running:
             try:
                 message = self._queue.get(timeout=0.1)
@@ -112,17 +130,27 @@ class LocalReceiver:
             if message is None:
                 break
 
-            self._process_message(message)
+            try:
+                self._process_message(message)
+            except Exception as e:
+                # Log error but continue processing - worker must not die
+                msg_id = message.get("id", "unknown")
+                logger.error(
+                    "LocalReceiver failed to process message %s: %s",
+                    msg_id,
+                    e,
+                    exc_info=True,
+                )
 
     def _process_message(self, message: OpenVIPMessage) -> None:
         """Process a single OpenVIP message.
 
         Args:
             message: OpenVIP message to process.
-        """
-        if not self._injector:
-            return
 
+        Note:
+            Uses _injector_lock to safely access _injector from worker thread.
+        """
         msg_type = message.get("type", "message")
         if msg_type != "message":
             return
@@ -136,13 +164,16 @@ class LocalReceiver:
         # x_visual_newline=true means auto_enter=false (send Shift+Enter)
         auto_enter = x_submit and not x_visual_newline
 
-        self._injector.type_text(
-            text,
-            delay_ms=self.config.output.typing_delay_ms,
-            auto_enter=auto_enter,
-            submit_keys=self.config.output.submit_keys,
-            newline_keys=self.config.output.newline_keys,
-        )
+        with self._injector_lock:
+            if not self._injector:
+                return
+            self._injector.type_text(
+                text,
+                delay_ms=self.config.output.typing_delay_ms,
+                auto_enter=auto_enter,
+                submit_keys=self.config.output.submit_keys,
+                newline_keys=self.config.output.newline_keys,
+            )
 
     @property
     def queue(self) -> queue.Queue[OpenVIPMessage | None]:
