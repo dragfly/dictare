@@ -205,7 +205,6 @@ def _apply_cli_overrides(
     hotkey: str | None,
     language: str | None,
     auto_enter: bool,
-    output: str | None,
     max_duration: int | None,
     verbose: bool | None,
     no_commands: bool,
@@ -233,8 +232,6 @@ def _apply_cli_overrides(
         config.stt.language = language
     if auto_enter:
         config.output.auto_enter = True
-    if output:
-        config.output.method = output
     if max_duration:
         config.audio.max_duration = max_duration
     if verbose is not None:
@@ -353,10 +350,6 @@ def listen(
         typer.Option("--max-duration", "-d", help="Max recording duration in seconds"),
     ] = None,
     # Output options
-    output: Annotated[
-        str | None,
-        typer.Option("--output", "-o", help="Output method: keyboard or agent"),
-    ] = None,
     agents: Annotated[
         str | None,
         typer.Option("--agents", "-A", help="Agent IDs comma-separated (e.g., 'claude,pippo')"),
@@ -439,7 +432,6 @@ def listen(
         hotkey=hotkey,
         language=language,
         auto_enter=auto_enter,
-        output=output,
         max_duration=max_duration,
         verbose=verbose,
         no_commands=no_commands,
