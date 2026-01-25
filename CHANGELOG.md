@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.27.1] - 2026-01-25
+
+### Fixed
+- **Audio buffer cleared on OFF**: When pressing hotkey to turn off listening, the audio buffer is now cleared. Previously, buffered audio from before OFF would be transcribed when re-enabling listening. (fixes #31)
+
 ## [2.27.0] - 2026-01-25
 
 ### Added

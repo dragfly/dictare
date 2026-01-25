@@ -767,6 +767,8 @@ class VoxtypeEngine:
         else:
             # Any active state → OFF (hotkey must always work to turn off)
             if self._state_manager.try_transition(AppState.OFF):
+                # Clear any buffered audio to avoid replaying old speech later
+                self._discard_current()
                 self._emit("on_state_change", old_state, AppState.OFF, "hotkey_toggle")
 
         # Sync LLM processor state
