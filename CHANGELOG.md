@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.27.0] - 2026-01-25
+
+### Added
+- **LocalReceiver**: New component for local keyboard injection via in-memory queue
+  - Uniform OpenVIP message-based architecture regardless of transport
+  - Engine produces OpenVIP messages, LocalReceiver consumes and injects via keyboard
+- **Architecture documentation**: `docs/architecture/openvip-transport.md` describes the transport design
+
+### Changed
+- **Removed `-o`/`--output` option**: Output method is now automatic:
+  - With `--agents`: uses socket transport
+  - Without `--agents`: uses LocalReceiver (in-memory queue → keyboard)
+- **Engine refactored for OpenVIP internally**: Always produces OpenVIP messages, local mode uses in-memory queue
+
 ## [2.26.0] - 2026-01-25
 
 ### Fixed
