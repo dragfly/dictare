@@ -7,10 +7,16 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 # Environment variable prefix
 ENV_PREFIX = "VOXTYPE_"
+
+
+class ConfigError(Exception):
+    """User-friendly configuration error."""
+
+    pass
 
 
 class AudioConfig(BaseModel):
@@ -277,7 +283,18 @@ def load_config(config_path: Path | None = None) -> Config:
     if config_path.exists():
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
-        config = Config.model_validate(data)
+        try:
+            config = Config.model_validate(data)
+        except ValidationError as e:
+            errors = []
+            for err in e.errors():
+                loc = ".".join(str(x) for x in err["loc"])
+                msg = err["msg"]
+                val = err.get("input", "")
+                errors.append(f"  • {loc}: {msg} (got: {val!r})")
+            raise ConfigError(
+                f"Invalid configuration in {config_path}:\n" + "\n".join(errors)
+            ) from None
     else:
         config = Config()
 
