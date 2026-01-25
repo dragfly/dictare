@@ -36,8 +36,11 @@ class TestConfigDefaults:
 
     def test_hotkey_config_defaults(self) -> None:
         """Test HotkeyConfig has correct defaults."""
+        import sys
         config = HotkeyConfig()
-        assert config.key == "KEY_SCROLLLOCK"
+        # Platform-specific: Command on macOS, Scroll Lock on Linux
+        expected_key = "KEY_LEFTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
+        assert config.key == expected_key
         assert config.device == ""
 
     def test_output_config_defaults(self) -> None:
