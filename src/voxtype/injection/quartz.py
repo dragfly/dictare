@@ -7,6 +7,57 @@ import time
 
 from voxtype.injection.base import TextInjector, sanitize_text_for_injection
 
+# macOS virtual key codes
+MACOS_KEY_CODES = {
+    "enter": 36,
+    "return": 36,
+    "shift": None,  # Modifier, not a key code
+    "alt": None,    # Modifier, not a key code
+    "option": None, # Modifier, not a key code
+    "ctrl": None,   # Modifier, not a key code
+    "command": None,  # Modifier, not a key code
+    "cmd": None,    # Modifier, not a key code
+}
+
+
+def parse_macos_key_combo(combo: str) -> tuple[int | None, int]:
+    """Parse a key combination for macOS.
+
+    Args:
+        combo: Key combination string (e.g., "enter", "shift+enter", "alt+enter")
+
+    Returns:
+        Tuple of (modifier_flags, key_code). modifier_flags is a bitmask or 0.
+    """
+    try:
+        from Quartz import (
+            kCGEventFlagMaskAlternate,
+            kCGEventFlagMaskCommand,
+            kCGEventFlagMaskControl,
+            kCGEventFlagMaskShift,
+        )
+    except ImportError:
+        return (0, 36)  # Default to Enter with no modifiers
+
+    keys = [k.strip().lower() for k in combo.split("+")]
+    flags = 0
+    key_code = 36  # Default to Enter
+
+    for key in keys:
+        if key in ("shift",):
+            flags |= kCGEventFlagMaskShift
+        elif key in ("alt", "option"):
+            flags |= kCGEventFlagMaskAlternate
+        elif key in ("ctrl", "control"):
+            flags |= kCGEventFlagMaskControl
+        elif key in ("cmd", "command"):
+            flags |= kCGEventFlagMaskCommand
+        elif key in ("enter", "return"):
+            key_code = 36
+        # Add more keys as needed
+
+    return (flags, key_code)
+
 
 class QuartzInjector(TextInjector):
     """macOS text injection using Quartz CGEvent.
@@ -47,14 +98,22 @@ class QuartzInjector(TextInjector):
             self._available = False
             return False
 
-    def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
+    def type_text(
+        self,
+        text: str,
+        delay_ms: int = 0,
+        auto_enter: bool = True,
+        submit_keys: str = "enter",
+        newline_keys: str = "shift+enter",
+    ) -> bool:
         """Type text using Quartz keyboard events.
 
         Args:
             text: Text to type (without trailing newline).
             delay_ms: Delay between characters in milliseconds.
-            auto_enter: If True, press Enter after text (submit).
-                        If False, press Shift+Enter (visual newline).
+            auto_enter: If True, send submit_keys. If False, send newline_keys.
+            submit_keys: Key combination for submit (e.g., "enter").
+            newline_keys: Key combination for visual newline (e.g., "shift+enter").
 
         Returns:
             True if successful.
@@ -66,7 +125,6 @@ class QuartzInjector(TextInjector):
                 CGEventPost,
                 CGEventSetFlags,
                 CGEventSourceCreate,
-                kCGEventFlagMaskShift,
                 kCGEventSourceStateHIDSystemState,
                 kCGSessionEventTap,
             )
@@ -98,21 +156,17 @@ class QuartzInjector(TextInjector):
                 if delay_sec > 0:
                     time.sleep(delay_sec)
 
-            # Send terminator
+            # Send terminator using configurable keys
             time.sleep(0.1)
-            if auto_enter:
-                # Enter key (submit)
-                enter_down = CGEventCreateKeyboardEvent(source, 36, True)
-                CGEventPost(kCGSessionEventTap, enter_down)
-                enter_up = CGEventCreateKeyboardEvent(source, 36, False)
-                CGEventPost(kCGSessionEventTap, enter_up)
-            else:
-                # Shift+Enter (visual newline)
-                event_down = CGEventCreateKeyboardEvent(source, 36, True)
-                CGEventSetFlags(event_down, kCGEventFlagMaskShift)
-                CGEventPost(kCGSessionEventTap, event_down)
-                event_up = CGEventCreateKeyboardEvent(source, 36, False)
-                CGEventPost(kCGSessionEventTap, event_up)
+            keys_to_send = submit_keys if auto_enter else newline_keys
+            flags, key_code = parse_macos_key_combo(keys_to_send)
+
+            event_down = CGEventCreateKeyboardEvent(source, key_code, True)
+            if flags:
+                CGEventSetFlags(event_down, flags)
+            CGEventPost(kCGSessionEventTap, event_down)
+            event_up = CGEventCreateKeyboardEvent(source, key_code, False)
+            CGEventPost(kCGSessionEventTap, event_up)
 
             return True
         except (ImportError, OSError):

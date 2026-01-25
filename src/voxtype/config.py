@@ -87,6 +87,12 @@ class HotkeyConfig(BaseModel):
     )
 
 
+def _default_newline_keys() -> str:
+    """Return platform-specific default for newline keys."""
+    import sys
+    return "shift+enter" if sys.platform == "darwin" else "alt+enter"
+
+
 class OutputConfig(BaseModel):
     """Text output configuration."""
 
@@ -101,6 +107,14 @@ class OutputConfig(BaseModel):
     auto_enter: bool = Field(
         default=False,
         description="Press Enter to submit after typing (False = visual newline only)",
+    )
+    submit_keys: str = Field(
+        default="enter",
+        description="Key combination for submit (when auto_enter=true)",
+    )
+    newline_keys: str = Field(
+        default_factory=_default_newline_keys,
+        description="Key combination for visual newline (when auto_enter=false). Default: alt+enter (Linux), shift+enter (macOS)",
     )
 
 

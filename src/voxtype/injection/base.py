@@ -53,14 +53,22 @@ class TextInjector(ABC):
         pass
 
     @abstractmethod
-    def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
+    def type_text(
+        self,
+        text: str,
+        delay_ms: int = 0,
+        auto_enter: bool = True,
+        submit_keys: str = "enter",
+        newline_keys: str = "alt+enter",
+    ) -> bool:
         """Type text into the active window.
 
         Args:
             text: Text to type. If ends with newline, behavior depends on auto_enter.
             delay_ms: Delay between characters in milliseconds.
-            auto_enter: If True and text ends with \\n, press Enter key (submit).
-                        If False and text ends with \\n, type literal newline (visual only).
+            auto_enter: If True, send submit_keys after text. If False, send newline_keys.
+            submit_keys: Key combination for submit (e.g., "enter").
+            newline_keys: Key combination for visual newline (e.g., "alt+enter", "shift+enter").
 
         Returns:
             True if successful.

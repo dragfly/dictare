@@ -50,7 +50,14 @@ class FileInjector(TextInjector):
         except OSError:
             return False
 
-    def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
+    def type_text(
+        self,
+        text: str,
+        delay_ms: int = 0,
+        auto_enter: bool = True,
+        submit_keys: str = "enter",
+        newline_keys: str = "alt+enter",
+    ) -> bool:
         """Write text as JSONL message.
 
         The consumer handles message termination:
@@ -61,6 +68,8 @@ class FileInjector(TextInjector):
             text: Text to write (without trailing newline).
             delay_ms: Ignored for file output.
             auto_enter: If True, add submit flag. If False, add visual newline.
+            submit_keys: Ignored for file output (consumer handles keys).
+            newline_keys: Ignored for file output (consumer handles keys).
 
         Returns:
             True if successful.
