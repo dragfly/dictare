@@ -62,7 +62,14 @@ class SocketInjector(TextInjector):
         msg.update(kwargs)
         return msg
 
-    def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = True) -> bool:
+    def type_text(
+        self,
+        text: str,
+        delay_ms: int = 0,
+        auto_enter: bool = True,
+        submit_keys: str = "enter",
+        newline_keys: str = "alt+enter",
+    ) -> bool:
         """Send text as OpenVIP message.
 
         The receiver (mux.py) handles message termination:
@@ -73,6 +80,8 @@ class SocketInjector(TextInjector):
             text: Text to send (without trailing newline).
             delay_ms: Ignored for socket output.
             auto_enter: If True, receiver sends Enter. If False, sends visual newline.
+            submit_keys: Ignored for socket output (receiver handles keys).
+            newline_keys: Ignored for socket output (receiver handles keys).
 
         Returns:
             True if successful.

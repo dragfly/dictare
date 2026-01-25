@@ -140,6 +140,8 @@ class LocalReceiver:
             text,
             delay_ms=self.config.output.typing_delay_ms,
             auto_enter=auto_enter,
+            submit_keys=self.config.output.submit_keys,
+            newline_keys=self.config.output.newline_keys,
         )
 
     @property
