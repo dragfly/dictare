@@ -64,10 +64,10 @@ class StateManager:
     VALID_TRANSITIONS: dict[AppState, list[AppState]] = {
         AppState.OFF: [AppState.LISTENING],
         AppState.LISTENING: [AppState.RECORDING, AppState.TRANSCRIBING, AppState.PLAYING, AppState.OFF],
-        AppState.RECORDING: [AppState.TRANSCRIBING, AppState.LISTENING],
-        AppState.TRANSCRIBING: [AppState.INJECTING, AppState.LISTENING],
-        AppState.INJECTING: [AppState.LISTENING],
-        AppState.PLAYING: [AppState.LISTENING],
+        AppState.RECORDING: [AppState.TRANSCRIBING, AppState.LISTENING, AppState.OFF],
+        AppState.TRANSCRIBING: [AppState.INJECTING, AppState.LISTENING, AppState.OFF],
+        AppState.INJECTING: [AppState.LISTENING, AppState.OFF],
+        AppState.PLAYING: [AppState.LISTENING, AppState.OFF],
     }
 
     def __init__(

@@ -739,12 +739,14 @@ class VoxtypeEngine:
         current = self.state
         old_state = current
 
-        if current == AppState.LISTENING:
-            if self._state_manager.try_transition(AppState.OFF):
-                self._emit("on_state_change", old_state, AppState.OFF, "hotkey_toggle")
-        elif current == AppState.OFF:
+        if current == AppState.OFF:
+            # OFF → LISTENING
             if self._state_manager.try_transition(AppState.LISTENING):
                 self._emit("on_state_change", old_state, AppState.LISTENING, "hotkey_toggle")
+        else:
+            # Any active state → OFF (hotkey must always work to turn off)
+            if self._state_manager.try_transition(AppState.OFF):
+                self._emit("on_state_change", old_state, AppState.OFF, "hotkey_toggle")
 
         # Sync LLM processor state
         if self._llm_processor:
