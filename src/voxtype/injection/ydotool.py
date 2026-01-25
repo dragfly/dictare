@@ -88,10 +88,10 @@ class YdotoolInjector(TextInjector):
         """Type text using ydotool.
 
         Args:
-            text: Text to type. If ends with newline, behavior depends on auto_enter.
+            text: Text to type (without trailing newline).
             delay_ms: Delay between characters in milliseconds.
-            auto_enter: If True and text ends with \\n, press Enter key (submit).
-                        If False and text ends with \\n, type literal newline (visual only).
+            auto_enter: If True, press Enter after text (submit).
+                        If False, press Shift+Enter (visual newline).
 
         Returns:
             True if successful.
@@ -103,14 +103,6 @@ class YdotoolInjector(TextInjector):
 
         # Sanitize text to remove any escape sequences or control characters
         text = sanitize_text_for_injection(text)
-
-        # Handle newline at end based on auto_enter mode
-        has_newline = text.endswith("\n")
-        if has_newline:
-            text = text.rstrip("\n")
-
-        # Only send Enter key if auto_enter is True
-        send_enter = has_newline and auto_enter
 
         delay_sec = delay_ms / 1000.0 if delay_ms > 0 else 0
 
@@ -150,23 +142,36 @@ class YdotoolInjector(TextInjector):
                 if result.returncode != 0:
                     return False
 
-            # Send Enter key if auto_enter mode
-            if send_enter:
-                time.sleep(0.2)
+            # Send terminator
+            time.sleep(0.2)
+            if auto_enter:
+                # Enter key (submit)
                 enter_result = subprocess.run(
-                    [self._ydotool_path, "key", "28:1", "28:0"],  # KEY_ENTER
+                    [self._ydotool_path, "key", f"{KEY_ENTER}:1", f"{KEY_ENTER}:0"],
                     capture_output=True,
                     timeout=5,
                 )
                 if enter_result.returncode != 0:
                     return False
                 self._enter_sent = True
-                return True
+            else:
+                # Shift+Enter (visual newline)
+                shift_enter_result = subprocess.run(
+                    [
+                        self._ydotool_path,
+                        "key",
+                        f"{KEY_LEFTSHIFT}:1",
+                        f"{KEY_ENTER}:1",
+                        f"{KEY_ENTER}:0",
+                        f"{KEY_LEFTSHIFT}:0",
+                    ],
+                    capture_output=True,
+                    timeout=5,
+                )
+                if shift_enter_result.returncode != 0:
+                    return False
+                self._enter_sent = False
 
-            # When auto_enter=false: don't add newline (keyboard mode can't do visual newline)
-            # Text accumulates on same line, user presses Enter when ready
-
-            self._enter_sent = False
             return True
         except subprocess.TimeoutExpired:
             return False
