@@ -12,6 +12,7 @@ from rich.table import Table
 
 from voxtype import __version__
 from voxtype.config import (
+    ConfigError,
     create_default_config,
     get_config_path,
     get_config_value,
@@ -1522,7 +1523,11 @@ def _check_python_environment() -> None:
 def main() -> None:
     """Entry point for the CLI."""
     _check_python_environment()
-    app()
+    try:
+        app()
+    except ConfigError as e:
+        console.print(f"[red]Configuration error:[/red] {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
