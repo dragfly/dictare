@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.27.4] - 2026-01-25
+
+### Added
+- **Configurable newline/submit keys**: New config options `submit_keys` and `newline_keys` in `[output]` section
+  - `submit_keys`: Key combo when `auto_enter=true` (default: "enter")
+  - `newline_keys`: Key combo when `auto_enter=false` (default: "alt+enter" on Linux, "shift+enter" on macOS)
+  - Supports combinations like "alt+enter", "shift+enter", "ctrl+enter"
+
+### Fixed
+- **Linux newline behavior**: Changed default from Shift+Enter to Alt+Enter, which works as visual newline in Claude and other apps (Shift+Enter was submitting in terminals)
+
 ## [2.27.3] - 2026-01-25
 
 ### Added
