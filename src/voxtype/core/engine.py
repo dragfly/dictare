@@ -106,6 +106,9 @@ class VoxtypeEngine:
         self._hotkey: HotkeyListener | None = None
         self._injector: TextInjector | None = None
 
+        # Local receiver for in-memory queue (when no agents specified)
+        self._local_receiver: Any = None
+
         # LLM processor for command mode
         self._llm_processor: LLMProcessor | None = None
 
@@ -306,37 +309,27 @@ class VoxtypeEngine:
 
         return ",".join(parts) if parts else None
 
-    def _create_injector(self) -> TextInjector:
-        """Create text injector based on config.output.method."""
+    def _create_injector(self) -> TextInjector | None:
+        """Create text injector based on mode.
+
+        Returns:
+            SocketInjector if agents are configured, None if local mode
+            (local mode uses LocalReceiver instead).
+        """
         # Agent output mode - send OpenVIP messages via Unix socket
         agent_id = self._get_current_agent_id()
-        if agent_id or self.config.output.method == "agent":
+        if agent_id:
             from voxtype.injection.socket import SocketInjector
-            return SocketInjector(agent_id or "default")
+            return SocketInjector(agent_id)
 
-        # Keyboard mode - platform-specific injector
-        if sys.platform == "darwin":
-            from voxtype.injection.quartz import QuartzInjector
+        # Local mode - use LocalReceiver (created separately)
+        return None
 
-            injector = QuartzInjector()
-            if not injector.is_available():
-                raise RuntimeError(
-                    "Quartz text injection not available. "
-                    "Grant Accessibility permission in System Preferences > "
-                    "Security & Privacy > Privacy > Accessibility"
-                )
-            return injector
-        else:
-            from voxtype.injection.ydotool import YdotoolInjector
-
-            injector = YdotoolInjector()
-            if not injector.is_available():
-                raise RuntimeError(
-                    "ydotool not available. Ensure ydotoold is running:\n"
-                    "  sudo ydotoold &\n"
-                    "Or install ydotool: apt install ydotool / pacman -S ydotool"
-                )
-            return injector
+    def _init_local_receiver(self) -> None:
+        """Initialize local receiver for keyboard injection."""
+        from voxtype.output.local import LocalReceiver
+        self._local_receiver = LocalReceiver(self.config)
+        self._local_receiver.start()
 
     # -------------------------------------------------------------------------
     # Initialization
@@ -345,7 +338,12 @@ class VoxtypeEngine:
     def _init_vad_components(self) -> None:
         """Initialize components for VAD mode."""
         self._stt = self._create_stt_engine()
+
+        # Initialize output based on mode
         self._injector = self._create_injector()
+        if self._injector is None:
+            # Local mode - use LocalReceiver with in-memory queue
+            self._init_local_receiver()
 
         # Create audio manager with VAD
         self._audio_manager = AudioManager(
@@ -645,39 +643,64 @@ class VoxtypeEngine:
     def _inject_text(self, text: str) -> None:
         """Inject text into the target.
 
-        Each injector handles message termination based on auto_enter:
+        Uses OpenVIP message format internally:
+        - Local mode: sends to LocalReceiver via in-memory queue
+        - Agent mode: sends to SocketInjector via Unix socket
+
+        Message termination based on auto_enter:
         - auto_enter=true: text + submit (Enter for keyboard, x_submit for socket)
         - auto_enter=false: text + visual newline (Shift+Enter for keyboard, etc.)
         """
-        if self._injector:
-            method = self._injector.get_name()
+        auto_enter = self.config.output.auto_enter
+        success = False
+        method = "unknown"
 
-            # Lock to prevent concurrent injections
-            with self._injection_lock:
-                inject_start = time.time()
+        # Build OpenVIP message
+        message: dict[str, Any] = {
+            "openvip": "1.0",
+            "type": "message",
+            "text": text,
+        }
+        if auto_enter:
+            message["x_submit"] = True
+        else:
+            message["x_visual_newline"] = True
+
+        # Lock to prevent concurrent injections
+        with self._injection_lock:
+            inject_start = time.time()
+
+            if self._local_receiver:
+                # Local mode - send to in-memory queue
+                method = "local:keyboard"
+                success = self._local_receiver.send(message)
+            elif self._injector:
+                # Agent mode - send via socket
+                method = self._injector.get_name()
                 success = self._injector.type_text(
                     text,
                     delay_ms=self.config.output.typing_delay_ms,
-                    auto_enter=self.config.output.auto_enter,
+                    auto_enter=auto_enter,
                 )
-                self._stats_injection_seconds += time.time() - inject_start
 
-            # Emit injection event
-            self._emit(
-                "on_injection",
-                InjectionResult(text=text, success=success, method=method),
+            self._stats_injection_seconds += time.time() - inject_start
+
+        # Emit injection event
+        self._emit(
+            "on_injection",
+            InjectionResult(text=text, success=success, method=method),
+        )
+
+        # Log injection
+        if self._logger:
+            enter_sent = getattr(self._injector, '_enter_sent', None) if self._injector else None
+            self._logger.log_injection(
+                text=text,
+                method=method,
+                success=success,
+                auto_enter=auto_enter,
+                enter_sent=enter_sent,
             )
-
-            # Log injection
-            if self._logger:
-                enter_sent = getattr(self._injector, '_enter_sent', None)
-                self._logger.log_injection(
-                    text=text,
-                    method=method,
-                    success=success,
-                    auto_enter=self.config.output.auto_enter,
-                    enter_sent=enter_sent,
-                )
 
     # -------------------------------------------------------------------------
     # State Control
@@ -928,6 +951,9 @@ class VoxtypeEngine:
 
         if self._input_manager:
             self._input_manager.stop()
+
+        if self._local_receiver:
+            self._local_receiver.stop()
 
         if self._hotkey:
             self._hotkey.stop()
