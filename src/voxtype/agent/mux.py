@@ -19,6 +19,7 @@ import tty
 from datetime import datetime, timezone
 from fcntl import ioctl
 from pathlib import Path
+from typing import Any
 
 from voxtype import __version__
 from voxtype.utils.stats import update_keystrokes
@@ -208,8 +209,12 @@ def _read_from_socket(
                 if openvip_msg.get("type") != "message":
                     continue
 
-                # Convert OpenVIP to internal format
-                msg = {"text": openvip_msg.get("text", "")}
+                # Convert OpenVIP to internal format, preserving metadata for tracing
+                msg: dict[str, Any] = {
+                    "text": openvip_msg.get("text", ""),
+                    "openvip_id": openvip_msg.get("id"),
+                    "openvip_ts": openvip_msg.get("timestamp"),
+                }
                 if openvip_msg.get("x_submit"):
                     msg["submit"] = True
                 if openvip_msg.get("x_visual_newline"):
@@ -316,8 +321,8 @@ def _write_to_pty(
                         "seq": msg_count,
                         "text": data.get("text", "")[:50],
                         "bytes": bytes_written,
-                        "writer_ts": data.get("ts"),
-                        "writer_v": data.get("v"),
+                        "openvip_id": data.get("openvip_id"),
+                        "openvip_ts": data.get("openvip_ts"),
                         "keystrokes": keystroke_counter.count if keystroke_counter else 0,
                     })
         except (BrokenPipeError, OSError) as e:
