@@ -34,6 +34,7 @@ class SocketInjector(TextInjector):
     def __init__(self, agent_id: str) -> None:
         self.agent_id = agent_id
         self.socket_path = get_socket_path(agent_id)
+        self._newline_sent = False
 
     def is_available(self) -> bool:
         """Check if the agent socket exists."""
@@ -84,6 +85,9 @@ class SocketInjector(TextInjector):
             msg["x_submit"] = True
         if has_visual_newline and not auto_enter:
             msg["x_visual_newline"] = True
+            self._newline_sent = True  # Track so send_newline() can skip
+        else:
+            self._newline_sent = False
 
         return self._send_message(msg)
 
@@ -92,8 +96,17 @@ class SocketInjector(TextInjector):
         return f"socket:{self.agent_id}"
 
     def send_newline(self) -> bool:
-        """Send a visual newline."""
-        msg = self._openvip_message("message", text="\n", x_visual_newline=True)
+        """Send a visual newline.
+
+        Note: When type_text() is called with auto_enter=false, the newline
+        is already included via x_visual_newline flag. This method checks
+        _newline_sent to avoid duplicates.
+        """
+        # Skip if newline was already sent by type_text()
+        if self._newline_sent:
+            self._newline_sent = False  # Reset for next call
+            return True
+        msg = self._openvip_message("message", text="\n")
         return self._send_message(msg)
 
     def send_submit(self) -> bool:
