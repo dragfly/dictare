@@ -17,6 +17,8 @@ class MockConfig:
     def __init__(self) -> None:
         self.output = MagicMock()
         self.output.typing_delay_ms = 0
+        self.output.submit_keys = ["Return"]
+        self.output.newline_keys = ["shift", "Return"]
 
 class MockInjector:
     """Mock keyboard injector for testing."""
@@ -29,13 +31,22 @@ class MockInjector:
     def is_available(self) -> bool:
         return self.available
 
-    def type_text(self, text: str, delay_ms: int = 0, auto_enter: bool = False) -> None:
+    def type_text(
+        self,
+        text: str,
+        delay_ms: int = 0,
+        auto_enter: bool = False,
+        submit_keys: list[str] | None = None,
+        newline_keys: list[str] | None = None,
+    ) -> None:
         if self.raise_on_type:
             raise RuntimeError("Simulated injector error")
         self.calls.append({
             "text": text,
             "delay_ms": delay_ms,
             "auto_enter": auto_enter,
+            "submit_keys": submit_keys,
+            "newline_keys": newline_keys,
         })
 
 class TestLocalReceiverInit:
