@@ -317,25 +317,24 @@ class TestFileInjectorRaceConditions:
         finally:
             Path(filepath).unlink(missing_ok=True)
 
-    def test_send_newline_skips_after_atomic_write(self) -> None:
-        """send_newline() should skip if already sent atomically."""
+    def test_send_newline_standalone(self) -> None:
+        """send_newline() sends a standalone newline message."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             filepath = f.name
 
         try:
             injector = FileInjector(filepath)
 
-            # Write with auto_enter=false (includes newline)
-            injector.type_text("test", auto_enter=False)
-
-            # This should be a no-op (newline already sent)
+            # Send standalone newline
             injector.send_newline()
 
             content = Path(filepath).read_text()
             lines = [line for line in content.strip().split("\n") if line]
 
-            # Should still have only 2 lines, not 3
-            assert len(lines) == 2
+            # Should have 1 line with newline message
+            assert len(lines) == 1
+            msg = json.loads(lines[0])
+            assert msg["text"] == "\n"
 
         finally:
             Path(filepath).unlink(missing_ok=True)

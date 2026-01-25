@@ -643,10 +643,12 @@ class VoxtypeEngine:
     # -------------------------------------------------------------------------
 
     def _inject_text(self, text: str) -> None:
-        """Inject text into the terminal."""
-        # Always add newline
-        inject_text = text + "\n"
+        """Inject text into the target.
 
+        Each injector handles message termination based on auto_enter:
+        - auto_enter=true: text + submit (Enter for keyboard, x_submit for socket)
+        - auto_enter=false: text + visual newline (Shift+Enter for keyboard, etc.)
+        """
         if self._injector:
             method = self._injector.get_name()
 
@@ -654,15 +656,11 @@ class VoxtypeEngine:
             with self._injection_lock:
                 inject_start = time.time()
                 success = self._injector.type_text(
-                    inject_text,
+                    text,
                     delay_ms=self.config.output.typing_delay_ms,
                     auto_enter=self.config.output.auto_enter,
                 )
                 self._stats_injection_seconds += time.time() - inject_start
-
-                # When auto_enter=false, add visual newline
-                if success and not self.config.output.auto_enter:
-                    self._injector.send_newline()
 
             # Emit injection event
             self._emit(
