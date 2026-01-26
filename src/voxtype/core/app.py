@@ -324,8 +324,12 @@ class VoxtypeApp(EngineEvents):
         """Speak text using TTS with mic muting in speaker mode.
 
         Uses event queue for state management:
+        - Get TTS ID (monotonic counter) BEFORE starting
         - TTSStartEvent: Sent before TTS starts, controller transitions to PLAYING
-        - TTSCompleteEvent: Sent after TTS finishes, controller transitions back
+        - TTSCompleteEvent: Sent with TTS ID after TTS finishes
+
+        Multiple TTS can play concurrently (rapid agent switching).
+        Only the completion of the LAST TTS triggers state transition.
         """
         if not self.config.audio.audio_feedback:
             return
@@ -350,22 +354,30 @@ class VoxtypeApp(EngineEvents):
             except Exception:
                 pass
 
-        def _do_tts_with_events() -> None:
+        def _do_tts_with_events(tts_id: int) -> None:
             """Do TTS with event-based state management."""
             try:
                 _do_tts()
             finally:
-                # Send completion event - controller handles state transition
-                self._engine._controller.send(TTSCompleteEvent(source="tts"))
+                # Send completion event with TTS ID
+                # Controller only transitions to LISTENING if this is the LAST TTS
+                self._engine._controller.send(TTSCompleteEvent(tts_id=tts_id, source="tts"))
 
         # Headphones mode: fire and forget (continue listening while playing)
         if self.config.audio.headphones_mode:
             threading.Thread(target=_do_tts, daemon=True).start()
         else:
-            # Speakers mode: send TTSStart event before starting TTS
-            # Controller will transition to PLAYING and reset VAD
+            # Speakers mode:
+            # 1. Get TTS ID FIRST (increments counter - this ID identifies this TTS)
+            # 2. Send TTSStart event (controller transitions to PLAYING)
+            # 3. Start thread with the ID (will send TTSComplete with same ID)
+            tts_id = self._engine._controller.get_next_tts_id()
             self._engine._controller.send(TTSStartEvent(text=text, source="tts"))
-            threading.Thread(target=_do_tts_with_events, daemon=True).start()
+            threading.Thread(
+                target=_do_tts_with_events,
+                args=(tts_id,),
+                daemon=True,
+            ).start()
 
     def _speak_mode_with_mute(self) -> None:
         """Speak the current mode using TTS."""

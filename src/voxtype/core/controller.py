@@ -78,8 +78,10 @@ class StateController:
         self._on_mode_change = on_mode_change
         self._on_agent_change = on_agent_change
 
-        # TTS state tracking
-        self._tts_in_progress = False
+        # TTS state tracking with monotonic counter
+        # Multiple TTS can play concurrently (e.g., rapid agent switching)
+        # We only return to LISTENING when the LAST TTS completes
+        self._current_tts_id: int = 0  # ID of the last TTS started (0 = none)
         self._desired_state_after_tts: AppState = AppState.LISTENING
 
         # Engine reference (set after creation via set_engine)
@@ -127,7 +129,12 @@ class StateController:
     @property
     def tts_in_progress(self) -> bool:
         """Check if TTS is currently playing."""
-        return self._tts_in_progress
+        return self._current_tts_id > 0
+
+    def get_next_tts_id(self) -> int:
+        """Get the next TTS ID. Called by app before starting TTS."""
+        self._current_tts_id += 1
+        return self._current_tts_id
 
     def _process_loop(self) -> None:
         """Main event processing loop."""
@@ -219,7 +226,7 @@ class StateController:
     def _handle_transcription_complete(self, event: TranscriptionCompleteEvent) -> None:
         """Transcription finished."""
         # If TTS is playing, defer the state transition
-        if self._tts_in_progress:
+        if self.tts_in_progress:
             # Store for later processing when TTS completes
             self._pending_transcription = event
             # Still inject the text (goes to correct agent via captured injector)
@@ -241,9 +248,13 @@ class StateController:
             self._engine._process_queued_audio()
 
     def _handle_tts_start(self, event: TTSStartEvent) -> None:
-        """TTS is about to play."""
-        self._tts_in_progress = True
-        self._desired_state_after_tts = AppState.LISTENING  # Default
+        """TTS is about to play.
+
+        Note: The TTS ID is assigned via get_next_tts_id() BEFORE sending this event.
+        This handler just manages VAD and state transitions.
+        """
+        # Reset desired state for this new TTS (user might press OFF during it)
+        self._desired_state_after_tts = AppState.LISTENING
 
         # Reset VAD to discard any buffered audio
         if self._engine and self._engine._audio_manager:
@@ -257,8 +268,18 @@ class StateController:
                     self._on_state_change(old_state, AppState.PLAYING, "tts_start")
 
     def _handle_tts_complete(self, event: TTSCompleteEvent) -> None:
-        """TTS finished playing."""
-        self._tts_in_progress = False
+        """TTS finished playing.
+
+        Only processes if event.tts_id matches the LAST TTS started.
+        This handles concurrent TTS (rapid agent switching) - we only
+        return to LISTENING when the final TTS completes.
+        """
+        # Ignore if this is not the last TTS (concurrent TTS scenario)
+        if event.tts_id != self._current_tts_id:
+            return
+
+        # This is the last TTS - clear the counter
+        self._current_tts_id = 0
 
         # Reset VAD to discard TTS audio
         if self._engine and self._engine._audio_manager:
@@ -267,8 +288,6 @@ class StateController:
         # Handle pending transcription that completed during TTS
         if self._pending_transcription:
             self._pending_transcription = None
-            # State transition already deferred, now complete it
-            old_state = self._state_manager.state
 
         # Go to desired state (LISTENING or OFF based on user intent)
         target_state = self._desired_state_after_tts
@@ -298,7 +317,7 @@ class StateController:
                 # Sync LLM processor
                 if self._engine and self._engine._llm_processor:
                     self._engine._llm_processor.set_listening(True)
-        elif self._tts_in_progress:
+        elif self.tts_in_progress:
             # TTS is playing - record user intent for later
             self._desired_state_after_tts = AppState.OFF
         else:

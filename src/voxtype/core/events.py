@@ -50,15 +50,24 @@ class TranscriptionCompleteEvent(StateEvent):
 
 @dataclass(frozen=True)
 class TTSStartEvent(StateEvent):
-    """TTS playback starting."""
+    """TTS playback starting.
+
+    Each TTS start increments a counter. The tts_id is assigned by the controller
+    when the event is processed, not when it's created.
+    """
 
     text: str = ""
 
 @dataclass(frozen=True)
 class TTSCompleteEvent(StateEvent):
-    """TTS playback finished."""
+    """TTS playback finished.
 
-    pass
+    The tts_id must match the ID assigned when TTSStartEvent was processed.
+    If multiple TTS are playing concurrently, only the completion of the
+    LAST started TTS will trigger state transition back to LISTENING.
+    """
+
+    tts_id: int = 0  # Must match the ID from TTSStartEvent
 
 @dataclass(frozen=True)
 class HotkeyToggleEvent(StateEvent):
