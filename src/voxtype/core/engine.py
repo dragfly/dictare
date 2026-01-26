@@ -816,6 +816,10 @@ class VoxtypeEngine:
         if not self.agents:
             return
 
+        # Flush VAD to send any buffered audio to CURRENT agent before switching
+        if self._audio_manager:
+            self._audio_manager.flush_vad()
+
         # Circular navigation
         self._current_agent_index = (self._current_agent_index + direction) % len(self.agents)
         new_agent = self.agents[self._current_agent_index]
@@ -835,6 +839,9 @@ class VoxtypeEngine:
         # Try exact match first
         for i, agent in enumerate(self.agents):
             if agent.lower() == name_lower:
+                # Flush VAD to send buffered audio to CURRENT agent before switching
+                if self._audio_manager:
+                    self._audio_manager.flush_vad()
                 self._current_agent_index = i
                 self._injector = self._create_injector()
                 self._emit("on_agent_change", agent, i)
@@ -843,6 +850,9 @@ class VoxtypeEngine:
         # Try partial match
         for i, agent in enumerate(self.agents):
             if name_lower in agent.lower():
+                # Flush VAD to send buffered audio to CURRENT agent before switching
+                if self._audio_manager:
+                    self._audio_manager.flush_vad()
                 self._current_agent_index = i
                 self._injector = self._create_injector()
                 self._emit("on_agent_change", agent, i)
@@ -858,6 +868,10 @@ class VoxtypeEngine:
         idx = index - 1
         if idx < 0 or idx >= len(self.agents):
             return False
+
+        # Flush VAD to send buffered audio to CURRENT agent before switching
+        if self._audio_manager:
+            self._audio_manager.flush_vad()
 
         self._current_agent_index = idx
         agent = self.agents[idx]

@@ -359,9 +359,6 @@ class VoxtypeApp(EngineEvents):
             # Speakers mode: transition to PLAYING BEFORE starting thread
             # This avoids race condition where audio is processed before state changes
             if self._engine.state == AppState.LISTENING:
-                # Reset VAD to discard any buffered audio before TTS
-                if self._engine._audio_manager:
-                    self._engine._audio_manager.reset_vad()
                 self._engine._state_manager.try_transition(AppState.PLAYING)
                 threading.Thread(target=_do_tts_and_resume, daemon=True).start()
             else:
