@@ -259,9 +259,14 @@ class AudioManager:
         return False
 
     def flush_vad(self) -> None:
-        """Flush VAD state (discard current speech)."""
+        """Flush VAD state (send buffered audio as speech_end)."""
         if self._streaming_vad:
             self._streaming_vad.flush()
+
+    def reset_vad(self) -> None:
+        """Reset VAD state (discard buffered audio without processing)."""
+        if self._streaming_vad:
+            self._streaming_vad.reset()
 
     def queue_audio(self, audio_data: object) -> None:
         """Add audio to queue for later processing.
