@@ -9,7 +9,20 @@ from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
 from voxtype.core.audio_manager import AudioManager
-from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
+from voxtype.core.controller import StateController
+from voxtype.core.events import (
+    AgentSwitchEvent,
+    DiscardCurrentEvent,
+    EngineEvents,
+    HotkeyDoubleTapEvent,
+    HotkeyToggleEvent,
+    InjectionResult,
+    SetListeningEvent,
+    SpeechEndEvent,
+    SpeechStartEvent,
+    TranscriptionCompleteEvent,
+    TranscriptionResult,
+)
 from voxtype.core.openvip import create_message
 from voxtype.core.state import AppState, ProcessingMode, StateManager
 from voxtype.hotkey.base import HotkeyListener
@@ -85,6 +98,20 @@ class VoxtypeEngine:
         self.agents = agents or []
         # State machine handles all state (OFF/LISTENING/RECORDING/etc)
         self._state_manager = StateManager(initial_state=AppState.OFF)
+
+        # Event queue controller - ONLY this component modifies state
+        self._controller = StateController(
+            self._state_manager,
+            on_recording_start=lambda: self._emit("on_recording_start"),
+            on_recording_end=lambda ms: self._emit("on_recording_end", ms),
+            on_state_change=lambda old, new, trigger: self._emit(
+                "on_state_change", old, new, trigger
+            ),
+            on_mode_change=lambda: self._emit("on_mode_change", self._processing_mode),
+            on_agent_change=lambda name, idx: self._emit("on_agent_change", name, idx),
+        )
+        self._controller.set_engine(self)
+
         self._running = False
         self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
@@ -403,11 +430,8 @@ class VoxtypeEngine:
 
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
-        # Try to transition IDLE → RECORDING
-        if not self._state_manager.try_transition(AppState.RECORDING):
-            return
-
-        self._emit("on_recording_start")
+        # Send event to controller - it handles the state transition
+        self._controller.send(SpeechStartEvent(source="vad"))
 
         if self._logger:
             self._logger.log_vad_event("speech_start")
@@ -451,32 +475,23 @@ class VoxtypeEngine:
 
     def _on_vad_speech_end(self, audio_data: Any) -> None:
         """Handle VAD speech end detection."""
-        # Try to transition to TRANSCRIBING (valid from IDLE or RECORDING)
-        if not self._state_manager.try_transition(AppState.TRANSCRIBING):
-            # Can't transition - queue audio if busy transcribing
-            if self.state == AppState.TRANSCRIBING and self._audio_manager:
-                self._audio_manager.queue_audio(audio_data)
-            return
-
-        # Calculate duration
-        sample_rate = self._audio_manager.sample_rate if self._audio_manager else self.config.audio.sample_rate
-        duration_ms = len(audio_data) / sample_rate * 1000
-
-        self._emit("on_recording_end", duration_ms)
+        # Capture injector NOW, before sending event
+        # This ensures audio goes to the agent that was active when speech ended
+        captured_injector = self._injector
 
         if self._logger:
+            sample_rate = self._audio_manager.sample_rate if self._audio_manager else self.config.audio.sample_rate
+            duration_ms = len(audio_data) / sample_rate * 1000
             self._logger.log_vad_event("speech_end", duration_ms=duration_ms)
 
-        # Check minimum duration
-        min_samples = int(sample_rate * self.MIN_RECORDING_DURATION)
-        if len(audio_data) < min_samples:
-            old_state = self.state
-            self._state_manager.reset_to_listening()
-            self._emit("on_state_change", old_state, AppState.LISTENING, "audio_too_short")
-            return
-
-        # Transcribe and process with LLM
-        self._transcribe_and_process(audio_data)
+        # Send event to controller with captured injector
+        self._controller.send(
+            SpeechEndEvent(
+                audio_data=audio_data,
+                injector=captured_injector,
+                source="vad",
+            )
+        )
 
     # -------------------------------------------------------------------------
     # Transcription
@@ -484,6 +499,8 @@ class VoxtypeEngine:
 
     def _transcribe_and_process(self, audio_data: Any, injector: Any | None = None) -> None:
         """Transcribe audio and process with LLM-first architecture.
+
+        Called by StateController when SpeechEndEvent is processed.
 
         Args:
             audio_data: Audio data to transcribe
@@ -495,11 +512,11 @@ class VoxtypeEngine:
         if self._realtime:
             self._partial_text = ""
 
-        # Capture injector NOW, before starting thread
-        # This ensures audio goes to the agent that was active when speech ended
+        # Use provided injector (captured at speech-end time)
         captured_injector = injector if injector is not None else self._injector
 
         def do_transcribe() -> None:
+            transcribed_text = ""
             try:
                 if not self._stt:
                     return
@@ -517,6 +534,8 @@ class VoxtypeEngine:
                 transcribe_time = time.time() - transcribe_start
 
                 if text:
+                    transcribed_text = text
+
                     # Update session stats
                     audio_duration = len(audio_data) / self.config.audio.sample_rate
                     self._stats_count += 1
@@ -525,7 +544,7 @@ class VoxtypeEngine:
                     self._stats_audio_seconds += audio_duration
                     self._stats_transcription_seconds += transcribe_time
 
-                    # Emit transcription event
+                    # Emit transcription event (for UI)
                     self._emit(
                         "on_transcription",
                         TranscriptionResult(
@@ -548,33 +567,36 @@ class VoxtypeEngine:
                     if self.is_off:
                         return
 
-                    # Process based on mode
-                    if self._processing_mode == ProcessingMode.TRANSCRIPTION:
-                        # Transcription mode: fast inject, no LLM
-                        self._inject_text(text, injector=captured_injector)
-                    elif self._processing_mode == ProcessingMode.COMMAND and self._llm_processor:
+                    # Process based on mode (command mode handles injection internally)
+                    if self._processing_mode == ProcessingMode.COMMAND and self._llm_processor:
                         # Command mode: process through LLM
                         response = self._llm_processor.process(text)
                         self._execute_llm_response(response, text, injector=captured_injector)
-                    else:
-                        # Fallback: just inject
-                        self._inject_text(text, injector=captured_injector)
+                        # Command mode handles its own injection, don't send to controller
+                        transcribed_text = ""
+
             except Exception as e:
                 if self._logger:
                     self._logger.log_error(str(e), context="transcribe_and_process")
                 self._emit("on_error", str(e), "transcribe_and_process")
             finally:
-                old_state = self.state
-                self._state_manager.reset_to_listening()
-                self._emit("on_state_change", old_state, AppState.LISTENING, "transcription_complete")
-                # Process queued audio if any
-                self._process_queued_audio()
+                # Send completion event to controller (it handles state transition)
+                self._controller.send(
+                    TranscriptionCompleteEvent(
+                        text=transcribed_text,
+                        injector=captured_injector,
+                        source="stt",
+                    )
+                )
 
         thread = threading.Thread(target=do_transcribe, daemon=True)
         thread.start()
 
     def _process_queued_audio(self) -> None:
-        """Process any queued audio from speech that occurred during transcription."""
+        """Process any queued audio from speech that occurred during transcription.
+
+        Called by StateController after transcription completes.
+        """
         if not self._audio_manager:
             return
 
@@ -590,9 +612,14 @@ class VoxtypeEngine:
             if len(audio_data) < min_samples:
                 continue
 
-            # Found valid audio - process it and return
-            self._state_manager.transition(AppState.TRANSCRIBING)
-            self._transcribe_and_process(audio_data)
+            # Found valid audio - send as event (controller handles state)
+            self._controller.send(
+                SpeechEndEvent(
+                    audio_data=audio_data,
+                    injector=self._injector,
+                    source="queued",
+                )
+            )
             return
 
     # -------------------------------------------------------------------------
@@ -773,7 +800,8 @@ class VoxtypeEngine:
             if self._pending_single_tap:
                 self._pending_single_tap.cancel()
                 self._pending_single_tap = None
-            self._switch_processing_mode()
+            # Send double-tap event
+            self._controller.send(HotkeyDoubleTapEvent(source="hotkey"))
             return
 
         # Schedule single tap
@@ -781,32 +809,20 @@ class VoxtypeEngine:
             self._pending_single_tap.cancel()
         self._pending_single_tap = threading.Timer(
             self.DOUBLE_TAP_THRESHOLD,
-            self._toggle_listening
+            lambda: self._controller.send(HotkeyToggleEvent(source="hotkey")),
         )
         self._pending_single_tap.start()
 
     def _toggle_listening(self) -> None:
-        """Toggle listening on/off using state machine."""
-        current = self.state
-        old_state = current
-
-        if current == AppState.OFF:
-            # OFF → LISTENING
-            if self._state_manager.try_transition(AppState.LISTENING):
-                self._emit("on_state_change", old_state, AppState.LISTENING, "hotkey_toggle")
-        else:
-            # Any active state → OFF (hotkey must always work to turn off)
-            if self._state_manager.try_transition(AppState.OFF):
-                # Clear any buffered audio to avoid replaying old speech later
-                self._discard_current()
-                self._emit("on_state_change", old_state, AppState.OFF, "hotkey_toggle")
-
-        # Sync LLM processor state
-        if self._llm_processor:
-            self._llm_processor.set_listening(self.is_listening)
+        """Toggle listening on/off - sends event to controller."""
+        self._controller.send(HotkeyToggleEvent(source="api"))
 
     def _switch_processing_mode(self) -> None:
-        """Switch between transcription and command mode."""
+        """Switch between transcription and command mode - sends event."""
+        self._controller.send(HotkeyDoubleTapEvent(source="api"))
+
+    def _switch_processing_mode_internal(self) -> None:
+        """Internal: Actually switch processing mode. Called by controller."""
         if self._processing_mode == ProcessingMode.TRANSCRIPTION:
             self._processing_mode = ProcessingMode.COMMAND
         else:
@@ -816,35 +832,22 @@ class VoxtypeEngine:
         if self._llm_processor:
             self._llm_processor.set_listening(self.is_listening)
 
-        self._emit("on_mode_change", self._processing_mode)
-
     def _set_listening(self, on: bool) -> None:
-        """Set listening state on/off using state machine."""
-        old_state = self.state
-
-        if on and self.is_off:
-            if self._state_manager.try_transition(AppState.LISTENING):
-                self._emit("on_state_change", old_state, AppState.LISTENING, "set_listening")
-        elif not on and self.is_listening:
-            if self._state_manager.try_transition(AppState.OFF):
-                self._emit("on_state_change", old_state, AppState.OFF, "set_listening")
-
-        # Sync LLM processor state
-        if self._llm_processor:
-            self._llm_processor.set_listening(self.is_listening)
+        """Set listening state on/off - sends event to controller."""
+        self._controller.send(SetListeningEvent(on=on, source="api"))
 
     # -------------------------------------------------------------------------
     # Agent Control
     # -------------------------------------------------------------------------
 
     def _switch_agent(self, direction: int) -> None:
-        """Switch to next/previous agent."""
+        """Switch to next/previous agent - sends event to controller."""
+        self._controller.send(AgentSwitchEvent(direction=direction, source="api"))
+
+    def _switch_agent_internal(self, direction: int) -> None:
+        """Internal: Actually switch agent. Called by controller."""
         if not self.agents:
             return
-
-        # Flush VAD to send any buffered audio to CURRENT agent before switching
-        if self._audio_manager:
-            self._audio_manager.flush_vad()
 
         # Circular navigation
         self._current_agent_index = (self._current_agent_index + direction) % len(self.agents)
@@ -856,7 +859,12 @@ class VoxtypeEngine:
         self._emit("on_agent_change", new_agent, self._current_agent_index)
 
     def _switch_to_agent_by_name(self, name: str) -> bool:
-        """Switch to a specific agent by name."""
+        """Switch to a specific agent by name - sends event to controller."""
+        self._controller.send(AgentSwitchEvent(agent_name=name, source="api"))
+        return True  # Actual success determined asynchronously
+
+    def _switch_to_agent_by_name_internal(self, name: str) -> bool:
+        """Internal: Actually switch by name. Called by controller."""
         if not self.agents:
             return False
 
@@ -865,9 +873,6 @@ class VoxtypeEngine:
         # Try exact match first
         for i, agent in enumerate(self.agents):
             if agent.lower() == name_lower:
-                # Flush VAD to send buffered audio to CURRENT agent before switching
-                if self._audio_manager:
-                    self._audio_manager.flush_vad()
                 self._current_agent_index = i
                 self._injector = self._create_injector()
                 self._emit("on_agent_change", agent, i)
@@ -876,9 +881,6 @@ class VoxtypeEngine:
         # Try partial match
         for i, agent in enumerate(self.agents):
             if name_lower in agent.lower():
-                # Flush VAD to send buffered audio to CURRENT agent before switching
-                if self._audio_manager:
-                    self._audio_manager.flush_vad()
                 self._current_agent_index = i
                 self._injector = self._create_injector()
                 self._emit("on_agent_change", agent, i)
@@ -887,17 +889,18 @@ class VoxtypeEngine:
         return False
 
     def _switch_to_agent_by_index(self, index: int) -> bool:
-        """Switch to a specific agent by index (1-based)."""
+        """Switch to a specific agent by index (1-based) - sends event."""
+        self._controller.send(AgentSwitchEvent(agent_index=index, source="api"))
+        return True  # Actual success determined asynchronously
+
+    def _switch_to_agent_by_index_internal(self, index: int) -> bool:
+        """Internal: Actually switch by index. Called by controller."""
         if not self.agents:
             return False
 
         idx = index - 1
         if idx < 0 or idx >= len(self.agents):
             return False
-
-        # Flush VAD to send buffered audio to CURRENT agent before switching
-        if self._audio_manager:
-            self._audio_manager.flush_vad()
 
         self._current_agent_index = idx
         agent = self.agents[idx]
@@ -916,13 +919,14 @@ class VoxtypeEngine:
             self._injector.send_submit()
 
     def _discard_current(self) -> None:
-        """Discard current recording/transcription."""
+        """Discard current recording/transcription - sends event."""
+        self._controller.send(DiscardCurrentEvent(source="api"))
+
+    def _discard_current_internal(self) -> None:
+        """Internal: Actually discard. Called by controller."""
         if self._audio_manager:
             self._audio_manager.clear_queue()
-            self._audio_manager.flush_vad()
-
-        if self.state == AppState.RECORDING:
-            self._state_manager.transition(AppState.LISTENING)
+            self._audio_manager.reset_vad()  # Use reset, not flush
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -934,6 +938,9 @@ class VoxtypeEngine:
 
         self._running = True
         self._stats_start_time = time.time()
+
+        # Start the state controller (event queue processor)
+        self._controller.start()
 
         try:
             # Start hotkey listener
@@ -972,6 +979,9 @@ class VoxtypeEngine:
         import gc
 
         self._running = False
+
+        # Stop the state controller first
+        self._controller.stop()
 
         # Force transition to OFF
         self._state_manager.transition(AppState.OFF, force=True)

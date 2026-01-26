@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.29.0] - 2026-01-26
+
+### Added
+- **Event Queue Architecture**: New `StateController` for centralized state management
+  - Single component responsible for ALL state transitions (FIFO processing)
+  - Events: `SpeechStartEvent`, `SpeechEndEvent`, `TranscriptionCompleteEvent`,
+    `TTSStartEvent`, `TTSCompleteEvent`, `HotkeyToggleEvent`, `HotkeyDoubleTapEvent`,
+    `AgentSwitchEvent`, `SetListeningEvent`, `DiscardCurrentEvent`
+  - All events are immutable (frozen dataclasses) with timestamp and source
+
+### Fixed
+- **TTS/Transcription race condition**: User intent preserved when pressing OFF during TTS
+  - `_desired_state_after_tts` tracks what user wants after TTS completes
+  - Transcription completing during TTS no longer causes state corruption
+- **Concurrent state modifications**: No more race conditions from multiple threads
+  - VAD, STT, TTS, hotkey, API all send events to single queue
+  - Events processed sequentially by controller worker thread
+- **Event ordering guaranteed**: FIFO queue ensures predictable state transitions
+
+### Changed
+- State transitions are now asynchronous (via event queue)
+- VAD callbacks send events instead of direct transitions
+- Hotkey handlers send events instead of direct transitions
+- Agent switch sends events instead of direct transitions
+- TTS sends `TTSStartEvent`/`TTSCompleteEvent` for proper state management
+
 ## [2.28.6] - 2026-01-26
 
 ### Fixed
