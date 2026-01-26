@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.28.6] - 2026-01-26
+
+### Fixed
+- **Transcription goes to wrong agent after switch**: Capture injector at speech-end time
+  - `_transcribe_and_process()` now captures injector BEFORE starting async transcription
+  - `_inject_text()` accepts optional `injector` parameter for explicit targeting
+  - Fixes race condition where `self._injector` was reassigned during async transcription
+
 ## [2.28.5] - 2026-01-26
 
 ### Fixed
