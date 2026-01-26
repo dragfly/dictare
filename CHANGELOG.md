@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.28.2] - 2026-01-26
+
+### Fixed
+- **Status panel flickering on agent switch**: `console.print()` was breaking Rich Live display
+  - Agent switch now updates the panel in-place with highlighted current agent
+  - Errors shown in panel instead of printing to console
+
+### Changed
+- **Agent display**: Current agent now highlighted in green, others dimmed in panel
+
 ## [2.28.1] - 2026-01-26
 
 ### Changed

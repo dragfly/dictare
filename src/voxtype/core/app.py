@@ -151,7 +151,11 @@ class VoxtypeApp(EngineEvents):
             self._console.print(f"[dim]Injection ({result.method}): {result.success}[/]")
 
         if not result.success:
-            self._console.print("[red]Failed to inject text[/]")
+            # Show error in panel (don't print - breaks Live display)
+            if self._status_panel:
+                self._status_panel.update_text("[ERROR] Injection failed")
+            else:
+                self._console.print("[red]Failed to inject text[/]")
 
         # Beep when file write succeeds
         if result.success and result.method.startswith("file:"):
@@ -171,7 +175,9 @@ class VoxtypeApp(EngineEvents):
 
     def on_agent_change(self, agent_name: str, index: int) -> None:
         """Handle agent change."""
-        self._console.print(f"[bold cyan]>>> Agent: {agent_name}[/]")
+        # Update panel to highlight current agent (don't print - breaks Live display)
+        if self._status_panel:
+            self._status_panel.update_current_agent(agent_name, index)
 
         # Send to SSE if running
         if self._sse:
@@ -182,7 +188,11 @@ class VoxtypeApp(EngineEvents):
     def on_error(self, message: str, context: str) -> None:
         """Handle errors."""
         if self.config.verbose:
-            self._console.print(f"[red]Error in {context}: {message}[/]")
+            # Show in panel if active, otherwise print
+            if self._status_panel:
+                self._status_panel.update_text(f"[ERROR] {context}: {message}")
+            else:
+                self._console.print(f"[red]Error in {context}: {message}[/]")
 
         # Send to SSE if running
         if self._sse:

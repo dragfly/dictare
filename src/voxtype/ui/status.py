@@ -102,7 +102,14 @@ class LiveStatusPanel:
     def _compute_output_str(self) -> str:
         """Compute the output mode display string."""
         if self._agents:
-            return f"[cyan]agents[/] ({', '.join(self._agents)})"
+            # Highlight first agent by default
+            parts = []
+            for i, name in enumerate(self._agents):
+                if i == 0:
+                    parts.append(f"[bold green]{name}[/]")
+                else:
+                    parts.append(f"[dim]{name}[/]")
+            return f"[cyan]agents[/] ({', '.join(parts)})"
         elif self._config.output.method == "agent":
             return "[cyan]agent[/] (single)"
         return self._config.output.method
@@ -214,5 +221,24 @@ class LiveStatusPanel:
             self._mode_str = "[cyan]transcription[/] (fast)"
         else:
             self._mode_str = "[yellow]command[/] (LLM)"
+        if self._live:
+            self._live.update(self._build_panel())
+
+    def update_current_agent(self, agent_name: str, index: int) -> None:
+        """Update the current agent display.
+
+        Args:
+            agent_name: Name of the current agent
+            index: Index of the current agent (0-based)
+        """
+        if self._agents:
+            # Highlight current agent in the list
+            parts = []
+            for i, name in enumerate(self._agents):
+                if i == index:
+                    parts.append(f"[bold green]{name}[/]")
+                else:
+                    parts.append(f"[dim]{name}[/]")
+            self._output_str = f"[cyan]agents[/] ({', '.join(parts)})"
         if self._live:
             self._live.update(self._build_panel())
