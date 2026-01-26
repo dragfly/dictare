@@ -483,11 +483,22 @@ class VoxtypeEngine:
     # Transcription
     # -------------------------------------------------------------------------
 
-    def _transcribe_and_process(self, audio_data: Any) -> None:
-        """Transcribe audio and process with LLM-first architecture."""
+    def _transcribe_and_process(self, audio_data: Any, injector: Any | None = None) -> None:
+        """Transcribe audio and process with LLM-first architecture.
+
+        Args:
+            audio_data: Audio data to transcribe
+            injector: Optional injector to use for injection. If None, uses current self._injector.
+                      This allows capturing the injector at speech-end time, ensuring audio
+                      goes to the correct agent even if agent switches during transcription.
+        """
         # For realtime mode: clear partial text
         if self._realtime:
             self._partial_text = ""
+
+        # Capture injector NOW, before starting thread
+        # This ensures audio goes to the agent that was active when speech ended
+        captured_injector = injector if injector is not None else self._injector
 
         def do_transcribe() -> None:
             try:
@@ -541,14 +552,14 @@ class VoxtypeEngine:
                     # Process based on mode
                     if self._processing_mode == ProcessingMode.TRANSCRIPTION:
                         # Transcription mode: fast inject, no LLM
-                        self._inject_text(text)
+                        self._inject_text(text, injector=captured_injector)
                     elif self._processing_mode == ProcessingMode.COMMAND and self._llm_processor:
                         # Command mode: process through LLM
                         response = self._llm_processor.process(text)
-                        self._execute_llm_response(response, text)
+                        self._execute_llm_response(response, text, injector=captured_injector)
                     else:
                         # Fallback: just inject
-                        self._inject_text(text)
+                        self._inject_text(text, injector=captured_injector)
             except Exception as e:
                 if self._logger:
                     self._logger.log_error(str(e), context="transcribe_and_process")
@@ -589,8 +600,16 @@ class VoxtypeEngine:
     # LLM Response Execution
     # -------------------------------------------------------------------------
 
-    def _execute_llm_response(self, response: LLMResponse, original_text: str) -> None:
-        """Execute the action decided by the LLM."""
+    def _execute_llm_response(
+        self, response: LLMResponse, original_text: str, *, injector: Any | None = None
+    ) -> None:
+        """Execute the action decided by the LLM.
+
+        Args:
+            response: LLM response with action to execute
+            original_text: Original transcribed text
+            injector: Optional injector to use for injection
+        """
         from voxtype.llm.models import Action
 
         # Log the LLM decision
@@ -627,7 +646,7 @@ class VoxtypeEngine:
         if response.action == Action.INJECT:
             if response.text_to_inject:
                 self._state_manager.transition(AppState.INJECTING)
-                self._inject_text(response.text_to_inject)
+                self._inject_text(response.text_to_inject, injector=injector)
 
     def _execute_command(self, command: Any, args: dict[str, Any] | None) -> None:
         """Execute a voice command."""
@@ -641,7 +660,7 @@ class VoxtypeEngine:
     # Text Injection
     # -------------------------------------------------------------------------
 
-    def _inject_text(self, text: str) -> None:
+    def _inject_text(self, text: str, *, injector: Any | None = None) -> None:
         """Inject text into the target.
 
         Uses OpenVIP message format internally:
@@ -651,10 +670,18 @@ class VoxtypeEngine:
         Message termination based on auto_enter:
         - auto_enter=true: text + submit (Enter for keyboard, x_submit for socket)
         - auto_enter=false: text + visual newline (Shift+Enter for keyboard, etc.)
+
+        Args:
+            text: Text to inject
+            injector: Optional injector to use. If None, uses self._injector.
+                      Allows injection to a specific agent even if current agent changed.
         """
         auto_enter = self.config.output.auto_enter
         success = False
         method = "unknown"
+
+        # Use provided injector or fall back to current
+        target_injector = injector if injector is not None else self._injector
 
         # Build OpenVIP message with unique ID (created once, forwarded by all transports)
         message = create_message(
@@ -671,15 +698,15 @@ class VoxtypeEngine:
                 # Local mode - send to in-memory queue
                 method = "local:keyboard"
                 success = self._local_receiver.send(message)
-            elif self._injector:
+            elif target_injector:
                 # Agent mode - send pre-built message via socket
-                method = self._injector.get_name()
-                if hasattr(self._injector, "send_message"):
+                method = target_injector.get_name()
+                if hasattr(target_injector, "send_message"):
                     # Preferred: forward complete message with ID
-                    success = self._injector.send_message(message)
+                    success = target_injector.send_message(message)
                 else:
                     # Fallback for injectors without send_message
-                    success = self._injector.type_text(
+                    success = target_injector.type_text(
                         text,
                         delay_ms=self.config.output.typing_delay_ms,
                         auto_enter=auto_enter,
@@ -697,7 +724,7 @@ class VoxtypeEngine:
 
         # Log injection
         if self._logger:
-            enter_sent = getattr(self._injector, '_enter_sent', None) if self._injector else None
+            enter_sent = getattr(target_injector, '_enter_sent', None) if target_injector else None
             self._logger.log_injection(
                 text=text,
                 method=method,
