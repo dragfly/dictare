@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.29.1] - 2026-01-26
+
+### Fixed
+- **Concurrent TTS during rapid agent switching**: Multiple TTS can now play concurrently without state corruption
+  - TTS now uses monotonic counter (`tts_id`) instead of boolean flag
+  - Only the completion of the LAST TTS triggers state transition back to LISTENING
+  - Prevents early return to LISTENING when first TTS completes while others still playing
+  - Fixes transcription of TTS audio during rapid agent switching
+
 ## [2.29.0] - 2026-01-26
 
 ### Added

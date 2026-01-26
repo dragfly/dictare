@@ -252,11 +252,14 @@ class TestTTSEvents:
         controller.start()
 
         try:
+            # Get TTS ID first (like app.py does)
+            tts_id = controller.get_next_tts_id()
             controller.send(TTSStartEvent(text="Hello", source="tts"))
             _wait()
 
             assert sm.state == AppState.PLAYING
             assert controller.tts_in_progress is True
+            assert controller._current_tts_id == tts_id
             engine._audio_manager.reset_vad.assert_called()
         finally:
             controller.stop()
@@ -267,11 +270,13 @@ class TestTTSEvents:
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        controller._tts_in_progress = True
+        # Set TTS ID to simulate TTS in progress
+        controller._current_tts_id = 1
         controller.start()
 
         try:
-            controller.send(TTSCompleteEvent(source="tts"))
+            # Send complete with matching ID
+            controller.send(TTSCompleteEvent(tts_id=1, source="tts"))
             _wait()
 
             assert sm.state == AppState.LISTENING
@@ -285,7 +290,8 @@ class TestTTSEvents:
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        controller._tts_in_progress = True
+        # Set TTS ID to simulate TTS in progress
+        controller._current_tts_id = 1
         controller.start()
 
         try:
@@ -297,8 +303,8 @@ class TestTTSEvents:
             assert sm.state == AppState.PLAYING
             assert controller._desired_state_after_tts == AppState.OFF
 
-            # TTS completes
-            controller.send(TTSCompleteEvent(source="tts"))
+            # TTS completes with matching ID
+            controller.send(TTSCompleteEvent(tts_id=1, source="tts"))
             _wait()
 
             # Now should go to OFF (user intent preserved)
@@ -312,7 +318,8 @@ class TestTTSEvents:
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        controller._tts_in_progress = True
+        # Set TTS ID to simulate TTS in progress
+        controller._current_tts_id = 1
         controller.start()
 
         try:
@@ -326,6 +333,60 @@ class TestTTSEvents:
             assert sm.state == AppState.PLAYING
             # Text should still be injected
             assert len(engine.injections) == 1
+        finally:
+            controller.stop()
+
+    def test_concurrent_tts_only_last_triggers_transition(self) -> None:
+        """Only the LAST TTS completion triggers state transition (rapid agent switching)."""
+        sm = StateManager(initial_state=AppState.LISTENING)
+        engine = MockEngine()
+        controller = StateController(sm)
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            # Simulate rapid agent switching: TTS 1, 2, 3 start in quick succession
+            tts_id_1 = controller.get_next_tts_id()
+            controller.send(TTSStartEvent(text="Agent 1", source="tts"))
+            _wait()
+
+            assert controller._current_tts_id == 1
+            assert sm.state == AppState.PLAYING
+
+            # Second TTS starts (agent switch while TTS 1 still playing)
+            tts_id_2 = controller.get_next_tts_id()
+            controller.send(TTSStartEvent(text="Agent 2", source="tts"))
+            _wait()
+
+            assert controller._current_tts_id == 2  # Updated to latest
+
+            # Third TTS starts
+            tts_id_3 = controller.get_next_tts_id()
+            controller.send(TTSStartEvent(text="Agent 3", source="tts"))
+            _wait()
+
+            assert controller._current_tts_id == 3
+
+            # TTS 1 completes - should be IGNORED (not the last)
+            controller.send(TTSCompleteEvent(tts_id=tts_id_1, source="tts"))
+            _wait()
+
+            assert sm.state == AppState.PLAYING  # Still playing!
+            assert controller.tts_in_progress is True
+
+            # TTS 2 completes - should be IGNORED (not the last)
+            controller.send(TTSCompleteEvent(tts_id=tts_id_2, source="tts"))
+            _wait()
+
+            assert sm.state == AppState.PLAYING  # Still playing!
+            assert controller.tts_in_progress is True
+
+            # TTS 3 completes - THIS is the last one, should transition
+            controller.send(TTSCompleteEvent(tts_id=tts_id_3, source="tts"))
+            _wait()
+
+            assert sm.state == AppState.LISTENING  # Now back to listening
+            assert controller.tts_in_progress is False
         finally:
             controller.stop()
 
