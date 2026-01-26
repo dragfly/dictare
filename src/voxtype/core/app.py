@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 from voxtype.core.engine import VoxtypeEngine
-from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
+from voxtype.core.events import (
+    EngineEvents,
+    InjectionResult,
+    TranscriptionResult,
+    TTSCompleteEvent,
+    TTSStartEvent,
+)
 from voxtype.core.state import AppState, ProcessingMode
 
 if TYPE_CHECKING:
@@ -316,7 +322,12 @@ class VoxtypeApp(EngineEvents):
         return default_phrases
 
     def _speak_text(self, text: str) -> None:
-        """Speak text using TTS with mic muting in speaker mode."""
+        """Speak text using TTS with mic muting in speaker mode.
+
+        Uses event queue for state management:
+        - TTSStartEvent: Sent before TTS starts, controller transitions to PLAYING
+        - TTSCompleteEvent: Sent after TTS finishes, controller transitions back
+        """
         if not self.config.audio.audio_feedback:
             return
 
@@ -340,30 +351,22 @@ class VoxtypeApp(EngineEvents):
             except Exception:
                 pass
 
-        def _do_tts_and_resume() -> None:
-            """Do TTS then transition back to LISTENING."""
+        def _do_tts_with_events() -> None:
+            """Do TTS with event-based state management."""
             try:
                 _do_tts()
             finally:
-                # Transition back to LISTENING (only if still in PLAYING)
-                if self._engine.state == AppState.PLAYING:
-                    # Reset VAD again to discard any audio captured during TTS
-                    if self._engine._audio_manager:
-                        self._engine._audio_manager.reset_vad()
-                    self._engine._state_manager.try_transition(AppState.LISTENING)
+                # Send completion event - controller handles state transition
+                self._engine._controller.send(TTSCompleteEvent(source="tts"))
 
         # Headphones mode: fire and forget (continue listening while playing)
         if self.config.audio.headphones_mode:
             threading.Thread(target=_do_tts, daemon=True).start()
         else:
-            # Speakers mode: transition to PLAYING BEFORE starting thread
-            # This avoids race condition where audio is processed before state changes
-            if self._engine.state == AppState.LISTENING:
-                self._engine._state_manager.try_transition(AppState.PLAYING)
-                threading.Thread(target=_do_tts_and_resume, daemon=True).start()
-            else:
-                # Not in LISTENING, just play without state changes
-                threading.Thread(target=_do_tts, daemon=True).start()
+            # Speakers mode: send TTSStart event before starting TTS
+            # Controller will transition to PLAYING and reset VAD
+            self._engine._controller.send(TTSStartEvent(text=text, source="tts"))
+            threading.Thread(target=_do_tts_with_events, daemon=True).start()
 
     def _speak_mode_with_mute(self) -> None:
         """Speak the current mode using TTS."""
@@ -586,6 +589,9 @@ class VoxtypeApp(EngineEvents):
         self._engine._running = True
         self._engine._stats_start_time = __import__("time").time()
 
+        # Start the state controller (event queue processor)
+        self._engine._controller.start()
+
         # Start live status panel
         if self._status_panel:
             self._status_panel.start()
@@ -598,7 +604,7 @@ class VoxtypeApp(EngineEvents):
                     on_release=lambda: None,
                 )
 
-            # Transition OFF → LISTENING
+            # Transition OFF → LISTENING (startup is special - direct transition OK)
             self._engine._state_manager.transition(AppState.LISTENING)
             if self._status_panel:
                 self._status_panel.update_state("LISTENING")

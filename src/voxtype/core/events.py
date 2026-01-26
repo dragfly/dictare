@@ -2,11 +2,112 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+import time
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from voxtype.core.state import AppState, ProcessingMode
+
+
+# =============================================================================
+# State Events (for Event Queue Architecture)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class StateEvent:
+    """Base event with timestamp and source.
+
+    All events are immutable (frozen=True) to ensure thread-safety.
+    Events are processed FIFO - no priority.
+    """
+
+    timestamp: float = field(default_factory=time.time)
+    source: str = ""  # "vad", "stt", "tts", "hotkey", "api", etc.
+
+
+@dataclass(frozen=True)
+class SpeechStartEvent(StateEvent):
+    """VAD detected speech start."""
+
+    pass
+
+
+@dataclass(frozen=True)
+class SpeechEndEvent(StateEvent):
+    """VAD detected speech end.
+
+    Captures audio_data and injector at event creation time,
+    ensuring they go to the correct agent even if agent switches later.
+    """
+
+    audio_data: Any = None
+    injector: Any = None  # Captured at event creation time
+
+
+@dataclass(frozen=True)
+class TranscriptionCompleteEvent(StateEvent):
+    """STT finished transcribing."""
+
+    text: str = ""
+    injector: Any = None  # The injector to use for injection
+
+
+@dataclass(frozen=True)
+class TTSStartEvent(StateEvent):
+    """TTS playback starting."""
+
+    text: str = ""
+
+
+@dataclass(frozen=True)
+class TTSCompleteEvent(StateEvent):
+    """TTS playback finished."""
+
+    pass
+
+
+@dataclass(frozen=True)
+class HotkeyToggleEvent(StateEvent):
+    """User pressed hotkey to toggle listening."""
+
+    pass
+
+
+@dataclass(frozen=True)
+class HotkeyDoubleTapEvent(StateEvent):
+    """User double-tapped hotkey to switch mode."""
+
+    pass
+
+
+@dataclass(frozen=True)
+class AgentSwitchEvent(StateEvent):
+    """User wants to switch agent."""
+
+    direction: int = 1  # +1 next, -1 prev
+    agent_name: str | None = None  # If switching by name
+    agent_index: int | None = None  # If switching by index (1-based)
+
+
+@dataclass(frozen=True)
+class SetListeningEvent(StateEvent):
+    """API request to set listening on/off."""
+
+    on: bool = True
+
+
+@dataclass(frozen=True)
+class DiscardCurrentEvent(StateEvent):
+    """User wants to discard current recording."""
+
+    pass
+
+
+# =============================================================================
+# UI Event Results
+# =============================================================================
 
 
 @dataclass
