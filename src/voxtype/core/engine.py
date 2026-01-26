@@ -915,7 +915,7 @@ class VoxtypeEngine:
 
             if self._audio_manager:
                 self._audio_manager.start_streaming(
-                    is_listening=lambda: self._state_manager.should_process_audio,
+                    should_process=lambda: self._state_manager.should_process_audio,
                     is_running=lambda: self._running,
                 )
 

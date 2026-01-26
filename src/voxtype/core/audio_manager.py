@@ -65,9 +65,24 @@ class AudioManager:
         self._on_reconnect_attempt: Callable[[int], None] | None = None
         self._on_reconnect_success: Callable[[str | None], None] | None = None
 
-        # Listening state getter (set by start_streaming)
-        self._is_listening: Callable[[], bool] | None = None
-        self._is_running: Callable[[], bool] | None = None
+        # State check callbacks (set by start_streaming)
+        # These are internal - use the properties should_process_audio / is_engine_running
+        self._should_process_check: Callable[[], bool] | None = None
+        self._is_running_check: Callable[[], bool] | None = None
+
+    @property
+    def should_process_audio(self) -> bool:
+        """Check if audio should be processed (engine is listening)."""
+        if self._should_process_check is None:
+            return False
+        return self._should_process_check()
+
+    @property
+    def is_engine_running(self) -> bool:
+        """Check if engine is running."""
+        if self._is_running_check is None:
+            return True  # Default to running if not set
+        return self._is_running_check()
 
     def initialize(
         self,
@@ -140,17 +155,17 @@ class AudioManager:
 
     def start_streaming(
         self,
-        is_listening: Callable[[], bool],
+        should_process: Callable[[], bool],
         is_running: Callable[[], bool],
     ) -> None:
         """Start audio streaming.
 
         Args:
-            is_listening: Callable that returns current listening state
-            is_running: Callable that returns current running state
+            should_process: Callable that returns True if audio should be processed
+            is_running: Callable that returns True if engine is running
         """
-        self._is_listening = is_listening
-        self._is_running = is_running
+        self._should_process_check = should_process
+        self._is_running_check = is_running
         if self._audio:
             self._audio.start_streaming(self._on_audio_chunk)
 
@@ -182,11 +197,8 @@ class AudioManager:
 
     def _on_audio_chunk(self, chunk: Any) -> None:
         """Process audio chunk through VAD."""
-        # Only process if running AND listening
-        is_running = self._is_running() if self._is_running else True
-        is_listening = self._is_listening() if self._is_listening else False
-
-        if not (is_running and is_listening):
+        # Only process if engine is running AND should process audio
+        if not (self.is_engine_running and self.should_process_audio):
             return
 
         # Use lock to prevent race condition with close()
