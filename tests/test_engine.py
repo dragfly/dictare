@@ -221,66 +221,105 @@ class TestEventEmission:
         # Should not raise
         engine._emit("on_error", "test", "test")
 
+def _wait_for_controller(timeout: float = 0.1) -> None:
+    """Wait for controller to process events."""
+    time.sleep(timeout)
+
 class TestStateControl:
-    """Test state control methods."""
+    """Test state control methods.
+
+    Note: State transitions are now asynchronous via the event queue.
+    Tests start the controller and wait for event processing.
+    """
 
     def test_toggle_listening_off_to_listening(self) -> None:
         """Toggle from OFF to LISTENING."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        engine._toggle_listening()
-        assert engine.state == AppState.LISTENING
-        assert len(events.state_changes) == 1
-        assert events.state_changes[0] == (AppState.OFF, AppState.LISTENING, "hotkey_toggle")
+        try:
+            engine._toggle_listening()
+            _wait_for_controller()
+            assert engine.state == AppState.LISTENING
+            assert len(events.state_changes) == 1
+            assert events.state_changes[0] == (AppState.OFF, AppState.LISTENING, "hotkey_toggle")
+        finally:
+            engine._controller.stop()
 
     def test_toggle_listening_listening_to_off(self) -> None:
         """Toggle from LISTENING to OFF."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        # First toggle ON
-        engine._toggle_listening()
-        # Then toggle OFF
-        engine._toggle_listening()
-        assert engine.state == AppState.OFF
-        assert len(events.state_changes) == 2
-        assert events.state_changes[1] == (AppState.LISTENING, AppState.OFF, "hotkey_toggle")
+        try:
+            # First toggle ON
+            engine._toggle_listening()
+            _wait_for_controller()
+            # Then toggle OFF
+            engine._toggle_listening()
+            _wait_for_controller()
+            assert engine.state == AppState.OFF
+            assert len(events.state_changes) == 2
+            assert events.state_changes[1] == (AppState.LISTENING, AppState.OFF, "hotkey_toggle")
+        finally:
+            engine._controller.stop()
 
     def test_set_listening_on(self) -> None:
         """_set_listening(True) turns on listening."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        engine._set_listening(True)
-        assert engine.state == AppState.LISTENING
+        try:
+            engine._set_listening(True)
+            _wait_for_controller()
+            assert engine.state == AppState.LISTENING
+        finally:
+            engine._controller.stop()
 
     def test_set_listening_off(self) -> None:
         """_set_listening(False) turns off listening."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        engine._set_listening(True)
-        engine._set_listening(False)
-        assert engine.state == AppState.OFF
+        try:
+            engine._set_listening(True)
+            _wait_for_controller()
+            engine._set_listening(False)
+            _wait_for_controller()
+            assert engine.state == AppState.OFF
+        finally:
+            engine._controller.stop()
 
     def test_set_listening_noop_when_already_on(self) -> None:
         """_set_listening(True) is noop when already listening."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        engine._set_listening(True)
-        events.state_changes.clear()
-        engine._set_listening(True)  # Already on
-        assert len(events.state_changes) == 0
+        try:
+            engine._set_listening(True)
+            _wait_for_controller()
+            events.state_changes.clear()
+            engine._set_listening(True)  # Already on
+            _wait_for_controller()
+            assert len(events.state_changes) == 0
+        finally:
+            engine._controller.stop()
 
 class TestModeSwitch:
-    """Test processing mode switching."""
+    """Test processing mode switching.
+
+    Note: Mode switch is now async via the event queue.
+    """
 
     def test_switch_mode_transcription_to_command(self) -> None:
         """Switch from transcription to command mode."""
@@ -288,11 +327,16 @@ class TestModeSwitch:
         config.command.mode = "transcription"
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        engine._switch_processing_mode()
-        assert engine.mode == ProcessingMode.COMMAND
-        assert len(events.mode_changes) == 1
-        assert events.mode_changes[0] == ProcessingMode.COMMAND
+        try:
+            engine._switch_processing_mode()
+            _wait_for_controller()
+            assert engine.mode == ProcessingMode.COMMAND
+            assert len(events.mode_changes) == 1
+            assert events.mode_changes[0] == ProcessingMode.COMMAND
+        finally:
+            engine._controller.stop()
 
     def test_switch_mode_command_to_transcription(self) -> None:
         """Switch from command to transcription mode."""
@@ -300,13 +344,21 @@ class TestModeSwitch:
         config.command.mode = "command"
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        engine._switch_processing_mode()
-        assert engine.mode == ProcessingMode.TRANSCRIPTION
-        assert events.mode_changes[0] == ProcessingMode.TRANSCRIPTION
+        try:
+            engine._switch_processing_mode()
+            _wait_for_controller()
+            assert engine.mode == ProcessingMode.TRANSCRIPTION
+            assert events.mode_changes[0] == ProcessingMode.TRANSCRIPTION
+        finally:
+            engine._controller.stop()
 
 class TestAgentSwitch:
-    """Test agent switching."""
+    """Test agent switching.
+
+    Note: Agent switching is now async via the event queue.
+    """
 
     def test_switch_agent_next(self) -> None:
         """Switch to next agent."""
@@ -314,11 +366,16 @@ class TestAgentSwitch:
         events = MockEventHandler()
         agents = ["claude", "cursor", "vscode"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        engine._switch_agent(1)
-        assert engine.current_agent == "cursor"
-        assert engine.current_agent_index == 1
-        assert events.agent_changes[0] == ("cursor", 1)
+        try:
+            engine._switch_agent(1)
+            _wait_for_controller()
+            assert engine.current_agent == "cursor"
+            assert engine.current_agent_index == 1
+            assert events.agent_changes[0] == ("cursor", 1)
+        finally:
+            engine._controller.stop()
 
     def test_switch_agent_previous(self) -> None:
         """Switch to previous agent."""
@@ -326,10 +383,15 @@ class TestAgentSwitch:
         events = MockEventHandler()
         agents = ["claude", "cursor", "vscode"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        engine._switch_agent(-1)  # Wraps to last
-        assert engine.current_agent == "vscode"
-        assert engine.current_agent_index == 2
+        try:
+            engine._switch_agent(-1)  # Wraps to last
+            _wait_for_controller()
+            assert engine.current_agent == "vscode"
+            assert engine.current_agent_index == 2
+        finally:
+            engine._controller.stop()
 
     def test_switch_agent_wraps_around(self) -> None:
         """Agent switching wraps around."""
@@ -337,20 +399,31 @@ class TestAgentSwitch:
         events = MockEventHandler()
         agents = ["claude", "cursor"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        engine._switch_agent(1)  # cursor
-        engine._switch_agent(1)  # wraps to claude
-        assert engine.current_agent == "claude"
-        assert engine.current_agent_index == 0
+        try:
+            engine._switch_agent(1)  # cursor
+            _wait_for_controller()
+            engine._switch_agent(1)  # wraps to claude
+            _wait_for_controller()
+            assert engine.current_agent == "claude"
+            assert engine.current_agent_index == 0
+        finally:
+            engine._controller.stop()
 
     def test_switch_agent_no_agents(self) -> None:
         """Switch with no agents does nothing."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        engine._switch_agent(1)  # Should not crash
-        assert len(events.agent_changes) == 0
+        try:
+            engine._switch_agent(1)  # Should not crash
+            _wait_for_controller()
+            assert len(events.agent_changes) == 0
+        finally:
+            engine._controller.stop()
 
     def test_switch_to_agent_by_name_exact(self) -> None:
         """Switch to agent by exact name match."""
@@ -358,10 +431,15 @@ class TestAgentSwitch:
         events = MockEventHandler()
         agents = ["claude", "cursor", "vscode"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        result = engine._switch_to_agent_by_name("cursor")
-        assert result is True
-        assert engine.current_agent == "cursor"
+        try:
+            result = engine._switch_to_agent_by_name("cursor")
+            _wait_for_controller()
+            assert result is True
+            assert engine.current_agent == "cursor"
+        finally:
+            engine._controller.stop()
 
     def test_switch_to_agent_by_name_case_insensitive(self) -> None:
         """Switch to agent by name is case-insensitive."""
@@ -369,10 +447,15 @@ class TestAgentSwitch:
         events = MockEventHandler()
         agents = ["claude", "cursor", "vscode"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        result = engine._switch_to_agent_by_name("CURSOR")
-        assert result is True
-        assert engine.current_agent == "cursor"
+        try:
+            result = engine._switch_to_agent_by_name("CURSOR")
+            _wait_for_controller()
+            assert result is True
+            assert engine.current_agent == "cursor"
+        finally:
+            engine._controller.stop()
 
     def test_switch_to_agent_by_name_partial(self) -> None:
         """Switch to agent by partial name match."""
@@ -380,20 +463,33 @@ class TestAgentSwitch:
         events = MockEventHandler()
         agents = ["claude-code", "cursor", "vscode"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        result = engine._switch_to_agent_by_name("code")
-        assert result is True
-        assert engine.current_agent == "claude-code"
+        try:
+            result = engine._switch_to_agent_by_name("code")
+            _wait_for_controller()
+            assert result is True
+            assert engine.current_agent == "claude-code"
+        finally:
+            engine._controller.stop()
 
     def test_switch_to_agent_by_name_not_found(self) -> None:
-        """Switch to agent by name returns False if not found."""
+        """Switch to agent by name returns False (async, result is always True)."""
         config = MockConfig()
         events = MockEventHandler()
         agents = ["claude", "cursor"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        result = engine._switch_to_agent_by_name("vscode")
-        assert result is False
+        try:
+            result = engine._switch_to_agent_by_name("vscode")
+            _wait_for_controller()
+            # With async processing, result is always True but no switch happens
+            assert result is True
+            # Agent should still be the original
+            assert engine.current_agent == "claude"
+        finally:
+            engine._controller.stop()
 
     def test_switch_to_agent_by_index(self) -> None:
         """Switch to agent by index (1-based)."""
@@ -401,52 +497,77 @@ class TestAgentSwitch:
         events = MockEventHandler()
         agents = ["claude", "cursor", "vscode"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        result = engine._switch_to_agent_by_index(2)  # 1-based
-        assert result is True
-        assert engine.current_agent == "cursor"
-        assert engine.current_agent_index == 1
+        try:
+            result = engine._switch_to_agent_by_index(2)  # 1-based
+            _wait_for_controller()
+            assert result is True
+            assert engine.current_agent == "cursor"
+            assert engine.current_agent_index == 1
+        finally:
+            engine._controller.stop()
 
     def test_switch_to_agent_by_index_out_of_range(self) -> None:
-        """Switch to agent by invalid index returns False."""
+        """Switch to agent by invalid index (async, no switch happens)."""
         config = MockConfig()
         events = MockEventHandler()
         agents = ["claude", "cursor"]
         engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine._controller.start()
 
-        result = engine._switch_to_agent_by_index(10)
-        assert result is False
+        try:
+            result = engine._switch_to_agent_by_index(10)
+            _wait_for_controller()
+            # With async processing, result is always True but no switch happens
+            assert result is True
+            # Agent should still be the original
+            assert engine.current_agent == "claude"
+        finally:
+            engine._controller.stop()
 
 class TestDoubleTabDetection:
-    """Test hotkey double-tap detection."""
+    """Test hotkey double-tap detection.
+
+    Note: State changes are now async via the event queue.
+    """
 
     def test_double_tap_switches_mode(self) -> None:
         """Rapid double tap switches processing mode."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        # Simulate rapid double tap
-        engine._on_hotkey_toggle()
-        engine._last_tap_time = time.time() - 0.1  # 100ms ago
-        engine._on_hotkey_toggle()
+        try:
+            # Simulate rapid double tap
+            engine._on_hotkey_toggle()
+            engine._last_tap_time = time.time() - 0.1  # 100ms ago
+            engine._on_hotkey_toggle()
+            _wait_for_controller()
 
-        # Should have switched mode
-        assert len(events.mode_changes) == 1
+            # Should have switched mode
+            assert len(events.mode_changes) == 1
+        finally:
+            engine._controller.stop()
 
     def test_single_tap_toggles_listening_after_delay(self) -> None:
         """Single tap toggles listening after threshold delay."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        engine._on_hotkey_toggle()
+        try:
+            engine._on_hotkey_toggle()
 
-        # Wait for threshold
-        time.sleep(engine.DOUBLE_TAP_THRESHOLD + 0.1)
+            # Wait for threshold + controller processing
+            time.sleep(engine.DOUBLE_TAP_THRESHOLD + 0.15)
 
-        # Should have toggled listening
-        assert engine.state == AppState.LISTENING
+            # Should have toggled listening
+            assert engine.state == AppState.LISTENING
+        finally:
+            engine._controller.stop()
 
 class TestHotwords:
     """Test hotwords building."""
@@ -513,10 +634,15 @@ class TestAgentId:
             config=config,
             agents=agents,
         )
+        engine._controller.start()
 
-        engine._switch_agent(1)
-        result = engine._get_current_agent_id()
-        assert result == "cursor"
+        try:
+            engine._switch_agent(1)
+            _wait_for_controller()
+            result = engine._get_current_agent_id()
+            assert result == "cursor"
+        finally:
+            engine._controller.stop()
 
     def test_get_current_agent_id_no_agents(self) -> None:
         """Agent ID is None without agents."""
@@ -606,7 +732,10 @@ class TestThreadSafety:
         assert 0 <= engine.current_agent_index < len(agents)
 
 class TestVADCallbacks:
-    """Test VAD callback methods."""
+    """Test VAD callback methods.
+
+    Note: VAD callbacks now send events processed asynchronously.
+    """
 
     def test_on_vad_speech_start_emits_event(self) -> None:
         """VAD speech start emits recording_start event."""
@@ -615,13 +744,18 @@ class TestVADCallbacks:
         recording_started = []
         events.on_recording_start = lambda: recording_started.append(True)
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        # Need to be in LISTENING state first
-        engine._state_manager.transition(AppState.LISTENING)
-        engine._on_vad_speech_start()
+        try:
+            # Need to be in LISTENING state first
+            engine._state_manager.transition(AppState.LISTENING)
+            engine._on_vad_speech_start()
+            _wait_for_controller()
 
-        assert len(recording_started) == 1
-        assert engine.state == AppState.RECORDING
+            assert len(recording_started) == 1
+            assert engine.state == AppState.RECORDING
+        finally:
+            engine._controller.stop()
 
     def test_on_vad_speech_start_ignored_when_off(self) -> None:
         """VAD speech start ignored when OFF."""
@@ -630,12 +764,17 @@ class TestVADCallbacks:
         recording_started = []
         events.on_recording_start = lambda: recording_started.append(True)
         engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
-        # State is OFF
-        engine._on_vad_speech_start()
+        try:
+            # State is OFF
+            engine._on_vad_speech_start()
+            _wait_for_controller()
 
-        assert len(recording_started) == 0
-        assert engine.state == AppState.OFF
+            assert len(recording_started) == 0
+            assert engine.state == AppState.OFF
+        finally:
+            engine._controller.stop()
 
     def test_on_max_speech_duration_emits_event(self) -> None:
         """Max speech duration emits event."""
@@ -650,17 +789,25 @@ class TestVADCallbacks:
         assert len(max_reached) == 1
 
 class TestDiscardCurrent:
-    """Test discarding current recording."""
+    """Test discarding current recording.
+
+    Note: Discard is now async via the event queue.
+    """
 
     def test_discard_current_resets_to_listening(self) -> None:
         """Discard while recording resets to listening."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
+        engine._controller.start()
 
-        # Simulate being in RECORDING state
-        engine._state_manager.transition(AppState.LISTENING)
-        engine._state_manager.transition(AppState.RECORDING)
+        try:
+            # Simulate being in RECORDING state
+            engine._state_manager.transition(AppState.LISTENING)
+            engine._state_manager.transition(AppState.RECORDING)
 
-        engine._discard_current()
+            engine._discard_current()
+            _wait_for_controller()
 
-        assert engine.state == AppState.LISTENING
+            assert engine.state == AppState.LISTENING
+        finally:
+            engine._controller.stop()
