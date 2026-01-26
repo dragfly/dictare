@@ -329,12 +329,27 @@ class VoxtypeApp(EngineEvents):
             except Exception:
                 pass
 
-        # Headphones mode: fire and forget
+        def _do_tts_with_mute() -> None:
+            """TTS with state transition to pause recording."""
+            # Transition to PLAYING to pause VAD/recording
+            # Only if we're in LISTENING state (not if OFF or other states)
+            was_listening = self._engine.state == AppState.LISTENING
+            if was_listening:
+                self._engine._state_manager.try_transition(AppState.PLAYING)
+
+            try:
+                _do_tts()
+            finally:
+                # Transition back to LISTENING
+                if was_listening and self._engine.state == AppState.PLAYING:
+                    self._engine._state_manager.try_transition(AppState.LISTENING)
+
+        # Headphones mode: fire and forget (continue listening while playing)
         if self.config.audio.headphones_mode:
             threading.Thread(target=_do_tts, daemon=True).start()
         else:
-            # Speakers mode: just speak (engine handles state)
-            threading.Thread(target=_do_tts, daemon=True).start()
+            # Speakers mode: transition to PLAYING to pause recording
+            threading.Thread(target=_do_tts_with_mute, daemon=True).start()
 
     def _speak_mode_with_mute(self) -> None:
         """Speak the current mode using TTS."""
