@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.32.7] - 2026-01-27
+
+### Changed
+- **TapDetector refactored**: Now uses same pattern as `StateManager` for consistency
+  - `TapState` Enum with 4 states: IDLE, PRESSED_1, RELEASED_1, PRESSED_2
+  - `VALID_TRANSITIONS` dict defines allowed state transitions
+  - Reduces cognitive load: one pattern for all state machines
+
+### Added
+- **TapDetector tests**: 22 tests covering states, single/double tap, combo abort, thread safety
+  - New file: `tests/test_tap_detector.py`
+
 ## [2.32.6] - 2026-01-27
 
 ### Added
