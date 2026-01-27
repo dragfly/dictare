@@ -14,12 +14,14 @@ class HotkeyListener(ABC):
         self,
         on_press: Callable[[], None],
         on_release: Callable[[], None],
+        on_other_key: Callable[[], None] | None = None,
     ) -> None:
         """Start listening for hotkey events.
 
         Args:
             on_press: Callback when hotkey is pressed.
             on_release: Callback when hotkey is released.
+            on_other_key: Callback when any OTHER key is pressed (for combo detection).
         """
         pass
 

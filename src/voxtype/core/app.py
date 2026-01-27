@@ -609,11 +609,12 @@ class VoxtypeApp(EngineEvents):
             self._status_panel.start()
 
         try:
-            # Start hotkey listener
+            # Start hotkey listener (tap detector handles single/double tap)
             if self._engine._hotkey:
                 self._engine._hotkey.start(
-                    on_press=self._engine._on_hotkey_toggle,
-                    on_release=lambda: None,
+                    on_press=self._engine._tap_detector.on_key_down,
+                    on_release=self._engine._tap_detector.on_key_up,
+                    on_other_key=self._engine._tap_detector.on_other_key,
                 )
 
             # Transition OFF → LISTENING (startup is special - direct transition OK)

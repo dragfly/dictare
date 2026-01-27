@@ -26,6 +26,7 @@ from voxtype.core.events import (
 from voxtype.core.openvip import create_message
 from voxtype.core.state import AppState, ProcessingMode, StateManager
 from voxtype.hotkey.base import HotkeyListener
+from voxtype.hotkey.tap_detector import TapDetector
 from voxtype.injection.base import TextInjector
 from voxtype.stt.base import STTEngine
 
@@ -125,9 +126,12 @@ class VoxtypeEngine:
         # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
         self._processing_mode = ProcessingMode(config.command.mode)
 
-        # Double-tap detection
-        self._last_tap_time: float = 0.0
-        self._pending_single_tap: threading.Timer | None = None
+        # Tap detection (isolated state machine)
+        self._tap_detector = TapDetector(
+            threshold=self.DOUBLE_TAP_THRESHOLD,
+            on_single_tap=lambda: self._controller.send(HotkeyToggleEvent(source="hotkey")),
+            on_double_tap=lambda: self._controller.send(HotkeyDoubleTapEvent(source="hotkey")),
+        )
 
         # Initialize components
         self._audio_manager: AudioManager | None = None
@@ -549,6 +553,7 @@ class VoxtypeEngine:
 
                 # Track transcription time
                 transcribe_start = time.time()
+                task = "translate" if self.config.stt.translate else "transcribe"
                 with self._stt_lock:
                     text = self._stt.transcribe(
                         audio_data,
@@ -556,7 +561,7 @@ class VoxtypeEngine:
                         hotwords=self._get_hotwords(),
                         beam_size=self.config.stt.beam_size,
                         max_repetitions=self.config.stt.max_repetitions,
-                        task="translate" if self.config.stt.translate else "transcribe",
+                        task=task,
                     )
                 transcribe_time = time.time() - transcribe_start
 
@@ -816,30 +821,6 @@ class VoxtypeEngine:
                     trigger=trigger,
                 )
 
-    def _on_hotkey_toggle(self) -> None:
-        """Handle hotkey press in VAD mode."""
-        current_time = time.time()
-        time_since_last = current_time - self._last_tap_time
-        self._last_tap_time = current_time
-
-        # Double tap detection
-        if time_since_last < self.DOUBLE_TAP_THRESHOLD:
-            if self._pending_single_tap:
-                self._pending_single_tap.cancel()
-                self._pending_single_tap = None
-            # Send double-tap event
-            self._controller.send(HotkeyDoubleTapEvent(source="hotkey"))
-            return
-
-        # Schedule single tap
-        if self._pending_single_tap:
-            self._pending_single_tap.cancel()
-        self._pending_single_tap = threading.Timer(
-            self.DOUBLE_TAP_THRESHOLD,
-            lambda: self._controller.send(HotkeyToggleEvent(source="hotkey")),
-        )
-        self._pending_single_tap.start()
-
     def _toggle_listening(self) -> None:
         """Toggle listening on/off - sends event to controller."""
         self._controller.send(HotkeyToggleEvent(source="api"))
@@ -971,11 +952,12 @@ class VoxtypeEngine:
         self._controller.start()
 
         try:
-            # Start hotkey listener
+            # Start hotkey listener (tap detector handles single/double tap)
             if self._hotkey:
                 self._hotkey.start(
-                    on_press=self._on_hotkey_toggle,
-                    on_release=lambda: None,
+                    on_press=self._tap_detector.on_key_down,
+                    on_release=self._tap_detector.on_key_up,
+                    on_other_key=self._tap_detector.on_other_key,
                 )
 
             # Transition OFF → LISTENING
@@ -1027,10 +1009,8 @@ class VoxtypeEngine:
 
         gc.collect()
 
-        # Cancel pending single tap timer
-        if self._pending_single_tap:
-            self._pending_single_tap.cancel()
-            self._pending_single_tap = None
+        # Cancel any pending tap timer
+        self._tap_detector.reset()
 
         if self._input_manager:
             self._input_manager.stop()

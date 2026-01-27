@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.32.6] - 2026-01-27
+
+### Added
+- **TapDetector**: Isolated state machine for hotkey tap/double-tap detection
+  - Fixes Command+Plus (and similar combos) incorrectly triggering hotkey toggle
+  - Detects when other keys are pressed while modifier is down and aborts tap
+  - New file: `hotkey/tap_detector.py` (~130 lines, clean separation from engine)
+- **Pluggable TTS engines**: Support for multiple text-to-speech backends
+  - `say` - macOS native TTS (new)
+  - `piper` - Fast neural TTS via piper-tts (new)
+  - `coqui` - High-quality neural TTS via Coqui XTTS (new)
+  - Config: `tts.engine = "say"` (or piper, coqui, espeak)
+- **Smart install detection**: `install_info.py` detects how voxtype was installed
+  - Provides correct dependency install commands for uv tool, pipx, pip, or dev mode
+  - Example: `uv pip install --python ~/.local/share/uv/tools/voxtype/bin/python piper-tts`
+- **Hotkey listener `on_other_key` callback**: Enables combo detection in pynput and evdev listeners
+
+### Fixed
+- **Python version constraint**: Changed from `>=3.11,<3.14` to `>=3.11,<3.12` (torch/MLX compatibility)
+- **Debug prints removed**: Removed `[DEBUG FW]` prints from faster_whisper.py that appeared without --verbose
+
+### Changed
+- Hotkey tap detection logic moved from `engine.py` to dedicated `TapDetector` class
+- TTS engine selection now uses factory pattern in `tts/__init__.py`
+
 ## [2.31.0] - 2026-01-27
 
 ### Added

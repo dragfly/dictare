@@ -32,7 +32,7 @@ app = typer.Typer(
 )
 
 # Completion subcommand
-completion_app = typer.Typer(help="Manage shell completion")
+completion_app = typer.Typer(help="Manage shell completion", no_args_is_help=True)
 app.add_typer(completion_app, name="completion")
 console = Console(
     force_terminal=None,  # Auto-detect
@@ -758,33 +758,88 @@ def config_shortcuts() -> None:
 
 @app.command()
 def speak(
+    ctx: typer.Context,
     text: Annotated[
-        str,
-        typer.Argument(help="Text to speak"),
-    ],
+        str | None,
+        typer.Argument(help="Text to speak (use '-' or omit to read from stdin)"),
+    ] = None,
     language: Annotated[
-        str,
-        typer.Option("--language", "-l", help="Language code (it, en, de, etc.)"),
-    ] = "it",
+        str | None,
+        typer.Option("--language", "-l", help="Language code (en, it, de, etc.)"),
+    ] = None,
     speed: Annotated[
-        int,
+        int | None,
         typer.Option("--speed", "-s", help="Speech speed in words per minute"),
-    ] = 160,
+    ] = None,
+    engine: Annotated[
+        str | None,
+        typer.Option("--engine", "-e", help="TTS engine: espeak, say (macOS), piper"),
+    ] = None,
+    voice: Annotated[
+        str | None,
+        typer.Option("--voice", "-v", help="Voice name (engine-specific)"),
+    ] = None,
+    config_file: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config file"),
+    ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress status messages (for pipe mode)"),
+    ] = False,
 ) -> None:
     """Speak text using text-to-speech.
 
-    Example: voxtype speak "Ciao Paola!"
+    Examples:
+        voxtype speak "Hello world"
+        echo "Hello world" | voxtype speak
+        llm "Tell me a joke" | voxtype speak --engine say
     """
-    from voxtype.tts.espeak import EspeakTTS
+    import sys
 
-    tts = EspeakTTS(language=language, speed=speed)
+    from voxtype.config import TTSConfig, load_config
+    from voxtype.tts import create_tts_engine
 
-    if not tts.is_available():
-        console.print("[red]espeak not found. Install with:[/]")
-        console.print("  sudo apt install espeak-ng")
+    # Load config
+    config = load_config(config_file)
+
+    # Read from stdin if no text provided or text is "-"
+    if text is None or text == "-":
+        if sys.stdin.isatty():
+            # No pipe, no argument - show help
+            import click
+            click.echo(ctx.get_help())
+            raise typer.Exit(0)
+        text = sys.stdin.read().strip()
+        if not text:
+            # Empty pipe - also show help
+            import click
+            click.echo(ctx.get_help())
+            raise typer.Exit(0)
+
+    # Build TTS config with CLI overrides
+    tts_config = TTSConfig(
+        engine=engine or config.tts.engine,  # type: ignore[arg-type]
+        language=language or config.tts.language,
+        speed=speed or config.tts.speed,
+        voice=voice or config.tts.voice,
+    )
+
+    try:
+        tts = create_tts_engine(tts_config)
+    except ValueError as e:
+        from voxtype.utils.install_info import get_feature_install_message
+
+        console.print(f"[red]{e}[/]")
+        if tts_config.engine == "espeak":
+            console.print("  Install: sudo apt install espeak-ng (Linux) or brew install espeak (macOS)")
+        elif tts_config.engine in ("piper", "coqui"):
+            console.print(get_feature_install_message(tts_config.engine))
         raise typer.Exit(1)
 
-    console.print(f"[dim]Speaking: {text[:50]}{'...' if len(text) > 50 else ''}[/]")
+    if not quiet:
+        console.print(f"[dim]Speaking ({tts.get_name()}): {text[:50]}{'...' if len(text) > 50 else ''}[/]")
+
     tts.speak(text)
 
 
@@ -918,6 +973,159 @@ def transcribe(
         raise typer.Exit(1)
 
 
+@app.command(
+    context_settings={"allow_extra_args": True, "allow_interspersed_args": False}
+)
+def execute(
+    ctx: typer.Context,
+    config_file: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config file"),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Whisper model size"),
+    ] = None,
+    language: Annotated[
+        str | None,
+        typer.Option("--language", "-l", help="Language code or 'auto'"),
+    ] = None,
+    one_shot: Annotated[
+        bool,
+        typer.Option("--one-shot", "-1", help="Single transcription then exit"),
+    ] = True,
+    silence_ms: Annotated[
+        int,
+        typer.Option("--silence-ms", "-s", help="Silence duration to end recording (ms)"),
+    ] = 1200,
+    no_hw_accel: Annotated[
+        bool,
+        typer.Option("--no-hw-accel", help="Disable hardware acceleration"),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show status messages"),
+    ] = False,
+) -> None:
+    """Execute a command with transcribed speech.
+
+    Use {{text}} as placeholder for the transcribed text.
+
+    Examples:
+        voxtype execute -- llm "{{text}}"
+        voxtype execute -- llm "{{text}}" | voxtype speak
+        voxtype execute -- echo "You said: {{text}}"
+
+    For continuous voice assistant (loop mode):
+        voxtype execute --no-one-shot -- llm "{{text}}" | voxtype speak
+    """
+    import io
+    import os
+    import shlex
+    import subprocess
+
+    # Get command from extra args (everything after --)
+    cmd_parts = ctx.args
+    if not cmd_parts:
+        console.print("[red]No command provided. Usage: voxtype execute -- llm \"{{text}}\"[/]")
+        raise typer.Exit(1)
+
+    # Join command parts back together
+    cmd_template = " ".join(cmd_parts)
+
+    if "{{text}}" not in cmd_template:
+        console.print("[yellow]Warning: No {{text}} placeholder found in command[/]")
+
+    config = load_config(config_file)
+
+    if no_hw_accel:
+        config.stt.hw_accel = False
+
+    # Load STT engine once
+    if verbose:
+        print("[Loading model...]", file=sys.stderr)
+
+    old_stderr = sys.stderr
+    if not os.environ.get("VOXTYPE_VERBOSE"):
+        sys.stderr = io.StringIO()
+
+    try:
+        _auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
+
+        if model:
+            config.stt.model_size = model
+        if language:
+            config.stt.language = language
+
+        from voxtype.utils.hardware import is_mlx_available
+        use_mlx = config.stt.hw_accel and is_mlx_available()
+
+        from voxtype.stt.base import STTEngine
+        stt_engine: STTEngine
+        if use_mlx:
+            from voxtype.stt.mlx_whisper import MLXWhisperEngine
+            stt_engine = MLXWhisperEngine()
+        else:
+            from voxtype.stt.faster_whisper import FasterWhisperEngine
+            stt_engine = FasterWhisperEngine()
+
+        stt_engine.load_model(
+            config.stt.model_size,
+            device=config.stt.device,
+            compute_type=config.stt.compute_type,
+        )
+    finally:
+        sys.stderr = old_stderr
+
+    from voxtype.core.transcriber import OneShotTranscriber
+
+    while True:
+        transcriber = OneShotTranscriber(
+            config=config,
+            stt_engine=stt_engine,
+            silence_ms=silence_ms,
+            max_duration=config.audio.max_duration,
+            quiet=not verbose,
+        )
+
+        try:
+            if verbose:
+                print("[Listening...]", file=sys.stderr)
+
+            text = transcriber.record_and_transcribe()
+
+            if not text:
+                if verbose:
+                    print("[No speech detected]", file=sys.stderr)
+                if one_shot:
+                    break
+                continue
+
+            if verbose:
+                print(f"> {text}", file=sys.stderr)
+
+            # Substitute {{text}} in command
+            final_cmd = cmd_template.replace("{{text}}", text)
+
+            if verbose:
+                print(f"[Executing: {final_cmd[:60]}...]", file=sys.stderr)
+
+            # Execute command with shell=True to support pipes
+            result = subprocess.run(
+                final_cmd,
+                shell=True,
+                text=True,
+            )
+
+            if one_shot:
+                raise typer.Exit(result.returncode)
+
+        except KeyboardInterrupt:
+            if verbose:
+                print("\n[Stopped]", file=sys.stderr)
+            raise typer.Exit(0)
+
+
 @app.command()
 def devices(
     set_hotkey: Annotated[
@@ -969,9 +1177,11 @@ def _list_hid_devices() -> None:
                 for d in hidapi.enumerate()
             ]
         except ImportError:
+            from voxtype.utils.install_info import get_feature_install_message
+
             console.print("[red]hidapi package not installed[/]")
             console.print("This should be installed automatically on macOS.")
-            console.print("Try: [cyan]pip install hidapi[/]")
+            console.print(get_feature_install_message("hidapi"))
             raise typer.Exit(1)
 
     if not devices_list:
@@ -1021,8 +1231,10 @@ def _list_evdev_devices(set_hotkey: bool) -> None:
     try:
         import evdev
     except ImportError:
+        from voxtype.utils.install_info import get_feature_install_message
+
         console.print("[red]evdev not installed[/]")
-        console.print("Install with: [cyan]pip install evdev[/]")
+        console.print(get_feature_install_message("evdev"))
         raise typer.Exit(1)
 
     # Collect all devices with their info
@@ -1153,14 +1365,13 @@ def backends() -> None:
     available = get_available_backends()
 
     if not available:
+        from voxtype.utils.install_info import get_feature_install_message
+
         console.print("[yellow]No device backends available[/]")
         console.print()
         console.print("[dim]Install dependencies:[/]")
-        console.print(
-            "  macOS: [cyan]pip install hidapi[/] or "
-            "[cyan]brew install --cask karabiner-elements[/]"
-        )
-        console.print("  Linux: [cyan]pip install evdev[/]")
+        console.print(f"  macOS: {get_feature_install_message('hidapi').strip()} or brew install --cask karabiner-elements")
+        console.print(f"  Linux: {get_feature_install_message('evdev').strip()}")
         raise typer.Exit(1)
 
     table = Table(title="Device Backends", show_header=True, header_style="bold", expand=False)
@@ -1209,9 +1420,9 @@ def backends() -> None:
 def agent(
     ctx: typer.Context,
     agent_id: Annotated[
-        str,
+        str | None,
         typer.Argument(help="Agent ID (e.g., 'claude')"),
-    ],
+    ] = None,
     quiet: Annotated[
         bool,
         typer.Option("--quiet", "-q", help="Suppress info messages"),
@@ -1229,6 +1440,12 @@ def agent(
         # Terminal 2: Send voice input via OpenVIP
         voxtype listen --agents claude
     """
+    # Show help if no agent_id
+    if agent_id is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
     from voxtype.agent import run_agent
 
     # Get command after -- (filter out the -- itself if present)
@@ -1245,7 +1462,7 @@ def agent(
 
 
 # Log subcommand for viewing logs
-log_app = typer.Typer(help="View voxtype logs")
+log_app = typer.Typer(help="View voxtype logs", no_args_is_help=True)
 app.add_typer(log_app, name="log")
 
 

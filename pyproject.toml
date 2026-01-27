@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Voice-to-text for your terminal"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.12"
 authors = [
     { name = "dragfly" }
 ]

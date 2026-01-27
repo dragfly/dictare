@@ -138,24 +138,18 @@ def _print_acceleration_hint(console: Console, accel_type: str) -> None:
         console: Rich console for output.
         accel_type: Type of acceleration ("cuda" or "mlx").
     """
+    from voxtype.utils.install_info import get_feature_install_message
+
     console.print("[yellow]Using CPU (hardware acceleration not configured)[/]")
     console.print("")
 
     if accel_type == "cuda":
         console.print("[bold]To enable NVIDIA GPU acceleration:[/]")
-        console.print("")
-        console.print("  [cyan]uv tool install voxtype --with 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'[/]")
-        console.print("")
-        console.print("[dim]Or with pip:[/]")
-        console.print("  [dim]pip install 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'[/]")
+        console.print(get_feature_install_message("cuda"))
 
     elif accel_type == "mlx":
         console.print("[bold]To enable Apple Silicon (MLX) acceleration:[/]")
-        console.print("")
-        console.print("  [cyan]uv tool install voxtype --with 'mlx-whisper>=0.4.0'[/]")
-        console.print("")
-        console.print("[dim]Or with pip:[/]")
-        console.print("  [dim]pip install 'mlx-whisper>=0.4.0'[/]")
+        console.print(get_feature_install_message("mlx"))
 
     console.print("")
 

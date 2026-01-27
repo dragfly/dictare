@@ -43,6 +43,7 @@ class EvdevHotkeyListener(HotkeyListener):
         self._device: evdev.InputDevice | None = None
         self._stop_event = threading.Event()
         self._selected_device_info: tuple[str, str] | None = None  # (path, name)
+        self._on_other_key: Callable[[], None] | None = None
 
     def _find_keyboard_device(self):
         """Find a keyboard device that has the target key.
@@ -142,12 +143,14 @@ class EvdevHotkeyListener(HotkeyListener):
         self,
         on_press: Callable[[], None],
         on_release: Callable[[], None],
+        on_other_key: Callable[[], None] | None = None,
     ) -> None:
         """Start listening for hotkey events.
 
         Args:
             on_press: Callback when hotkey is pressed.
             on_release: Callback when hotkey is released.
+            on_other_key: Callback when any OTHER key is pressed (for combo detection).
         """
         import evdev
 
@@ -157,6 +160,7 @@ class EvdevHotkeyListener(HotkeyListener):
         target_key = getattr(evdev.ecodes, self.key_name)
         self._running = True
         self._stop_event.clear()
+        self._on_other_key = on_other_key
 
         def listen_loop() -> None:
             assert self._device is not None
@@ -165,12 +169,16 @@ class EvdevHotkeyListener(HotkeyListener):
                     if self._stop_event.is_set():
                         break
 
-                    if event.type == evdev.ecodes.EV_KEY and event.code == target_key:
-                        if event.value == 1:  # Key pressed
-                            on_press()
-                        elif event.value == 0:  # Key released
-                            on_release()
-                        # value == 2 is key repeat, ignored
+                    if event.type == evdev.ecodes.EV_KEY:
+                        if event.code == target_key:
+                            if event.value == 1:  # Key pressed
+                                on_press()
+                            elif event.value == 0:  # Key released
+                                on_release()
+                            # value == 2 is key repeat, ignored
+                        elif event.value == 1 and self._on_other_key:
+                            # Any other key pressed - notify for combo detection
+                            self._on_other_key()
             except OSError:
                 # Device closed or disconnected
                 pass
