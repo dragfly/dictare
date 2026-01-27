@@ -68,12 +68,15 @@ class MLXWhisperEngine(STTEngine):
         Returns:
             True if model files are cached locally.
         """
+        import logging
+
         try:
             from huggingface_hub import try_to_load_from_cache
             # Check if the config file is cached (good indicator the model is downloaded)
             result = try_to_load_from_cache(repo_id, "config.json")
             return result is not None
-        except Exception:
+        except Exception as e:
+            logging.getLogger(__name__).debug(f"Error checking model cache for {repo_id}: {e}")
             return False
 
     def transcribe(

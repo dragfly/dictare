@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
-from queue import Empty, Queue
+from queue import Empty, Full, Queue
 from typing import TYPE_CHECKING, Any
 
 from voxtype.core.events import (
@@ -67,7 +67,9 @@ class StateController:
             on_agent_change: Callback when agent changes (name, index)
         """
         self._state_manager = state_manager
-        self._queue: Queue[StateEvent] = Queue()
+        # Bounded queue to prevent memory exhaustion under heavy load
+        # 100 events should be plenty - events should process fast
+        self._queue: Queue[StateEvent] = Queue(maxsize=100)
         self._running = False
         self._worker: threading.Thread | None = None
 
@@ -98,8 +100,16 @@ class StateController:
         self._engine = engine
 
     def send(self, event: StateEvent) -> None:
-        """Send event to queue. Thread-safe, non-blocking."""
-        self._queue.put(event)
+        """Send event to queue. Thread-safe, non-blocking.
+
+        Note:
+            If queue is full (>100 events), logs warning and drops event.
+            This prevents blocking senders under heavy load.
+        """
+        try:
+            self._queue.put_nowait(event)
+        except Full:
+            logger.warning(f"Event queue full, dropping event: {type(event).__name__}")
 
     def start(self) -> None:
         """Start the event processing loop."""
