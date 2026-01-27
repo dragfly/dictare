@@ -206,9 +206,9 @@ class VoxtypeApp(EngineEvents):
 
     def on_partial_transcription(self, text: str) -> None:
         """Handle partial transcription (realtime mode)."""
-        import sys
-        sys.stdout.write(f"\r\033[36m\033[1mListening:\033[0m   \033[2m{text}\033[0m\033[K")
-        sys.stdout.flush()
+        # Update panel instead of printing (prevents breaking Rich Live)
+        if self._status_panel:
+            self._status_panel.update_partial(text)
 
         # Send to SSE if running
         if self._sse:
