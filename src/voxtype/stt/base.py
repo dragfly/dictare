@@ -30,6 +30,7 @@ class STTEngine(ABC):
         hotwords: str | None = None,
         beam_size: int = 5,
         max_repetitions: int = 5,
+        task: str = "transcribe",
     ) -> str:
         """Transcribe audio to text.
 
@@ -41,9 +42,10 @@ class STTEngine(ABC):
             beam_size: Beam size for decoding (higher = more accurate, slower).
                 Note: Optional, may be ignored by some engines (e.g., MLX).
             max_repetitions: Max consecutive word repetitions before filtering.
+            task: "transcribe" for same-language output, "translate" for English output.
 
         Returns:
-            Transcribed text.
+            Transcribed (or translated) text.
         """
         pass
 

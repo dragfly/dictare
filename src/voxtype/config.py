@@ -73,6 +73,10 @@ class STTConfig(BaseModel):
         default=5,
         description="Max consecutive word repetitions before filtering (anti-hallucination)",
     )
+    translate: bool = Field(
+        default=False,
+        description="Translate to English (Whisper task=translate). Any input language → English output.",
+    )
 
 def _default_hotkey() -> str:
     """Return platform-specific default hotkey."""

@@ -86,6 +86,7 @@ class MLXWhisperEngine(STTEngine):
         hotwords: str | None = None,
         beam_size: int = 5,
         max_repetitions: int = 5,
+        task: str = "transcribe",
     ) -> str:
         """Transcribe audio to text.
 
@@ -95,9 +96,10 @@ class MLXWhisperEngine(STTEngine):
             hotwords: Comma-separated words to boost recognition (not supported by MLX).
             beam_size: Beam size for decoding (not supported by MLX).
             max_repetitions: Max consecutive word repetitions before filtering.
+            task: "transcribe" for same-language output, "translate" for English output.
 
         Returns:
-            Transcribed text.
+            Transcribed (or translated) text.
 
         Raises:
             RuntimeError: If model is not loaded.
@@ -123,6 +125,7 @@ class MLXWhisperEngine(STTEngine):
             audio,
             path_or_hf_repo=self._model_path,
             language=lang,
+            task=task,  # "transcribe" or "translate"
         )
 
         # Extract text from result
