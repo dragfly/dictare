@@ -48,6 +48,8 @@ _MODEL_SIZES_MB = {
 
 def _is_model_cached(model_size: str) -> bool:
     """Check if model is already downloaded."""
+    import logging
+
     repo_id = _MODEL_REPOS.get(model_size)
     if repo_id is None:
         # Turbo models: check faster-whisper's cache location
@@ -59,12 +61,15 @@ def _is_model_cached(model_size: str) -> bool:
         # Check for the main model file
         result = try_to_load_from_cache(repo_id, "model.bin")
         return result is not None and os.path.exists(result)
-    except Exception:
+    except Exception as e:
+        logging.getLogger(__name__).debug(f"Error checking model cache for {model_size}: {e}")
         return False
 
 
 def _is_turbo_model_cached() -> bool:
     """Check if turbo model is cached (faster-whisper uses mobiuslabsgmbh repo)."""
+    import logging
+
     try:
         from huggingface_hub import try_to_load_from_cache
 
@@ -73,7 +78,8 @@ def _is_turbo_model_cached() -> bool:
             "mobiuslabsgmbh/faster-whisper-large-v3-turbo", "model.bin"
         )
         return result is not None and os.path.exists(result)
-    except Exception:
+    except Exception as e:
+        logging.getLogger(__name__).debug(f"Error checking turbo model cache: {e}")
         return False
 
 

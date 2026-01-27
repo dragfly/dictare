@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.29.3] - 2026-01-27
+
+### Fixed
+- **Unbounded queues could cause memory exhaustion**: Audio queue and event queue are now bounded
+  - `_audio_queue` limited to 10 items (oldest discarded if full)
+  - `_queue` (StateController) limited to 100 events (warning logged if full)
+- **Silent failures in STT providers**: Model cache checks now log errors at DEBUG level instead of silently failing
+  - `_is_model_cached()` in faster_whisper.py and mlx_whisper.py
+- **Race condition on `_partial_text` in realtime mode**: Added lock to protect concurrent access from worker thread and transcription thread
+
 ## [2.29.2] - 2026-01-27
 
 ### Fixed
