@@ -390,6 +390,49 @@ class TestTTSEvents:
         finally:
             controller.stop()
 
+    def test_transcription_during_tts_while_transcribing(self) -> None:
+        """Fix for STUCK in TRANSCRIBING: TTS starts while transcribing, then both complete.
+
+        Scenario:
+        1. User speaks → TRANSCRIBING
+        2. User switches agent → TTS starts (but state stays TRANSCRIBING)
+        3. Transcription completes → deferred (tts_in_progress is True)
+        4. TTS completes → should transition TRANSCRIBING → LISTENING
+        """
+        sm = StateManager(initial_state=AppState.TRANSCRIBING)
+        engine = MockEngine()
+        controller = StateController(sm)
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            # TTS starts while in TRANSCRIBING (agent switch during transcription)
+            tts_id = controller.get_next_tts_id()
+            controller.send(TTSStartEvent(text="Agent 2", source="tts"))
+            _wait()
+
+            # State stays TRANSCRIBING (TTS only transitions from LISTENING)
+            assert sm.state == AppState.TRANSCRIBING
+            assert controller.tts_in_progress is True
+
+            # Transcription completes while TTS playing → deferred
+            controller.send(TranscriptionCompleteEvent(text="test", source="stt"))
+            _wait()
+
+            # Still TRANSCRIBING (deferred)
+            assert sm.state == AppState.TRANSCRIBING
+            assert controller._pending_transcription is not None
+
+            # TTS completes → should transition to LISTENING
+            controller.send(TTSCompleteEvent(tts_id=tts_id, source="tts"))
+            _wait()
+
+            # NOW should be LISTENING (not stuck in TRANSCRIBING)
+            assert sm.state == AppState.LISTENING
+            assert controller.tts_in_progress is False
+        finally:
+            controller.stop()
+
 
 class TestHotkeyEvents:
     """Test hotkey-related events."""
