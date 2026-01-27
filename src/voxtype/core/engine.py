@@ -131,6 +131,7 @@ class VoxtypeEngine:
         # Initialize components
         self._audio_manager: AudioManager | None = None
         self._stt: STTEngine | None = None
+        self._realtime_stt: STTEngine | None = None  # Separate fast model for realtime
         self._hotkey: HotkeyListener | None = None
         self._injector: TextInjector | None = None
 
@@ -235,8 +236,12 @@ class VoxtypeEngine:
     # Factory Methods
     # -------------------------------------------------------------------------
 
-    def _create_stt_engine(self) -> STTEngine:
-        """Create and load STT engine."""
+    def _create_stt_engine(self, model_size: str | None = None) -> STTEngine:
+        """Create and load STT engine.
+
+        Args:
+            model_size: Model size to load. If None, uses config.stt.model_size.
+        """
         from voxtype.utils.hardware import is_mlx_available
 
         # Auto-detect MLX on Apple Silicon
@@ -251,7 +256,7 @@ class VoxtypeEngine:
             engine = FasterWhisperEngine()
 
         engine.load_model(
-            self.config.stt.model_size,
+            model_size or self.config.stt.model_size,
             device=self.config.stt.device,
             compute_type=self.config.stt.compute_type,
             console=None,  # No console in engine
@@ -259,6 +264,13 @@ class VoxtypeEngine:
         )
 
         return engine
+
+    def _create_realtime_stt_engine(self) -> STTEngine:
+        """Create fast STT engine for realtime partial transcriptions.
+
+        Uses a smaller model (default: tiny) for low latency.
+        """
+        return self._create_stt_engine(model_size=self.config.stt.realtime_model)
 
     def _create_hotkey_listener(self) -> HotkeyListener:
         """Create hotkey listener with smart fallback."""
@@ -367,6 +379,10 @@ class VoxtypeEngine:
         """Initialize components for VAD mode."""
         self._stt = self._create_stt_engine()
 
+        # Load separate fast model for realtime partial transcriptions
+        if self._realtime:
+            self._realtime_stt = self._create_realtime_stt_engine()
+
         # Initialize output based on mode
         self._injector = self._create_injector()
         if self._injector is None:
@@ -446,7 +462,11 @@ class VoxtypeEngine:
         self._partial_queue.put(audio_data.copy())
 
     def _partial_worker_loop(self) -> None:
-        """Single worker thread for partial transcriptions."""
+        """Single worker thread for partial transcriptions.
+
+        Uses the fast realtime STT engine (tiny model) for low latency.
+        No lock needed since _realtime_stt is only used by this thread.
+        """
         while not self._partial_stop.is_set():
             try:
                 audio_data = self._partial_queue.get(timeout=0.1)
@@ -460,14 +480,14 @@ class VoxtypeEngine:
                 except Empty:
                     break
 
-            # Transcribe the latest chunk
+            # Transcribe the latest chunk with fast realtime model
             try:
-                with self._stt_lock:
-                    assert self._stt is not None
-                    text = self._stt.transcribe(
-                        audio_data,
-                        language=self.config.stt.language,
-                    )
+                if self._realtime_stt is None:
+                    continue
+                text = self._realtime_stt.transcribe(
+                    audio_data,
+                    language=self.config.stt.language,
+                )
                 if text:
                     with self._partial_text_lock:
                         if text != self._partial_text:
