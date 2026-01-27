@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.31.0] - 2026-01-27
+
+### Added
+- **`--translate` / `-T` flag**: Translate any language to English using Whisper's built-in translation
+  - New CLI flag: `voxtype listen --language it --translate`
+  - New config option: `stt.translate = true`
+  - Works with both realtime partial transcriptions and final transcription
+  - Uses Whisper's `task="translate"` (any input language → English output)
+
+### Documentation
+- Added `docs/notes/translation-options.md` with analysis of translation options (argos, ollama, nllb-200)
+
 ## [2.30.1] - 2026-01-27
 
 ### Fixed

@@ -488,6 +488,7 @@ class VoxtypeEngine:
                 text = self._realtime_stt.transcribe(
                     audio_data,
                     language=self.config.stt.language,
+                    task="translate" if self.config.stt.translate else "transcribe",
                 )
                 if text:
                     with self._partial_text_lock:
@@ -555,6 +556,7 @@ class VoxtypeEngine:
                         hotwords=self._get_hotwords(),
                         beam_size=self.config.stt.beam_size,
                         max_repetitions=self.config.stt.max_repetitions,
+                        task="translate" if self.config.stt.translate else "transcribe",
                     )
                 transcribe_time = time.time() - transcribe_start
 

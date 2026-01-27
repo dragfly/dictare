@@ -318,6 +318,7 @@ class FasterWhisperEngine(STTEngine):
         hotwords: str | None = None,
         beam_size: int = 5,
         max_repetitions: int = 5,
+        task: str = "transcribe",
     ) -> str:
         """Transcribe audio to text.
 
@@ -327,9 +328,10 @@ class FasterWhisperEngine(STTEngine):
             hotwords: Comma-separated words to boost recognition.
             beam_size: Beam size for decoding.
             max_repetitions: Max consecutive word repetitions before filtering.
+            task: "transcribe" for same-language output, "translate" for English output.
 
         Returns:
-            Transcribed text.
+            Transcribed (or translated) text.
 
         Raises:
             RuntimeError: If model is not loaded.
@@ -350,6 +352,7 @@ class FasterWhisperEngine(STTEngine):
         transcribe_kwargs = dict(
             language=lang,
             beam_size=beam_size,
+            task=task,  # "transcribe" or "translate"
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
         )
