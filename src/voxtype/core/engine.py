@@ -390,12 +390,9 @@ class VoxtypeEngine:
 
         # Initialize output based on mode
         self._injector = self._create_injector()
-        import sys
-        print(f"[DEBUG] _init_vad_components: _injector={self._injector}, agents={self.agents}", file=sys.stderr)
         if self._injector is None:
             # Local mode - use LocalReceiver with in-memory queue
             self._init_local_receiver()
-            print(f"[DEBUG] _init_vad_components: LocalReceiver created, _local_receiver={self._local_receiver}", file=sys.stderr)
 
         # Create audio manager with VAD
         self._audio_manager = AudioManager(
@@ -752,14 +749,9 @@ class VoxtypeEngine:
         )
 
         # Lock to prevent concurrent injections
+        error_msg: str | None = None
         with self._injection_lock:
             inject_start = time.time()
-
-            # DEBUG: Print injection state
-            import sys
-            print(f"[DEBUG] _inject_text: _local_receiver={self._local_receiver}, _injector={self._injector}, target_injector={target_injector}", file=sys.stderr)
-            if self._local_receiver:
-                print(f"[DEBUG] _local_receiver._running={getattr(self._local_receiver, '_running', 'N/A')}", file=sys.stderr)
 
             if self._local_receiver:
                 # Local mode - send to in-memory queue
@@ -781,12 +773,16 @@ class VoxtypeEngine:
                         newline_keys=self.config.output.newline_keys,
                     )
 
+                # Set helpful error message for agent mode failures
+                if not success and hasattr(target_injector, "agent_id"):
+                    error_msg = f"<agent '{target_injector.agent_id}' not running>"
+
             self._stats_injection_seconds += time.time() - inject_start
 
         # Emit injection event
         self._emit(
             "on_injection",
-            InjectionResult(text=text, success=success, method=method),
+            InjectionResult(text=text, success=success, method=method, error=error_msg),
         )
 
         # Log injection

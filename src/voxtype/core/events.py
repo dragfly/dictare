@@ -135,6 +135,7 @@ class InjectionResult:
     text: str
     success: bool
     method: str
+    error: str | None = None  # Error message if success=False
 
 
 @runtime_checkable
