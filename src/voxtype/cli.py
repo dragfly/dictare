@@ -751,7 +751,7 @@ def speak(
     ] = None,
     engine: Annotated[
         str | None,
-        typer.Option("--engine", "-e", help="TTS engine: espeak, say (macOS), piper"),
+        typer.Option("--engine", "-e", help="TTS engine: espeak, say (macOS), piper, qwen3, coqui"),
     ] = None,
     voice: Annotated[
         str | None,
@@ -1080,8 +1080,9 @@ def execute(
             if verbose:
                 print(f"> {text}", file=sys.stderr)
 
-            # Substitute {{text}} in command
-            final_cmd = cmd_template.replace("{{text}}", text)
+            # Substitute {{text}} in command (properly quoted for shell)
+            import shlex
+            final_cmd = cmd_template.replace("{{text}}", shlex.quote(text))
 
             if verbose:
                 print(f"[Executing: {final_cmd[:60]}...]", file=sys.stderr)
