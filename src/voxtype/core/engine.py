@@ -75,6 +75,7 @@ class VoxtypeEngine:
         self._events = events
         self._realtime = realtime
         self._partial_text = ""
+        self._partial_text_lock = threading.Lock()  # Protects _partial_text access
         # Partial transcription: queue + single worker (avoids race conditions)
         self._partial_queue: Queue[Any] = Queue()
         self._partial_worker: threading.Thread | None = None
@@ -467,9 +468,11 @@ class VoxtypeEngine:
                         audio_data,
                         language=self.config.stt.language,
                     )
-                if text and text != self._partial_text:
-                    self._partial_text = text
-                    self._emit("on_partial_transcription", text)
+                if text:
+                    with self._partial_text_lock:
+                        if text != self._partial_text:
+                            self._partial_text = text
+                            self._emit("on_partial_transcription", text)
             except Exception:
                 pass  # Ignore partial transcription errors
 
@@ -510,7 +513,8 @@ class VoxtypeEngine:
         """
         # For realtime mode: clear partial text
         if self._realtime:
-            self._partial_text = ""
+            with self._partial_text_lock:
+                self._partial_text = ""
 
         # Use provided injector (captured at speech-end time)
         captured_injector = injector if injector is not None else self._injector

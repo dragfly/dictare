@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
-from queue import Empty, Queue
+from queue import Empty, Full, Queue
 from typing import TYPE_CHECKING, Any
 
 from voxtype.audio.capture import AudioCapture
@@ -51,7 +51,8 @@ class AudioManager:
         self._vad_lock = threading.Lock()
 
         # Audio queue for buffered speech during transcription (thread-safe)
-        self._audio_queue: Queue = Queue()
+        # Bounded to prevent memory exhaustion if events come faster than processing
+        self._audio_queue: Queue = Queue(maxsize=10)
 
         # VAD callbacks
         self._on_speech_start: Callable[[], None] | None = None
@@ -273,8 +274,23 @@ class AudioManager:
 
         Args:
             audio_data: Audio data to queue
+
+        Note:
+            If queue is full (>10 items), oldest audio is discarded.
+            This prevents memory exhaustion under heavy load.
         """
-        self._audio_queue.put(audio_data)
+        try:
+            self._audio_queue.put_nowait(audio_data)
+        except Full:
+            # Queue full - discard oldest and add new
+            try:
+                self._audio_queue.get_nowait()
+            except Empty:
+                pass
+            try:
+                self._audio_queue.put_nowait(audio_data)
+            except Full:
+                pass  # Still full, drop this audio
 
     def pop_queued_audio(self) -> Any | None:
         """Pop first audio from queue.
