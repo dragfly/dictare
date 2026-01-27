@@ -46,6 +46,7 @@ class PynputHotkeyListener(HotkeyListener):
         self._target_key = None
         self._on_press: Callable[[], None] | None = None
         self._on_release: Callable[[], None] | None = None
+        self._on_other_key: Callable[[], None] | None = None
 
     def _get_pynput_key(self):
         """Convert evdev key name to pynput key."""
@@ -61,8 +62,13 @@ class PynputHotkeyListener(HotkeyListener):
 
     def _handle_press(self, key) -> None:
         """Handle key press event."""
-        if key == self._target_key and self._on_press:
-            self._on_press()
+        if key == self._target_key:
+            if self._on_press:
+                self._on_press()
+        else:
+            # Any other key pressed - notify for combo detection
+            if self._on_other_key:
+                self._on_other_key()
 
     def _handle_release(self, key) -> None:
         """Handle key release event."""
@@ -73,12 +79,14 @@ class PynputHotkeyListener(HotkeyListener):
         self,
         on_press: Callable[[], None],
         on_release: Callable[[], None],
+        on_other_key: Callable[[], None] | None = None,
     ) -> None:
         """Start listening for hotkey events.
 
         Args:
             on_press: Callback when hotkey is pressed.
             on_release: Callback when hotkey is released.
+            on_other_key: Callback when any OTHER key is pressed (for combo detection).
         """
         from pynput import keyboard
 
@@ -88,6 +96,7 @@ class PynputHotkeyListener(HotkeyListener):
 
         self._on_press = on_press
         self._on_release = on_release
+        self._on_other_key = on_other_key
 
         self._listener = keyboard.Listener(
             on_press=self._handle_press,
@@ -108,6 +117,7 @@ class PynputHotkeyListener(HotkeyListener):
 
         self._on_press = None
         self._on_release = None
+        self._on_other_key = None
 
     def is_key_available(self) -> bool:
         """Check if the configured key is available."""

@@ -121,10 +121,13 @@ class MLXWhisperEngine(STTEngine):
         lang = None if language == "auto" else language
 
         # Transcribe using mlx-whisper
+        # Note: When task=translate, don't force language - let Whisper detect it
+        # Otherwise translation might be ignored
+        effective_lang = None if task == "translate" else lang
         result = mlx_whisper.transcribe(
             audio,
             path_or_hf_repo=self._model_path,
-            language=lang,
+            language=effective_lang,
             task=task,  # "transcribe" or "translate"
         )
 
