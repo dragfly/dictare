@@ -61,6 +61,7 @@ class LiveStatusPanel:
         self._log_path = log_path
         self._state = "OFF"
         self._last_text = ""
+        self._last_text_is_error = False  # True if _last_text is an error message
         self._partial_text = ""  # Realtime partial transcription
         self._live: Live | None = None
 
@@ -151,7 +152,15 @@ class LiveStatusPanel:
         """Format the last transcribed text (truncated if needed)."""
         if not self._last_text:
             return "[dim]--[/]"
-        # Truncate to max chars
+
+        # Error messages: bold yellow on red, no quotes
+        if self._last_text_is_error:
+            text = self._last_text
+            if len(text) > self.LAST_TEXT_MAX_CHARS:
+                text = text[:self.LAST_TEXT_MAX_CHARS] + "..."
+            return f"[bold yellow on red] {text} [/]"
+
+        # Normal text: with quotes
         if len(self._last_text) > self.LAST_TEXT_MAX_CHARS:
             return f'"{self._last_text[:self.LAST_TEXT_MAX_CHARS]}..."'
         return f'"{self._last_text}"'
@@ -218,13 +227,15 @@ class LiveStatusPanel:
         if self._live:
             self._live.update(self._build_panel())
 
-    def update_text(self, text: str) -> None:
+    def update_text(self, text: str, *, is_error: bool = False) -> None:
         """Update last transcribed text and refresh the panel.
 
         Args:
             text: The transcribed text to display.
+            is_error: If True, display as error (bold yellow on red, no quotes).
         """
         self._last_text = text
+        self._last_text_is_error = is_error
         self._partial_text = ""  # Clear partial when final arrives
         if self._live:
             self._live.update(self._build_panel())
