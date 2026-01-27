@@ -220,6 +220,7 @@ def _apply_cli_overrides(
     webhook: str | None,
     sse: bool,
     sse_port: int | None,
+    translate: bool = False,
 ) -> None:
     """Apply CLI options to config.
 
@@ -261,6 +262,8 @@ def _apply_cli_overrides(
         config.sse.enabled = True
     if sse_port is not None:
         config.sse.port = sse_port
+    if translate:
+        config.stt.translate = True
 
 def _create_logger(config, agents: list[str] | None = None):
     """Create JSONL logger for session.
@@ -397,6 +400,10 @@ def listen(
         bool,
         typer.Option("--realtime", "-R", help="Show transcription in realtime while speaking"),
     ] = False,
+    translate: Annotated[
+        bool,
+        typer.Option("--translate", "-T", help="Translate to English (any input language → English)"),
+    ] = False,
     # Webhook/SSE options
     webhook: Annotated[
         str | None,
@@ -447,6 +454,7 @@ def listen(
         webhook=webhook,
         sse=sse,
         sse_port=sse_port,
+        translate=translate,
     )
 
     # Auto-detect hardware acceleration (unless --no-hw-accel)
