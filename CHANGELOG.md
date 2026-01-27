@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.29.2] - 2026-01-27
+
+### Fixed
+- **Stuck in TRANSCRIBING during rapid agent switching**: TTS completing while in TRANSCRIBING state now correctly transitions to LISTENING
+  - Scenario: User speaks (TRANSCRIBING) → switches agent (TTS starts) → transcription completes (deferred) → TTS completes
+  - Before: State stayed TRANSCRIBING forever (check was only for PLAYING state)
+  - After: Check handles both PLAYING and TRANSCRIBING with pending transcription
+
 ## [2.29.1] - 2026-01-26
 
 ### Fixed
