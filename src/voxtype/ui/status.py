@@ -60,6 +60,7 @@ class LiveStatusPanel:
         self._log_path = log_path
         self._state = "OFF"
         self._last_text = ""
+        self._partial_text = ""  # Realtime partial transcription
         self._live: Live | None = None
 
         # Pre-compute static content
@@ -154,8 +155,24 @@ class LiveStatusPanel:
             return f'"{self._last_text[:self.LAST_TEXT_MAX_CHARS]}..."'
         return f'"{self._last_text}"'
 
+    def _format_partial_text(self) -> str:
+        """Format the partial transcription (realtime mode)."""
+        if not self._partial_text:
+            return ""
+        # Truncate to max chars
+        text = self._partial_text
+        if len(text) > self.LAST_TEXT_MAX_CHARS:
+            text = text[:self.LAST_TEXT_MAX_CHARS] + "..."
+        return f'[italic cyan]"{text}"[/]'
+
     def _build_panel(self) -> Panel:
         """Build the panel with current state."""
+        # Build status line with optional partial transcription
+        status_line = f"Status: {self._format_state()}"
+        partial = self._format_partial_text()
+        if partial:
+            status_line += f"  {partial}"
+
         content = (
             f"Mode: {self._mode_str}\n"
             f"STT: {self._stt_str}\n"
@@ -164,7 +181,7 @@ class LiveStatusPanel:
             f"Hotkey: {self._hotkey_str}\n"
             f"Log: {self._log_str}\n"
             f"\n"
-            f"Status: {self._format_state()}\n"
+            f"{status_line}\n"
             f"Last: {self._format_last_text()}"
         )
         return Panel(
@@ -207,6 +224,17 @@ class LiveStatusPanel:
             text: The transcribed text to display.
         """
         self._last_text = text
+        self._partial_text = ""  # Clear partial when final arrives
+        if self._live:
+            self._live.update(self._build_panel())
+
+    def update_partial(self, text: str) -> None:
+        """Update partial transcription (realtime mode).
+
+        Args:
+            text: The partial transcription to display.
+        """
+        self._partial_text = text
         if self._live:
             self._live.update(self._build_panel())
 
