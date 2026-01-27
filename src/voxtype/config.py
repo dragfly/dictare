@@ -47,6 +47,10 @@ class STTConfig(BaseModel):
         default="large-v3-turbo",
         description="Whisper model size (tiny/base/small/medium/large-v3/large-v3-turbo)",
     )
+    realtime_model: str = Field(
+        default="tiny",
+        description="Whisper model for realtime partial transcriptions (tiny recommended for low latency)",
+    )
     language: str = Field(
         default="auto",
         description="Language code or 'auto' for auto-detection",
