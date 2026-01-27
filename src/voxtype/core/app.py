@@ -157,11 +157,11 @@ class VoxtypeApp(EngineEvents):
 
         if not result.success:
             # Show graceful error message (e.g., "<agent 'claude' not running>")
-            error_text = result.error or "[ERROR] Injection failed"
+            error_text = result.error or "Injection failed"
             if self._status_panel:
-                self._status_panel.update_text(error_text)
+                self._status_panel.update_text(error_text, is_error=True)
             else:
-                self._console.print(f"[red]{error_text}[/]")
+                self._console.print(f"[bold yellow on red] {error_text} [/]")
 
         # Beep when file write succeeds
         if result.success and result.method.startswith("file:"):
