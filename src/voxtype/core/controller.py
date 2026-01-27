@@ -285,16 +285,21 @@ class StateController:
         if self._engine and self._engine._audio_manager:
             self._engine._audio_manager.reset_vad()
 
-        # Handle pending transcription that completed during TTS
-        if self._pending_transcription:
-            self._pending_transcription = None
-
         # Go to desired state (LISTENING or OFF based on user intent)
         target_state = self._desired_state_after_tts
         self._desired_state_after_tts = AppState.LISTENING  # Reset for next time
 
+        # Handle pending transcription that completed during TTS
+        # This happens when: user speaks (TRANSCRIBING) → user switches agent (TTS) → transcription completes
+        # In this case state is TRANSCRIBING, not PLAYING, so we need to handle it explicitly
+        had_pending = self._pending_transcription is not None
+        if self._pending_transcription:
+            self._pending_transcription = None
+
         current = self._state_manager.state
-        if current == AppState.PLAYING:
+
+        # Transition from PLAYING or TRANSCRIBING (if transcription was deferred)
+        if current == AppState.PLAYING or (had_pending and current == AppState.TRANSCRIBING):
             old_state = current
             self._state_manager.transition(target_state, force=True)
             if self._on_state_change:
