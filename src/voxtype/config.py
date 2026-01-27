@@ -205,11 +205,32 @@ class StatsConfig(BaseModel):
         description="Average typing speed in words per minute (for time saved calculation)",
     )
 
+class TTSConfig(BaseModel):
+    """Text-to-speech configuration."""
+
+    engine: Literal["espeak", "say", "piper", "coqui"] = Field(
+        default="espeak",
+        description="TTS engine: espeak, say (macOS), piper (neural), coqui (XTTS)",
+    )
+    language: str = Field(
+        default="en",
+        description="Language code (en, es, de, it, fr, etc.)",
+    )
+    speed: int = Field(
+        default=175,
+        description="Speech speed in WPM (espeak: 80-500, say: 90-720, others: ignored)",
+    )
+    voice: str = Field(
+        default="",
+        description="Voice name or speaker WAV path (engine-specific)",
+    )
+
 class Config(BaseModel):
     """Main configuration."""
 
     audio: AudioConfig = Field(default_factory=AudioConfig)
     stt: STTConfig = Field(default_factory=STTConfig)
+    tts: TTSConfig = Field(default_factory=TTSConfig)
     hotkey: HotkeyConfig = Field(default_factory=HotkeyConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
@@ -438,7 +459,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "hotkey", "output", "command", "keyboard", "webhook", "sse", "logging", "stats"):
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "command", "keyboard", "webhook", "sse", "logging", "stats"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -455,6 +476,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
     sections = [
         ("audio", AudioConfig),
         ("stt", STTConfig),
+        ("tts", TTSConfig),
         ("hotkey", HotkeyConfig),
         ("output", OutputConfig),
         ("command", CommandConfig),
