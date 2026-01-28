@@ -191,6 +191,14 @@ class EngineEvents(Protocol):
         """
         ...
 
+    def on_agents_changed(self, agents: list[str]) -> None:
+        """Called when the agents list changes (auto-discovery).
+
+        Args:
+            agents: Updated list of agent IDs.
+        """
+        ...
+
     def on_error(self, message: str, context: str) -> None:
         """Called when an error occurs.
 

@@ -384,9 +384,9 @@ def listen(
     ] = None,
     # Output options
     agents: Annotated[
-        str | None,
-        typer.Option("--agents", "-A", help="Agent IDs comma-separated (e.g., 'claude,pippo')"),
-    ] = None,
+        bool,
+        typer.Option("--agents", "-A", help="Enable agent mode with auto-discovery"),
+    ] = False,
     typing_delay: Annotated[
         int | None,
         typer.Option("--typing-delay", help="Delay between keystrokes in ms"),
@@ -452,13 +452,21 @@ def listen(
     Uses Voice Activity Detection (VAD) to automatically detect when you speak.
     Tap the hotkey to toggle listening on/off, double-tap to switch mode.
 
+    Modes:
+
+        # Keyboard mode (default) - types what you say
+        voxtype listen
+
+        # Agent mode - sends to agents via socket (auto-discovery)
+        voxtype listen --agents
+
     Example with agent:
 
         # Terminal 1: Start the agent
-        voxtype agent macinanumeri -- claude -c
+        voxtype agent claude -- claude
 
-        # Terminal 2: Listen and send to agent
-        voxtype listen --agents macinanumeri
+        # Terminal 2: Listen in agent mode (auto-discovers claude)
+        voxtype listen --agents
     """
     config = load_config(config_file)
 
@@ -501,22 +509,20 @@ def listen(
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
 
-    # Handle agent mode - parse comma-separated string
-    agent_list = [a.strip() for a in agents.split(",")] if agents else None
-
     # Create JSONL logger (always enabled by default)
-    logger = _create_logger(config, agents=agent_list)
+    # In agent mode, log path will be updated dynamically
+    logger = _create_logger(config, agents=["agents"] if agents else None)
 
     voxtypeapp = VoxtypeApp(
         config,
         logger=logger,
-        agents=agent_list,
+        agent_mode=agents,  # True = auto-discovery, False = keyboard mode
         realtime=realtime,
     )
 
     # Create live status panel (will be started after loading)
     log_path_str = str(logger.log_path) if logger else None
-    status_panel = LiveStatusPanel(config, console, agents=agent_list, log_path=log_path_str)
+    status_panel = LiveStatusPanel(config, console, agent_mode=agents, log_path=log_path_str)
 
     # Setup signal handler for graceful shutdown (KeyboardInterrupt may not work with C extensions)
     import atexit

@@ -44,7 +44,7 @@ class LiveStatusPanel:
         self,
         config: Config,
         console: Console,
-        agents: list[str] | None = None,
+        agent_mode: bool = False,
         log_path: str | None = None,
     ) -> None:
         """Initialize the status panel.
@@ -52,12 +52,14 @@ class LiveStatusPanel:
         Args:
             config: Application configuration.
             console: Rich console for output.
-            agents: List of agent IDs (for multi-output mode).
+            agent_mode: True if running in agent auto-discovery mode.
             log_path: Path to the log file (displayed in panel).
         """
         self._config = config
         self._console = console
-        self._agents = agents or []
+        self._agent_mode = agent_mode
+        self._agents: list[str] = []  # Updated dynamically
+        self._current_agent_index = 0
         self._log_path = log_path
         self._state = "OFF"
         self._last_text = ""
@@ -103,15 +105,17 @@ class LiveStatusPanel:
 
     def _compute_output_str(self) -> str:
         """Compute the output mode display string."""
-        if self._agents:
-            # Highlight first agent by default
-            parts = []
-            for i, name in enumerate(self._agents):
-                if i == 0:
-                    parts.append(f"[bold green]{name}[/]")
-                else:
-                    parts.append(f"[dim]{name}[/]")
-            return f"[cyan]agents[/] ({', '.join(parts)})"
+        if self._agent_mode:
+            if self._agents:
+                # Highlight current agent
+                parts = []
+                for i, name in enumerate(self._agents):
+                    if i == self._current_agent_index:
+                        parts.append(f"[bold green]{name}[/]")
+                    else:
+                        parts.append(f"[dim]{name}[/]")
+                return f"[cyan]agents[/] ({', '.join(parts)})"
+            return "[cyan]agents[/] [dim](waiting for agents...)[/]"
         elif self._config.output.method == "agent":
             return "[cyan]agent[/] (single)"
         return self._config.output.method
@@ -270,14 +274,23 @@ class LiveStatusPanel:
             agent_name: Name of the current agent
             index: Index of the current agent (0-based)
         """
-        if self._agents:
-            # Highlight current agent in the list
-            parts = []
-            for i, name in enumerate(self._agents):
-                if i == index:
-                    parts.append(f"[bold green]{name}[/]")
-                else:
-                    parts.append(f"[dim]{name}[/]")
-            self._output_str = f"[cyan]agents[/] ({', '.join(parts)})"
+        self._current_agent_index = index
+        self._output_str = self._compute_output_str()
+        if self._live:
+            self._live.update(self._build_panel())
+
+    def update_agents(self, agents: list[str]) -> None:
+        """Update the list of available agents.
+
+        Called when agents are discovered or removed.
+
+        Args:
+            agents: List of agent IDs.
+        """
+        self._agents = agents
+        # Reset index if current agent no longer exists
+        if self._current_agent_index >= len(agents):
+            self._current_agent_index = 0
+        self._output_str = self._compute_output_str()
         if self._live:
             self._live.update(self._build_panel())

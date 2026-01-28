@@ -42,7 +42,7 @@ class VoxtypeApp(EngineEvents):
         self,
         config: Config,
         logger: JSONLLogger | None = None,
-        agents: list[str] | None = None,
+        agent_mode: bool = False,
         realtime: bool = False,
     ) -> None:
         """Initialize the application.
@@ -50,7 +50,7 @@ class VoxtypeApp(EngineEvents):
         Args:
             config: Application configuration.
             logger: Optional JSONL logger for structured logging.
-            agents: List of agent IDs for socket-based multi-output mode.
+            agent_mode: Enable agent mode with auto-discovery of running agents.
             realtime: Enable realtime transcription feedback while speaking.
         """
         self.config = config
@@ -76,7 +76,7 @@ class VoxtypeApp(EngineEvents):
             config=config,
             events=self,
             logger=logger,
-            agents=agents,
+            agent_mode=agent_mode,
             realtime=realtime,
         )
 
@@ -191,6 +191,11 @@ class VoxtypeApp(EngineEvents):
             self._sse.send_agent_change(agent_name, index)
 
         self._speak_agent(agent_name)
+
+    def on_agents_changed(self, agents: list[str]) -> None:
+        """Handle agents list change (auto-discovery)."""
+        if self._status_panel:
+            self._status_panel.update_agents(agents)
 
     def on_error(self, message: str, context: str) -> None:
         """Handle errors."""
