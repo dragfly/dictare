@@ -8,12 +8,9 @@ on:
 
 jobs:
   test-linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -45,7 +42,7 @@ jobs:
         run: uv run pytest tests/ -v
 
   typecheck:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
 
