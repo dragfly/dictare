@@ -715,9 +715,15 @@ def _show_config_list() -> None:
 
 @config_app.command("get")
 def config_get(
-    key: Annotated[str, typer.Argument(help="Config key (e.g., stt.model_size)")],
+    ctx: typer.Context,
+    key: Annotated[str | None, typer.Argument(help="Config key (e.g., stt.model_size)")] = None,
 ) -> None:
     """Get a configuration value."""
+    if key is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
     try:
         value = get_config_value(key)
         console.print(value)
@@ -728,10 +734,16 @@ def config_get(
 
 @config_app.command("set")
 def config_set(
-    key: Annotated[str, typer.Argument(help="Config key (e.g., stt.model_size)")],
-    value: Annotated[str, typer.Argument(help="Value to set")],
+    ctx: typer.Context,
+    key: Annotated[str | None, typer.Argument(help="Config key (e.g., stt.model_size)")] = None,
+    value: Annotated[str | None, typer.Argument(help="Value to set")] = None,
 ) -> None:
     """Set a configuration value."""
+    if key is None or value is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
     try:
         set_config_value(key, value)
         console.print(f"[green]✓[/] Set [cyan]{key}[/] = [yellow]{value}[/]")
@@ -1520,7 +1532,8 @@ def _list_evdev_devices(set_hotkey: bool) -> None:
 
 @app.command()
 def cmd(
-    command: Annotated[str, typer.Argument(help="Command to send (e.g., toggle-listening)")],
+    ctx: typer.Context,
+    command: Annotated[str | None, typer.Argument(help="Command to send (e.g., toggle-listening)")] = None,
 ) -> None:
     """Send a command to a running voxtype instance.
 
@@ -1535,6 +1548,11 @@ def cmd(
         voxtype cmd toggle-listening
         voxtype cmd project-next
     """
+    if command is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
     import socket
 
     socket_path = "/tmp/voxtype.sock"
@@ -1826,10 +1844,11 @@ def log_listen(
 
 @log_app.command("agent")
 def log_agent(
+    ctx: typer.Context,
     agent_name: Annotated[
-        str,
+        str | None,
         typer.Argument(help="Agent name to view logs for"),
-    ],
+    ] = None,
     follow: Annotated[
         bool,
         typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
@@ -1851,6 +1870,11 @@ def log_agent(
         voxtype log agent claude        # Show logs for claude agent
         voxtype log agent claude -f     # Follow live
     """
+    if agent_name is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
     from voxtype.logging.jsonl import get_default_log_path
 
     log_path = get_default_log_path(f"agent.{agent_name}")
