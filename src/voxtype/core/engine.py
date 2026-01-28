@@ -786,6 +786,11 @@ class VoxtypeEngine:
                 # Set helpful error message for agent mode failures
                 if not success and hasattr(target_injector, "agent_id"):
                     error_msg = f"<agent '{target_injector.agent_id}' not running>"
+            else:
+                # No injector available - agent mode with no agents
+                if self.agent_mode:
+                    method = "none"
+                    error_msg = "<no agents available - start an agent with 'voxtype agent'>"
 
             self._stats_injection_seconds += time.time() - inject_start
 
