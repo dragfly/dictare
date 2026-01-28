@@ -564,12 +564,7 @@ class VoxtypeApp(EngineEvents):
             if self._engine._hotkey:
                 self._console.print(f"[dim]Toggle hotkey: {self._engine._hotkey.get_key_name()}[/]")
 
-        # Show agent sockets (OpenVIP)
-        if self._engine.agents:
-            from voxtype.injection.socket import get_socket_path
-            for agent in self._engine.agents:
-                socket_path = get_socket_path(agent)
-                self._console.print(f"[dim]Socket: {socket_path}[/]")
+        # Note: agent sockets are printed after watcher starts (see below)
 
         # Initialize webhook if configured
         if self.config.webhook.url:
@@ -611,6 +606,12 @@ class VoxtypeApp(EngineEvents):
         if self._engine._agent_watcher:
             self._engine._agent_watcher.start()
             self._engine.agents = self._engine._agent_watcher.agent_ids
+            # Print discovered agent sockets
+            if self.config.verbose and self._engine.agents:
+                from voxtype.injection.socket import get_socket_path
+                for agent in self._engine.agents:
+                    socket_path = get_socket_path(agent)
+                    self._console.print(f"[dim]Socket: {socket_path}[/]")
             # Update status panel with discovered agents
             if self._status_panel:
                 self._status_panel.update_agents(self._engine.agents)

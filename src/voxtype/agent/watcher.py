@@ -68,10 +68,10 @@ class AgentWatcher:
         """Start watching for agents."""
         self._socket_dir = get_socket_dir()
 
-        # Initial discovery
-        self._discover_existing_agents()
+        # Initial discovery (no callbacks - caller reads agent_ids after start)
+        self._discover_existing_agents(emit_callbacks=False)
 
-        # Start filesystem watcher
+        # Start filesystem watcher (callbacks enabled for runtime changes)
         handler = _AgentEventHandler(self)
         self._observer = Observer()
         self._observer.schedule(handler, str(self._socket_dir), recursive=False)
@@ -84,15 +84,15 @@ class AgentWatcher:
             self._observer.join(timeout=2.0)
             self._observer = None
 
-    def _discover_existing_agents(self) -> None:
+    def _discover_existing_agents(self, emit_callbacks: bool = True) -> None:
         """Discover agents that already exist at startup."""
         if not self._socket_dir:
             return
 
         for sock_file in self._socket_dir.glob("*.sock"):
-            self._handle_socket_created(sock_file)
+            self._handle_socket_created(sock_file, emit_callback=emit_callbacks)
 
-    def _handle_socket_created(self, path: Path) -> None:
+    def _handle_socket_created(self, path: Path, *, emit_callback: bool = True) -> None:
         """Handle a socket file being created."""
         if path.name in INTERNAL_SOCKETS:
             return
@@ -119,7 +119,7 @@ class AgentWatcher:
         with self._lock:
             if agent_id not in self._agents:
                 self._agents[agent_id] = agent
-                if self.on_agent_added:
+                if emit_callback and self.on_agent_added:
                     self.on_agent_added(agent)
 
     def _handle_socket_deleted(self, path: Path) -> None:
