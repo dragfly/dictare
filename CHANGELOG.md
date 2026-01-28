@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.43.0] - 2026-01-28
+
+### Added
+- **Model self-check at startup**: `listen` and `daemon start` verify required models are cached
+  - If models missing, shows colored model list and download commands
+  - Prevents slow startup with uncached models
+- **Improved `models list` display**:
+  - Green: configured models that are cached
+  - Red: configured models that are MISSING
+  - Dim: other available models (not configured)
+
 ## [2.42.0] - 2026-01-28
 
 ### Changed
