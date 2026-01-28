@@ -36,7 +36,7 @@ def is_daemon_running() -> bool:
         sock.connect(str(socket_path))
         sock.close()
         return True
-    except (socket.error, OSError):
+    except OSError:
         return False
 
 
@@ -84,9 +84,9 @@ class DaemonClient:
 
             return b"".join(chunks)
 
-        except socket.timeout:
+        except TimeoutError:
             raise TimeoutError("Request timed out")
-        except socket.error as e:
+        except OSError as e:
             raise ConnectionError(f"Cannot connect to daemon: {e}")
         finally:
             sock.close()

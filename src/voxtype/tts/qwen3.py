@@ -18,7 +18,6 @@ import sys
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Any
 
 from voxtype.tts.base import TTSEngine
 
@@ -108,8 +107,9 @@ class Qwen3TTS(TTSEngine):
         if self._models_ready:
             return True
 
-        from voxtype.utils.hf_download import is_repo_cached, download_with_progress
         from huggingface_hub import snapshot_download
+
+        from voxtype.utils.hf_download import download_with_progress, is_repo_cached
 
         if not is_repo_cached(self._model_repo, "config.json"):
             download_with_progress(

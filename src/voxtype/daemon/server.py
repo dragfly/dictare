@@ -176,6 +176,7 @@ class DaemonServer:
             # Parse and handle request
             request = parse_request(data)
 
+            response: ErrorResponse | TTSResponse | StatusResponse
             if request is None:
                 response = ErrorResponse(error="Invalid request", code="INVALID_REQUEST")
             elif isinstance(request, TTSRequest):
@@ -257,7 +258,7 @@ class DaemonServer:
                 thread = threading.Thread(target=self._handle_client, args=(conn, addr))
                 thread.daemon = True
                 thread.start()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except Exception as e:
                 if self.running:

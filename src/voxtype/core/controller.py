@@ -338,7 +338,7 @@ class StateController:
             self._desired_state_after_tts = AppState.OFF
         else:
             # Any active state → OFF
-            old_state = current
+            old_state: AppState = current
             if self._state_manager.try_transition(AppState.OFF):
                 # Clear buffered audio
                 if self._engine:
@@ -392,7 +392,7 @@ class StateController:
                 if self._engine and self._engine._llm_processor:
                     self._engine._llm_processor.set_listening(True)
         elif not event.on and current == AppState.LISTENING:
-            old_state = current
+            old_state: AppState = current
             if self._state_manager.try_transition(AppState.OFF):
                 if self._on_state_change:
                     self._on_state_change(old_state, AppState.OFF, "set_listening")

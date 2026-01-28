@@ -971,11 +971,13 @@ def daemon_status_cmd() -> None:
 
     # Try to get detailed status from daemon
     if is_daemon_running():
+        from voxtype.daemon.protocol import StatusResponse
+
         try:
             client = DaemonClient()
             response = client.get_status()
 
-            if hasattr(response, "uptime_seconds"):
+            if isinstance(response, StatusResponse):
                 uptime = response.uptime_seconds
                 if uptime < 60:
                     uptime_str = f"{uptime:.0f}s"
