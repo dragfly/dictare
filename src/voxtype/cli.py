@@ -736,7 +736,7 @@ def deps_resolve(
     if all_ok:
         console.print("[green]All dependencies are now satisfied![/]")
     else:
-        console.print(f"[yellow]Some dependencies still missing (run 'voxtype dependencies check' for details)[/]")
+        console.print("[yellow]Some dependencies still missing (run 'voxtype dependencies check' for details)[/]")
         raise typer.Exit(1)
 
 @app.command()
@@ -2336,15 +2336,16 @@ def models_resolve() -> None:
     Example:
         voxtype models resolve
     """
-    from voxtype.utils.hf_download import download_with_progress, is_repo_cached
     from huggingface_hub import snapshot_download
+
+    from voxtype.utils.hf_download import download_with_progress, is_repo_cached
 
     config = load_config()
     configured = _get_configured_models(config)
     registry = _get_model_registry()
 
     # Find missing models
-    missing = []
+    missing: list[str] = []
     for name in configured.keys():
         if name in registry:
             info = registry[name]
@@ -2361,14 +2362,17 @@ def models_resolve() -> None:
 
     for name in missing:
         info = registry[name]
-        repo = info["repo"]
+        repo: str = info["repo"]
 
         console.print(f"[bold]{name}[/] ({info['description']})")
+
+        def _download(r: str = repo) -> str:
+            return snapshot_download(r)
 
         try:
             download_with_progress(
                 repo,
-                lambda r=repo: snapshot_download(r),
+                _download,
                 fallback_size_gb=info["size_gb"],
             )
             console.print(f"[green]✓ {name} downloaded[/]\n")
@@ -2405,8 +2409,9 @@ def models_download(
     info = _get_model_registry()[model]
     repo = info["repo"]
 
-    from voxtype.utils.hf_download import download_with_progress, is_repo_cached
     from huggingface_hub import snapshot_download
+
+    from voxtype.utils.hf_download import download_with_progress, is_repo_cached
 
     check_file = info.get("check_file", "config.json")
     if is_repo_cached(repo, check_file):
