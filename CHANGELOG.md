@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.48.1] - 2026-01-28
+
+### Fixed
+- **Warning when no agents**: Shows helpful message when speaking with no agents available
+- **Version bump**: Fixed version number not updating with releases
+
 ## [2.48.0] - 2026-01-28
 
 ### Added
