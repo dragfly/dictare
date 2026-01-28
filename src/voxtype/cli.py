@@ -2102,16 +2102,16 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / 1024 / 1024 / 1024:.1f} GB"
 
 
-def _get_configured_models(config=None) -> set[str]:
+def _get_configured_models(config=None) -> dict[str, str]:
     """Get model names that are configured to be used.
 
     Returns:
-        Set of model registry keys that are currently configured.
+        Dict mapping model registry key to usage type (stt, realtime, tts).
     """
     if config is None:
         config = load_config()
 
-    configured = set()
+    configured: dict[str, str] = {}
     registry = _get_model_registry()
 
     # STT model: map config value to registry key
@@ -2119,7 +2119,16 @@ def _get_configured_models(config=None) -> set[str]:
     stt_model = config.stt.model
     stt_key = f"whisper-{stt_model}"
     if stt_key in registry:
-        configured.add(stt_key)
+        configured[stt_key] = "stt"
+
+    # Realtime STT model
+    realtime_model = config.stt.realtime_model
+    realtime_key = f"whisper-{realtime_model}"
+    if realtime_key in registry:
+        if realtime_key in configured:
+            configured[realtime_key] = "stt+realtime"
+        else:
+            configured[realtime_key] = "realtime"
 
     # TTS model: find model by engine
     # e.g., "qwen3" -> "vyvotts-4bit", "outetts" -> "outetts"
@@ -2127,11 +2136,36 @@ def _get_configured_models(config=None) -> set[str]:
     if tts_engine in ("qwen3", "outetts"):
         for name, info in registry.items():
             if info.get("engine") == tts_engine:
-                # Pick first (default) model for that engine
-                configured.add(name)
+                configured[name] = "tts"
                 break
 
     return configured
+
+
+def _get_ollama_models() -> set[str]:
+    """Get list of locally available Ollama models."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return set()
+
+        models = set()
+        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
+            if line.strip():
+                # Format: "NAME    ID    SIZE    MODIFIED"
+                name = line.split()[0] if line.split() else ""
+                if name:
+                    models.add(name)
+        return models
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return set()
 
 
 def _check_required_models(config=None, for_command: str = "listen") -> bool:
@@ -2153,7 +2187,7 @@ def _check_required_models(config=None, for_command: str = "listen") -> bool:
     registry = _get_model_registry()
     missing = []
 
-    for name in configured:
+    for name in configured.keys():
         if name in registry:
             info = registry[name]
             check_file = info.get("check_file", "config.json")
@@ -2168,8 +2202,7 @@ def _check_required_models(config=None, for_command: str = "listen") -> bool:
         _show_models_list(config)
         console.print()
         console.print("[bold]Download missing models:[/]")
-        for name in missing:
-            console.print(f"  [cyan]voxtype models download {name}[/]")
+        console.print("  [cyan]voxtype models resolve[/]")
         return False
 
     return True
@@ -2197,33 +2230,36 @@ def _show_models_list(config=None) -> None:
     )
     table.add_column("Model", no_wrap=True)
     table.add_column("Type", width=4)
+    table.add_column("Use", width=12)
     table.add_column("Status", justify="center")
     table.add_column("Size", justify="right")
-    table.add_column("Description")
 
     for name, info in _get_model_registry().items():
         repo = info["repo"]
         model_type = info["type"].upper()
-        is_configured = name in configured
+        usage = configured.get(name, "")
 
         # Check if cached
         check_file = info.get("check_file", "config.json")
         cached = is_repo_cached(repo, check_file)
 
         # Determine colors based on configured + cached state
-        if is_configured:
+        if usage:
             if cached:
                 # Configured and cached = green
                 name_style = "[green]"
                 status = "[green]cached[/]"
+                use_str = f"[green]{usage}[/]"
             else:
                 # Configured but not cached = red
                 name_style = "[red]"
                 status = "[red]MISSING[/]"
+                use_str = f"[red]{usage}[/]"
         else:
             # Not configured = normal/dim
             name_style = "[dim]"
             status = "[dim]cached[/]" if cached else "[dim]—[/]"
+            use_str = ""
 
         # Size
         if cached:
@@ -2235,12 +2271,26 @@ def _show_models_list(config=None) -> None:
         table.add_row(
             f"{name_style}{name}[/]",
             model_type,
+            use_str,
             status,
             size_str,
-            info["description"],
         )
 
     console.print(table)
+
+    # Show LLM status
+    console.print()
+    ollama_model = config.command.ollama_model
+    ollama_cached = _get_ollama_models()
+    is_cached = ollama_model in ollama_cached or any(
+        m.startswith(ollama_model.split(":")[0]) for m in ollama_cached
+    )
+
+    if is_cached:
+        console.print(f"[green]LLM:[/] {ollama_model} [green](cached)[/]")
+    else:
+        console.print(f"[red]LLM:[/] {ollama_model} [red](not cached)[/]")
+        console.print(f"  [dim]Install: ollama pull {ollama_model}[/]")
 
 
 @models_app.command("list")
@@ -2252,9 +2302,83 @@ def models_list() -> None:
     """
     _show_models_list()
     console.print()
+    console.print("[dim]Use:      voxtype models use <model> [--realtime|--tts|--llm][/]")
     console.print("[dim]Resolve:  voxtype models resolve[/]")
     console.print("[dim]Download: voxtype models download <model>[/]")
-    console.print("[dim]Clear:    voxtype models clear <model>[/]")
+
+
+@models_app.command("use")
+def models_use(
+    ctx: typer.Context,
+    model: Annotated[str | None, typer.Argument(help="Model name to use")] = None,
+    realtime: Annotated[
+        bool,
+        typer.Option("--realtime", "-r", help="Set as realtime STT model"),
+    ] = False,
+    tts: Annotated[
+        bool,
+        typer.Option("--tts", "-t", help="Set as TTS model"),
+    ] = False,
+    llm: Annotated[
+        bool,
+        typer.Option("--llm", "-l", help="Set as LLM model (Ollama)"),
+    ] = False,
+) -> None:
+    """Set which model to use for STT, TTS, or LLM.
+
+    By default sets the STT model. Use flags for other types.
+
+    Examples:
+        voxtype models use large-v3-turbo           # Set STT model
+        voxtype models use tiny --realtime          # Set realtime STT model
+        voxtype models use vyvotts-4bit --tts       # Set TTS model
+        voxtype models use qwen2.5:1.5b --llm       # Set Ollama LLM model
+    """
+    if model is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
+    registry = _get_model_registry()
+
+    if llm:
+        # LLM: just set the config, Ollama handles downloads
+        set_config_value("command.ollama_model", model)
+        console.print(f"[green]✓[/] LLM set to [cyan]{model}[/]")
+        console.print(f"[dim]Download if needed: ollama pull {model}[/]")
+        return
+
+    if tts:
+        # TTS: find by model name or engine
+        if model in registry and registry[model]["type"] == "tts":
+            engine = registry[model].get("engine", model)
+            set_config_value("tts.engine", engine)
+            console.print(f"[green]✓[/] TTS set to [cyan]{engine}[/] (model: {model})")
+        elif model in ("espeak", "say", "piper", "coqui", "qwen3", "outetts"):
+            set_config_value("tts.engine", model)
+            console.print(f"[green]✓[/] TTS engine set to [cyan]{model}[/]")
+        else:
+            console.print(f"[red]Unknown TTS model or engine: {model}[/]")
+            console.print("[dim]Available: espeak, say, piper, coqui, qwen3, outetts[/]")
+            raise typer.Exit(1)
+        return
+
+    # STT model (default or --realtime)
+    # Accept both "large-v3-turbo" and "whisper-large-v3-turbo"
+    stt_model = model.replace("whisper-", "") if model.startswith("whisper-") else model
+    stt_key = f"whisper-{stt_model}"
+
+    if stt_key not in registry:
+        console.print(f"[red]Unknown STT model: {model}[/]")
+        console.print("[dim]Available: tiny, base, small, medium, large-v3, large-v3-turbo[/]")
+        raise typer.Exit(1)
+
+    if realtime:
+        set_config_value("stt.realtime_model", stt_model)
+        console.print(f"[green]✓[/] Realtime STT set to [cyan]{stt_model}[/]")
+    else:
+        set_config_value("stt.model", stt_model)
+        console.print(f"[green]✓[/] STT set to [cyan]{stt_model}[/]")
 
 
 @models_app.command("resolve")
@@ -2275,7 +2399,7 @@ def models_resolve() -> None:
 
     # Find missing models
     missing = []
-    for name in configured:
+    for name in configured.keys():
         if name in registry:
             info = registry[name]
             check_file = info.get("check_file", "config.json")
