@@ -30,7 +30,9 @@ def get_log_path() -> Path:
 
 def get_socket_path() -> Path:
     """Get path to daemon Unix socket."""
-    return Path("/tmp/voxtype-daemon.sock")
+    from voxtype.utils.platform import get_socket_dir
+
+    return get_socket_dir() / "daemon.sock"
 
 
 def write_pid(pid: int) -> None:

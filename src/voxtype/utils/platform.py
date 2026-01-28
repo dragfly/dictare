@@ -2,10 +2,48 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
+
+
+def get_runtime_dir() -> Path:
+    """Get the runtime directory for sockets and ephemeral files.
+
+    Returns platform-appropriate directory:
+    - Linux: $XDG_RUNTIME_DIR (typically /run/user/UID)
+    - macOS: $TMPDIR (typically /var/folders/.../T/)
+    - Fallback: /tmp
+
+    This follows the de facto standard for Unix socket locations.
+    """
+    # Linux: XDG standard
+    if xdg := os.environ.get("XDG_RUNTIME_DIR"):
+        runtime_dir = Path(xdg)
+        if runtime_dir.exists():
+            return runtime_dir
+
+    # macOS: user-specific temp directory
+    if tmpdir := os.environ.get("TMPDIR"):
+        runtime_dir = Path(tmpdir)
+        if runtime_dir.exists():
+            return runtime_dir
+
+    # Fallback to /tmp
+    return Path("/tmp")
+
+
+def get_socket_dir() -> Path:
+    """Get the directory for VoxType Unix sockets.
+
+    Creates a voxtype subdirectory in the runtime dir for organization.
+    """
+    socket_dir = get_runtime_dir() / "voxtype"
+    socket_dir.mkdir(parents=True, exist_ok=True)
+    return socket_dir
 
 
 @dataclass

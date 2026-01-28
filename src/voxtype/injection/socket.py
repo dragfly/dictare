@@ -18,9 +18,11 @@ def get_socket_path(agent_id: str) -> Path:
         agent_id: Agent identifier.
 
     Returns:
-        Path to socket file.
+        Path to socket file in the platform-appropriate runtime directory.
     """
-    return Path(f"/tmp/voxtype-{agent_id}.sock")
+    from voxtype.utils.platform import get_socket_dir
+
+    return get_socket_dir() / f"{agent_id}.sock"
 
 
 class SocketInjector(TextInjector):

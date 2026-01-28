@@ -1674,7 +1674,9 @@ def cmd(
 
     import socket
 
-    socket_path = "/tmp/voxtype.sock"
+    from voxtype.utils.platform import get_socket_dir
+
+    socket_path = str(get_socket_dir() / "control.sock")
 
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -2553,7 +2555,12 @@ def models_clear(
 
 
 @tray_app.command("start")
-def tray_start() -> None:
+def tray_start(
+    foreground: Annotated[
+        bool,
+        typer.Option("--foreground", "-f", help="Run in foreground (for debugging)"),
+    ] = False,
+) -> None:
     """Start the VoxType system tray application.
 
     Shows an icon in the system tray/menu bar with controls for:
@@ -2562,35 +2569,92 @@ def tray_start() -> None:
     - Target selection
     - Settings
 
+    By default runs in background. Use --foreground for debugging.
+
     Example:
-        voxtype tray start
+        voxtype tray start              # Background (daemon mode)
+        voxtype tray start --foreground # Foreground (debug mode)
     """
-    try:
-        from voxtype.tray import TrayApp
-    except ImportError:
-        console.print("[red]Tray dependencies not installed.[/]")
-        console.print("Install with: [cyan]pip install voxtype[tray][/]")
+    from voxtype.tray.lifecycle import get_tray_status, start_tray
+
+    # Check if already running
+    status = get_tray_status()
+    if status.running:
+        console.print(f"[yellow]Tray already running[/] (PID: {status.pid})")
         raise typer.Exit(1)
 
-    console.print("[dim]Starting VoxType tray...[/]")
-    console.print("[dim]Right-click the icon for menu. Ctrl+C to quit.[/]")
+    if foreground:
+        console.print("[dim]Starting VoxType tray (foreground)...[/]")
+        console.print("[dim]Right-click the icon for menu. Ctrl+C to quit.[/]")
 
-    app = TrayApp()
+        # Connect to daemon if running
+        from voxtype.daemon import get_daemon_status
 
-    # Connect to daemon if running
-    from voxtype.daemon import get_daemon_status
+        daemon_status = get_daemon_status()
+        if daemon_status.running:
+            console.print(f"[green]Connected to daemon[/] (PID: {daemon_status.pid})")
+        else:
+            console.print("[yellow]Daemon not running.[/] Start with: voxtype daemon start")
 
-    status = get_daemon_status()
-    if status.running:
-        console.print(f"[green]Connected to daemon[/] (PID: {status.pid})")
-        app.set_state("idle")
+        result = start_tray(foreground=True)
+        raise typer.Exit(result)
     else:
-        console.print("[yellow]Daemon not running.[/] Start with: voxtype daemon start")
+        # Background mode
+        result = start_tray(foreground=False)
+        if result == 0:
+            import time
 
-    try:
-        app.run()
-    except KeyboardInterrupt:
-        console.print("\n[dim]Tray stopped.[/]")
+            time.sleep(0.3)
+            status = get_tray_status()
+            if status.running:
+                console.print(f"[green]Tray started[/] (PID: {status.pid})")
+            else:
+                console.print("[red]Tray failed to start[/]")
+                raise typer.Exit(1)
+        else:
+            console.print("[red]Tray failed to start[/]")
+            raise typer.Exit(1)
+
+
+@tray_app.command("stop")
+def tray_stop() -> None:
+    """Stop the VoxType system tray application.
+
+    Example:
+        voxtype tray stop
+    """
+    from voxtype.tray.lifecycle import get_tray_status, stop_tray
+
+    status = get_tray_status()
+    if not status.running:
+        console.print("[yellow]Tray is not running[/]")
+        raise typer.Exit(1)
+
+    console.print(f"[dim]Stopping tray (PID: {status.pid})...[/]")
+    result = stop_tray()
+
+    if result == 0:
+        console.print("[green]Tray stopped[/]")
+    else:
+        console.print("[red]Failed to stop tray[/]")
+        raise typer.Exit(1)
+
+
+@tray_app.command("status")
+def tray_status() -> None:
+    """Show VoxType tray status.
+
+    Example:
+        voxtype tray status
+    """
+    from voxtype.tray.lifecycle import get_tray_status
+
+    status = get_tray_status()
+
+    if status.running:
+        console.print(f"[green]Tray running[/] (PID: {status.pid})")
+    else:
+        console.print("[dim]Tray not running[/]")
 
 
 def _check_python_environment() -> None:
