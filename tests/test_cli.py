@@ -35,9 +35,9 @@ class TestCLIBasics:
         result = runner.invoke(app, ["config", "--help"])
         assert result.exit_code == 0
 
-    def test_check_help(self) -> None:
-        """Test 'check --help' shows check command help."""
-        result = runner.invoke(app, ["check", "--help"])
+    def test_dependencies_help(self) -> None:
+        """Test 'dependencies --help' shows command help."""
+        result = runner.invoke(app, ["dependencies", "--help"])
         assert result.exit_code == 0
 
 
