@@ -2252,8 +2252,61 @@ def models_list() -> None:
     """
     _show_models_list()
     console.print()
+    console.print("[dim]Resolve:  voxtype models resolve[/]")
     console.print("[dim]Download: voxtype models download <model>[/]")
     console.print("[dim]Clear:    voxtype models clear <model>[/]")
+
+
+@models_app.command("resolve")
+def models_resolve() -> None:
+    """Download all configured models that are missing.
+
+    Automatically downloads models needed for your current configuration.
+
+    Example:
+        voxtype models resolve
+    """
+    from voxtype.utils.hf_download import download_with_progress, is_repo_cached
+    from huggingface_hub import snapshot_download
+
+    config = load_config()
+    configured = _get_configured_models(config)
+    registry = _get_model_registry()
+
+    # Find missing models
+    missing = []
+    for name in configured:
+        if name in registry:
+            info = registry[name]
+            check_file = info.get("check_file", "config.json")
+            if not is_repo_cached(info["repo"], check_file):
+                missing.append(name)
+
+    if not missing:
+        console.print("[green]All configured models are already cached![/]")
+        _show_models_list(config)
+        raise typer.Exit(0)
+
+    console.print(f"[bold]Downloading {len(missing)} missing model(s)...[/]\n")
+
+    for name in missing:
+        info = registry[name]
+        repo = info["repo"]
+
+        console.print(f"[bold]{name}[/] ({info['description']})")
+
+        try:
+            download_with_progress(
+                repo,
+                lambda r=repo: snapshot_download(r),
+                fallback_size_gb=info["size_gb"],
+            )
+            console.print(f"[green]✓ {name} downloaded[/]\n")
+        except Exception as e:
+            console.print(f"[red]✗ {name} failed: {e}[/]\n")
+            raise typer.Exit(1)
+
+    console.print("[green]All configured models are ready![/]")
 
 
 @models_app.command("download")
