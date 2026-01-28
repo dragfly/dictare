@@ -1952,7 +1952,7 @@ _MODEL_REGISTRY = {
     },
     "whisper-large-v3-turbo": {
         "type": "stt",
-        "repo": "Systran/faster-whisper-large-v3-turbo",
+        "repo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
         "size_gb": 1.6,
         "description": "Whisper large-v3-turbo (fast + accurate)",
     },
