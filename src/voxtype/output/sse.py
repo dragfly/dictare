@@ -57,7 +57,9 @@ class SSEHandler(BaseHTTPRequestHandler):
         try:
             while self.sse_server and self.sse_server._running:
                 # Wait for shutdown or keepalive timeout
-                self.sse_server._shutdown_event.wait(timeout=30)
+                self.sse_server._shutdown_event.wait(
+                    timeout=self.sse_server.keepalive_interval
+                )
                 if not self.sse_server._running:
                     break
                 # Send keepalive comment
@@ -110,6 +112,7 @@ class SSEServer:
         host: str = "localhost",
         port: int = 8765,
         agent: str | None = None,
+        keepalive_interval: float = 30.0,
     ) -> None:
         """Initialize SSE server.
 
@@ -117,10 +120,12 @@ class SSEServer:
             host: Host to bind to.
             port: Port to listen on.
             agent: Optional agent name for context.
+            keepalive_interval: Seconds between keepalive messages.
         """
         self.host = host
         self.port = port
         self.agent = agent
+        self.keepalive_interval = keepalive_interval
         self._server: HTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._running = False
