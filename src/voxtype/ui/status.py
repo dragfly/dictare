@@ -98,7 +98,7 @@ class LiveStatusPanel:
         elif is_mlx_available():
             device_str = "[bold green]MLX (Apple Silicon)[/]"
 
-        return f"[cyan]{self._config.stt.model_size}[/] on {device_str}{gpu_hint}"
+        return f"[cyan]{self._config.stt.model}[/] on {device_str}{gpu_hint}"
 
     def _compute_output_str(self) -> str:
         """Compute the output mode display string."""

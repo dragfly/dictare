@@ -27,7 +27,7 @@ class TestConfigDefaults:
     def test_stt_config_defaults(self) -> None:
         """Test STTConfig has correct defaults."""
         config = STTConfig()
-        assert config.model_size == "large-v3-turbo"
+        assert config.model == "large-v3-turbo"
         assert config.language == "auto"
         assert config.device == "auto"
         assert config.compute_type == "int8"
@@ -82,7 +82,7 @@ class TestConfigLoading:
         try:
             config = load_config(temp_path)
             assert config is not None
-            assert config.stt.model_size == "large-v3-turbo"
+            assert config.stt.model == "large-v3-turbo"
         finally:
             temp_path.unlink()
 
@@ -90,7 +90,7 @@ class TestConfigLoading:
         """Test loading TOML with partial config merges with defaults."""
         toml_content = """
 [stt]
-model_size = "base"
+model = "base"
 language = "en"
 """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
@@ -99,7 +99,7 @@ language = "en"
 
         try:
             config = load_config(temp_path)
-            assert config.stt.model_size == "base"
+            assert config.stt.model == "base"
             assert config.stt.language == "en"
             # Other values should be defaults
             assert config.stt.device == "auto"
