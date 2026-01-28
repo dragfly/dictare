@@ -20,7 +20,7 @@ class MockConfig:
         # STT config
         self.stt = MagicMock()
         self.stt.hw_accel = False
-        self.stt.model_size = "tiny"
+        self.stt.model = "tiny"
         self.stt.device = "cpu"
         self.stt.compute_type = "int8"
         self.stt.language = "en"

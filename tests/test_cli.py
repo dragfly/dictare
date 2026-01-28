@@ -52,4 +52,4 @@ class TestCLIConfigCommands:
         """Test 'config list' shows available config keys."""
         result = runner.invoke(app, ["config", "list"])
         assert result.exit_code == 0
-        assert "stt.model_size" in result.stdout
+        assert "stt.model" in result.stdout

@@ -40,9 +40,9 @@ class AudioConfig(BaseModel):
 class STTConfig(BaseModel):
     """Speech-to-text configuration."""
 
-    model_size: str = Field(
+    model: str = Field(
         default="large-v3-turbo",
-        description="Whisper model size (tiny/base/small/medium/large-v3/large-v3-turbo)",
+        description="Whisper model (tiny/base/small/medium/large-v3/large-v3-turbo)",
     )
     realtime_model: str = Field(
         default="tiny",
@@ -275,7 +275,7 @@ def get_config_path() -> Path:
 def _key_to_env_var(key: str) -> str:
     """Convert config key to environment variable name.
 
-    Example: stt.model_size -> VOXTYPE_STT_MODEL_SIZE
+    Example: stt.model -> VOXTYPE_STT_MODEL
     """
     return ENV_PREFIX + key.upper().replace(".", "_")
 
@@ -294,7 +294,7 @@ def _apply_env_overrides(config: Config) -> Config:
     """Apply environment variable overrides to config.
 
     Environment variables follow the pattern: VOXTYPE_SECTION_KEY
-    Example: VOXTYPE_STT_MODEL_SIZE=large-v3
+    Example: VOXTYPE_STT_MODEL=large-v3
     """
     config_dict = config.model_dump()
 
@@ -356,7 +356,7 @@ def get_config_value(key: str, config: Config | None = None) -> Any:
     """Get a config value by dot-notation key.
 
     Args:
-        key: Dot-notation key like 'stt.model_size' or 'verbose'
+        key: Dot-notation key like 'stt.model' or 'verbose'
         config: Config object (loads default if None)
 
     Returns:
@@ -383,7 +383,7 @@ def set_config_value(key: str, value: str, config_path: Path | None = None) -> N
     """Set a config value by dot-notation key.
 
     Args:
-        key: Dot-notation key like 'stt.model_size' or 'verbose'
+        key: Dot-notation key like 'stt.model' or 'verbose'
         value: String value (will be converted to appropriate type)
         config_path: Path to config file (uses default if None)
 
@@ -555,7 +555,7 @@ silence_ms = 1200      # VAD silence threshold in ms
 headphones_mode = false  # Set to true when using headphones (TTS won't pause listening)
 
 [stt]
-model_size = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
+model = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
 language = "auto"              # auto-detect, or "en", "de", "fr", etc.
 device = "auto"                # auto, cpu, cuda
 compute_type = "int8"

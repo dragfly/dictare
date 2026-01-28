@@ -76,7 +76,7 @@ voxtype listen --agents claude
 ```bash
 voxtype init              # Create default config file
 voxtype config list       # Show all settings
-voxtype config get stt.model_size
+voxtype config get stt.model
 voxtype config set stt.language it
 voxtype config shortcuts  # Configure keyboard shortcuts
 ```
