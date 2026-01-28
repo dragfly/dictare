@@ -47,6 +47,10 @@ app.add_typer(models_app, name="models")
 deps_app = typer.Typer(help="Manage system dependencies", no_args_is_help=True)
 app.add_typer(deps_app, name="dependencies")
 
+# Tray subcommand
+tray_app = typer.Typer(help="System tray integration", no_args_is_help=True)
+app.add_typer(tray_app, name="tray")
+
 console = Console(
     force_terminal=None,  # Auto-detect
     force_interactive=None,  # Auto-detect
@@ -2541,6 +2545,52 @@ def models_clear(
 
     shutil.rmtree(cache_dir)
     console.print(f"[green]Cleared '{model}'[/]")
+
+
+# =============================================================================
+# Tray commands
+# =============================================================================
+
+
+@tray_app.command("start")
+def tray_start() -> None:
+    """Start the VoxType system tray application.
+
+    Shows an icon in the system tray/menu bar with controls for:
+    - Start/Stop listening
+    - Mute/Unmute
+    - Target selection
+    - Settings
+
+    Example:
+        voxtype tray start
+    """
+    try:
+        from voxtype.tray import TrayApp
+    except ImportError:
+        console.print("[red]Tray dependencies not installed.[/]")
+        console.print("Install with: [cyan]pip install voxtype[tray][/]")
+        raise typer.Exit(1)
+
+    console.print("[dim]Starting VoxType tray...[/]")
+    console.print("[dim]Right-click the icon for menu. Ctrl+C to quit.[/]")
+
+    app = TrayApp()
+
+    # Connect to daemon if running
+    from voxtype.daemon import get_daemon_status
+
+    status = get_daemon_status()
+    if status.running:
+        console.print(f"[green]Connected to daemon[/] (PID: {status.pid})")
+        app.set_state("idle")
+    else:
+        console.print("[yellow]Daemon not running.[/] Start with: voxtype daemon start")
+
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        console.print("\n[dim]Tray stopped.[/]")
 
 
 def _check_python_environment() -> None:
