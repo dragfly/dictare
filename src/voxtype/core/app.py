@@ -607,6 +607,14 @@ class VoxtypeApp(EngineEvents):
         self._engine._running = True
         self._engine._stats_start_time = __import__("time").time()
 
+        # Start agent watcher if in agent mode
+        if self._engine._agent_watcher:
+            self._engine._agent_watcher.start()
+            self._engine.agents = self._engine._agent_watcher.agent_ids
+            # Update status panel with discovered agents
+            if self._status_panel:
+                self._status_panel.update_agents(self._engine.agents)
+
         # Start the state controller (event queue processor)
         self._engine._controller.start()
 
