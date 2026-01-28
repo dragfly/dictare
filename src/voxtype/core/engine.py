@@ -399,9 +399,10 @@ class VoxtypeEngine:
             self._realtime_stt = self._create_realtime_stt_engine()
 
         # Initialize output based on mode
+        # Note: in agent_mode, injector is created later after discovery
         self._injector = self._create_injector()
-        if self._injector is None:
-            # Local mode - use LocalReceiver with in-memory queue
+        if self._injector is None and not self.agent_mode:
+            # Local mode (keyboard) - use LocalReceiver with in-memory queue
             self._init_local_receiver()
 
         # Create audio manager with VAD
