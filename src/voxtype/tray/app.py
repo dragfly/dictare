@@ -262,7 +262,10 @@ class TrayApp:
         return thread
 
 def main() -> None:
-    """Entry point for standalone tray app."""
+    """Entry point for standalone tray app (used when run as module)."""
+    import os
+    import signal
+
     try:
         import pystray  # noqa: F401
         from PIL import Image  # noqa: F401
@@ -271,9 +274,25 @@ def main() -> None:
         print("Install with: pip install voxtype[tray]", file=sys.stderr)
         sys.exit(1)
 
+    from voxtype.tray.lifecycle import remove_pid, write_pid
+
+    # Write PID for lifecycle management
+    write_pid(os.getpid())
+
     app = TrayApp()
-    print("VoxType tray started. Right-click the icon for menu.")
-    app.run()
+
+    # Handle SIGINT/SIGTERM gracefully
+    def signal_handler(signum: int, frame: object) -> None:
+        if app._icon:
+            app._icon.stop()
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    try:
+        app.run()
+    finally:
+        remove_pid()
 
 if __name__ == "__main__":
     main()

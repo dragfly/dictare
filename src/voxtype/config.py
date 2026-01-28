@@ -209,9 +209,17 @@ class DaemonConfig(BaseModel):
     """Daemon configuration."""
 
     socket_path: str = Field(
-        default="/tmp/voxtype-daemon.sock",
-        description="Path to daemon Unix socket",
+        default="",
+        description="Path to daemon Unix socket (empty = use platform default)",
     )
+
+    def get_socket_path(self) -> str:
+        """Get actual socket path, using platform default if not specified."""
+        if self.socket_path:
+            return self.socket_path
+        from voxtype.utils.platform import get_socket_dir
+
+        return str(get_socket_dir() / "daemon.sock")
     preload_tts: bool = Field(
         default=True,
         description="Preload TTS engine on daemon start",
