@@ -39,6 +39,10 @@ app.add_typer(completion_app, name="completion")
 daemon_app = typer.Typer(help="Manage the voxtype daemon", no_args_is_help=True)
 app.add_typer(daemon_app, name="daemon")
 
+# Models subcommand
+models_app = typer.Typer(help="Manage TTS/STT models", no_args_is_help=True)
+app.add_typer(models_app, name="models")
+
 console = Console(
     force_terminal=None,  # Auto-detect
     force_interactive=None,  # Auto-detect
@@ -1912,6 +1916,225 @@ def log_list() -> None:
 
     console.print(table)
     console.print(f"\n[dim]Log directory: {DEFAULT_LOG_DIR}[/]")
+
+# Model registry for voxtype models list/download
+_MODEL_REGISTRY = {
+    # STT models (Whisper)
+    "whisper-tiny": {
+        "type": "stt",
+        "repo": "Systran/faster-whisper-tiny",
+        "size_gb": 0.15,
+        "description": "Whisper tiny (fastest, least accurate)",
+    },
+    "whisper-base": {
+        "type": "stt",
+        "repo": "Systran/faster-whisper-base",
+        "size_gb": 0.3,
+        "description": "Whisper base",
+    },
+    "whisper-small": {
+        "type": "stt",
+        "repo": "Systran/faster-whisper-small",
+        "size_gb": 0.5,
+        "description": "Whisper small",
+    },
+    "whisper-medium": {
+        "type": "stt",
+        "repo": "Systran/faster-whisper-medium",
+        "size_gb": 1.5,
+        "description": "Whisper medium",
+    },
+    "whisper-large-v3": {
+        "type": "stt",
+        "repo": "Systran/faster-whisper-large-v3",
+        "size_gb": 3.0,
+        "description": "Whisper large-v3 (most accurate)",
+    },
+    "whisper-large-v3-turbo": {
+        "type": "stt",
+        "repo": "Systran/faster-whisper-large-v3-turbo",
+        "size_gb": 1.6,
+        "description": "Whisper large-v3-turbo (fast + accurate)",
+    },
+    # TTS models
+    "vyvotts-4bit": {
+        "type": "tts",
+        "repo": "mlx-community/VyvoTTS-EN-Beta-4bit",
+        "size_gb": 1.0,
+        "description": "VyvoTTS 4-bit (qwen3 engine, fastest)",
+        "engine": "qwen3",
+    },
+    "vyvotts-8bit": {
+        "type": "tts",
+        "repo": "mlx-community/VyvoTTS-EN-Beta-8bit",
+        "size_gb": 1.5,
+        "description": "VyvoTTS 8-bit (qwen3 engine)",
+        "engine": "qwen3",
+    },
+    "outetts": {
+        "type": "tts",
+        "repo": "OuteAI/OuteTTS-0.3-1B-GGUF",
+        "size_gb": 1.2,
+        "description": "OuteTTS (outetts engine)",
+        "engine": "outetts",
+    },
+}
+
+def _format_size(size_bytes: int) -> str:
+    """Format bytes as human-readable size."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / 1024 / 1024:.1f} MB"
+    else:
+        return f"{size_bytes / 1024 / 1024 / 1024:.1f} GB"
+
+@models_app.command("list")
+def models_list() -> None:
+    """List available models and their cache status.
+
+    Shows STT (Whisper) and TTS models with download status.
+    """
+    from voxtype.utils.hf_download import get_cache_size, get_hf_cache_dir, is_repo_cached
+
+    table = Table(
+        title="Models",
+        show_header=True,
+        header_style="bold",
+        expand=False,
+    )
+    table.add_column("Model", style="cyan", no_wrap=True)
+    table.add_column("Type", width=4)
+    table.add_column("Status", justify="center")
+    table.add_column("Size", justify="right")
+    table.add_column("Description")
+
+    for name, info in _MODEL_REGISTRY.items():
+        repo = info["repo"]
+        model_type = info["type"].upper()
+
+        # Check if cached
+        check_file = "model.bin" if info["type"] == "stt" else "config.json"
+        cached = is_repo_cached(repo, check_file)
+
+        if cached:
+            status = "[green]cached[/]"
+            # Get actual cached size
+            cache_size = get_cache_size(repo)
+            size_str = _format_size(cache_size) if cache_size > 0 else f"~{info['size_gb']:.1f} GB"
+        else:
+            status = "[dim]—[/]"
+            size_str = f"~{info['size_gb']:.1f} GB"
+
+        table.add_row(name, model_type, status, size_str, info["description"])
+
+    console.print(table)
+    console.print()
+    console.print("[dim]Download: voxtype models download <model>[/]")
+    console.print("[dim]Clear:    voxtype models clear <model>[/]")
+
+@models_app.command("download")
+def models_download(
+    ctx: typer.Context,
+    model: Annotated[str | None, typer.Argument(help="Model name to download")] = None,
+) -> None:
+    """Download a model.
+
+    Examples:
+        voxtype models download whisper-large-v3-turbo
+        voxtype models download vyvotts-4bit
+    """
+    if model is None:
+        import click
+        click.echo(ctx.get_help())
+        console.print("\n[bold]Available models:[/]")
+        for name in _MODEL_REGISTRY:
+            console.print(f"  {name}")
+        raise typer.Exit(0)
+
+    if model not in _MODEL_REGISTRY:
+        console.print(f"[red]Unknown model: {model}[/]")
+        console.print("[dim]Run 'voxtype models list' to see available models[/]")
+        raise typer.Exit(1)
+
+    info = _MODEL_REGISTRY[model]
+    repo = info["repo"]
+
+    from voxtype.utils.hf_download import download_with_progress, is_repo_cached
+    from huggingface_hub import snapshot_download
+
+    check_file = "model.bin" if info["type"] == "stt" else "config.json"
+    if is_repo_cached(repo, check_file):
+        console.print(f"[green]Model '{model}' is already cached[/]")
+        raise typer.Exit(0)
+
+    console.print(f"[bold]Downloading {model}...[/]")
+
+    try:
+        download_with_progress(
+            repo,
+            lambda: snapshot_download(repo),
+            fallback_size_gb=info["size_gb"],
+        )
+        console.print(f"[green]Model '{model}' downloaded successfully[/]")
+    except Exception as e:
+        console.print(f"[red]Download failed: {e}[/]")
+        raise typer.Exit(1)
+
+@models_app.command("clear")
+def models_clear(
+    ctx: typer.Context,
+    model: Annotated[str | None, typer.Argument(help="Model name to clear (or 'all')")] = None,
+) -> None:
+    """Clear cached model(s).
+
+    Examples:
+        voxtype models clear vyvotts-4bit
+        voxtype models clear all
+    """
+    import shutil
+
+    if model is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
+    from voxtype.utils.hf_download import get_hf_cache_dir
+
+    if model == "all":
+        if not typer.confirm("Clear ALL cached models?"):
+            raise typer.Abort()
+
+        cleared = 0
+        for name, info in _MODEL_REGISTRY.items():
+            cache_dir = get_hf_cache_dir(info["repo"])
+            if cache_dir.exists():
+                shutil.rmtree(cache_dir)
+                console.print(f"  Cleared {name}")
+                cleared += 1
+
+        if cleared == 0:
+            console.print("[yellow]No cached models found[/]")
+        else:
+            console.print(f"[green]Cleared {cleared} model(s)[/]")
+        return
+
+    if model not in _MODEL_REGISTRY:
+        console.print(f"[red]Unknown model: {model}[/]")
+        console.print("[dim]Run 'voxtype models list' to see available models[/]")
+        raise typer.Exit(1)
+
+    info = _MODEL_REGISTRY[model]
+    cache_dir = get_hf_cache_dir(info["repo"])
+
+    if not cache_dir.exists():
+        console.print(f"[yellow]Model '{model}' is not cached[/]")
+        raise typer.Exit(0)
+
+    shutil.rmtree(cache_dir)
+    console.print(f"[green]Cleared '{model}'[/]")
 
 def _check_python_environment() -> None:
     """Check if running in the correct Python environment."""
