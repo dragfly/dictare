@@ -1,12 +1,10 @@
-"""VyvoTTS backend - Qwen3-based TTS via mlx-audio.
+"""OuteTTS backend - MLX-optimized TTS for Apple Silicon.
 
-Note: On Apple Silicon, the 'qwen3' engine in mlx-audio uses VyvoTTS
-(a Qwen3-based model), not the official Alibaba Qwen3-TTS.
+OuteTTS is a Llama-based TTS model that works reliably with mlx-audio.
+This is the recommended TTS engine for Apple Silicon Macs.
 
-For official Qwen3-TTS, use OuteTTS instead (better support in mlx-audio).
-
-MLX: https://github.com/Blaizzy/mlx-audio
-VyvoTTS: https://huggingface.co/Vyvo
+GitHub: https://github.com/Blaizzy/mlx-audio
+Models: https://huggingface.co/mlx-community (search "OuteTTS")
 """
 
 from __future__ import annotations
@@ -40,28 +38,37 @@ def _has_mlx_audio() -> bool:
         return False
 
 
-# VyvoTTS models on mlx-community (these work with mlx-audio's 'qwen3' architecture)
-VYVO_MODELS = {
-    "4bit": ("mlx-community/VyvoTTS-EN-Beta-4bit", 0.3),   # ~300MB, fastest
-    "8bit": ("mlx-community/VyvoTTS-EN-Beta-8bit", 0.5),   # ~500MB, better quality
-    "fp16": ("mlx-community/VyvoTTS-EN-Beta-fp16", 2.0),   # ~2GB, best quality
+# Available OuteTTS models on mlx-community
+OUTETTS_MODELS = {
+    "small": ("mlx-community/Llama-OuteTTS-1.0-1B-4bit", 0.6),   # ~600MB
+    "medium": ("mlx-community/Llama-OuteTTS-1.0-1B-8bit", 1.0),  # ~1GB
+    "large": ("mlx-community/Llama-OuteTTS-1.0-1B-fp16", 2.0),   # ~2GB
 }
 
-DEFAULT_MODEL = "4bit"
+# Supported languages (24 total)
+SUPPORTED_LANGUAGES = [
+    "en", "it", "de", "fr", "es", "pt", "nl",  # European
+    "zh", "ja", "ko",  # East Asian
+    "ar", "fa",  # Middle Eastern
+    "ru", "uk", "be", "pl", "lt", "lv", "hu",  # Eastern European
+    "bn", "ta", "sw", "ka",  # Other
+]
+
+# Additional model needed by OuteTTS
+SNAC_MODEL = ("mlx-community/snac_24khz", 0.1)  # ~100MB
+
+DEFAULT_MODEL = "small"
 
 
-class Qwen3TTS(TTSEngine):
-    """TTS using VyvoTTS via mlx-audio (Qwen3-based architecture).
-
-    Note: This uses VyvoTTS, not the official Alibaba Qwen3-TTS.
-    VyvoTTS is a Qwen3-based TTS model that works well with mlx-audio.
+class OuteTTS(TTSEngine):
+    """TTS using OuteTTS via mlx-audio - optimized for Apple Silicon.
 
     Install: ./install.sh (includes mlx-audio on Apple Silicon)
 
     Models (auto-downloaded on first use):
-    - 4bit: Fastest, ~300MB
-    - 8bit: Better quality, ~500MB
-    - fp16: Best quality, ~2GB
+    - small: 4-bit quantized, fastest, ~600MB
+    - medium: 8-bit quantized, balanced, ~1GB
+    - large: fp16, best quality, ~2GB
     """
 
     def __init__(
@@ -69,22 +76,22 @@ class Qwen3TTS(TTSEngine):
         language: str = "en",
         speed: float = 1.0,
         voice: str = "",
-        model_size: str = DEFAULT_MODEL,
+        model_size: str = "small",
     ) -> None:
-        """Initialize VyvoTTS (via qwen3 engine).
+        """Initialize OuteTTS.
 
         Args:
-            language: Language code (en only for VyvoTTS).
+            language: Language code (en, etc.).
             speed: Speech speed multiplier (0.5-2.0).
-            voice: Ignored (VyvoTTS uses single voice).
-            model_size: Quantization - "4bit", "8bit", or "fp16".
+            voice: Voice name (model-specific, optional).
+            model_size: Model size - "small", "medium", or "large".
         """
         self.language = language
         self.speed = speed
         self.voice = voice
-        self.model_size = model_size if model_size in VYVO_MODELS else DEFAULT_MODEL
+        self.model_size = model_size
 
-        model_info = VYVO_MODELS.get(self.model_size, VYVO_MODELS[DEFAULT_MODEL])
+        model_info = OUTETTS_MODELS.get(model_size, OUTETTS_MODELS[DEFAULT_MODEL])
         self._model_repo = model_info[0]
         self._model_size_gb = model_info[1]
 
@@ -111,11 +118,12 @@ class Qwen3TTS(TTSEngine):
         from voxtype.utils.hf_download import is_repo_cached, download_with_progress
         from huggingface_hub import snapshot_download
 
+        # Check and download main model
         if not is_repo_cached(self._model_repo, "config.json"):
             from rich.console import Console
             console = Console()
 
-            console.print(f"[cyan]Downloading VyvoTTS model ({self._model_size_gb:.1f} GB)...[/]")
+            console.print(f"[cyan]Downloading OuteTTS model ({self._model_size_gb:.1f} GB)...[/]")
 
             download_with_progress(
                 self._model_repo,
@@ -123,11 +131,25 @@ class Qwen3TTS(TTSEngine):
                 fallback_size_gb=self._model_size_gb,
             )
 
+        # Check and download SNAC codec model (needed for audio decoding)
+        snac_repo, snac_size = SNAC_MODEL
+        if not is_repo_cached(snac_repo, "config.json"):
+            from rich.console import Console
+            console = Console()
+
+            console.print(f"[cyan]Downloading audio codec ({snac_size:.1f} GB)...[/]")
+
+            download_with_progress(
+                snac_repo,
+                lambda: snapshot_download(snac_repo),
+                fallback_size_gb=snac_size,
+            )
+
         self._models_ready = True
         return True
 
     def speak(self, text: str) -> bool:
-        """Speak text using VyvoTTS via mlx-audio CLI.
+        """Speak text using OuteTTS via mlx-audio.
 
         Args:
             text: Text to speak.
@@ -138,33 +160,41 @@ class Qwen3TTS(TTSEngine):
         if not self.is_available():
             return False
 
+        # Ensure models are downloaded with nice progress
         if not self._ensure_models_downloaded():
             return False
 
+        # Generate and play audio with suppressed verbose output
         return self._generate_and_play(text)
 
     def _generate_and_play(self, text: str) -> bool:
-        """Generate audio and play it using mlx-audio CLI."""
+        """Generate audio and play it, suppressing verbose output."""
         try:
+            # Suppress all the noisy output
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
 
+                # Suppress HuggingFace progress bars
                 from huggingface_hub.utils import disable_progress_bars, enable_progress_bars
                 disable_progress_bars()
 
+                # Suppress transformers warnings
                 logging.getLogger("transformers").setLevel(logging.ERROR)
                 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
                 try:
                     with tempfile.TemporaryDirectory() as tmpdir:
+                        # Run generation silently
                         cmd = [
                             sys.executable, "-m", "mlx_audio.tts.generate",
                             "--model", self._model_repo,
                             "--text", text,
                             "--speed", str(self.speed),
+                            "--lang_code", self.language,
                             "--file_prefix", f"{tmpdir}/audio",
                         ]
 
+                        # Run with suppressed output
                         result = subprocess.run(
                             cmd,
                             capture_output=True,
@@ -176,8 +206,10 @@ class Qwen3TTS(TTSEngine):
                             logging.error(f"TTS generation failed: {result.stderr.decode()}")
                             return False
 
+                        # Find and play the generated audio file
                         audio_files = list(Path(tmpdir).glob("audio_*.wav"))
                         if audio_files:
+                            # Play with afplay (macOS)
                             subprocess.run(
                                 ["afplay", str(audio_files[0])],
                                 capture_output=True,
@@ -196,4 +228,4 @@ class Qwen3TTS(TTSEngine):
 
     def get_name(self) -> str:
         """Get engine name."""
-        return f"vyvotts-{self.model_size}"
+        return f"outetts-{self.model_size}"

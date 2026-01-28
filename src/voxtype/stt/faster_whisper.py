@@ -84,7 +84,7 @@ def _is_turbo_model_cached() -> bool:
 
 
 def _download_model_with_progress(model_size: str, console=None) -> str:
-    """Download model with progress bar, return local path."""
+    """Download model with real progress bar (monitors cache size), return local path."""
     import os as _os
 
     from huggingface_hub import snapshot_download
@@ -92,23 +92,29 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
         HfHubHTTPError,
         RepositoryNotFoundError,
     )
-    from rich.progress import (
-        BarColumn,
-        DownloadColumn,
-        Progress,
-        TextColumn,
-        TimeRemainingColumn,
-        TransferSpeedColumn,
+
+    from voxtype.utils.hf_download import (
+        DownloadProgressMonitor,
+        get_repo_size,
+        is_repo_cached,
     )
 
     repo_id = _MODEL_REPOS.get(model_size)
     if repo_id is None:
         return model_size  # Turbo models: let faster-whisper handle
 
-    size_mb = _MODEL_SIZES_MB.get(model_size, "?")
+    # Check if already cached
+    if is_repo_cached(repo_id, "model.bin"):
+        return snapshot_download(repo_id, local_files_only=True)
+
+    # Get expected size from API (or use fallback)
+    expected_size = get_repo_size(repo_id)
+    fallback_mb = _MODEL_SIZES_MB.get(model_size, 500)
+    if expected_size is None:
+        expected_size = fallback_mb * 1024 * 1024
 
     if console:
-        console.print(f"[cyan]Downloading Whisper model '{model_size}' (~{size_mb} MB)...[/]")
+        console.print(f"[cyan]Downloading Whisper model '{model_size}' ({expected_size / 1e6:.0f} MB)...[/]")
         console.print(f"[dim]Source: huggingface.co/{repo_id}[/]")
 
     # Clear any HF credentials from environment to avoid auth issues with public repos
@@ -119,30 +125,45 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
             saved_env[var] = _os.environ.pop(var)
 
     try:
-        # Download with rich progress bar
-        with Progress(
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
-            DownloadColumn(),
-            TransferSpeedColumn(),
-            TimeRemainingColumn(),
-            console=console,
-            transient=True,
-        ) as progress:
-            task = progress.add_task(f"Downloading {model_size}", total=None)
+        from huggingface_hub import disable_progress_bars, enable_progress_bars
+        from rich.progress import (
+            BarColumn,
+            DownloadColumn,
+            Progress,
+            TextColumn,
+            TimeRemainingColumn,
+            TransferSpeedColumn,
+        )
 
-            local_path = snapshot_download(
-                repo_id,
-                local_files_only=False,
-                token=False,  # Public repos - no auth needed
-            )
+        # Suppress huggingface's ugly progress
+        disable_progress_bars()
 
-            progress.update(task, completed=True)
+        try:
+            # Real progress bar with cache monitoring
+            with Progress(
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(f"Downloading {model_size}", total=expected_size)
 
-        if console:
-            console.print("[green]Model downloaded successfully[/]")
+                with DownloadProgressMonitor(repo_id, expected_size, progress, task):
+                    local_path = snapshot_download(
+                        repo_id,
+                        local_files_only=False,
+                        token=False,  # Public repos - no auth needed
+                    )
 
-        return local_path
+            if console:
+                console.print("[green]✓ Model downloaded successfully[/]")
+
+            return local_path
+
+        finally:
+            enable_progress_bars()
 
     except RepositoryNotFoundError as e:
         if console:

@@ -213,7 +213,8 @@ install_macos() {
         # Build install flags
         # --reinstall: upgrade even if installed
         # --force: rebuild from source (ignore cached wheel)
-        INSTALL_FLAGS="--reinstall --python 3.11"
+        # --prerelease=allow: needed for mlx-audio 0.3.0 which requires transformers==5.0.0rc3
+        INSTALL_FLAGS="--reinstall --python 3.11 --prerelease=allow"
         if [ $FORCE_MODE -eq 1 ]; then
             INSTALL_FLAGS="$INSTALL_FLAGS --force"
         fi
@@ -396,7 +397,8 @@ EOF
         # --reinstall: upgrade even if installed
         # --python 3.11: consistent Python version across platforms
         # --force: rebuild from source (ignore cached wheel)
-        INSTALL_FLAGS="--reinstall --python 3.11"
+        # --prerelease=allow: needed for mlx-audio 0.3.0 which requires transformers==5.0.0rc3
+        INSTALL_FLAGS="--reinstall --python 3.11 --prerelease=allow"
         if [ $FORCE_MODE -eq 1 ]; then
             INSTALL_FLAGS="$INSTALL_FLAGS --force"
         fi
