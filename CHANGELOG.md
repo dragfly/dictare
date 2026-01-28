@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.48.0] - 2026-01-28
+
+### Added
+- **Agent auto-discovery**: `voxtype listen --agents` now auto-discovers running agents
+  - No need to specify agent names - discovers by watching socket directory
+  - Real-time updates when agents start/stop (using `watchdog` filesystem watcher)
+  - Stale socket detection: automatically cleans up orphaned sockets
+  - Agents sorted by creation time (oldest first)
+  - UI updates dynamically when agents appear/disappear
+- New dependency: `watchdog>=4.0.0` for filesystem monitoring
+
+### Changed
+- **`--agents` is now a flag**: Use `voxtype listen --agents` instead of `voxtype listen --agents claude,pippo`
+- Agent mode starts with empty list and populates dynamically
+
 ## [2.47.0] - 2026-01-28
 
 ### Added

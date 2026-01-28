@@ -60,7 +60,7 @@ class VoxtypeEngine:
         config: Config,
         events: EngineEvents | None = None,
         logger: JSONLLogger | None = None,
-        agents: list[str] | None = None,
+        agent_mode: bool = False,
         realtime: bool = False,
     ) -> None:
         """Initialize the engine.
@@ -69,7 +69,7 @@ class VoxtypeEngine:
             config: Application configuration.
             events: Optional event handler for UI callbacks.
             logger: Optional JSONL logger for structured logging.
-            agents: List of agent IDs for multi-output mode (socket-based).
+            agent_mode: Enable agent mode with auto-discovery.
             realtime: Enable realtime transcription feedback while speaking.
         """
         self.config = config
@@ -97,7 +97,18 @@ class VoxtypeEngine:
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
-        self.agents = agents or []
+
+        # Agent mode: auto-discover agents from socket directory
+        self.agent_mode = agent_mode
+        self.agents: list[str] = []
+        self._agent_watcher: Any = None  # AgentWatcher instance
+        if agent_mode:
+            from voxtype.agent.watcher import AgentWatcher
+
+            self._agent_watcher = AgentWatcher(
+                on_agent_added=self._on_agent_added,
+                on_agent_removed=self._on_agent_removed,
+            )
         # State machine handles all state (OFF/LISTENING/RECORDING/etc)
         self._state_manager = StateManager(initial_state=AppState.OFF)
 
@@ -852,6 +863,44 @@ class VoxtypeEngine:
     # Agent Control
     # -------------------------------------------------------------------------
 
+    def _on_agent_added(self, agent: Any) -> None:
+        """Callback when a new agent is discovered.
+
+        Args:
+            agent: Agent object from the watcher.
+        """
+        if agent.id not in self.agents:
+            self.agents.append(agent.id)
+            # Sort by creation time (watcher returns sorted, but ensure consistency)
+            if self._agent_watcher:
+                self.agents = self._agent_watcher.agent_ids
+            self._emit("on_agents_changed", self.agents)
+
+    def _on_agent_removed(self, agent: Any) -> None:
+        """Callback when an agent disappears.
+
+        Args:
+            agent: Agent object from the watcher.
+        """
+        if agent.id in self.agents:
+            was_current = (
+                self._current_agent_index < len(self.agents)
+                and self.agents[self._current_agent_index] == agent.id
+            )
+            self.agents = [a for a in self.agents if a != agent.id]
+
+            # Adjust current index if needed
+            if self.agents:
+                if was_current or self._current_agent_index >= len(self.agents):
+                    self._current_agent_index = 0
+                    # Recreate injector for new agent
+                    self._injector = self._create_injector()
+                    self._emit("on_agent_change", self.agents[0], 0)
+            else:
+                self._current_agent_index = 0
+
+            self._emit("on_agents_changed", self.agents)
+
     def _switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent - sends event to controller."""
         self._controller.send(AgentSwitchEvent(direction=direction, source="api"))
@@ -951,6 +1000,11 @@ class VoxtypeEngine:
         self._running = True
         self._stats_start_time = time.time()
 
+        # Start agent watcher if in agent mode
+        if self._agent_watcher:
+            self._agent_watcher.start()
+            self.agents = self._agent_watcher.agent_ids
+
         # Start the state controller (event queue processor)
         self._controller.start()
 
@@ -1020,6 +1074,10 @@ class VoxtypeEngine:
 
         if self._local_receiver:
             self._local_receiver.stop()
+
+        # Stop agent watcher
+        if self._agent_watcher:
+            self._agent_watcher.stop()
 
         if self._hotkey:
             self._hotkey.stop()
