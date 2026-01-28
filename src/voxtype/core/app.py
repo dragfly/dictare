@@ -605,6 +605,9 @@ class VoxtypeApp(EngineEvents):
         if self._engine._agent_watcher:
             self._engine._agent_watcher.start()
             self._engine.agents = self._engine._agent_watcher.agent_ids
+            # Recreate injector now that agents are discovered
+            if self._engine.agents:
+                self._engine._injector = self._engine._create_injector()
             # Print discovered agent sockets
             if self.config.verbose and self._engine.agents:
                 from voxtype.injection.socket import get_socket_path
