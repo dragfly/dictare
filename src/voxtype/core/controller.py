@@ -326,10 +326,9 @@ class StateController:
 
         if current == AppState.OFF:
             # OFF → LISTENING
-            old_state = current
             if self._state_manager.try_transition(AppState.LISTENING):
                 if self._on_state_change:
-                    self._on_state_change(old_state, AppState.LISTENING, "hotkey_toggle")
+                    self._on_state_change(AppState.OFF, AppState.LISTENING, "hotkey_toggle")
                 # Sync LLM processor
                 if self._engine and self._engine._llm_processor:
                     self._engine._llm_processor.set_listening(True)
@@ -338,13 +337,13 @@ class StateController:
             self._desired_state_after_tts = AppState.OFF
         else:
             # Any active state → OFF
-            old_state = current
+            previous = current  # Capture before transition
             if self._state_manager.try_transition(AppState.OFF):
                 # Clear buffered audio
                 if self._engine:
                     self._engine._discard_current_internal()
                 if self._on_state_change:
-                    self._on_state_change(old_state, AppState.OFF, "hotkey_toggle")
+                    self._on_state_change(previous, AppState.OFF, "hotkey_toggle")
                 # Sync LLM processor
                 if self._engine and self._engine._llm_processor:
                     self._engine._llm_processor.set_listening(False)
@@ -385,17 +384,15 @@ class StateController:
         current = self._state_manager.state
 
         if event.on and current == AppState.OFF:
-            old_state = current
             if self._state_manager.try_transition(AppState.LISTENING):
                 if self._on_state_change:
-                    self._on_state_change(old_state, AppState.LISTENING, "set_listening")
+                    self._on_state_change(AppState.OFF, AppState.LISTENING, "set_listening")
                 if self._engine and self._engine._llm_processor:
                     self._engine._llm_processor.set_listening(True)
         elif not event.on and current == AppState.LISTENING:
-            old_state = current
             if self._state_manager.try_transition(AppState.OFF):
                 if self._on_state_change:
-                    self._on_state_change(old_state, AppState.OFF, "set_listening")
+                    self._on_state_change(AppState.LISTENING, AppState.OFF, "set_listening")
                 if self._engine and self._engine._llm_processor:
                     self._engine._llm_processor.set_listening(False)
 

@@ -7,6 +7,8 @@ import time
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import InjectionResult, TranscriptionResult
 from voxtype.core.state import AppState, ProcessingMode
@@ -540,18 +542,46 @@ class TestDoubleTabDetection:
     """Test hotkey double-tap detection.
 
     Note: State changes are now async via the event queue.
-    These tests are skipped because _on_hotkey_toggle was refactored.
     """
 
+    @pytest.mark.skip(reason="TODO: Update test for new hotkey API (_on_hotkey_toggle removed)")
     def test_double_tap_switches_mode(self) -> None:
         """Rapid double tap switches processing mode."""
-        # TODO: Update test for new hotkey API
-        pass
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
 
+        try:
+            # Simulate rapid double tap
+            engine._on_hotkey_toggle()
+            engine._last_tap_time = time.time() - 0.1  # 100ms ago
+            engine._on_hotkey_toggle()
+            _wait_for_controller()
+
+            # Should have switched mode
+            assert len(events.mode_changes) == 1
+        finally:
+            engine._controller.stop()
+
+    @pytest.mark.skip(reason="TODO: Update test for new hotkey API (_on_hotkey_toggle removed)")
     def test_single_tap_toggles_listening_after_delay(self) -> None:
         """Single tap toggles listening after threshold delay."""
-        # TODO: Update test for new hotkey API
-        pass
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+        engine._controller.start()
+
+        try:
+            engine._on_hotkey_toggle()
+
+            # Wait for threshold + controller processing
+            time.sleep(engine.DOUBLE_TAP_THRESHOLD + 0.15)
+
+            # Should have toggled listening
+            assert engine.state == AppState.LISTENING
+        finally:
+            engine._controller.stop()
 
 
 class TestHotwords:

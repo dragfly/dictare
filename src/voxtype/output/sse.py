@@ -56,8 +56,10 @@ class SSEHandler(BaseHTTPRequestHandler):
         # Keep connection open
         try:
             while self.sse_server and self.sse_server._running:
-                # Wait for events (handled by _send_event calls from server)
-                threading.Event().wait(timeout=30)
+                # Wait for shutdown or keepalive timeout
+                self.sse_server._shutdown_event.wait(timeout=30)
+                if not self.sse_server._running:
+                    break
                 # Send keepalive comment
                 try:
                     self.wfile.write(b": keepalive\n\n")
@@ -124,6 +126,7 @@ class SSEServer:
         self._running = False
         self._clients: list[SSEHandler] = []
         self._clients_lock = threading.Lock()
+        self._shutdown_event = threading.Event()
 
     def start(self) -> None:
         """Start the SSE server in a background thread."""
@@ -149,10 +152,12 @@ class SSEServer:
     def stop(self) -> None:
         """Stop the SSE server."""
         self._running = False
+        self._shutdown_event.set()  # Wake up waiting handlers
         if self._server:
             self._server.shutdown()
             self._server = None
         self._thread = None
+        self._shutdown_event.clear()  # Reset for potential restart
 
     def _serve(self) -> None:
         """Serve requests (runs in background thread)."""
