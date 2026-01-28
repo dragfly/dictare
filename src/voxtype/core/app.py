@@ -548,7 +548,7 @@ class VoxtypeApp(EngineEvents):
     def _run_vad_mode(self) -> None:
         """Run in VAD (voice activity detection) mode."""
         # Show loading messages
-        self._console.print(f"[dim]Loading STT model ({self.config.stt.model_size})...[/]")
+        self._console.print(f"[dim]Loading STT model ({self.config.stt.model})...[/]")
 
         # Initialize engine components (this calls _init_vad_components internally)
         self._engine._init_vad_components()

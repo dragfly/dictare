@@ -249,7 +249,7 @@ def _apply_cli_overrides(
     Boolean flags use negative form (--no-X) for features that are ON by default.
     """
     if model:
-        config.stt.model_size = model
+        config.stt.model = model
     if hotkey:
         config.hotkey.key = hotkey
     if language:
@@ -324,7 +324,7 @@ def _create_logger(config, agents: list[str] | None = None):
         "trigger_phrase": config.command.wake_word,
         "log_level": level.name,
         "silence_ms": config.audio.silence_ms,
-        "stt_model": config.stt.model_size,
+        "stt_model": config.stt.model,
         "stt_language": config.stt.language,
         "output_method": config.output.method,
     }
@@ -825,7 +825,7 @@ def _show_config_list() -> None:
 @config_app.command("get")
 def config_get(
     ctx: typer.Context,
-    key: Annotated[str | None, typer.Argument(help="Config key (e.g., stt.model_size)")] = None,
+    key: Annotated[str | None, typer.Argument(help="Config key (e.g., stt.model)")] = None,
 ) -> None:
     """Get a configuration value."""
     if key is None:
@@ -844,7 +844,7 @@ def config_get(
 @config_app.command("set")
 def config_set(
     ctx: typer.Context,
-    key: Annotated[str | None, typer.Argument(help="Config key (e.g., stt.model_size)")] = None,
+    key: Annotated[str | None, typer.Argument(help="Config key (e.g., stt.model)")] = None,
     value: Annotated[str | None, typer.Argument(help="Value to set")] = None,
 ) -> None:
     """Set a configuration value."""
@@ -1245,7 +1245,7 @@ def transcribe(
 
         # Apply CLI overrides
         if model:
-            config.stt.model_size = model
+            config.stt.model = model
         if language:
             config.stt.language = language
 
@@ -1263,7 +1263,7 @@ def transcribe(
             stt_engine = FasterWhisperEngine()
 
         stt_engine.load_model(
-            config.stt.model_size,
+            config.stt.model,
             device=config.stt.device,
             compute_type=config.stt.compute_type,
         )
@@ -1381,7 +1381,7 @@ def execute(
         _auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
 
         if model:
-            config.stt.model_size = model
+            config.stt.model = model
         if language:
             config.stt.language = language
 
@@ -1398,7 +1398,7 @@ def execute(
             stt_engine = FasterWhisperEngine()
 
         stt_engine.load_model(
-            config.stt.model_size,
+            config.stt.model,
             device=config.stt.device,
             compute_type=config.stt.compute_type,
         )
@@ -2116,7 +2116,7 @@ def _get_configured_models(config=None) -> set[str]:
 
     # STT model: map config value to registry key
     # e.g., "large-v3-turbo" -> "whisper-large-v3-turbo"
-    stt_model = config.stt.model_size
+    stt_model = config.stt.model
     stt_key = f"whisper-{stt_model}"
     if stt_key in registry:
         configured.add(stt_key)

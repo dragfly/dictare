@@ -97,7 +97,7 @@ Config file: `~/.config/voxtype/config.toml`
 
 ```toml
 [stt]
-model_size = "large-v3-turbo"
+model = "large-v3-turbo"
 language = "auto"
 
 [hotkey]

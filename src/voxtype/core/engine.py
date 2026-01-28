@@ -245,7 +245,7 @@ class VoxtypeEngine:
         """Create and load STT engine.
 
         Args:
-            model_size: Model size to load. If None, uses config.stt.model_size.
+            model_size: Model size to load. If None, uses config.stt.model.
         """
         from voxtype.utils.hardware import is_mlx_available
 
@@ -261,7 +261,7 @@ class VoxtypeEngine:
             engine = FasterWhisperEngine()
 
         engine.load_model(
-            model_size or self.config.stt.model_size,
+            model_size or self.config.stt.model,
             device=self.config.stt.device,
             compute_type=self.config.stt.compute_type,
             console=None,  # No console in engine
