@@ -205,12 +205,32 @@ class StatsConfig(BaseModel):
         description="Average typing speed in words per minute (for time saved calculation)",
     )
 
+class DaemonConfig(BaseModel):
+    """Daemon configuration."""
+
+    socket_path: str = Field(
+        default="/tmp/voxtype-daemon.sock",
+        description="Path to daemon Unix socket",
+    )
+    preload_tts: bool = Field(
+        default=True,
+        description="Preload TTS engine on daemon start",
+    )
+    preload_stt: bool = Field(
+        default=False,
+        description="Preload STT engine on daemon start",
+    )
+    idle_timeout: int = Field(
+        default=0,
+        description="Shutdown daemon after N seconds of inactivity (0 = never)",
+    )
+
 class TTSConfig(BaseModel):
     """Text-to-speech configuration."""
 
-    engine: Literal["espeak", "say", "piper", "coqui"] = Field(
+    engine: Literal["espeak", "say", "piper", "coqui", "qwen3", "outetts"] = Field(
         default="espeak",
-        description="TTS engine: espeak, say (macOS), piper (neural), coqui (XTTS)",
+        description="TTS engine: espeak, say (macOS), piper, coqui, outetts (MLX)",
     )
     language: str = Field(
         default="en",
@@ -239,6 +259,7 @@ class Config(BaseModel):
     sse: SSEConfig = Field(default_factory=SSEConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     stats: StatsConfig = Field(default_factory=StatsConfig)
+    daemon: DaemonConfig = Field(default_factory=DaemonConfig)
 
     verbose: bool = Field(default=False, description="Enable verbose output")
 
@@ -459,7 +480,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "command", "keyboard", "webhook", "sse", "logging", "stats"):
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "command", "keyboard", "webhook", "sse", "logging", "stats", "daemon"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -485,6 +506,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("sse", SSEConfig),
         ("logging", LoggingConfig),
         ("stats", StatsConfig),
+        ("daemon", DaemonConfig),
     ]
 
     for section_name, section_class in sections:

@@ -34,6 +34,11 @@ app = typer.Typer(
 # Completion subcommand
 completion_app = typer.Typer(help="Manage shell completion", no_args_is_help=True)
 app.add_typer(completion_app, name="completion")
+
+# Daemon subcommand
+daemon_app = typer.Typer(help="Manage the voxtype daemon", no_args_is_help=True)
+app.add_typer(daemon_app, name="daemon")
+
 console = Console(
     force_terminal=None,  # Auto-detect
     force_interactive=None,  # Auto-detect
@@ -734,6 +739,138 @@ def config_shortcuts() -> None:
 
     configure_shortcuts()
 
+# Daemon commands
+@daemon_app.command("start")
+def daemon_start(
+    foreground: Annotated[
+        bool,
+        typer.Option("--foreground", "-f", help="Run in foreground (for systemd/launchd)"),
+    ] = False,
+) -> None:
+    """Start the voxtype daemon.
+
+    The daemon keeps TTS/STT models loaded in memory for fast responses.
+
+    Examples:
+        voxtype daemon start              # Background
+        voxtype daemon start --foreground # Foreground (for systemd/launchd)
+    """
+    from voxtype.daemon import get_daemon_status, start_daemon
+
+    status = get_daemon_status()
+    if status.running:
+        console.print(f"[yellow]Daemon already running[/] (PID: {status.pid})")
+        raise typer.Exit(0)
+
+    if foreground:
+        console.print("[dim]Starting daemon in foreground...[/]")
+        result = start_daemon(foreground=True)
+    else:
+        console.print("[dim]Starting daemon...[/]")
+        result = start_daemon(foreground=False)
+
+        if result == 0:
+            # Verify it started
+            import time
+
+            time.sleep(0.5)
+            status = get_daemon_status()
+            if status.running:
+                console.print(f"[green]Daemon started[/] (PID: {status.pid})")
+            else:
+                console.print("[red]Daemon failed to start[/]")
+                console.print("[dim]Check logs: ~/.local/share/voxtype/daemon.log[/]")
+                raise typer.Exit(1)
+        else:
+            console.print("[red]Failed to start daemon[/]")
+            raise typer.Exit(1)
+
+@daemon_app.command("stop")
+def daemon_stop() -> None:
+    """Stop the voxtype daemon."""
+    from voxtype.daemon import get_daemon_status, stop_daemon
+
+    status = get_daemon_status()
+    if not status.running:
+        console.print("[yellow]Daemon is not running[/]")
+        raise typer.Exit(0)
+
+    console.print(f"[dim]Stopping daemon (PID: {status.pid})...[/]")
+    result = stop_daemon()
+
+    if result == 0:
+        console.print("[green]Daemon stopped[/]")
+    else:
+        console.print("[red]Failed to stop daemon[/]")
+        raise typer.Exit(1)
+
+@daemon_app.command("status")
+def daemon_status_cmd() -> None:
+    """Show daemon status."""
+    from voxtype.daemon import get_daemon_status
+    from voxtype.daemon.client import DaemonClient, is_daemon_running
+
+    status = get_daemon_status()
+
+    if not status.running:
+        console.print("[yellow]Daemon is not running[/]")
+        if status.socket_exists:
+            console.print("[dim]Stale socket file exists (will be cleaned on next start)[/]")
+        raise typer.Exit(0)
+
+    console.print(f"[green]Daemon is running[/] (PID: {status.pid})")
+
+    # Try to get detailed status from daemon
+    if is_daemon_running():
+        try:
+            client = DaemonClient()
+            response = client.get_status()
+
+            if hasattr(response, "uptime_seconds"):
+                uptime = response.uptime_seconds
+                if uptime < 60:
+                    uptime_str = f"{uptime:.0f}s"
+                elif uptime < 3600:
+                    uptime_str = f"{uptime / 60:.1f}m"
+                else:
+                    uptime_str = f"{uptime / 3600:.1f}h"
+                console.print(f"  Uptime: {uptime_str}")
+                console.print(f"  Requests served: {response.requests_served}")
+                console.print(f"  TTS loaded: {'yes' if response.tts_loaded else 'no'}")
+                if response.tts_engine:
+                    console.print(f"  TTS engine: {response.tts_engine}")
+        except Exception as e:
+            console.print(f"[dim]Could not get detailed status: {e}[/]")
+
+@daemon_app.command("restart")
+def daemon_restart(
+    foreground: Annotated[
+        bool,
+        typer.Option("--foreground", "-f", help="Run in foreground after restart"),
+    ] = False,
+) -> None:
+    """Restart the voxtype daemon."""
+    from voxtype.daemon import get_daemon_status, start_daemon, stop_daemon
+
+    status = get_daemon_status()
+    if status.running:
+        console.print(f"[dim]Stopping daemon (PID: {status.pid})...[/]")
+        stop_daemon()
+
+    console.print("[dim]Starting daemon...[/]")
+    result = start_daemon(foreground=foreground)
+
+    if result == 0 and not foreground:
+        import time
+
+        time.sleep(0.5)
+        status = get_daemon_status()
+        if status.running:
+            console.print(f"[green]Daemon restarted[/] (PID: {status.pid})")
+        else:
+            console.print("[red]Daemon failed to start[/]")
+            raise typer.Exit(1)
+
 @app.command()
 def speak(
     ctx: typer.Context,
@@ -751,7 +888,7 @@ def speak(
     ] = None,
     engine: Annotated[
         str | None,
-        typer.Option("--engine", "-e", help="TTS engine: espeak, say (macOS), piper, qwen3, coqui"),
+        typer.Option("--engine", "-e", help="TTS engine: espeak, say, piper, coqui, qwen3, outetts"),
     ] = None,
     voice: Annotated[
         str | None,
@@ -765,6 +902,14 @@ def speak(
         bool,
         typer.Option("--quiet", "-q", help="Suppress status messages (for pipe mode)"),
     ] = False,
+    list_engines: Annotated[
+        bool,
+        typer.Option("--list-engines", help="List available TTS engines and exit"),
+    ] = False,
+    no_daemon: Annotated[
+        bool,
+        typer.Option("--no-daemon", help="Force in-process TTS (skip daemon even if running)"),
+    ] = False,
 ) -> None:
     """Speak text using text-to-speech.
 
@@ -772,11 +917,29 @@ def speak(
         voxtype speak "Hello world"
         echo "Hello world" | voxtype speak
         llm "Tell me a joke" | voxtype speak --engine say
+        voxtype speak --list-engines
+        voxtype speak "Hello" --no-daemon  # Force in-process
     """
     import sys
 
     from voxtype.config import TTSConfig, load_config
     from voxtype.tts import create_tts_engine
+
+    # List engines mode
+    if list_engines:
+        console.print("[bold]Available TTS engines:[/]\n")
+        engines_info = [
+            ("espeak", "Basic TTS", "Many", "System: brew install espeak"),
+            ("say", "macOS built-in", "Many", "macOS only"),
+            ("piper", "Neural TTS", "Many", "pip: piper-tts"),
+            ("coqui", "Neural TTS (XTTS)", "8+", "pip: TTS"),
+            ("outetts", "Neural TTS (MLX)", "24", "Apple Silicon, pip: mlx-audio"),
+            ("qwen3", "VyvoTTS (MLX)", "en only", "Apple Silicon, pip: mlx-audio"),
+        ]
+        for name, desc, langs, install in engines_info:
+            console.print(f"  [cyan]{name:10}[/] {desc:20} Languages: {langs:8} ({install})")
+        console.print("\n[dim]Use: voxtype speak \"text\" --engine <name>[/]")
+        raise typer.Exit(0)
 
     # Load config
     config = load_config(config_file)
@@ -795,6 +958,13 @@ def speak(
             click.echo(ctx.get_help())
             raise typer.Exit(0)
 
+    # Validate engine if provided
+    valid_engines = ("espeak", "say", "piper", "coqui", "qwen3", "outetts")
+    if engine is not None and engine not in valid_engines:
+        console.print(f"[red]Error: Unknown TTS engine '{engine}'[/]")
+        console.print(f"[dim]Available engines: {', '.join(valid_engines)}[/]")
+        raise typer.Exit(1)
+
     # Build TTS config with CLI overrides
     tts_config = TTSConfig(
         engine=engine or config.tts.engine,  # type: ignore[arg-type]
@@ -803,6 +973,35 @@ def speak(
         voice=voice or config.tts.voice,
     )
 
+    # Try to use daemon if available and not --no-daemon
+    if not no_daemon:
+        from voxtype.daemon.client import DaemonClient, is_daemon_running
+
+        if is_daemon_running():
+            try:
+                client = DaemonClient()
+                response = client.send_tts_request(
+                    text=text,
+                    engine=tts_config.engine,
+                    language=tts_config.language,
+                    voice=tts_config.voice if tts_config.voice else None,
+                    speed=tts_config.speed,
+                )
+
+                if hasattr(response, "status") and response.status == "ok":
+                    if not quiet:
+                        console.print(f"[dim]Spoken via daemon ({response.duration_ms}ms)[/]")
+                    return
+                elif hasattr(response, "error"):
+                    if not quiet:
+                        console.print(f"[yellow]Daemon error: {response.error}[/]")
+                    # Fall through to in-process TTS
+            except Exception as e:
+                if not quiet:
+                    console.print(f"[yellow]Daemon unavailable: {e}[/]")
+                # Fall through to in-process TTS
+
+    # Fallback: in-process TTS
     try:
         tts = create_tts_engine(tts_config)
     except ValueError as e:
