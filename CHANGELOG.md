@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.41.0] - 2026-01-28
+
+### Added
+- **`voxtype models` command**: Model management for TTS/STT
+  - `voxtype models list` - Show models with cache status and size
+  - `voxtype models download <model>` - Download a specific model
+  - `voxtype models clear <model>` - Clear cached model(s)
+  - `voxtype models clear all` - Clear all cached models
+
+### Fixed
+- **HuggingFace download progress**: Now uses `list_repo_tree` API for accurate file sizes
+- **Duplicate download messages**: Removed redundant "Downloading..." messages in qwen3.py
+- **VyvoTTS size estimates**: Updated to accurate values (~1GB for 4bit, not 0.3GB)
+
+## [2.40.0] - 2026-01-28
+
+### Added
+- **Daemon architecture**: Keep models loaded in memory for instant TTS
+  - `voxtype daemon start [--foreground]` - Start daemon
+  - `voxtype daemon stop` - Stop daemon
+  - `voxtype daemon status` - Show daemon status with uptime, requests served
+  - `voxtype daemon restart` - Restart daemon
+- **Fast TTS via daemon**: `voxtype speak` uses daemon if running (~900ms vs ~6s)
+  - `--no-daemon` flag to force in-process TTS
+  - Automatic fallback to in-process if daemon not running
+- **Unix socket server**: `/tmp/voxtype-daemon.sock` with JSON protocol
+- **Thread-safe TTS caching**: Models cached by engine:language:voice:speed key
+- **`DaemonConfig`**: New config section for daemon settings
+
+### Changed
+- **README updated**: Added all commands (daemon, speak, agent, config, log, etc.)
+- **CLI help behavior**: Commands now show help when required arguments missing
+
+## [2.34.0] - 2026-01-28
+
+### Added
+- **OuteTTS engine**: High-quality neural TTS on Apple Silicon via mlx-audio
+- **VyvoTTS via qwen3**: Rewrote qwen3 engine to use VyvoTTS (official Qwen3-TTS not working with mlx-audio)
+- **mlx-audio dependencies**: Added `mlx-audio>=0.3.0` and `soundfile>=0.12.0` to `[mlx]` extras
+- **HuggingFace download utility**: New `hf_download.py` with real progress monitoring via cache size
+- **`--prerelease=allow`**: Added to install.sh for transformers 5.0.0rc3 (mlx-audio dependency)
+
+### Changed
+- **Download progress bars**: Now show accurate progress by monitoring HuggingFace cache directory
+
 ## [2.32.7] - 2026-01-27
 
 ### Changed
