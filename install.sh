@@ -222,16 +222,16 @@ install_macos() {
         if [ $IS_LOCAL -eq 1 ]; then
             # Local install from repo
             if [ "$ARCH" = "arm64" ]; then
-                uv tool install $INSTALL_FLAGS "$SCRIPT_DIR[mlx,tray]"
+                uv tool install $INSTALL_FLAGS "$SCRIPT_DIR[mlx]"
             else
-                uv tool install $INSTALL_FLAGS "$SCRIPT_DIR[tray]"
+                uv tool install $INSTALL_FLAGS "$SCRIPT_DIR"
             fi
         else
             # Remote install from PyPI
             if [ "$ARCH" = "arm64" ]; then
-                uv tool install $INSTALL_FLAGS "voxtype[mlx,tray]"
+                uv tool install $INSTALL_FLAGS "voxtype[mlx]"
             else
-                uv tool install $INSTALL_FLAGS "voxtype[tray]"
+                uv tool install $INSTALL_FLAGS "voxtype"
             fi
         fi
         info "Installed voxtype"
@@ -403,18 +403,18 @@ EOF
             INSTALL_FLAGS="$INSTALL_FLAGS --force"
         fi
 
-        # Determine package spec (with or without gpu extra, always include tray)
+        # Determine package spec (with or without gpu extra)
         if [ $IS_LOCAL -eq 1 ]; then
             if [ $GPU_MODE -eq 1 ]; then
-                PKG_SPEC="$SCRIPT_DIR[gpu,tray]"
+                PKG_SPEC="$SCRIPT_DIR[gpu]"
             else
-                PKG_SPEC="$SCRIPT_DIR[tray]"
+                PKG_SPEC="$SCRIPT_DIR"
             fi
         else
             if [ $GPU_MODE -eq 1 ]; then
-                PKG_SPEC="voxtype[gpu,tray]"
+                PKG_SPEC="voxtype[gpu]"
             else
-                PKG_SPEC="voxtype[tray]"
+                PKG_SPEC="voxtype"
             fi
         fi
 
