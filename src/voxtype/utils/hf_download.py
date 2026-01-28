@@ -56,12 +56,13 @@ def get_repo_size(repo_id: str) -> int | None:
         Total size in bytes, or None if unavailable.
     """
     try:
-        from huggingface_hub import HfApi
+        from huggingface_hub import list_repo_tree
 
-        api = HfApi()
-        info = api.repo_info(repo_id, repo_type="model")
-        if info.siblings:
-            return sum(s.size or 0 for s in info.siblings)
+        total = 0
+        for item in list_repo_tree(repo_id, repo_type="model"):
+            if hasattr(item, "size") and item.size:
+                total += item.size
+        return total if total > 0 else None
     except Exception:
         pass
     return None

@@ -42,9 +42,9 @@ def _has_mlx_audio() -> bool:
 
 # VyvoTTS models on mlx-community (these work with mlx-audio's 'qwen3' architecture)
 VYVO_MODELS = {
-    "4bit": ("mlx-community/VyvoTTS-EN-Beta-4bit", 0.3),   # ~300MB, fastest
-    "8bit": ("mlx-community/VyvoTTS-EN-Beta-8bit", 0.5),   # ~500MB, better quality
-    "fp16": ("mlx-community/VyvoTTS-EN-Beta-fp16", 2.0),   # ~2GB, best quality
+    "4bit": ("mlx-community/VyvoTTS-EN-Beta-4bit", 1.0),   # ~1GB, fastest
+    "8bit": ("mlx-community/VyvoTTS-EN-Beta-8bit", 1.5),   # ~1.5GB, better quality
+    "fp16": ("mlx-community/VyvoTTS-EN-Beta-fp16", 3.0),   # ~3GB, best quality
 }
 
 DEFAULT_MODEL = "4bit"
@@ -112,11 +112,6 @@ class Qwen3TTS(TTSEngine):
         from huggingface_hub import snapshot_download
 
         if not is_repo_cached(self._model_repo, "config.json"):
-            from rich.console import Console
-            console = Console()
-
-            console.print(f"[cyan]Downloading VyvoTTS model ({self._model_size_gb:.1f} GB)...[/]")
-
             download_with_progress(
                 self._model_repo,
                 lambda: snapshot_download(self._model_repo),
