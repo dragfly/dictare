@@ -30,7 +30,11 @@ KARABINER_CONFIG_DIR = Path.home() / ".config" / "karabiner"
 KARABINER_COMPLEX_MODS = KARABINER_CONFIG_DIR / "assets" / "complex_modifications"
 
 # Socket for receiving commands from Karabiner
-SOCKET_PATH = "/tmp/voxtype.sock"
+def _get_socket_path() -> str:
+    """Get socket path using platform standard location."""
+    from voxtype.utils.platform import get_socket_dir
+
+    return str(get_socket_dir() / "control.sock")
 
 class KarabinerBackend(DeviceBackend):
     """Karabiner-Elements based device input.
@@ -115,7 +119,7 @@ class KarabinerBackend(DeviceBackend):
 
         self._running = True
         if self._verbose:
-            print(f"[karabiner] Listening on {SOCKET_PATH}")
+            print(f"[karabiner] Listening on {_get_socket_path()}")
 
         return True
 
@@ -162,7 +166,7 @@ class KarabinerBackend(DeviceBackend):
                         },
                         "to": [
                             {
-                                "shell_command": f"echo '{command}' | nc -U {SOCKET_PATH} 2>/dev/null || true"
+                                "shell_command": f"echo '{command}' | nc -U {_get_socket_path()} 2>/dev/null || true"
                             }
                         ],
                         "conditions": [
@@ -194,13 +198,14 @@ class KarabinerBackend(DeviceBackend):
 
     def _start_socket_server(self) -> bool:
         """Start Unix socket server for receiving commands."""
+        socket_path = _get_socket_path()
         # Remove old socket if exists
-        if os.path.exists(SOCKET_PATH):
-            os.unlink(SOCKET_PATH)
+        if os.path.exists(socket_path):
+            os.unlink(socket_path)
 
         try:
             self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self._socket.bind(SOCKET_PATH)
+            self._socket.bind(socket_path)
             self._socket.listen(1)
             self._socket.settimeout(0.5)  # For clean shutdown
         except Exception as e:
@@ -246,9 +251,10 @@ class KarabinerBackend(DeviceBackend):
                 pass
             self._socket = None
 
-        if os.path.exists(SOCKET_PATH):
+        socket_path = _get_socket_path()
+        if os.path.exists(socket_path):
             try:
-                os.unlink(SOCKET_PATH)
+                os.unlink(socket_path)
             except Exception:
                 pass
 
