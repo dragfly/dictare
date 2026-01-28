@@ -113,20 +113,20 @@ def get_daemon_status() -> DaemonStatus:
 
 def _parse_etime(etime: str) -> float:
     """Parse ps etime format (DD-HH:MM:SS or HH:MM:SS or MM:SS) to seconds."""
-    parts = etime.replace("-", ":").split(":")
-    parts = [int(p) for p in parts]
+    str_parts = etime.replace("-", ":").split(":")
+    parts = [int(p) for p in str_parts]
 
     if len(parts) == 4:
         # DD-HH:MM:SS
-        return parts[0] * 86400 + parts[1] * 3600 + parts[2] * 60 + parts[3]
+        return float(parts[0] * 86400 + parts[1] * 3600 + parts[2] * 60 + parts[3])
     elif len(parts) == 3:
         # HH:MM:SS
-        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        return float(parts[0] * 3600 + parts[1] * 60 + parts[2])
     elif len(parts) == 2:
         # MM:SS
-        return parts[0] * 60 + parts[1]
+        return float(parts[0] * 60 + parts[1])
     else:
-        return 0
+        return 0.0
 
 def start_daemon(foreground: bool = False) -> int:
     """Start the daemon.
