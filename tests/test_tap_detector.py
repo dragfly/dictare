@@ -3,8 +3,6 @@
 import threading
 import time
 
-import pytest
-
 from voxtype.hotkey.tap_detector import TapDetector, TapState
 
 class TestTapDetectorStates:
