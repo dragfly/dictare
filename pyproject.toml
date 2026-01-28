@@ -40,6 +40,9 @@ dependencies = [
     "pynput>=1.7.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
     "hidapi>=0.14.0; sys_platform == 'darwin'",  # hidapi for device profiles (bundles native lib)
+    # System tray (cross-platform, ~13MB total)
+    "pystray>=0.19.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
@@ -66,10 +69,6 @@ mlx = [
 ]
 tts = [
     "piper-tts>=1.2.0",
-]
-tray = [
-    "pystray>=0.19.0",
-    "Pillow>=10.0.0",
 ]
 
 [project.scripts]
