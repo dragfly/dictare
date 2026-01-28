@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.48.5] - 2026-01-28
 
+### Fixed
+- **Agent mode injection**: Socket injector now created after agent discovery
+- **Keyboard typing in agent mode**: LocalReceiver no longer activates in agent mode
+- **Warning when no agents**: Shows helpful message when speaking with no agents available
+
+## [2.48.0] - 2026-01-28
+
 ### Added
 - **Agent auto-discovery**: `voxtype listen --agents` now auto-discovers running agents
   - No need to specify agent names - discovers by watching socket directory
@@ -14,7 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Stale socket detection: automatically cleans up orphaned sockets
   - Agents sorted by creation time (oldest first)
   - UI updates dynamically when agents appear/disappear
-  - Shows warning when speaking with no agents available
 - New dependency: `watchdog>=4.0.0` for filesystem monitoring
 
 ### Changed
