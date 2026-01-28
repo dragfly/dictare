@@ -43,23 +43,32 @@ class MLXWhisperEngine(STTEngine):
             model_size: Model size (tiny/base/small/medium/large-v3).
             **kwargs: Additional options (ignored for MLX).
         """
+        # Disable HuggingFace progress bars FIRST (before any HF imports)
+        try:
+            from huggingface_hub import disable_progress_bars
+            disable_progress_bars()
+        except ImportError:
+            pass
+
         self._model_path = MLX_MODELS.get(model_size, f"mlx-community/whisper-{model_size}")
         self._model_size = model_size
 
-        # Check if model is already cached - if so, disable progress bars
-        if self._is_model_cached(self._model_path):
-            try:
-                from huggingface_hub import disable_progress_bars
-                disable_progress_bars()
-            except ImportError:
-                pass
-
-        # Pre-load the model now (downloads if needed)
-        # Use ModelHolder so the model is cached and reused by transcribe()
-        # Default is fp16=True, so use float16 to match transcribe()
         import mlx.core as mx
         from mlx_whisper.transcribe import ModelHolder
-        ModelHolder.get_model(self._model_path, mx.float16)
+
+        # Check if model is already cached
+        if self._is_model_cached(self._model_path):
+            # Model cached - load silently
+            ModelHolder.get_model(self._model_path, mx.float16)
+        else:
+            # Model not cached - download with nice Rich progress bar
+            from voxtype.utils.hf_download import download_with_progress
+
+            download_with_progress(
+                self._model_path,
+                lambda: ModelHolder.get_model(self._model_path, mx.float16),
+                fallback_size_gb=3.0,  # Large-v3-turbo is ~3GB
+            )
 
     def _is_model_cached(self, repo_id: str) -> bool:
         """Check if a HuggingFace model is already cached.
