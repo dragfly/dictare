@@ -1917,68 +1917,25 @@ def log_list() -> None:
     console.print(table)
     console.print(f"\n[dim]Log directory: {DEFAULT_LOG_DIR}[/]")
 
-# Model registry for voxtype models list/download
-_MODEL_REGISTRY = {
-    # STT models (Whisper)
-    "whisper-tiny": {
-        "type": "stt",
-        "repo": "Systran/faster-whisper-tiny",
-        "size_gb": 0.15,
-        "description": "Whisper tiny (fastest, least accurate)",
-    },
-    "whisper-base": {
-        "type": "stt",
-        "repo": "Systran/faster-whisper-base",
-        "size_gb": 0.3,
-        "description": "Whisper base",
-    },
-    "whisper-small": {
-        "type": "stt",
-        "repo": "Systran/faster-whisper-small",
-        "size_gb": 0.5,
-        "description": "Whisper small",
-    },
-    "whisper-medium": {
-        "type": "stt",
-        "repo": "Systran/faster-whisper-medium",
-        "size_gb": 1.5,
-        "description": "Whisper medium",
-    },
-    "whisper-large-v3": {
-        "type": "stt",
-        "repo": "Systran/faster-whisper-large-v3",
-        "size_gb": 3.0,
-        "description": "Whisper large-v3 (most accurate)",
-    },
-    "whisper-large-v3-turbo": {
-        "type": "stt",
-        "repo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
-        "size_gb": 1.6,
-        "description": "Whisper large-v3-turbo (fast + accurate)",
-    },
-    # TTS models
-    "vyvotts-4bit": {
-        "type": "tts",
-        "repo": "mlx-community/VyvoTTS-EN-Beta-4bit",
-        "size_gb": 1.0,
-        "description": "VyvoTTS 4-bit (qwen3 engine, fastest)",
-        "engine": "qwen3",
-    },
-    "vyvotts-8bit": {
-        "type": "tts",
-        "repo": "mlx-community/VyvoTTS-EN-Beta-8bit",
-        "size_gb": 1.5,
-        "description": "VyvoTTS 8-bit (qwen3 engine)",
-        "engine": "qwen3",
-    },
-    "outetts": {
-        "type": "tts",
-        "repo": "OuteAI/OuteTTS-0.3-1B-GGUF",
-        "size_gb": 1.2,
-        "description": "OuteTTS (outetts engine)",
-        "engine": "outetts",
-    },
-}
+def _load_model_registry() -> dict:
+    """Load model registry from JSON file."""
+    import json
+    from pathlib import Path
+
+    models_file = Path(__file__).parent / "models.json"
+    if models_file.exists():
+        with open(models_file) as f:
+            return json.load(f)
+    return {}
+
+_MODEL_REGISTRY: dict | None = None
+
+def _get_model_registry() -> dict:
+    """Get model registry (lazy loaded)."""
+    global _MODEL_REGISTRY
+    if _MODEL_REGISTRY is None:
+        _MODEL_REGISTRY = _load_model_registry()
+    return _MODEL_REGISTRY
 
 def _format_size(size_bytes: int) -> str:
     """Format bytes as human-readable size."""
@@ -2011,12 +1968,12 @@ def models_list() -> None:
     table.add_column("Size", justify="right")
     table.add_column("Description")
 
-    for name, info in _MODEL_REGISTRY.items():
+    for name, info in _get_model_registry().items():
         repo = info["repo"]
         model_type = info["type"].upper()
 
         # Check if cached
-        check_file = "model.bin" if info["type"] == "stt" else "config.json"
+        check_file = info.get("check_file", "config.json")
         cached = is_repo_cached(repo, check_file)
 
         if cached:
@@ -2050,22 +2007,22 @@ def models_download(
         import click
         click.echo(ctx.get_help())
         console.print("\n[bold]Available models:[/]")
-        for name in _MODEL_REGISTRY:
+        for name in _get_model_registry():
             console.print(f"  {name}")
         raise typer.Exit(0)
 
-    if model not in _MODEL_REGISTRY:
+    if model not in _get_model_registry():
         console.print(f"[red]Unknown model: {model}[/]")
         console.print("[dim]Run 'voxtype models list' to see available models[/]")
         raise typer.Exit(1)
 
-    info = _MODEL_REGISTRY[model]
+    info = _get_model_registry()[model]
     repo = info["repo"]
 
     from voxtype.utils.hf_download import download_with_progress, is_repo_cached
     from huggingface_hub import snapshot_download
 
-    check_file = "model.bin" if info["type"] == "stt" else "config.json"
+    check_file = info.get("check_file", "config.json")
     if is_repo_cached(repo, check_file):
         console.print(f"[green]Model '{model}' is already cached[/]")
         raise typer.Exit(0)
@@ -2108,7 +2065,7 @@ def models_clear(
             raise typer.Abort()
 
         cleared = 0
-        for name, info in _MODEL_REGISTRY.items():
+        for name, info in _get_model_registry().items():
             cache_dir = get_hf_cache_dir(info["repo"])
             if cache_dir.exists():
                 shutil.rmtree(cache_dir)
@@ -2121,12 +2078,12 @@ def models_clear(
             console.print(f"[green]Cleared {cleared} model(s)[/]")
         return
 
-    if model not in _MODEL_REGISTRY:
+    if model not in _get_model_registry():
         console.print(f"[red]Unknown model: {model}[/]")
         console.print("[dim]Run 'voxtype models list' to see available models[/]")
         raise typer.Exit(1)
 
-    info = _MODEL_REGISTRY[model]
+    info = _get_model_registry()[model]
     cache_dir = get_hf_cache_dir(info["repo"])
 
     if not cache_dir.exists():

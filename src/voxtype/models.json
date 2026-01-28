@@ -1,0 +1,68 @@
+{
+  "whisper-tiny": {
+    "type": "stt",
+    "repo": "Systran/faster-whisper-tiny",
+    "size_gb": 0.15,
+    "check_file": "model.bin",
+    "description": "Whisper tiny (fastest, least accurate)"
+  },
+  "whisper-base": {
+    "type": "stt",
+    "repo": "Systran/faster-whisper-base",
+    "size_gb": 0.3,
+    "check_file": "model.bin",
+    "description": "Whisper base"
+  },
+  "whisper-small": {
+    "type": "stt",
+    "repo": "Systran/faster-whisper-small",
+    "size_gb": 0.5,
+    "check_file": "model.bin",
+    "description": "Whisper small"
+  },
+  "whisper-medium": {
+    "type": "stt",
+    "repo": "Systran/faster-whisper-medium",
+    "size_gb": 1.5,
+    "check_file": "model.bin",
+    "description": "Whisper medium"
+  },
+  "whisper-large-v3": {
+    "type": "stt",
+    "repo": "Systran/faster-whisper-large-v3",
+    "size_gb": 3.0,
+    "check_file": "model.bin",
+    "description": "Whisper large-v3 (most accurate)"
+  },
+  "whisper-large-v3-turbo": {
+    "type": "stt",
+    "repo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+    "size_gb": 1.6,
+    "check_file": "model.bin",
+    "description": "Whisper large-v3-turbo (fast + accurate)"
+  },
+  "vyvotts-4bit": {
+    "type": "tts",
+    "repo": "mlx-community/VyvoTTS-EN-Beta-4bit",
+    "size_gb": 1.0,
+    "check_file": "config.json",
+    "engine": "qwen3",
+    "description": "VyvoTTS 4-bit (qwen3 engine, fastest)"
+  },
+  "vyvotts-8bit": {
+    "type": "tts",
+    "repo": "mlx-community/VyvoTTS-EN-Beta-8bit",
+    "size_gb": 1.5,
+    "check_file": "config.json",
+    "engine": "qwen3",
+    "description": "VyvoTTS 8-bit (qwen3 engine)"
+  },
+  "outetts": {
+    "type": "tts",
+    "repo": "OuteAI/OuteTTS-0.3-1B-GGUF",
+    "size_gb": 1.2,
+    "check_file": "config.json",
+    "engine": "outetts",
+    "description": "OuteTTS (outetts engine)"
+  }
+}
