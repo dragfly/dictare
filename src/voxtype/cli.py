@@ -482,6 +482,10 @@ def listen(
         translate=translate,
     )
 
+    # Quick check: verify required models are cached
+    if not _check_required_models(config, for_command="listen"):
+        raise typer.Exit(1)
+
     # Auto-detect hardware acceleration (unless --no-hw-accel)
     _auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
 
@@ -900,6 +904,10 @@ def daemon_start(
     if status.running:
         console.print(f"[yellow]Daemon already running[/] (PID: {status.pid})")
         raise typer.Exit(0)
+
+    # Quick check: verify required models are cached
+    if not _check_required_models(for_command="daemon"):
+        raise typer.Exit(1)
 
     if foreground:
         console.print("[dim]Starting daemon in foreground...[/]")
@@ -2094,13 +2102,92 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / 1024 / 1024 / 1024:.1f} GB"
 
 
-@models_app.command("list")
-def models_list() -> None:
-    """List available models and their cache status.
+def _get_configured_models(config=None) -> set[str]:
+    """Get model names that are configured to be used.
 
-    Shows STT (Whisper) and TTS models with download status.
+    Returns:
+        Set of model registry keys that are currently configured.
     """
-    from voxtype.utils.hf_download import get_cache_size, get_hf_cache_dir, is_repo_cached
+    if config is None:
+        config = load_config()
+
+    configured = set()
+    registry = _get_model_registry()
+
+    # STT model: map config value to registry key
+    # e.g., "large-v3-turbo" -> "whisper-large-v3-turbo"
+    stt_model = config.stt.model_size
+    stt_key = f"whisper-{stt_model}"
+    if stt_key in registry:
+        configured.add(stt_key)
+
+    # TTS model: find model by engine
+    # e.g., "qwen3" -> "vyvotts-4bit", "outetts" -> "outetts"
+    tts_engine = config.tts.engine
+    if tts_engine in ("qwen3", "outetts"):
+        for name, info in registry.items():
+            if info.get("engine") == tts_engine:
+                # Pick first (default) model for that engine
+                configured.add(name)
+                break
+
+    return configured
+
+
+def _check_required_models(config=None, for_command: str = "listen") -> bool:
+    """Check if required models are cached.
+
+    Args:
+        config: Config object (loaded if None)
+        for_command: Command name for error message
+
+    Returns:
+        True if all required models are cached, False otherwise.
+    """
+    from voxtype.utils.hf_download import is_repo_cached
+
+    if config is None:
+        config = load_config()
+
+    configured = _get_configured_models(config)
+    registry = _get_model_registry()
+    missing = []
+
+    for name in configured:
+        if name in registry:
+            info = registry[name]
+            check_file = info.get("check_file", "config.json")
+            if not is_repo_cached(info["repo"], check_file):
+                missing.append(name)
+
+    if missing:
+        console.print(f"[red]Missing required models for '{for_command}':[/]")
+        for name in missing:
+            console.print(f"  [red]{name}[/]")
+        console.print()
+        _show_models_list(config)
+        console.print()
+        console.print("[bold]Download missing models:[/]")
+        for name in missing:
+            console.print(f"  [cyan]voxtype models download {name}[/]")
+        return False
+
+    return True
+
+
+def _show_models_list(config=None) -> None:
+    """Show models list with configured status highlighting.
+
+    - Green: configured AND cached
+    - Red: configured but NOT cached
+    - Normal: not configured
+    """
+    from voxtype.utils.hf_download import get_cache_size, is_repo_cached
+
+    if config is None:
+        config = load_config()
+
+    configured = _get_configured_models(config)
 
     table = Table(
         title="Models",
@@ -2108,7 +2195,7 @@ def models_list() -> None:
         header_style="bold",
         expand=False,
     )
-    table.add_column("Model", style="cyan", no_wrap=True)
+    table.add_column("Model", no_wrap=True)
     table.add_column("Type", width=4)
     table.add_column("Status", justify="center")
     table.add_column("Size", justify="right")
@@ -2117,23 +2204,53 @@ def models_list() -> None:
     for name, info in _get_model_registry().items():
         repo = info["repo"]
         model_type = info["type"].upper()
+        is_configured = name in configured
 
         # Check if cached
         check_file = info.get("check_file", "config.json")
         cached = is_repo_cached(repo, check_file)
 
+        # Determine colors based on configured + cached state
+        if is_configured:
+            if cached:
+                # Configured and cached = green
+                name_style = "[green]"
+                status = "[green]cached[/]"
+            else:
+                # Configured but not cached = red
+                name_style = "[red]"
+                status = "[red]MISSING[/]"
+        else:
+            # Not configured = normal/dim
+            name_style = "[dim]"
+            status = "[dim]cached[/]" if cached else "[dim]—[/]"
+
+        # Size
         if cached:
-            status = "[green]cached[/]"
-            # Get actual cached size
             cache_size = get_cache_size(repo)
             size_str = _format_size(cache_size) if cache_size > 0 else f"~{info['size_gb']:.1f} GB"
         else:
-            status = "[dim]—[/]"
             size_str = f"~{info['size_gb']:.1f} GB"
 
-        table.add_row(name, model_type, status, size_str, info["description"])
+        table.add_row(
+            f"{name_style}{name}[/]",
+            model_type,
+            status,
+            size_str,
+            info["description"],
+        )
 
     console.print(table)
+
+
+@models_app.command("list")
+def models_list() -> None:
+    """List available models and their cache status.
+
+    Shows STT (Whisper) and TTS models with download status.
+    Configured models shown in green (cached) or red (missing).
+    """
+    _show_models_list()
     console.print()
     console.print("[dim]Download: voxtype models download <model>[/]")
     console.print("[dim]Clear:    voxtype models clear <model>[/]")
