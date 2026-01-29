@@ -56,6 +56,38 @@ app.add_typer(deps_app, name="dependencies")
 tray_app = typer.Typer(help="System tray integration", no_args_is_help=True)
 app.add_typer(tray_app, name="tray")
 
+def _register_plugins() -> None:
+    """Discover and register plugin commands."""
+    import logging
+
+    from voxtype.plugins import discover_plugins
+    from voxtype.services import ServiceRegistry
+
+    # Create service registry for plugins
+    registry = ServiceRegistry()
+
+    for plugin_cls in discover_plugins():
+        try:
+            plugin = plugin_cls()
+            plugin.on_load(registry)
+
+            if commands := plugin.get_commands():
+                app.add_typer(commands, name=plugin.name, help=plugin.description)
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                f"Failed to register plugin '{plugin_cls.__name__}': {e}"
+            )
+
+# Register plugins at import time (lazy loaded)
+_plugins_registered = False
+
+def _ensure_plugins_registered() -> None:
+    """Ensure plugins are registered (called once)."""
+    global _plugins_registered
+    if not _plugins_registered:
+        _register_plugins()
+        _plugins_registered = True
+
 console = Console(
     force_terminal=None,  # Auto-detect
     force_interactive=None,  # Auto-detect
@@ -2682,6 +2714,7 @@ def _check_python_environment() -> None:
 def main() -> None:
     """Entry point for the CLI."""
     _check_python_environment()
+    _ensure_plugins_registered()
     try:
         app()
     except ConfigError as e:

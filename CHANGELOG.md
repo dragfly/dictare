@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.60.0-alpha] - 2026-01-29
+
+### Added
+- **Service Layer**: New `voxtype.services` module with high-level APIs
+  - `STTService`: Speech-to-text with daemon integration and local fallback
+  - `TTSService`: Text-to-speech with daemon integration and local fallback
+  - `ServiceRegistry`: Lazy-loaded registry for all services
+- **Plugin System**: New `voxtype.plugins` module for extensibility
+  - `Plugin` protocol and `BasePlugin` base class
+  - Plugin discovery: built-in, entry points (`voxtype.plugins`), user plugins (`~/.config/voxtype/plugins/`)
+  - CLI integration: plugins can add subcommands
+- **Daemon STT Support**: New `stt.transcribe` action in daemon protocol
+  - `STTRequest`/`STTResponse` message types
+  - Daemon caches STT engine for fast repeated transcriptions
+  - Client `send_stt_request()` method with base64 audio encoding
+
 ## [2.58.0] - 2026-01-29
 
 ### Changed
