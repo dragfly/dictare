@@ -370,6 +370,18 @@ def run_agent(
     # Get socket path for this agent
     socket_path = get_socket_path(agent_id)
 
+    # Register cleanup handler (safety net for abnormal exits)
+    import atexit
+
+    def cleanup_socket():
+        if socket_path.exists():
+            try:
+                socket_path.unlink()
+            except OSError:
+                pass
+
+    atexit.register(cleanup_socket)
+
     # Create session log
     session_path = _get_session_log_path(agent_id)
     _write_session_start(session_path, agent_id, command, socket_path)
@@ -496,6 +508,13 @@ def run_agent(
         return exit_code
 
     finally:
+        # Clean up socket file (daemon threads don't run finally blocks on exit)
+        if socket_path.exists():
+            try:
+                socket_path.unlink()
+            except OSError:
+                pass
+
         # Restore terminal settings
         if old_settings:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)

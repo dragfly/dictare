@@ -68,13 +68,33 @@ class SileroVAD(VADEngine):
         self._c: Any = None
         self._context: Any = None
 
-    def _load_model(self) -> None:
-        """Load the Silero VAD model."""
+    def _load_model(self, with_indicator: bool = False) -> None:
+        """Load the Silero VAD model.
+
+        Args:
+            with_indicator: If True, show loading progress indicator.
+        """
         if self._model is not None:
             return
 
-        from faster_whisper.vad import get_vad_model
-        self._model = get_vad_model()
+        def load_vad_fn():
+            from faster_whisper.vad import get_vad_model
+
+            return get_vad_model()
+
+        if with_indicator:
+            from voxtype.utils.loading import load_with_indicator
+
+            self._model = load_with_indicator(
+                "silero-vad",
+                "VAD model",
+                load_vad_fn,
+            )
+        else:
+            from faster_whisper.vad import get_vad_model
+
+            self._model = get_vad_model()
+
         self.reset()
 
     def close(self) -> None:

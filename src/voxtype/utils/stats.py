@@ -139,3 +139,48 @@ def update_keystrokes(keystrokes: int) -> StatsData:
     save_stats(stats)
 
     return stats
+
+# -------------------------------------------------------------------------
+# Model Load Times
+# -------------------------------------------------------------------------
+
+def get_model_load_time(model_id: str) -> float | None:
+    """Get historical load time for a model.
+
+    Args:
+        model_id: Model identifier (e.g., 'mlx-community/whisper-large-v3-turbo').
+
+    Returns:
+        Load time in seconds, or None if no historical data.
+    """
+    stats = load_stats()
+    load_times = stats.get("model_load_times", {})
+    return load_times.get(model_id)
+
+def save_model_load_time(model_id: str, load_time: float) -> None:
+    """Save load time for a model (cold loads only).
+
+    Only saves if:
+    - No previous time recorded, OR
+    - New time >= 50% of previous (it's a cold load, possibly improved)
+
+    Warm loads (much faster, <50% of previous) are ignored to preserve
+    the cold load baseline for accurate progress estimation.
+
+    Args:
+        model_id: Model identifier.
+        load_time: Load time in seconds.
+    """
+    stats = load_stats()
+
+    # Ensure model_load_times exists
+    if "model_load_times" not in stats:
+        stats["model_load_times"] = {}
+
+    previous_time = stats["model_load_times"].get(model_id)
+
+    # Save if: no previous OR new time is at least 50% of previous (cold load)
+    # Skip if: new time is much lower (<50%), indicating a warm load
+    if previous_time is None or load_time >= previous_time * 0.5:
+        stats["model_load_times"][model_id] = load_time
+        save_stats(stats)

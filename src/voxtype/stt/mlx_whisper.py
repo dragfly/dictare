@@ -51,20 +51,32 @@ class MLXWhisperEngine(STTEngine):
         self._model_path = MLX_MODELS.get(model_size, f"mlx-community/whisper-{model_size}")
         self._model_size = model_size
 
-        import mlx.core as mx
-        from mlx_whisper.transcribe import ModelHolder
+        # Define load function that includes imports (they can be slow)
+        model_path = self._model_path  # Capture for closure
+
+        def load_model_fn():
+            import mlx.core as mx
+            from mlx_whisper.transcribe import ModelHolder
+
+            return ModelHolder.get_model(model_path, mx.float16)
 
         # Check if model is already cached
         if self._is_model_cached(self._model_path):
-            # Model cached - load silently
-            ModelHolder.get_model(self._model_path, mx.float16)
+            # Model cached - load with progress indicator
+            from voxtype.utils.loading import load_with_indicator
+
+            load_with_indicator(
+                self._model_path,
+                "STT model",
+                load_model_fn,
+            )
         else:
             # Model not cached - download with nice Rich progress bar
             from voxtype.utils.hf_download import download_with_progress
 
             download_with_progress(
                 self._model_path,
-                lambda: ModelHolder.get_model(self._model_path, mx.float16),
+                load_model_fn,
                 fallback_size_gb=3.0,  # Large-v3-turbo is ~3GB
             )
 

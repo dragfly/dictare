@@ -5,6 +5,147 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.56.0] - 2026-01-29
+
+### Added
+- **Auto-deregistration on failure**: SocketAgent calls `on_failure` callback when send fails
+  - Dead agents are automatically removed from the list
+  - When agent comes back online, discovery will re-register it
+- **On-switch liveness check**: Verifies agent is alive before switching to it
+  - If dead, agent is unregistered and skipped
+  - Circular navigation finds next live agent
+- **SocketAgent.is_alive()**: Method to check if socket has active listener
+
+### Changed
+- **Agent switching**: Now validates agent is responsive before making it current
+- **ManualAgentRegistrar**: Passes `on_failure` callback to agents for auto-cleanup
+- **AutoDiscoveryRegistrar**: Same auto-cleanup behavior
+
+## [2.55.0] - 2026-01-29
+
+### Added
+- **PollingMonitor**: Reliable agent discovery via polling (default)
+  - Checks socket directory every 1 second
+  - Verifies sockets are alive (not just file exists)
+  - Guaranteed to detect agents with 1-second delay
+- **WatchdogMonitor**: Fast agent discovery via filesystem events (optional)
+  - Near-instant detection but may miss events on some platforms
+- **CLI `--discovery` option**: Choose discovery method
+  - `--discovery polling` (default, reliable)
+  - `--discovery watchdog` (fast, potentially unreliable)
+- **SocketMonitor abstraction**: Pluggable monitoring strategies
+
+### Fixed
+- **Socket cleanup on agent exit**: Agent now properly removes socket file on CTRL+C
+  - Bug: daemon threads don't execute `finally` blocks when process exits
+  - Fix: cleanup moved to main thread's `finally` block
+  - Added `atexit` handler as safety net for abnormal exits
+
+## [2.54.0] - 2026-01-29
+
+### Added
+- **Agent as first-class concept**: Each agent handles its own transport
+  - `Agent` protocol: Interface with `id` property and `send(message)` method
+  - `BaseAgent`: Abstract base class for agent implementations
+  - `KeyboardAgent`: Simulates keystrokes via Quartz (macOS) or ydotool (Linux)
+  - `SocketAgent`: Sends messages via Unix domain socket to local processes
+- **OpenVIP message format**: Standard message format with text, submit, visual_newline flags
+- **Pluggable agent transports**: SSEAgent, WebhookAgent, WebSocketAgent can be added easily
+
+### Changed
+- **Engine uses Agent instances**: `register_agent(agent)` takes Agent, not string ID
+- **Engine doesn't know about transports**: Just calls `agent.send(message)`
+- **Registrars create Agent instances**: ManualAgentRegistrar creates SocketAgents
+- **Local mode uses KeyboardAgent**: Non-agent mode now uses KeyboardAgent instead of injector
+
+### Removed
+- **Old injector architecture**: Replaced by Agent-based architecture
+- **Engine._create_injector()**: Agents handle their own transport creation
+
+## [2.53.0] - 2026-01-29
+
+### Added
+- **AgentRegistrar abstraction**: Clean separation between agent discovery and engine
+  - `ManualAgentRegistrar`: Register agents from CLI args (deterministic, reliable)
+  - `AutoDiscoveryRegistrar`: Watch socket directory (dynamic, uses watchdog)
+- **Engine register/unregister API**: `engine.register_agent(id)` and `engine.unregister_agent(id)`
+- **CLI manual agent registration**:
+  - `--agents` → auto-discovery (unchanged)
+  - `--agent foo --agent bar` → manual registration with specific agents
+
+### Changed
+- **Engine no longer knows about discovery mechanism**: Registrar is created and managed by app
+- **Cleaner architecture**: Engine only manages agent list, discovery is pluggable
+
+## [2.51.1] - 2026-01-28
+
+### Fixed
+- **output.method references**: Replaced remaining `output.method` with `output.mode` in cli.py and status.py
+
+## [2.51.0] - 2026-01-28
+
+### Added
+- **Tray Output Mode dropdown**: Switch between Keyboard and Agents mode from tray menu
+  - Selection shown in menu label: `Output Mode (Agents) >`
+  - Persists to config when changed
+- **Tray Target submenu**: Shows current target with selection: `Target (claude) >`
+  - Only visible when Output Mode is Agents
+- **Tray loading state**: Yellow icon during model loading with progress tracking
+- **Config output.mode**: New field `output.mode = "keyboard" | "agents"` replaces deprecated `method`
+- **CLI respects config mode**: `voxtype listen` uses `output.mode` from config; `--agents` flag overrides
+
+### Changed
+- **StatusResponse extended**: Added `state`, `progress`, `loading_stage` fields for tray polling
+
+## [2.50.9] - 2026-01-28
+
+### Fixed
+- **Live panel corruption**: Removed all console.print() calls during runtime
+  - Max duration, device reconnect, submit, webhook errors now use status panel
+  - Verbose debug prints removed (were corrupting Live display)
+
+## [2.50.5] - 2026-01-28
+
+### Fixed
+- **HuggingFace progress bars**: Disabled at package init (before any imports)
+
+## [2.50.4] - 2026-01-28
+
+### Fixed
+- **HuggingFace progress bars**: Disabled via env var at module import time (didn't work)
+
+## [2.50.3] - 2026-01-28
+
+### Changed
+- **Smart cold/warm detection**: Only saves cold load times for progress estimation
+  - Warm loads (<50% of saved time) are ignored to preserve cold baseline
+  - Progress bar shows accurate ETA based on cold load history
+
+## [2.50.2] - 2026-01-28
+
+### Changed
+- **Model loading indicator**: Simplified to elapsed time only (reverted in 2.50.3)
+
+### Fixed
+- **Model loading timing**: Imports now included in timing measurement for accurate load times
+- **Duplicate loading messages**: Removed redundant messages from app.py
+
+## [2.50.0] - 2026-01-28
+
+### Added
+- **Model loading progress indicator**: Shows elapsed time during STT/VAD model loading
+  - First load: spinner with elapsed time
+  - Subsequent loads: progress bar with ETA based on historical times
+  - Displays "STT model loaded in X.Xs" / "VAD model loaded in X.Xs" on completion
+  - Load times saved to stats file for future estimates
+
+## [2.49.0] - 2026-01-28
+
+### Changed
+- **Rich progress bars for model downloads**: HuggingFace model downloads now use existing Rich progress bars
+  - Disabled ugly tqdm/HuggingFace progress bars
+  - Consistent UI across all download operations
+
 ## [2.48.5] - 2026-01-28
 
 ### Fixed
