@@ -373,17 +373,26 @@ def listen(
     ] = None,
     max_duration: Annotated[
         int | None,
-        typer.Option("--max-duration", "-d", help="Max recording duration in seconds"),
+        typer.Option("--max-duration", help="Max recording duration in seconds"),
     ] = None,
-    # Output options
+    # Output options (one required)
+    keyboard: Annotated[
+        bool,
+        typer.Option("--keyboard", "-K", help="Keyboard mode - types what you say"),
+    ] = False,
     agents: Annotated[
         bool,
-        typer.Option("--agents", "-A", help="Enable agent mode with auto-discovery"),
+        typer.Option("--agents", "-A", help="Agent mode - sends to socket agents (auto-discovery)"),
     ] = False,
     agent: Annotated[
         list[str] | None,
         typer.Option("--agent", help="Register specific agent(s) manually (can be repeated)"),
     ] = None,
+    # Daemon mode
+    daemon: Annotated[
+        bool,
+        typer.Option("--daemon", "-d", help="Run in background as daemon"),
+    ] = False,
     discovery_method: Annotated[
         str,
         typer.Option(
@@ -457,10 +466,10 @@ def listen(
     Uses Voice Activity Detection (VAD) to automatically detect when you speak.
     Tap the hotkey to toggle listening on/off, double-tap to switch mode.
 
-    Modes:
+    Requires --keyboard or --agents:
 
-        # Keyboard mode (default) - types what you say
-        voxtype listen
+        # Keyboard mode - types what you say
+        voxtype listen --keyboard
 
         # Agent mode - sends to agents via socket (auto-discovery)
         voxtype listen --agents
@@ -472,7 +481,50 @@ def listen(
 
         # Terminal 2: Listen in agent mode (auto-discovers claude)
         voxtype listen --agents
+
+    Run as daemon (background):
+
+        voxtype listen --keyboard -d
     """
+    # Validate: require --keyboard or --agents (mutually exclusive)
+    has_agents = agents or agent is not None
+    if not keyboard and not has_agents:
+        console.print("[red]Error: Must specify --keyboard or --agents[/]")
+        console.print("[dim]Examples:[/]")
+        console.print("[dim]  voxtype listen --keyboard    # Types what you say[/]")
+        console.print("[dim]  voxtype listen --agents      # Sends to socket agents[/]")
+        raise typer.Exit(1)
+    if keyboard and has_agents:
+        console.print("[red]Error: Cannot use --keyboard with --agents[/]")
+        raise typer.Exit(1)
+
+    # Handle daemon mode
+    if daemon:
+        from voxtype.daemon import get_daemon_status, start_daemon
+
+        status = get_daemon_status()
+        if status.running:
+            console.print(f"[yellow]Daemon already running[/] (PID: {status.pid})")
+            raise typer.Exit(0)
+
+        console.print("[dim]Starting daemon...[/]")
+        # Pass mode to daemon via config temporarily
+        # TODO: daemon should accept mode parameter
+        result = start_daemon(foreground=False)
+        if result == 0:
+            import time
+            time.sleep(0.5)
+            status = get_daemon_status()
+            if status.running:
+                console.print(f"[green]Daemon started[/] (PID: {status.pid})")
+            else:
+                console.print("[red]Daemon failed to start[/]")
+                raise typer.Exit(1)
+        else:
+            console.print("[red]Failed to start daemon[/]")
+            raise typer.Exit(1)
+        return
+
     config = load_config(config_file)
 
     # Apply CLI overrides first (so hw_accel is set before auto-detect)
@@ -514,9 +566,8 @@ def listen(
     # Determine agent mode and parse agent names
     # --agents → auto-discovery
     # --agent foo --agent bar → manual with those names
-    # config.output.mode == "agents" → auto-discovery (from config)
     manual_agents: list[str] | None = agent if agent else None
-    agent_mode = agents or manual_agents is not None or config.output.mode == "agents"
+    agent_mode = agents or manual_agents is not None  # Explicit from CLI, no config fallback
 
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
