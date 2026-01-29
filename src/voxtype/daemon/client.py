@@ -18,12 +18,17 @@ from voxtype.daemon.protocol import (
     ProcessingModeToggleRequest,
     StatusRequest,
     StatusResponse,
+    STTRequest,
+    STTResponse,
     TTSRequest,
     TTSResponse,
     parse_response,
 )
 
 if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
+
     from voxtype.config import TTSConfig
 
 def get_socket_path() -> Path:
@@ -266,6 +271,59 @@ class DaemonClient:
             return ErrorResponse(error="Invalid response from daemon", code="INVALID_RESPONSE")
 
         if isinstance(response, (ProcessingModeResponse, ErrorResponse)):
+            return response
+
+        return ErrorResponse(error="Unexpected response type", code="UNEXPECTED_RESPONSE")
+
+    def send_stt_request(
+        self,
+        audio: NDArray[np.float32],
+        language: str = "auto",
+        model_size: str | None = None,
+        hotwords: str | None = None,
+        beam_size: int = 5,
+        max_repetitions: int = 5,
+        task: str = "transcribe",
+    ) -> STTResponse | ErrorResponse:
+        """Send STT request to daemon for transcription.
+
+        Args:
+            audio: Audio samples (float32, mono, 16kHz).
+            language: Language code or "auto" for auto-detection.
+            model_size: Model size override (uses daemon's loaded model if None).
+            hotwords: Comma-separated words to boost recognition.
+            beam_size: Beam size for decoding.
+            max_repetitions: Max consecutive word repetitions before filtering.
+            task: "transcribe" for same-language, "translate" for English output.
+
+        Returns:
+            STTResponse on success, ErrorResponse on error.
+        """
+        import base64
+
+        import numpy as np
+
+        # Encode audio as base64
+        audio_bytes = audio.astype(np.float32).tobytes()
+        audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+
+        request = STTRequest(
+            audio_b64=audio_b64,
+            language=language,
+            model_size=model_size,
+            hotwords=hotwords,
+            beam_size=beam_size,
+            max_repetitions=max_repetitions,
+            task=task,
+        )
+
+        response_data = self._send_request(request.to_json())
+        response = parse_response(response_data)
+
+        if response is None:
+            return ErrorResponse(error="Invalid response from daemon", code="INVALID_RESPONSE")
+
+        if isinstance(response, (STTResponse, ErrorResponse)):
             return response
 
         return ErrorResponse(error="Unexpected response type", code="UNEXPECTED_RESPONSE")
