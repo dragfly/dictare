@@ -174,53 +174,45 @@ class OuteTTS(TTSEngine):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
 
-                # Suppress HuggingFace progress bars
-                from huggingface_hub.utils import disable_progress_bars, enable_progress_bars
-                disable_progress_bars()
-
                 # Suppress transformers warnings
                 logging.getLogger("transformers").setLevel(logging.ERROR)
                 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
-                try:
-                    with tempfile.TemporaryDirectory() as tmpdir:
-                        # Run generation silently
-                        cmd = [
-                            sys.executable, "-m", "mlx_audio.tts.generate",
-                            "--model", self._model_repo,
-                            "--text", text,
-                            "--speed", str(self.speed),
-                            "--lang_code", self.language,
-                            "--file_prefix", f"{tmpdir}/audio",
-                        ]
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    # Run generation silently
+                    cmd = [
+                        sys.executable, "-m", "mlx_audio.tts.generate",
+                        "--model", self._model_repo,
+                        "--text", text,
+                        "--speed", str(self.speed),
+                        "--lang_code", self.language,
+                        "--file_prefix", f"{tmpdir}/audio",
+                    ]
 
-                        # Run with suppressed output
-                        result = subprocess.run(
-                            cmd,
-                            capture_output=True,
-                            timeout=120,
-                            env={**os.environ, "TQDM_DISABLE": "1"},
-                        )
+                    # Run with suppressed output
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        timeout=120,
+                        env={**os.environ, "TQDM_DISABLE": "1"},
+                    )
 
-                        if result.returncode != 0:
-                            logging.error(f"TTS generation failed: {result.stderr.decode()}")
-                            return False
-
-                        # Find and play the generated audio file
-                        audio_files = list(Path(tmpdir).glob("audio_*.wav"))
-                        if audio_files:
-                            # Play with afplay (macOS)
-                            subprocess.run(
-                                ["afplay", str(audio_files[0])],
-                                capture_output=True,
-                                timeout=60,
-                            )
-                            return True
-
+                    if result.returncode != 0:
+                        logging.error(f"TTS generation failed: {result.stderr.decode()}")
                         return False
 
-                finally:
-                    enable_progress_bars()
+                    # Find and play the generated audio file
+                    audio_files = list(Path(tmpdir).glob("audio_*.wav"))
+                    if audio_files:
+                        # Play with afplay (macOS)
+                        subprocess.run(
+                            ["afplay", str(audio_files[0])],
+                            capture_output=True,
+                            timeout=60,
+                        )
+                        return True
+
+                    return False
 
         except Exception as e:
             logging.error(f"TTS exception: {e}")

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.56.3] - 2026-01-29
+
+### Fixed
+- **HuggingFace progress bars**: Set `HF_HUB_DISABLE_PROGRESS_BARS=1` at CLI entry point
+  - Single place: cli.py, before any imports
+  - Removed redundant disable_progress_bars()/enable_progress_bars() from:
+    - faster_whisper.py
+    - qwen3.py
+    - outetts.py
+    - hf_download.py
+  - Eliminates tqdm "Fetching X files" output during model loading
+
 ## [2.56.1] - 2026-01-29
 
 ### Changed
