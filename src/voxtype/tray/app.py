@@ -4,18 +4,19 @@ from __future__ import annotations
 
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from PIL import Image
     import pystray
+    from PIL import Image
 
 # Icon paths relative to this module
 ICONS_DIR = Path(__file__).parent / "icons"
 
 
-def _load_icon(name: str) -> "Image.Image":
+def _load_icon(name: str) -> Image.Image:
     """Load an icon from the icons directory."""
     from PIL import Image
 
@@ -27,7 +28,7 @@ def _load_icon(name: str) -> "Image.Image":
     return _create_fallback_icon(name)
 
 
-def _create_fallback_icon(name: str) -> "Image.Image":
+def _create_fallback_icon(name: str) -> Image.Image:
     """Create a simple fallback icon if PNG not found."""
     from PIL import Image, ImageDraw
 
@@ -36,6 +37,7 @@ def _create_fallback_icon(name: str) -> "Image.Image":
         "voxtype": "#4A90D9",  # Blue - idle
         "voxtype_active": "#5CB85C",  # Green - listening
         "voxtype_muted": "#D9534F",  # Red - muted
+        "voxtype_loading": "#FFA500",  # Orange - loading
     }
     color = colors.get(name, "#4A90D9")
 
@@ -81,35 +83,64 @@ def _create_fallback_icon(name: str) -> "Image.Image":
 
 
 class TrayApp:
-    """System tray application for VoxType."""
+    """System tray application for VoxType.
+
+    This is a UI-only component. It communicates with the daemon via API
+    to control listening, get status, etc. It does NOT spawn processes.
+    """
 
     def __init__(self) -> None:
         self._icon: pystray.Icon | None = None
-        self._state = "idle"  # idle, listening, muted
-        self._targets: list[str] = ["Claude Code", "Cursor", "Terminal"]
-        self._current_target: str = "Claude Code"
-        self._daemon_running = False
-        self._on_start_listening: Callable[[], None] | None = None
-        self._on_stop_listening: Callable[[], None] | None = None
-        self._on_target_change: Callable[[str], None] | None = None
+        self._state = "off"  # off, listening, loading
+        self._processing_mode = "transcription"  # transcription, command
+        self._progress: int = 0  # 0-100, for loading state
+        self._loading_stage: str = ""  # "STT" | "VAD" | ""
+        self._targets: list[str] = []
+        self._current_target: str = ""
 
-    def _create_menu(self) -> "pystray.Menu":
+        # Callbacks
+        self._on_toggle_listening_cb: Callable[[], None] | None = None
+        self._on_toggle_processing_mode_cb: Callable[[], None] | None = None
+        self._on_target_change: Callable[[str], None] | None = None
+        self._on_output_mode_change: Callable[[str], None] | None = None
+
+        # Output mode from config
+        self._output_mode: str = "keyboard"  # "keyboard" | "agents"
+        self._load_output_mode()
+
+        # Status polling
+        self._polling = False
+        self._poll_thread: threading.Thread | None = None
+
+    def _load_output_mode(self) -> None:
+        """Load output mode from config."""
+        try:
+            from voxtype.config import load_config
+
+            config = load_config()
+            self._output_mode = config.output.mode
+        except Exception:
+            self._output_mode = "keyboard"
+
+    def _create_menu(self) -> pystray.Menu:
         """Create the tray menu."""
         import pystray
 
-        # Status item
-        status_text = {
-            "idle": "Idle",
-            "listening": "Listening...",
-            "muted": "Muted",
-        }.get(self._state, "Unknown")
+        # Status line: state + processing mode
+        if self._state == "loading":
+            stage_text = f" {self._loading_stage}" if self._loading_stage else ""
+            status_text = f"Loading...{stage_text} ({self._progress}%)"
+        else:
+            state_display = self._state.upper()  # OFF or LISTENING
+            mode_display = self._processing_mode.capitalize()  # Transcription or Command
+            status_text = f"{state_display} ({mode_display})"
 
         items = [
             pystray.MenuItem(f"Status: {status_text}", None, enabled=False),
             pystray.Menu.SEPARATOR,
         ]
 
-        # Start/Stop listening
+        # Start/Stop listening toggle
         if self._state == "listening":
             items.append(
                 pystray.MenuItem("Stop Listening", self._on_toggle_listening)
@@ -119,30 +150,51 @@ class TrayApp:
                 pystray.MenuItem("Start Listening", self._on_toggle_listening)
             )
 
-        # Mute toggle
-        mute_text = "Unmute" if self._state == "muted" else "Mute"
-        items.append(pystray.MenuItem(mute_text, self._on_toggle_mute))
-
-        items.append(pystray.Menu.SEPARATOR)
-
-        # Target submenu
-        target_items = [
-            pystray.MenuItem(
-                target,
-                self._make_target_handler(target),
-                checked=lambda item, t=target: self._current_target == t,
-                radio=True,
+        # Processing mode toggle
+        if self._processing_mode == "transcription":
+            items.append(
+                pystray.MenuItem("Switch to Command Mode", self._on_toggle_processing_mode)
             )
-            for target in self._targets
-        ]
-        items.append(
-            pystray.MenuItem("Target", pystray.Menu(*target_items))
-        )
+        else:
+            items.append(
+                pystray.MenuItem("Switch to Transcription Mode", self._on_toggle_processing_mode)
+            )
 
         items.append(pystray.Menu.SEPARATOR)
 
-        # Settings (placeholder)
-        items.append(pystray.MenuItem("Settings...", self._on_settings, enabled=False))
+        # Output Mode submenu
+        output_display = "Keyboard" if self._output_mode == "keyboard" else "Agents"
+        output_items = [
+            pystray.MenuItem(
+                "Keyboard",
+                self._make_output_mode_handler("keyboard"),
+                checked=lambda item: self._output_mode == "keyboard",
+                radio=True,
+            ),
+            pystray.MenuItem(
+                "Agents",
+                self._make_output_mode_handler("agents"),
+                checked=lambda item: self._output_mode == "agents",
+                radio=True,
+            ),
+        ]
+        items.append(pystray.MenuItem(f"Output: {output_display}", pystray.Menu(*output_items)))
+
+        # Target submenu (only shown when output mode is agents)
+        if self._output_mode == "agents" and self._targets:
+            target_items = [
+                pystray.MenuItem(
+                    target,
+                    self._make_target_handler(target),
+                    checked=lambda item, t=target: self._current_target == t,
+                    radio=True,
+                )
+                for target in self._targets
+            ]
+            target_display = self._current_target or "None"
+            items.append(
+                pystray.MenuItem(f"Target: {target_display}", pystray.Menu(*target_items))
+            )
 
         items.append(pystray.Menu.SEPARATOR)
 
@@ -154,7 +206,7 @@ class TrayApp:
     def _make_target_handler(self, target: str) -> Callable:
         """Create a handler for target selection."""
 
-        def handler(icon: "pystray.Icon", item: "pystray.MenuItem") -> None:
+        def handler(icon: pystray.Icon, item: pystray.MenuItem) -> None:
             self._current_target = target
             if self._on_target_change:
                 self._on_target_change(target)
@@ -162,39 +214,39 @@ class TrayApp:
 
         return handler
 
+    def _make_output_mode_handler(self, mode: str) -> Callable:
+        """Create a handler for output mode selection."""
+
+        def handler(icon: pystray.Icon, item: pystray.MenuItem) -> None:
+            self._output_mode = mode
+            # Persist to config
+            try:
+                from voxtype.config import set_config_value
+
+                set_config_value("output.mode", mode)
+            except Exception:
+                pass  # Config write failed, but mode is still set in memory
+            if self._on_output_mode_change:
+                self._on_output_mode_change(mode)
+            self._update_menu()
+
+        return handler
+
     def _on_toggle_listening(
-        self, icon: "pystray.Icon", item: "pystray.MenuItem"
+        self, icon: pystray.Icon, item: pystray.MenuItem
     ) -> None:
-        """Toggle listening state."""
-        if self._state == "listening":
-            self._state = "idle"
-            if self._on_stop_listening:
-                self._on_stop_listening()
-        else:
-            self._state = "listening"
-            if self._on_start_listening:
-                self._on_start_listening()
-        self._update_icon()
-        self._update_menu()
+        """Toggle listening state (OFF <-> LISTENING)."""
+        if self._on_toggle_listening_cb:
+            self._on_toggle_listening_cb()
 
-    def _on_toggle_mute(
-        self, icon: "pystray.Icon", item: "pystray.MenuItem"
+    def _on_toggle_processing_mode(
+        self, icon: pystray.Icon, item: pystray.MenuItem
     ) -> None:
-        """Toggle mute state."""
-        if self._state == "muted":
-            self._state = "idle"
-        else:
-            self._state = "muted"
-        self._update_icon()
-        self._update_menu()
+        """Toggle processing mode (transcription <-> command)."""
+        if self._on_toggle_processing_mode_cb:
+            self._on_toggle_processing_mode_cb()
 
-    def _on_settings(
-        self, icon: "pystray.Icon", item: "pystray.MenuItem"
-    ) -> None:
-        """Open settings (placeholder)."""
-        pass
-
-    def _on_quit(self, icon: "pystray.Icon", item: "pystray.MenuItem") -> None:
+    def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Quit the application."""
         if self._icon:
             self._icon.stop()
@@ -205,9 +257,9 @@ class TrayApp:
             return
 
         icon_name = {
-            "idle": "voxtype",
+            "off": "voxtype",
             "listening": "voxtype_active",
-            "muted": "voxtype_muted",
+            "loading": "voxtype_loading",
         }.get(self._state, "voxtype")
 
         self._icon.icon = _load_icon(icon_name)
@@ -217,34 +269,107 @@ class TrayApp:
         if self._icon:
             self._icon.menu = self._create_menu()
 
-    def set_state(self, state: str) -> None:
-        """Set the tray state externally."""
-        if state in ("idle", "listening", "muted"):
+    def set_state(
+        self,
+        state: str,
+        processing_mode: str = "transcription",
+        progress: int = 0,
+        loading_stage: str = "",
+    ) -> None:
+        """Set the tray state externally.
+
+        Args:
+            state: Current state ("off", "listening", "loading")
+            processing_mode: Current processing mode ("transcription", "command")
+            progress: Loading progress 0-100 (only for loading state)
+            loading_stage: What's loading ("STT", "VAD", "")
+        """
+        if state in ("off", "listening", "loading"):
             self._state = state
+            self._processing_mode = processing_mode
+            self._progress = progress
+            self._loading_stage = loading_stage
             self._update_icon()
             self._update_menu()
 
-    def set_targets(self, targets: list[str]) -> None:
+    def set_targets(self, targets: list[str], current: str = "") -> None:
         """Set available targets."""
         self._targets = targets
+        if current:
+            self._current_target = current
+        elif targets and not self._current_target:
+            self._current_target = targets[0]
         self._update_menu()
 
-    def set_current_target(self, target: str) -> None:
-        """Set current target."""
-        self._current_target = target
+    def set_output_mode(self, mode: str) -> None:
+        """Set output mode."""
+        self._output_mode = mode
         self._update_menu()
 
-    def on_start_listening(self, callback: Callable[[], None]) -> None:
-        """Register callback for start listening."""
-        self._on_start_listening = callback
+    def on_toggle_listening(self, callback: Callable[[], None]) -> None:
+        """Register callback for listening toggle."""
+        self._on_toggle_listening_cb = callback
 
-    def on_stop_listening(self, callback: Callable[[], None]) -> None:
-        """Register callback for stop listening."""
-        self._on_stop_listening = callback
+    def on_toggle_processing_mode(self, callback: Callable[[], None]) -> None:
+        """Register callback for processing mode toggle."""
+        self._on_toggle_processing_mode_cb = callback
 
     def on_target_change(self, callback: Callable[[str], None]) -> None:
         """Register callback for target change."""
         self._on_target_change = callback
+
+    def on_output_mode_change(self, callback: Callable[[str], None]) -> None:
+        """Register callback for output mode change."""
+        self._on_output_mode_change = callback
+
+    def get_output_mode(self) -> str:
+        """Get current output mode."""
+        return self._output_mode
+
+    def start_status_polling(self) -> None:
+        """Start polling daemon status every 500ms."""
+        if self._polling:
+            return
+
+        def poll() -> None:
+            import time
+
+            from voxtype.daemon.client import DaemonClient
+            from voxtype.daemon.protocol import StatusResponse
+
+            client = DaemonClient(timeout=2.0)
+
+            while self._polling:
+                try:
+                    response = client.get_status()
+                    if isinstance(response, StatusResponse):
+                        # Update all state from daemon
+                        self.set_state(
+                            state=response.state,
+                            processing_mode=response.processing_mode,
+                            progress=response.progress,
+                            loading_stage=response.loading_stage,
+                        )
+                        self.set_output_mode(response.output_mode)
+                        if response.available_agents:
+                            self.set_targets(
+                                response.available_agents,
+                                response.current_agent or "",
+                            )
+                except Exception:
+                    pass  # Daemon not available yet
+
+                time.sleep(0.5)
+
+            self._polling = False
+
+        self._polling = True
+        self._poll_thread = threading.Thread(target=poll, daemon=True)
+        self._poll_thread.start()
+
+    def stop_status_polling(self) -> None:
+        """Stop status polling."""
+        self._polling = False
 
     def run(self) -> None:
         """Run the tray application (blocking)."""
@@ -266,7 +391,10 @@ class TrayApp:
 
 
 def main() -> None:
-    """Entry point for standalone tray app (used when run as module)."""
+    """Entry point for standalone tray app (used when run as module).
+
+    Connects to the daemon via Unix socket API for all operations.
+    """
     import os
     import signal
 
@@ -278,12 +406,51 @@ def main() -> None:
         print("Install with: pip install voxtype[tray]", file=sys.stderr)
         sys.exit(1)
 
+    from voxtype.daemon.client import DaemonClient, is_daemon_running
     from voxtype.tray.lifecycle import remove_pid, write_pid
 
     # Write PID for lifecycle management
     write_pid(os.getpid())
 
     app = TrayApp()
+    client = DaemonClient(timeout=5.0)
+
+    # Check if daemon is running
+    if not is_daemon_running():
+        print("Warning: Daemon is not running. Start it with 'voxtype daemon start'", file=sys.stderr)
+
+    # Connect tray callbacks to daemon client
+    def on_toggle_listening() -> None:
+        try:
+            response = client.toggle_listening()
+            if hasattr(response, "listening"):
+                if response.listening:
+                    app.start_status_polling()
+                else:
+                    app.stop_status_polling()
+        except Exception as e:
+            print(f"Error toggling listening: {e}", file=sys.stderr)
+
+    def on_toggle_processing_mode() -> None:
+        try:
+            response = client.toggle_processing_mode()
+            if hasattr(response, "processing_mode"):
+                app.set_state(app._state, processing_mode=response.processing_mode)
+        except Exception as e:
+            print(f"Error toggling processing mode: {e}", file=sys.stderr)
+
+    def on_output_mode_change(mode: str) -> None:
+        try:
+            client.set_mode(mode)
+        except Exception as e:
+            print(f"Error setting output mode: {e}", file=sys.stderr)
+
+    app.on_toggle_listening(on_toggle_listening)
+    app.on_toggle_processing_mode(on_toggle_processing_mode)
+    app.on_output_mode_change(on_output_mode_change)
+
+    # Start polling to sync state with daemon
+    app.start_status_polling()
 
     # Handle SIGINT/SIGTERM gracefully
     def signal_handler(signum: int, frame: object) -> None:

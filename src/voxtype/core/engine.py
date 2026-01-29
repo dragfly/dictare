@@ -8,6 +8,7 @@ import time
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
+from voxtype.agent.base import Agent
 from voxtype.core.audio_manager import AudioManager
 from voxtype.core.controller import StateController
 from voxtype.core.events import (
@@ -27,7 +28,6 @@ from voxtype.core.openvip import create_message
 from voxtype.core.state import AppState, ProcessingMode, StateManager
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
-from voxtype.injection.base import TextInjector
 from voxtype.stt.base import STTEngine
 
 if TYPE_CHECKING:
@@ -99,17 +99,11 @@ class VoxtypeEngine:
         self.vad_silence_ms = config.audio.silence_ms
         self.trigger_phrase = config.command.wake_word or None
 
-        # Agent mode: auto-discover agents from socket directory
+        # Agent mode: whether we're outputting to agents (vs keyboard/clipboard)
         self.agent_mode = agent_mode
-        self.agents: list[str] = []
-        self._agent_watcher: Any = None  # AgentWatcher instance
-        if agent_mode:
-            from voxtype.agent.watcher import AgentWatcher
-
-            self._agent_watcher = AgentWatcher(
-                on_agent_added=self._on_agent_added,
-                on_agent_removed=self._on_agent_removed,
-            )
+        self._agents: dict[str, Agent] = {}  # ID -> Agent instance
+        # Note: Agent registration is handled externally via register_agent()/
+        # unregister_agent() API. The app creates the appropriate AgentRegistrar.
         # State machine handles all state (OFF/LISTENING/RECORDING/etc)
         self._state_manager = StateManager(initial_state=AppState.OFF)
 
@@ -131,7 +125,8 @@ class VoxtypeEngine:
         self._logger = logger
 
         # Agent state
-        self._current_agent_index = 0
+        self._current_agent_id: str | None = None  # ID of currently selected agent
+        self._agent_order: list[str] = []  # Ordered list of agent IDs for cycling
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
 
         # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
@@ -149,10 +144,7 @@ class VoxtypeEngine:
         self._stt: STTEngine | None = None
         self._realtime_stt: STTEngine | None = None  # Separate fast model for realtime
         self._hotkey: HotkeyListener | None = None
-        self._injector: TextInjector | None = None
-
-        # Local receiver for in-memory queue (when no agents specified)
-        self._local_receiver: Any = None
+        # Note: No more _injector - each Agent handles its own transport
 
         # LLM processor for command mode
         self._llm_processor: LLMProcessor | None = None
@@ -198,16 +190,27 @@ class VoxtypeEngine:
         return self._processing_mode
 
     @property
+    def agents(self) -> list[str]:
+        """Get list of registered agent IDs (for backward compatibility)."""
+        return self._agent_order.copy()
+
+    @property
     def current_agent(self) -> str | None:
-        """Get the name of the current agent, or None if no agents."""
-        if self.agents:
-            return self.agents[self._current_agent_index]
-        return None
+        """Get the ID of the current agent, or None if no agents."""
+        return self._current_agent_id
 
     @property
     def current_agent_index(self) -> int:
         """Get the index of the current agent (0-based)."""
-        return self._current_agent_index
+        if self._current_agent_id and self._current_agent_id in self._agent_order:
+            return self._agent_order.index(self._current_agent_id)
+        return 0
+
+    def _get_current_agent(self) -> Agent | None:
+        """Get the current Agent instance."""
+        if self._current_agent_id:
+            return self._agents.get(self._current_agent_id)
+        return None
 
     # -------------------------------------------------------------------------
     # Session Stats (read-only access for UI)
@@ -343,12 +346,6 @@ class VoxtypeEngine:
             f"Install pynput (macOS/X11): pip install pynput"
         )
 
-    def _get_current_agent_id(self) -> str | None:
-        """Get the current agent ID for socket-based injection."""
-        if self.agents:
-            return self.agents[self._current_agent_index]
-        return None
-
     def _get_hotwords(self) -> str | None:
         """Build hotwords string from config + wake_word."""
         parts = []
@@ -365,28 +362,6 @@ class VoxtypeEngine:
 
         return ",".join(parts) if parts else None
 
-    def _create_injector(self) -> TextInjector | None:
-        """Create text injector based on mode.
-
-        Returns:
-            SocketInjector if agents are configured, None if local mode
-            (local mode uses LocalReceiver instead).
-        """
-        # Agent output mode - send OpenVIP messages via Unix socket
-        agent_id = self._get_current_agent_id()
-        if agent_id:
-            from voxtype.injection.socket import SocketInjector
-            return SocketInjector(agent_id)
-
-        # Local mode - use LocalReceiver (created separately)
-        return None
-
-    def _init_local_receiver(self) -> None:
-        """Initialize local receiver for keyboard injection."""
-        from voxtype.output.local import LocalReceiver
-        self._local_receiver = LocalReceiver(self.config)
-        self._local_receiver.start()
-
     # -------------------------------------------------------------------------
     # Initialization
     # -------------------------------------------------------------------------
@@ -399,12 +374,8 @@ class VoxtypeEngine:
         if self._realtime:
             self._realtime_stt = self._create_realtime_stt_engine()
 
-        # Initialize output based on mode
-        # Note: in agent_mode, injector is created later after discovery
-        self._injector = self._create_injector()
-        if self._injector is None and not self.agent_mode:
-            # Local mode (keyboard) - use LocalReceiver with in-memory queue
-            self._init_local_receiver()
+        # Note: Agent registration is handled externally by AgentRegistrar.
+        # The registrar calls register_agent() to add agents before run().
 
         # Create audio manager with VAD
         self._audio_manager = AudioManager(
@@ -516,20 +487,20 @@ class VoxtypeEngine:
 
     def _on_vad_speech_end(self, audio_data: Any) -> None:
         """Handle VAD speech end detection."""
-        # Capture injector NOW, before sending event
+        # Capture agent NOW, before sending event
         # This ensures audio goes to the agent that was active when speech ended
-        captured_injector = self._injector
+        captured_agent = self._get_current_agent()
 
         if self._logger:
             sample_rate = self._audio_manager.sample_rate if self._audio_manager else self.config.audio.sample_rate
             duration_ms = len(audio_data) / sample_rate * 1000
             self._logger.log_vad_event("speech_end", duration_ms=duration_ms)
 
-        # Send event to controller with captured injector
+        # Send event to controller with captured agent
         self._controller.send(
             SpeechEndEvent(
                 audio_data=audio_data,
-                injector=captured_injector,
+                agent=captured_agent,
                 source="vad",
             )
         )
@@ -538,24 +509,24 @@ class VoxtypeEngine:
     # Transcription
     # -------------------------------------------------------------------------
 
-    def _transcribe_and_process(self, audio_data: Any, injector: Any | None = None) -> None:
+    def _transcribe_and_process(self, audio_data: Any, agent: Agent | None = None) -> None:
         """Transcribe audio and process with LLM-first architecture.
 
         Called by StateController when SpeechEndEvent is processed.
 
         Args:
             audio_data: Audio data to transcribe
-            injector: Optional injector to use for injection. If None, uses current self._injector.
-                      This allows capturing the injector at speech-end time, ensuring audio
-                      goes to the correct agent even if agent switches during transcription.
+            agent: Optional agent to use for injection. If None, uses current agent.
+                   This allows capturing the agent at speech-end time, ensuring audio
+                   goes to the correct agent even if agent switches during transcription.
         """
         # For realtime mode: clear partial text
         if self._realtime:
             with self._partial_text_lock:
                 self._partial_text = ""
 
-        # Use provided injector (captured at speech-end time)
-        captured_injector = injector if injector is not None else self._injector
+        # Use provided agent (captured at speech-end time)
+        captured_agent = agent if agent is not None else self._get_current_agent()
 
         def do_transcribe() -> None:
             transcribed_text = ""
@@ -615,7 +586,7 @@ class VoxtypeEngine:
                     if self._processing_mode == ProcessingMode.COMMAND and self._llm_processor:
                         # Command mode: process through LLM
                         response = self._llm_processor.process(text)
-                        self._execute_llm_response(response, text, injector=captured_injector)
+                        self._execute_llm_response(response, text, agent=captured_agent)
                         # Command mode handles its own injection, don't send to controller
                         transcribed_text = ""
 
@@ -628,7 +599,7 @@ class VoxtypeEngine:
                 self._controller.send(
                     TranscriptionCompleteEvent(
                         text=transcribed_text,
-                        injector=captured_injector,
+                        agent=captured_agent,
                         source="stt",
                     )
                 )
@@ -660,7 +631,7 @@ class VoxtypeEngine:
             self._controller.send(
                 SpeechEndEvent(
                     audio_data=audio_data,
-                    injector=self._injector,
+                    agent=self._get_current_agent(),
                     source="queued",
                 )
             )
@@ -671,14 +642,14 @@ class VoxtypeEngine:
     # -------------------------------------------------------------------------
 
     def _execute_llm_response(
-        self, response: LLMResponse, original_text: str, *, injector: Any | None = None
+        self, response: LLMResponse, original_text: str, *, agent: Agent | None = None
     ) -> None:
         """Execute the action decided by the LLM.
 
         Args:
             response: LLM response with action to execute
             original_text: Original transcribed text
-            injector: Optional injector to use for injection
+            agent: Optional agent to use for injection
         """
         from voxtype.llm.models import Action
 
@@ -716,7 +687,7 @@ class VoxtypeEngine:
         if response.action == Action.INJECT:
             if response.text_to_inject:
                 self._state_manager.transition(AppState.INJECTING)
-                self._inject_text(response.text_to_inject, injector=injector)
+                self._inject_text(response.text_to_inject, agent=agent)
 
     def _execute_command(self, command: Any, args: dict[str, Any] | None) -> None:
         """Execute a voice command."""
@@ -730,30 +701,32 @@ class VoxtypeEngine:
     # Text Injection
     # -------------------------------------------------------------------------
 
-    def _inject_text(self, text: str, *, injector: Any | None = None) -> None:
-        """Inject text into the target.
+    def _inject_text(self, text: str, *, agent: Agent | None = None) -> None:
+        """Inject text into the target agent.
 
-        Uses OpenVIP message format internally:
-        - Local mode: sends to LocalReceiver via in-memory queue
-        - Agent mode: sends to SocketInjector via Unix socket
+        Uses OpenVIP message format - each agent handles its own transport:
+        - KeyboardAgent: simulates keystrokes
+        - SocketAgent: sends via Unix socket
+        - SSEAgent: sends via Server-Sent Events
+        - WebhookAgent: sends via HTTP POST
 
         Message termination based on auto_enter:
-        - auto_enter=true: text + submit (Enter for keyboard, x_submit for socket)
-        - auto_enter=false: text + visual newline (Shift+Enter for keyboard, etc.)
+        - auto_enter=true: text + submit flag
+        - auto_enter=false: text + visual newline flag
 
         Args:
             text: Text to inject
-            injector: Optional injector to use. If None, uses self._injector.
-                      Allows injection to a specific agent even if current agent changed.
+            agent: Optional agent to use. If None, uses current agent.
+                   Allows injection to a specific agent even if current changed.
         """
         auto_enter = self.config.output.auto_enter
         success = False
         method = "unknown"
 
-        # Use provided injector or fall back to current
-        target_injector = injector if injector is not None else self._injector
+        # Use provided agent or fall back to current
+        target_agent = agent if agent is not None else self._get_current_agent()
 
-        # Build OpenVIP message with unique ID (created once, forwarded by all transports)
+        # Build OpenVIP message with unique ID
         message = create_message(
             text,
             submit=auto_enter,
@@ -765,34 +738,18 @@ class VoxtypeEngine:
         with self._injection_lock:
             inject_start = time.time()
 
-            if self._local_receiver:
-                # Local mode - send to in-memory queue
-                method = "local:keyboard"
-                success = self._local_receiver.send(message)
-            elif target_injector:
-                # Agent mode - send pre-built message via socket
-                method = target_injector.get_name()
-                if hasattr(target_injector, "send_message"):
-                    # Preferred: forward complete message with ID
-                    success = target_injector.send_message(message)
-                else:
-                    # Fallback for injectors without send_message
-                    success = target_injector.type_text(
-                        text,
-                        delay_ms=self.config.output.typing_delay_ms,
-                        auto_enter=auto_enter,
-                        submit_keys=self.config.output.submit_keys,
-                        newline_keys=self.config.output.newline_keys,
-                    )
+            if target_agent:
+                # Send to agent - agent handles its own transport
+                method = f"agent:{target_agent.id}"
+                success = target_agent.send(message)
 
-                # Set helpful error message for agent mode failures
-                if not success and hasattr(target_injector, "agent_id"):
-                    error_msg = f"<agent '{target_injector.agent_id}' not running>"
+                # Set helpful error message for failures
+                if not success:
+                    error_msg = f"<agent '{target_agent.id}' not responding>"
             else:
-                # No injector available - agent mode with no agents
-                if self.agent_mode:
-                    method = "none"
-                    error_msg = "<no agents available - start an agent with 'voxtype agent'>"
+                # No agent available
+                method = "none"
+                error_msg = "<no agents registered - use --agents or start an agent>"
 
             self._stats_injection_seconds += time.time() - inject_start
 
@@ -804,13 +761,12 @@ class VoxtypeEngine:
 
         # Log injection
         if self._logger:
-            enter_sent = getattr(target_injector, '_enter_sent', None) if target_injector else None
             self._logger.log_injection(
                 text=text,
                 method=method,
                 success=success,
                 auto_enter=auto_enter,
-                enter_sent=enter_sent,
+                enter_sent=None,  # Agents handle their own submission
             )
 
     # -------------------------------------------------------------------------
@@ -870,61 +826,107 @@ class VoxtypeEngine:
     # Agent Control
     # -------------------------------------------------------------------------
 
-    def _on_agent_added(self, agent: Any) -> None:
-        """Callback when a new agent is discovered.
+    def register_agent(self, agent: Agent) -> bool:
+        """Register an agent.
+
+        This is the public API for adding agents. Can be called by any
+        discovery mechanism (manual CLI args, auto-discovery watcher, etc.)
 
         Args:
-            agent: Agent object from the watcher.
-        """
-        if agent.id not in self.agents:
-            self.agents.append(agent.id)
-            # Sort by creation time (watcher returns sorted, but ensure consistency)
-            if self._agent_watcher:
-                self.agents = self._agent_watcher.agent_ids
-            self._emit("on_agents_changed", self.agents)
+            agent: The Agent instance to register.
 
-    def _on_agent_removed(self, agent: Any) -> None:
-        """Callback when an agent disappears.
+        Returns:
+            True if agent was added, False if already registered.
+        """
+        if agent.id in self._agents:
+            return False
+
+        self._agents[agent.id] = agent
+        self._agent_order.append(agent.id)
+
+        # If this is the first agent, make it current
+        if self._current_agent_id is None:
+            self._current_agent_id = agent.id
+
+        self._emit("on_agents_changed", self.agents)
+        return True
+
+    def unregister_agent(self, agent_id: str) -> bool:
+        """Unregister an agent by ID.
+
+        This is the public API for removing agents.
 
         Args:
-            agent: Agent object from the watcher.
+            agent_id: The agent identifier to remove.
+
+        Returns:
+            True if agent was removed, False if not found.
         """
-        if agent.id in self.agents:
-            was_current = (
-                self._current_agent_index < len(self.agents)
-                and self.agents[self._current_agent_index] == agent.id
-            )
-            self.agents = [a for a in self.agents if a != agent.id]
+        if agent_id not in self._agents:
+            return False
 
-            # Adjust current index if needed
-            if self.agents:
-                if was_current or self._current_agent_index >= len(self.agents):
-                    self._current_agent_index = 0
-                    # Recreate injector for new agent
-                    self._injector = self._create_injector()
-                    self._emit("on_agent_change", self.agents[0], 0)
-            else:
-                self._current_agent_index = 0
+        was_current = self._current_agent_id == agent_id
 
-            self._emit("on_agents_changed", self.agents)
+        # Remove from both dict and order list
+        del self._agents[agent_id]
+        self._agent_order = [a for a in self._agent_order if a != agent_id]
+
+        # Adjust current agent if needed
+        if self._agent_order:
+            if was_current:
+                # Switch to first agent
+                self._current_agent_id = self._agent_order[0]
+                self._emit("on_agent_change", self._current_agent_id, 0)
+        else:
+            self._current_agent_id = None
+
+        self._emit("on_agents_changed", self.agents)
+        return True
 
     def _switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent - sends event to controller."""
         self._controller.send(AgentSwitchEvent(direction=direction, source="api"))
 
     def _switch_agent_internal(self, direction: int) -> None:
-        """Internal: Actually switch agent. Called by controller."""
-        if not self.agents:
+        """Internal: Actually switch agent. Called by controller.
+
+        Verifies the target agent is alive before switching.
+        If dead, unregisters it and tries the next one.
+        """
+        if not self._agent_order:
             return
 
-        # Circular navigation
-        self._current_agent_index = (self._current_agent_index + direction) % len(self.agents)
-        new_agent = self.agents[self._current_agent_index]
+        # Get current index
+        current_idx = 0
+        if self._current_agent_id and self._current_agent_id in self._agent_order:
+            current_idx = self._agent_order.index(self._current_agent_id)
 
-        # Update the injector to write to the new agent file
-        self._injector = self._create_injector()
+        # Try to find a live agent (circular search, max one full loop)
+        tried = 0
+        while tried < len(self._agent_order):
+            new_idx = (current_idx + direction * (tried + 1)) % len(self._agent_order)
+            new_agent_id = self._agent_order[new_idx]
+            agent = self._agents.get(new_agent_id)
 
-        self._emit("on_agent_change", new_agent, self._current_agent_index)
+            if agent:
+                # Check if agent is alive (if it has the method)
+                if hasattr(agent, "is_alive") and not agent.is_alive():
+                    # Agent is dead - unregister and try next
+                    self.unregister_agent(new_agent_id)
+                    tried += 1
+                    continue
+
+                # Agent is alive - switch to it
+                self._current_agent_id = new_agent_id
+                # Recalculate index after potential unregistrations
+                actual_idx = self._agent_order.index(new_agent_id) if new_agent_id in self._agent_order else 0
+                self._emit("on_agent_change", self._current_agent_id, actual_idx)
+                return
+
+            tried += 1
+
+        # No live agents found
+        self._current_agent_id = None
 
     def _switch_to_agent_by_name(self, name: str) -> bool:
         """Switch to a specific agent by name - sends event to controller."""
@@ -932,27 +934,40 @@ class VoxtypeEngine:
         return True  # Actual success determined asynchronously
 
     def _switch_to_agent_by_name_internal(self, name: str) -> bool:
-        """Internal: Actually switch by name. Called by controller."""
-        if not self.agents:
+        """Internal: Actually switch by name. Called by controller.
+
+        Verifies the target agent is alive before switching.
+        If dead, unregisters it and returns False.
+        """
+        if not self._agent_order:
             return False
 
         name_lower = name.lower()
 
+        def try_switch(agent_id: str, idx: int) -> bool:
+            """Try to switch to an agent, verify it's alive."""
+            agent = self._agents.get(agent_id)
+            if not agent:
+                return False
+            # Check if agent is alive (if it has the method)
+            if hasattr(agent, "is_alive") and not agent.is_alive():
+                self.unregister_agent(agent_id)
+                return False
+            self._current_agent_id = agent_id
+            # Recalculate index after potential unregistrations
+            actual_idx = self._agent_order.index(agent_id) if agent_id in self._agent_order else idx
+            self._emit("on_agent_change", agent_id, actual_idx)
+            return True
+
         # Try exact match first
-        for i, agent in enumerate(self.agents):
-            if agent.lower() == name_lower:
-                self._current_agent_index = i
-                self._injector = self._create_injector()
-                self._emit("on_agent_change", agent, i)
-                return True
+        for i, agent_id in enumerate(self._agent_order):
+            if agent_id.lower() == name_lower:
+                return try_switch(agent_id, i)
 
         # Try partial match
-        for i, agent in enumerate(self.agents):
-            if name_lower in agent.lower():
-                self._current_agent_index = i
-                self._injector = self._create_injector()
-                self._emit("on_agent_change", agent, i)
-                return True
+        for i, agent_id in enumerate(self._agent_order):
+            if name_lower in agent_id.lower():
+                return try_switch(agent_id, i)
 
         return False
 
@@ -962,18 +977,32 @@ class VoxtypeEngine:
         return True  # Actual success determined asynchronously
 
     def _switch_to_agent_by_index_internal(self, index: int) -> bool:
-        """Internal: Actually switch by index. Called by controller."""
-        if not self.agents:
+        """Internal: Actually switch by index. Called by controller.
+
+        Verifies the target agent is alive before switching.
+        If dead, unregisters it and returns False.
+        """
+        if not self._agent_order:
             return False
 
-        idx = index - 1
-        if idx < 0 or idx >= len(self.agents):
+        idx = index - 1  # Convert from 1-based to 0-based
+        if idx < 0 or idx >= len(self._agent_order):
             return False
 
-        self._current_agent_index = idx
-        agent = self.agents[idx]
-        self._injector = self._create_injector()
-        self._emit("on_agent_change", agent, idx)
+        agent_id = self._agent_order[idx]
+        agent = self._agents.get(agent_id)
+        if not agent:
+            return False
+
+        # Check if agent is alive (if it has the method)
+        if hasattr(agent, "is_alive") and not agent.is_alive():
+            self.unregister_agent(agent_id)
+            return False
+
+        self._current_agent_id = agent_id
+        # Recalculate index after potential unregistrations
+        actual_idx = self._agent_order.index(agent_id) if agent_id in self._agent_order else idx
+        self._emit("on_agent_change", self._current_agent_id, actual_idx)
         return True
 
     def _repeat_last_injection(self) -> None:
@@ -983,8 +1012,10 @@ class VoxtypeEngine:
 
     def _send_submit(self) -> None:
         """Send submit (Enter key) to the target."""
-        if self._injector:
-            self._injector.send_submit()
+        agent = self._get_current_agent()
+        if agent:
+            # Send empty message with submit flag
+            agent.send(create_message("", submit=True))
 
     def _discard_current(self) -> None:
         """Discard current recording/transcription - sends event."""
@@ -1001,17 +1032,20 @@ class VoxtypeEngine:
     # Lifecycle
     # -------------------------------------------------------------------------
 
-    def start(self) -> None:
-        """Start the engine main loop."""
+    def start(self, *, start_listening: bool = True) -> None:
+        """Start the engine main loop.
+
+        Args:
+            start_listening: If True, immediately transition to LISTENING state.
+                           If False, stay in OFF state (daemon mode - wait for hotkey/API).
+        """
         self._init_vad_components()
 
         self._running = True
         self._stats_start_time = time.time()
 
-        # Start agent watcher if in agent mode
-        if self._agent_watcher:
-            self._agent_watcher.start()
-            self.agents = self._agent_watcher.agent_ids
+        # Note: Agent registration is handled externally by AgentRegistrar
+        # before run() is called. The registrar calls register_agent().
 
         # Start the state controller (event queue processor)
         self._controller.start()
@@ -1025,20 +1059,25 @@ class VoxtypeEngine:
                     on_other_key=self._tap_detector.on_other_key,
                 )
 
-            # Transition OFF → LISTENING
-            old_state = self.state
-            self._state_manager.transition(AppState.LISTENING)
-            self._emit("on_state_change", old_state, AppState.LISTENING, "start")
-
-            # Sync LLM processor state
-            if self._llm_processor:
-                self._llm_processor.set_listening(True)
-
+            # Start audio streaming (always needed for VAD to work)
             if self._audio_manager:
                 self._audio_manager.start_streaming(
                     should_process=lambda: self._state_manager.should_process_audio,
                     is_running=lambda: self._running,
                 )
+
+            # Engine is now ready (STT, VAD, hotkey all initialized)
+            self._emit("on_engine_ready")
+
+            # Transition to initial state
+            if start_listening:
+                old_state = self.state
+                self._state_manager.transition(AppState.LISTENING)
+                self._emit("on_state_change", old_state, AppState.LISTENING, "start")
+
+                # Sync LLM processor state
+                if self._llm_processor:
+                    self._llm_processor.set_listening(True)
 
             # Keep main thread alive
             while self._running:
@@ -1080,12 +1119,7 @@ class VoxtypeEngine:
         if self._input_manager:
             self._input_manager.stop()
 
-        if self._local_receiver:
-            self._local_receiver.stop()
-
-        # Stop agent watcher
-        if self._agent_watcher:
-            self._agent_watcher.stop()
+        # Note: AgentRegistrar.stop() is called by the app, not here
 
         if self._hotkey:
             self._hotkey.stop()

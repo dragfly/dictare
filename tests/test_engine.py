@@ -7,9 +7,34 @@ import time
 from typing import Any
 from unittest.mock import MagicMock
 
+from voxtype.agent.base import OpenVIPMessage
 from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import InjectionResult, TranscriptionResult
 from voxtype.core.state import AppState, ProcessingMode
+
+
+class MockAgent:
+    """Mock agent for testing."""
+
+    def __init__(self, agent_id: str) -> None:
+        self._id = agent_id
+        self.messages: list[OpenVIPMessage] = []
+
+    @property
+    def id(self) -> str:
+        return self._id
+
+    def send(self, message: OpenVIPMessage) -> bool:
+        self.messages.append(message)
+        return True
+
+
+def register_test_agents(engine: VoxtypeEngine, agent_ids: list[str]) -> list[MockAgent]:
+    """Helper to register mock agents for testing."""
+    agents = [MockAgent(aid) for aid in agent_ids]
+    for agent in agents:
+        engine.register_agent(agent)
+    return agents
 
 
 class MockConfig:
@@ -46,7 +71,7 @@ class MockConfig:
 
         # Output config
         self.output = MagicMock()
-        self.output.method = "agent"
+        self.output.mode = "keyboard"
         self.output.typing_delay_ms = 0
         self.output.auto_enter = True
 
@@ -137,20 +162,11 @@ class TestVoxtypeEngineInit:
         assert engine.is_off is True
         assert engine.is_listening is False
 
-    def test_agents_stored(self) -> None:
-        """Agents list is stored."""
-        config = MockConfig()
-        agents = ["claude", "cursor", "vscode"]
-        engine = VoxtypeEngine(config=config, agents=agents)
-        assert engine.agents == agents
-        assert engine.current_agent == "claude"
-        assert engine.current_agent_index == 0
-
-    def test_no_agents_returns_none(self) -> None:
-        """No agents means current_agent is None."""
+    def test_agent_mode_default_false(self) -> None:
+        """Agent mode defaults to False (keyboard mode)."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
-        assert engine.current_agent is None
+        assert engine.agent_mode is False
 
     def test_events_handler_stored(self) -> None:
         """Event handler is stored."""
@@ -373,8 +389,8 @@ class TestAgentSwitch:
         """Switch to next agent."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude", "cursor", "vscode"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
         try:
@@ -390,8 +406,8 @@ class TestAgentSwitch:
         """Switch to previous agent."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude", "cursor", "vscode"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
         try:
@@ -406,8 +422,8 @@ class TestAgentSwitch:
         """Agent switching wraps around."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude", "cursor"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
 
         try:
@@ -438,8 +454,8 @@ class TestAgentSwitch:
         """Switch to agent by exact name match."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude", "cursor", "vscode"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
         try:
@@ -454,8 +470,8 @@ class TestAgentSwitch:
         """Switch to agent by name is case-insensitive."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude", "cursor", "vscode"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
         try:
@@ -470,8 +486,8 @@ class TestAgentSwitch:
         """Switch to agent by partial name match."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude-code", "cursor", "vscode"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude-code", "cursor", "vscode"])
         engine._controller.start()
 
         try:
@@ -486,8 +502,8 @@ class TestAgentSwitch:
         """Switch to agent by name returns False (async, result is always True)."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude", "cursor"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
 
         try:
@@ -504,8 +520,8 @@ class TestAgentSwitch:
         """Switch to agent by index (1-based)."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude", "cursor", "vscode"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
         try:
@@ -521,8 +537,8 @@ class TestAgentSwitch:
         """Switch to agent by invalid index (async, no switch happens)."""
         config = MockConfig()
         events = MockEventHandler()
-        agents = ["claude", "cursor"]
-        engine = VoxtypeEngine(config=config, events=events, agents=agents)
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
 
         try:
@@ -585,29 +601,23 @@ class TestAgentId:
     def test_get_current_agent_id_with_agents(self) -> None:
         """Agent ID with agents configured."""
         config = MockConfig()
-        agents = ["claude", "cursor"]
-        engine = VoxtypeEngine(
-            config=config,
-            agents=agents,
-        )
+        engine = VoxtypeEngine(config=config)
+        register_test_agents(engine, ["claude", "cursor"])
 
-        result = engine._get_current_agent_id()
+        result = engine.current_agent
         assert result == "claude"
 
     def test_get_current_agent_id_after_switch(self) -> None:
         """Agent ID changes after agent switch."""
         config = MockConfig()
-        agents = ["claude", "cursor"]
-        engine = VoxtypeEngine(
-            config=config,
-            agents=agents,
-        )
+        engine = VoxtypeEngine(config=config)
+        register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
 
         try:
             engine._switch_agent(1)
             _wait_for_controller()
-            result = engine._get_current_agent_id()
+            result = engine.current_agent
             assert result == "cursor"
         finally:
             engine._controller.stop()
@@ -617,7 +627,7 @@ class TestAgentId:
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
 
-        result = engine._get_current_agent_id()
+        result = engine.current_agent
         assert result is None
 
 
@@ -677,8 +687,8 @@ class TestThreadSafety:
     def test_concurrent_agent_switches(self) -> None:
         """Concurrent agent switches don't corrupt index."""
         config = MockConfig()
-        agents = ["a", "b", "c", "d", "e"]
-        engine = VoxtypeEngine(config=config, agents=agents)
+        engine = VoxtypeEngine(config=config)
+        register_test_agents(engine, ["a", "b", "c", "d", "e"])
         errors = []
 
         def switch_agents() -> None:
@@ -698,7 +708,7 @@ class TestThreadSafety:
         # No exceptions
         assert len(errors) == 0
         # Index should be valid
-        assert 0 <= engine.current_agent_index < len(agents)
+        assert 0 <= engine.current_agent_index < len(engine.agents)
 
 
 class TestVADCallbacks:

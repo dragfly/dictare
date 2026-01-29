@@ -127,8 +127,8 @@ class AudioManager:
             min_silence_ms=self._config.silence_ms,
             min_speech_ms=250,
         )
-        # Pre-load the model now, not on first speech
-        self._vad._load_model()
+        # Pre-load the model now with progress indicator
+        self._vad._load_model(with_indicator=True)
 
         # Create streaming VAD processor
         self._streaming_vad = StreamingVAD(

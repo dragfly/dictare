@@ -330,7 +330,7 @@ def _create_logger(config, agents: list[str] | None = None):
         "silence_ms": config.audio.silence_ms,
         "stt_model": config.stt.model,
         "stt_language": config.stt.language,
-        "output_method": config.output.method,
+        "output_mode": config.output.mode,
     }
     if agents:
         log_params["agents"] = agents
@@ -387,6 +387,18 @@ def listen(
         bool,
         typer.Option("--agents", "-A", help="Enable agent mode with auto-discovery"),
     ] = False,
+    agent: Annotated[
+        list[str] | None,
+        typer.Option("--agent", help="Register specific agent(s) manually (can be repeated)"),
+    ] = None,
+    discovery_method: Annotated[
+        str,
+        typer.Option(
+            "--discovery",
+            "-D",
+            help="Agent discovery method: polling (reliable, 1s delay) or watchdog (fast, may miss events)",
+        ),
+    ] = "polling",
     typing_delay: Annotated[
         int | None,
         typer.Option("--typing-delay", help="Delay between keystrokes in ms"),
@@ -506,23 +518,32 @@ def listen(
         # macOS doesn't have ScrollLock, use Right Command instead
         config.hotkey.key = "KEY_RIGHTMETA"
 
+    # Determine agent mode and parse agent names
+    # --agents → auto-discovery
+    # --agent foo --agent bar → manual with those names
+    # config.output.mode == "agents" → auto-discovery (from config)
+    manual_agents: list[str] | None = agent if agent else None
+    agent_mode = agents or manual_agents is not None or config.output.mode == "agents"
+
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
 
     # Create JSONL logger (always enabled by default)
     # In agent mode, log path will be updated dynamically
-    logger = _create_logger(config, agents=["agents"] if agents else None)
+    logger = _create_logger(config, agents=["agents"] if agent_mode else None)
 
     voxtypeapp = VoxtypeApp(
         config,
         logger=logger,
-        agent_mode=agents,  # True = auto-discovery, False = keyboard mode
+        agent_mode=agent_mode,
+        manual_agents=manual_agents,  # None = auto-discovery, list = manual
         realtime=realtime,
+        discovery_method=discovery_method,
     )
 
     # Create live status panel (will be started after loading)
     log_path_str = str(logger.log_path) if logger else None
-    status_panel = LiveStatusPanel(config, console, agent_mode=agents, log_path=log_path_str)
+    status_panel = LiveStatusPanel(config, console, agent_mode=agent_mode, log_path=log_path_str)
 
     # Setup signal handler for graceful shutdown (KeyboardInterrupt may not work with C extensions)
     import atexit
@@ -995,8 +1016,15 @@ def daemon_status_cmd() -> None:
                     uptime_str = f"{uptime / 60:.1f}m"
                 else:
                     uptime_str = f"{uptime / 3600:.1f}h"
+                console.print(f"  State: {response.state}")
                 console.print(f"  Uptime: {uptime_str}")
                 console.print(f"  Requests served: {response.requests_served}")
+                console.print(f"  Output mode: {response.output_mode}")
+                if response.current_agent:
+                    console.print(f"  Current agent: {response.current_agent}")
+                if response.available_agents:
+                    console.print(f"  Available agents: {', '.join(response.available_agents)}")
+                console.print(f"  STT loaded: {'yes' if response.stt_loaded else 'no'}")
                 console.print(f"  TTS loaded: {'yes' if response.tts_loaded else 'no'}")
                 if response.tts_engine:
                     console.print(f"  TTS engine: {response.tts_engine}")

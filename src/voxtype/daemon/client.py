@@ -8,6 +8,14 @@ from typing import TYPE_CHECKING
 
 from voxtype.daemon.protocol import (
     ErrorResponse,
+    ListenResponse,
+    ListenStartRequest,
+    ListenStopRequest,
+    ListenToggleRequest,
+    ModeSetRequest,
+    OkResponse,
+    ProcessingModeResponse,
+    ProcessingModeToggleRequest,
     StatusRequest,
     StatusResponse,
     TTSRequest,
@@ -168,6 +176,99 @@ class DaemonClient:
             return ErrorResponse(error="Invalid response from daemon", code="INVALID_RESPONSE")
 
         if isinstance(response, (StatusResponse, ErrorResponse)):
+            return response
+
+        return ErrorResponse(error="Unexpected response type", code="UNEXPECTED_RESPONSE")
+
+    def start_listening(self) -> ListenResponse | ErrorResponse:
+        """Start listening (voice recognition).
+
+        Returns:
+            ListenResponse on success, ErrorResponse on error.
+        """
+        request = ListenStartRequest()
+        response_data = self._send_request(request.to_json())
+        response = parse_response(response_data)
+
+        if response is None:
+            return ErrorResponse(error="Invalid response from daemon", code="INVALID_RESPONSE")
+
+        if isinstance(response, (ListenResponse, ErrorResponse)):
+            return response
+
+        return ErrorResponse(error="Unexpected response type", code="UNEXPECTED_RESPONSE")
+
+    def stop_listening(self) -> ListenResponse | ErrorResponse:
+        """Stop listening (voice recognition).
+
+        Returns:
+            ListenResponse on success, ErrorResponse on error.
+        """
+        request = ListenStopRequest()
+        response_data = self._send_request(request.to_json())
+        response = parse_response(response_data)
+
+        if response is None:
+            return ErrorResponse(error="Invalid response from daemon", code="INVALID_RESPONSE")
+
+        if isinstance(response, (ListenResponse, ErrorResponse)):
+            return response
+
+        return ErrorResponse(error="Unexpected response type", code="UNEXPECTED_RESPONSE")
+
+    def toggle_listening(self) -> ListenResponse | ErrorResponse:
+        """Toggle listening state.
+
+        Returns:
+            ListenResponse on success, ErrorResponse on error.
+        """
+        request = ListenToggleRequest()
+        response_data = self._send_request(request.to_json())
+        response = parse_response(response_data)
+
+        if response is None:
+            return ErrorResponse(error="Invalid response from daemon", code="INVALID_RESPONSE")
+
+        if isinstance(response, (ListenResponse, ErrorResponse)):
+            return response
+
+        return ErrorResponse(error="Unexpected response type", code="UNEXPECTED_RESPONSE")
+
+    def set_mode(self, mode: str) -> OkResponse | ErrorResponse:
+        """Set output mode.
+
+        Args:
+            mode: Output mode ("keyboard" or "agents").
+
+        Returns:
+            OkResponse on success, ErrorResponse on error.
+        """
+        request = ModeSetRequest(mode=mode)
+        response_data = self._send_request(request.to_json())
+        response = parse_response(response_data)
+
+        if response is None:
+            return ErrorResponse(error="Invalid response from daemon", code="INVALID_RESPONSE")
+
+        if isinstance(response, (OkResponse, ErrorResponse)):
+            return response
+
+        return ErrorResponse(error="Unexpected response type", code="UNEXPECTED_RESPONSE")
+
+    def toggle_processing_mode(self) -> ProcessingModeResponse | ErrorResponse:
+        """Toggle processing mode (transcription <-> command).
+
+        Returns:
+            ProcessingModeResponse on success, ErrorResponse on error.
+        """
+        request = ProcessingModeToggleRequest()
+        response_data = self._send_request(request.to_json())
+        response = parse_response(response_data)
+
+        if response is None:
+            return ErrorResponse(error="Invalid response from daemon", code="INVALID_RESPONSE")
+
+        if isinstance(response, (ProcessingModeResponse, ErrorResponse)):
             return response
 
         return ErrorResponse(error="Unexpected response type", code="UNEXPECTED_RESPONSE")

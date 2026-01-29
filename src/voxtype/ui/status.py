@@ -116,9 +116,9 @@ class LiveStatusPanel:
                         parts.append(f"[dim]{name}[/]")
                 return f"[cyan]agents[/] ({', '.join(parts)})"
             return "[cyan]agents[/] [dim](waiting for agents...)[/]"
-        elif self._config.output.method == "agent":
-            return "[cyan]agent[/] (single)"
-        return self._config.output.method
+        elif self._config.output.mode == "agents":
+            return "[cyan]agents[/]"
+        return self._config.output.mode
 
     def _compute_hotkey_str(self) -> str:
         """Compute the hotkey display string."""

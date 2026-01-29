@@ -228,10 +228,10 @@ class StateController:
                 )
             return
 
-        # Start transcription (with captured injector)
+        # Start transcription (with captured agent)
         if self._engine:
             self._engine._transcribe_and_process(
-                event.audio_data, injector=event.injector
+                event.audio_data, agent=event.agent
             )
 
     def _handle_transcription_complete(self, event: TranscriptionCompleteEvent) -> None:
@@ -240,9 +240,9 @@ class StateController:
         if self.tts_in_progress:
             # Store for later processing when TTS completes
             self._pending_transcription = event
-            # Still inject the text (goes to correct agent via captured injector)
+            # Still inject the text (goes to correct agent via captured agent)
             if self._engine and event.text:
-                self._engine._inject_text(event.text, injector=event.injector)
+                self._engine._inject_text(event.text, agent=event.agent)
             return
 
         # Normal flow: transition to LISTENING and inject
@@ -252,7 +252,7 @@ class StateController:
             self._on_state_change(old_state, AppState.LISTENING, "transcription_complete")
 
         if self._engine and event.text:
-            self._engine._inject_text(event.text, injector=event.injector)
+            self._engine._inject_text(event.text, agent=event.agent)
 
         # Process queued audio
         if self._engine:

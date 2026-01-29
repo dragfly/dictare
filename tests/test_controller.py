@@ -51,11 +51,11 @@ class MockEngine:
         self.mode_switches = 0
         self.agent_switches: list[tuple[str, int]] = []
 
-    def _transcribe_and_process(self, audio_data: Any, injector: Any = None) -> None:
-        self.transcriptions.append((audio_data, injector))
+    def _transcribe_and_process(self, audio_data: Any, agent: Any = None) -> None:
+        self.transcriptions.append((audio_data, agent))
 
-    def _inject_text(self, text: str, injector: Any = None) -> None:
-        self.injections.append((text, injector))
+    def _inject_text(self, text: str, agent: Any = None) -> None:
+        self.injections.append((text, agent))
 
     def _process_queued_audio(self) -> None:
         pass
@@ -163,12 +163,12 @@ class TestSpeechEvents:
         try:
             # Create audio data with enough samples (> 300ms at 16kHz = 4800 samples)
             audio_data = np.zeros(5000, dtype=np.float32)
-            mock_injector = MagicMock()
+            mock_agent = MagicMock()
 
             controller.send(
                 SpeechEndEvent(
                     audio_data=audio_data,
-                    injector=mock_injector,
+                    agent=mock_agent,
                     source="vad",
                 )
             )
@@ -176,7 +176,7 @@ class TestSpeechEvents:
 
             assert sm.state == AppState.TRANSCRIBING
             assert len(engine.transcriptions) == 1
-            assert engine.transcriptions[0][1] is mock_injector
+            assert engine.transcriptions[0][1] is mock_agent
         finally:
             controller.stop()
 
@@ -223,11 +223,11 @@ class TestTranscriptionComplete:
         controller.start()
 
         try:
-            mock_injector = MagicMock()
+            mock_agent = MagicMock()
             controller.send(
                 TranscriptionCompleteEvent(
                     text="Hello world",
-                    injector=mock_injector,
+                    agent=mock_agent,
                     source="stt",
                 )
             )
@@ -235,7 +235,7 @@ class TestTranscriptionComplete:
 
             assert sm.state == AppState.LISTENING
             assert len(engine.injections) == 1
-            assert engine.injections[0] == ("Hello world", mock_injector)
+            assert engine.injections[0] == ("Hello world", mock_agent)
         finally:
             controller.stop()
 
