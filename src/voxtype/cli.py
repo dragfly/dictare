@@ -248,9 +248,6 @@ def _apply_cli_overrides(
     log_file: str | None,
     no_audio_feedback: bool,
     no_hw_accel: bool,
-    webhook: str | None,
-    sse: bool,
-    sse_port: int | None,
     translate: bool = False,
 ) -> None:
     """Apply CLI options to config.
@@ -287,12 +284,6 @@ def _apply_cli_overrides(
         config.audio.audio_feedback = False
     if no_hw_accel:
         config.stt.hw_accel = False
-    if webhook:
-        config.webhook.url = webhook
-    if sse:
-        config.sse.enabled = True
-    if sse_port is not None:
-        config.sse.port = sse_port
     if translate:
         config.stt.translate = True
 
@@ -400,11 +391,6 @@ def listen(
         list[str] | None,
         typer.Option("--agent", help="Register specific agent(s) manually (can be repeated)"),
     ] = None,
-    # Daemon mode
-    daemon: Annotated[
-        bool,
-        typer.Option("--daemon", "-d", help="Run in background as daemon"),
-    ] = False,
     discovery_method: Annotated[
         str,
         typer.Option(
@@ -459,44 +445,26 @@ def listen(
         bool,
         typer.Option("--translate", "-T", help="Translate to English (any input language → English)"),
     ] = False,
-    # Webhook/SSE options
-    webhook: Annotated[
-        str | None,
-        typer.Option("--webhook", "-W", help="Webhook URL to POST transcriptions to"),
-    ] = None,
-    sse: Annotated[
-        bool,
-        typer.Option("--sse", help="Enable SSE server for streaming events"),
-    ] = False,
-    sse_port: Annotated[
-        int | None,
-        typer.Option("--sse-port", help="Port for SSE server (default: 8765)"),
-    ] = None,
 ) -> None:
-    """Start listening for voice input.
+    """Start listening for voice input (foreground).
 
     Uses Voice Activity Detection (VAD) to automatically detect when you speak.
     Tap the hotkey to toggle listening on/off, double-tap to switch mode.
 
     Requires --keyboard or --agents:
 
-        # Keyboard mode - types what you say
-        voxtype listen --keyboard
-
-        # Agent mode - sends to agents via socket (auto-discovery)
-        voxtype listen --agents
+        voxtype listen --keyboard    # Types what you say
+        voxtype listen --agents      # Sends to socket agents
 
     Example with agent:
 
         # Terminal 1: Start the agent
         voxtype agent claude -- claude
 
-        # Terminal 2: Listen in agent mode (auto-discovers claude)
+        # Terminal 2: Listen in agent mode
         voxtype listen --agents
 
-    Run as daemon (background):
-
-        voxtype listen --keyboard -d
+    For background mode, use: voxtype daemon start
     """
     # Validate: require --keyboard or --agents (mutually exclusive)
     has_agents = agents or agent is not None
@@ -509,33 +477,6 @@ def listen(
     if keyboard and has_agents:
         console.print("[red]Error: Cannot use --keyboard with --agents[/]")
         raise typer.Exit(1)
-
-    # Handle daemon mode
-    if daemon:
-        from voxtype.daemon import get_daemon_status, start_daemon
-
-        status = get_daemon_status()
-        if status.running:
-            console.print(f"[yellow]Daemon already running[/] (PID: {status.pid})")
-            raise typer.Exit(0)
-
-        console.print("[dim]Starting daemon...[/]")
-        # Pass mode to daemon via config temporarily
-        # TODO: daemon should accept mode parameter
-        result = start_daemon(foreground=False)
-        if result == 0:
-            import time
-            time.sleep(0.5)
-            status = get_daemon_status()
-            if status.running:
-                console.print(f"[green]Daemon started[/] (PID: {status.pid})")
-            else:
-                console.print("[red]Daemon failed to start[/]")
-                raise typer.Exit(1)
-        else:
-            console.print("[red]Failed to start daemon[/]")
-            raise typer.Exit(1)
-        return
 
     config = load_config(config_file)
 
@@ -557,9 +498,6 @@ def listen(
         log_file=log_file,
         no_audio_feedback=no_audio_feedback,
         no_hw_accel=no_hw_accel,
-        webhook=webhook,
-        sse=sse,
-        sse_port=sse_port,
         translate=translate,
     )
 

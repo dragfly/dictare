@@ -167,37 +167,20 @@ class KeyboardConfig(BaseModel):
     )
 
 
-class WebhookConfig(BaseModel):
-    """Webhook configuration."""
-
-    url: str = Field(
-        default="",
-        description="Webhook URL to POST transcriptions to",
-    )
-    timeout: float = Field(
-        default=5.0,
-        description="Request timeout in seconds",
-    )
-    include_metadata: bool = Field(
-        default=True,
-        description="Include timing and language metadata in webhook payload",
-    )
-
-
-class SSEConfig(BaseModel):
-    """Server-Sent Events configuration."""
+class ServerConfig(BaseModel):
+    """HTTP/SSE server configuration."""
 
     enabled: bool = Field(
         default=False,
-        description="Enable SSE server for streaming events",
+        description="Enable HTTP server for streaming events",
     )
     host: str = Field(
-        default="localhost",
-        description="Host to bind SSE server to",
+        default="127.0.0.1",
+        description="Host to bind server to (127.0.0.1 = localhost only for security)",
     )
     port: int = Field(
         default=8765,
-        description="Port for SSE server",
+        description="Port for HTTP server",
     )
 
 
@@ -279,8 +262,7 @@ class Config(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
     keyboard: KeyboardConfig = Field(default_factory=KeyboardConfig)
-    webhook: WebhookConfig = Field(default_factory=WebhookConfig)
-    sse: SSEConfig = Field(default_factory=SSEConfig)
+    server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     stats: StatsConfig = Field(default_factory=StatsConfig)
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
@@ -515,7 +497,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "command", "keyboard", "webhook", "sse", "logging", "stats", "daemon"):
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "command", "keyboard", "server", "logging", "stats", "daemon"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -537,8 +519,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("output", OutputConfig),
         ("command", CommandConfig),
         ("keyboard", KeyboardConfig),
-        ("webhook", WebhookConfig),
-        ("sse", SSEConfig),
+        ("server", ServerConfig),
         ("logging", LoggingConfig),
         ("stats", StatsConfig),
         ("daemon", DaemonConfig),
