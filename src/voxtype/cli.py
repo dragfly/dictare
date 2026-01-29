@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+
+# Disable HuggingFace progress bars globally (must be before any HF imports)
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
 import sys
 from pathlib import Path
 from typing import Annotated, Any

@@ -194,27 +194,18 @@ def download_with_progress(
     console.print(f"[cyan]Downloading model ({expected_size / 1e9:.1f} GB)...[/]")
     console.print(f"[dim]Source: huggingface.co/{repo_id}[/]")
 
-    # Suppress huggingface's progress bars
-    from huggingface_hub.utils import disable_progress_bars, enable_progress_bars
+    with Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Downloading", total=expected_size)
 
-    disable_progress_bars()
+        with DownloadProgressMonitor(repo_id, expected_size, progress, task):
+            result = load_fn()
 
-    try:
-        with Progress(
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
-            DownloadColumn(),
-            TransferSpeedColumn(),
-            TimeRemainingColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Downloading", total=expected_size)
-
-            with DownloadProgressMonitor(repo_id, expected_size, progress, task):
-                result = load_fn()
-
-        console.print("[green]✓ Model ready[/]")
-        return result
-
-    finally:
-        enable_progress_bars()
+    console.print("[green]✓ Model ready[/]")
+    return result
