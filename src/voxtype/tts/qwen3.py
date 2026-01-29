@@ -140,46 +140,39 @@ class Qwen3TTS(TTSEngine):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
 
-                from huggingface_hub.utils import disable_progress_bars, enable_progress_bars
-                disable_progress_bars()
-
                 logging.getLogger("transformers").setLevel(logging.ERROR)
                 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
-                try:
-                    with tempfile.TemporaryDirectory() as tmpdir:
-                        cmd = [
-                            sys.executable, "-m", "mlx_audio.tts.generate",
-                            "--model", self._model_repo,
-                            "--text", text,
-                            "--speed", str(self.speed),
-                            "--file_prefix", f"{tmpdir}/audio",
-                        ]
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    cmd = [
+                        sys.executable, "-m", "mlx_audio.tts.generate",
+                        "--model", self._model_repo,
+                        "--text", text,
+                        "--speed", str(self.speed),
+                        "--file_prefix", f"{tmpdir}/audio",
+                    ]
 
-                        result = subprocess.run(
-                            cmd,
-                            capture_output=True,
-                            timeout=120,
-                            env={**os.environ, "TQDM_DISABLE": "1"},
-                        )
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        timeout=120,
+                        env={**os.environ, "TQDM_DISABLE": "1"},
+                    )
 
-                        if result.returncode != 0:
-                            logging.error(f"TTS generation failed: {result.stderr.decode()}")
-                            return False
-
-                        audio_files = list(Path(tmpdir).glob("audio_*.wav"))
-                        if audio_files:
-                            subprocess.run(
-                                ["afplay", str(audio_files[0])],
-                                capture_output=True,
-                                timeout=60,
-                            )
-                            return True
-
+                    if result.returncode != 0:
+                        logging.error(f"TTS generation failed: {result.stderr.decode()}")
                         return False
 
-                finally:
-                    enable_progress_bars()
+                    audio_files = list(Path(tmpdir).glob("audio_*.wav"))
+                    if audio_files:
+                        subprocess.run(
+                            ["afplay", str(audio_files[0])],
+                            capture_output=True,
+                            timeout=60,
+                        )
+                        return True
+
+                    return False
 
         except Exception as e:
             logging.error(f"TTS exception: {e}")

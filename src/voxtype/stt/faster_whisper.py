@@ -122,7 +122,6 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
             saved_env[var] = _os.environ.pop(var)
 
     try:
-        from huggingface_hub import disable_progress_bars, enable_progress_bars
         from rich.progress import (
             BarColumn,
             DownloadColumn,
@@ -132,35 +131,28 @@ def _download_model_with_progress(model_size: str, console=None) -> str:
             TransferSpeedColumn,
         )
 
-        # Suppress huggingface's ugly progress
-        disable_progress_bars()
+        # Real progress bar with cache monitoring
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(f"Downloading {model_size}", total=expected_size)
 
-        try:
-            # Real progress bar with cache monitoring
-            with Progress(
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(),
-                DownloadColumn(),
-                TransferSpeedColumn(),
-                TimeRemainingColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task(f"Downloading {model_size}", total=expected_size)
+            with DownloadProgressMonitor(repo_id, expected_size, progress, task):
+                local_path = snapshot_download(
+                    repo_id,
+                    local_files_only=False,
+                    token=False,  # Public repos - no auth needed
+                )
 
-                with DownloadProgressMonitor(repo_id, expected_size, progress, task):
-                    local_path = snapshot_download(
-                        repo_id,
-                        local_files_only=False,
-                        token=False,  # Public repos - no auth needed
-                    )
+        if console:
+            console.print("[green]✓ Model downloaded successfully[/]")
 
-            if console:
-                console.print("[green]✓ Model downloaded successfully[/]")
-
-            return local_path
-
-        finally:
-            enable_progress_bars()
+        return local_path
 
     except RepositoryNotFoundError as e:
         if console:

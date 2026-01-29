@@ -41,13 +41,6 @@ class MLXWhisperEngine(STTEngine):
             model_size: Model size (tiny/base/small/medium/large-v3).
             **kwargs: Additional options (ignored for MLX).
         """
-        # Disable HuggingFace progress bars FIRST (before any HF imports)
-        try:
-            from huggingface_hub import disable_progress_bars
-            disable_progress_bars()
-        except ImportError:
-            pass
-
         self._model_path = MLX_MODELS.get(model_size, f"mlx-community/whisper-{model_size}")
         self._model_size = model_size
 
