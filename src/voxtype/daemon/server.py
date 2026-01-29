@@ -26,6 +26,8 @@ from voxtype.daemon.protocol import (
     ShutdownRequest,
     StatusRequest,
     StatusResponse,
+    STTRequest,
+    STTResponse,
     TTSRequest,
     TTSResponse,
     parse_request,
@@ -33,6 +35,7 @@ from voxtype.daemon.protocol import (
 
 if TYPE_CHECKING:
     from voxtype.core.engine import VoxtypeEngine
+    from voxtype.stt.base import STTEngine
     from voxtype.tts.base import TTSEngine
 
 
@@ -55,6 +58,9 @@ class DaemonServer:
         # Cached engines
         self._tts_cache: dict[str, TTSEngine] = {}
         self._tts_lock = threading.Lock()
+        self._stt_engine: STTEngine | None = None
+        self._stt_model_size: str | None = None
+        self._stt_lock = threading.Lock()
 
         # Current default config (loaded lazily)
         self._config = None
@@ -167,6 +173,86 @@ class DaemonServer:
 
         except ValueError as e:
             return ErrorResponse(error=str(e), code="TTS_ERROR")
+        except Exception as e:
+            return ErrorResponse(error=str(e), code="INTERNAL_ERROR")
+
+    def _get_stt_engine(self, model_size: str | None = None) -> STTEngine:
+        """Get or create cached STT engine.
+
+        Args:
+            model_size: Model size to load. If None, uses config default.
+
+        Returns:
+            Cached or newly created STTEngine.
+        """
+        from voxtype.utils.hardware import is_mlx_available
+
+        config = self._load_config()
+        target_size = model_size or config.stt.model
+
+        with self._stt_lock:
+            # Reload if model size changed
+            if self._stt_engine is not None and self._stt_model_size != target_size:
+                self._stt_engine = None
+
+            if self._stt_engine is None:
+                use_mlx = config.stt.hw_accel and is_mlx_available()
+
+                if use_mlx:
+                    from voxtype.stt.mlx_whisper import MLXWhisperEngine
+
+                    self._stt_engine = MLXWhisperEngine()
+                else:
+                    from voxtype.stt.faster_whisper import FasterWhisperEngine
+
+                    self._stt_engine = FasterWhisperEngine()
+
+                self._stt_engine.load_model(
+                    target_size,
+                    device=config.stt.device,
+                    compute_type=config.stt.compute_type,
+                    verbose=config.verbose,
+                )
+                self._stt_model_size = target_size
+
+            return self._stt_engine
+
+    def _handle_stt_request(self, request: STTRequest) -> STTResponse | ErrorResponse:
+        """Handle STT request.
+
+        Args:
+            request: STT request with base64-encoded audio.
+
+        Returns:
+            Response with transcribed text or error.
+        """
+        import base64
+
+        import numpy as np
+
+        try:
+            # Decode audio from base64
+            audio_bytes = base64.b64decode(request.audio_b64)
+            audio = np.frombuffer(audio_bytes, dtype=np.float32)
+
+            # Get or create STT engine
+            engine = self._get_stt_engine(model_size=request.model_size)
+
+            start_time = time.time()
+            text = engine.transcribe(
+                audio,
+                language=request.language,
+                hotwords=request.hotwords,
+                beam_size=request.beam_size,
+                max_repetitions=request.max_repetitions,
+                task=request.task,
+            )
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            return STTResponse(status="ok", text=text, duration_ms=duration_ms)
+
+        except ValueError as e:
+            return ErrorResponse(error=str(e), code="STT_ERROR")
         except Exception as e:
             return ErrorResponse(error=str(e), code="INTERNAL_ERROR")
 
@@ -348,6 +434,11 @@ class DaemonServer:
                 stt_loaded = self._engine._stt is not None
                 processing_mode = self._engine.mode.value
 
+        # Also check standalone STT engine (for service layer usage)
+        with self._stt_lock:
+            if self._stt_engine is not None:
+                stt_loaded = True
+
         return StatusResponse(
             status="ok",
             state=state,  # type: ignore[arg-type]
@@ -387,11 +478,13 @@ class DaemonServer:
             # Parse and handle request
             request = parse_request(data)
 
-            response: ErrorResponse | TTSResponse | StatusResponse | ListenResponse | ProcessingModeResponse | OkResponse
+            response: ErrorResponse | TTSResponse | STTResponse | StatusResponse | ListenResponse | ProcessingModeResponse | OkResponse
             if request is None:
                 response = ErrorResponse(error="Invalid request", code="INVALID_REQUEST")
             elif isinstance(request, TTSRequest):
                 response = self._handle_tts_request(request)
+            elif isinstance(request, STTRequest):
+                response = self._handle_stt_request(request)
             elif isinstance(request, StatusRequest):
                 response = self._handle_status_request(request)
             elif isinstance(request, ShutdownRequest):
