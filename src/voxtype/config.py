@@ -104,9 +104,9 @@ def _default_newline_keys() -> str:
 class OutputConfig(BaseModel):
     """Text output configuration."""
 
-    method: Literal["keyboard", "agent"] = Field(
+    mode: Literal["keyboard", "agents"] = Field(
         default="keyboard",
-        description="Output method: keyboard (type) or agent (file for inputmux)",
+        description="Output mode: keyboard (type to focus) or agents (OpenVIP)",
     )
     typing_delay_ms: int = Field(
         default=5,
@@ -576,7 +576,7 @@ max_repetitions = 5            # Anti-hallucination: max consecutive word repeat
 key = "{hotkey}"  # {hotkey_comment} (toggle listening)
 
 [output]
-method = "keyboard"    # keyboard or agent
+mode = "keyboard"      # keyboard or agents
 typing_delay_ms = 5
 auto_enter = false     # Visual newline only
 # submit_keys = "enter"         # Keys for submit (when auto_enter=true)

@@ -34,19 +34,19 @@ class SpeechStartEvent(StateEvent):
 class SpeechEndEvent(StateEvent):
     """VAD detected speech end.
 
-    Captures audio_data and injector at event creation time,
+    Captures audio_data and agent at event creation time,
     ensuring they go to the correct agent even if agent switches later.
     """
 
     audio_data: Any = None
-    injector: Any = None  # Captured at event creation time
+    agent: Any = None  # Captured at event creation time
 
 @dataclass(frozen=True)
 class TranscriptionCompleteEvent(StateEvent):
     """STT finished transcribing."""
 
     text: str = ""
-    injector: Any = None  # The injector to use for injection
+    agent: Any = None  # The agent to use for injection
 
 @dataclass(frozen=True)
 class TTSStartEvent(StateEvent):
@@ -190,6 +190,10 @@ class EngineEvents(Protocol):
             message: Error message.
             context: Context where the error occurred.
         """
+        ...
+
+    def on_engine_ready(self) -> None:
+        """Called when engine initialization is complete (STT, VAD loaded)."""
         ...
 
     def on_partial_transcription(self, text: str) -> None:

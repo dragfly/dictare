@@ -15,6 +15,14 @@ from typing import TYPE_CHECKING
 from voxtype.daemon.lifecycle import get_socket_path, remove_pid, write_pid
 from voxtype.daemon.protocol import (
     ErrorResponse,
+    ListenResponse,
+    ListenStartRequest,
+    ListenStopRequest,
+    ListenToggleRequest,
+    ModeSetRequest,
+    OkResponse,
+    ProcessingModeResponse,
+    ProcessingModeToggleRequest,
     ShutdownRequest,
     StatusRequest,
     StatusResponse,
@@ -24,6 +32,7 @@ from voxtype.daemon.protocol import (
 )
 
 if TYPE_CHECKING:
+    from voxtype.core.engine import VoxtypeEngine
     from voxtype.tts.base import TTSEngine
 
 class DaemonServer:
@@ -48,6 +57,38 @@ class DaemonServer:
 
         # Current default config (loaded lazily)
         self._config = None
+
+        # Loading state tracking
+        self._state: str = "off"  # "loading" | "listening" | "muted" | "off"
+        self._progress: int = 0  # 0-100
+        self._loading_stage: str = ""  # "STT" | "VAD" | ""
+        self._state_lock = threading.Lock()
+
+        # Voice engine (loaded lazily on first listen request)
+        self._engine: VoxtypeEngine | None = None
+        self._engine_thread: threading.Thread | None = None
+        self._engine_lock = threading.Lock()
+
+        # Output mode tracking
+        self._output_mode: str = "keyboard"  # "keyboard" | "agents"
+
+    def set_state(
+        self,
+        state: str,
+        progress: int = 0,
+        loading_stage: str = "",
+    ) -> None:
+        """Set the daemon state (called externally to update status).
+
+        Args:
+            state: Current state ("loading", "listening", "muted", "off")
+            progress: Loading progress 0-100 (only relevant when loading)
+            loading_stage: What is currently loading ("STT", "VAD", "")
+        """
+        with self._state_lock:
+            self._state = state
+            self._progress = progress
+            self._loading_stage = loading_stage
 
     def _load_config(self):
         """Load configuration lazily."""
@@ -128,6 +169,151 @@ class DaemonServer:
         except Exception as e:
             return ErrorResponse(error=str(e), code="INTERNAL_ERROR")
 
+    def _create_engine(self, start_listening: bool = False) -> None:
+        """Create and start the voice engine in a background thread.
+
+        Args:
+            start_listening: If True, transition to LISTENING after init.
+                           If False, stay in OFF state.
+        """
+        from voxtype.config import load_config
+        from voxtype.core.engine import VoxtypeEngine
+
+        config = load_config()
+        self._output_mode = config.output.mode
+
+        # Determine if agent mode based on output mode
+        agent_mode = self._output_mode == "agents"
+
+        # Event to signal when engine is ready
+        engine_ready = threading.Event()
+
+        # Event handler to capture on_engine_ready
+        class DaemonEvents:
+            def on_engine_ready(self) -> None:
+                engine_ready.set()
+
+            def on_state_change(self, old, new, trigger) -> None:
+                pass  # We sync state after ready
+
+        self._engine = VoxtypeEngine(
+            config=config,
+            agent_mode=agent_mode,
+            events=DaemonEvents(),
+        )
+
+        # Start engine in background thread
+        def run_engine() -> None:
+            if self._engine:
+                self.set_state("loading", 0, "STT")
+                self._engine.start(start_listening=start_listening)
+
+        self._engine_thread = threading.Thread(target=run_engine, daemon=True)
+        self._engine_thread.start()
+
+        # Wait for engine ready signal (with timeout)
+        if not engine_ready.wait(timeout=60.0):
+            raise TimeoutError("Engine failed to initialize within 60 seconds")
+
+        # Update state based on engine state
+        if self._engine:
+            if self._engine.is_listening:
+                self.set_state("listening")
+            else:
+                self.set_state("off")
+
+    def _handle_listen_start(self, request: ListenStartRequest) -> ListenResponse | ErrorResponse:
+        """Handle listen.start request."""
+        try:
+            needs_create = False
+            with self._engine_lock:
+                if self._engine is None:
+                    needs_create = True
+                elif self._engine.is_off:
+                    self._engine._set_listening(True)
+                    self.set_state("listening")
+
+            # Create engine outside lock to avoid blocking other requests
+            if needs_create:
+                self._create_engine(start_listening=True)
+
+            listening = self._engine.is_listening if self._engine else False
+            return ListenResponse(status="ok", listening=listening)
+        except Exception as e:
+            return ErrorResponse(error=str(e), code="ENGINE_ERROR")
+
+    def _handle_listen_stop(self, request: ListenStopRequest) -> ListenResponse | ErrorResponse:
+        """Handle listen.stop request."""
+        try:
+            with self._engine_lock:
+                if self._engine and self._engine.is_listening:
+                    self._engine._set_listening(False)
+
+            self.set_state("off")
+            return ListenResponse(status="ok", listening=False)
+        except Exception as e:
+            return ErrorResponse(error=str(e), code="ENGINE_ERROR")
+
+    def _handle_listen_toggle(self, request: ListenToggleRequest) -> ListenResponse | ErrorResponse:
+        """Handle listen.toggle request."""
+        try:
+            needs_create = False
+            with self._engine_lock:
+                if self._engine is None:
+                    needs_create = True
+                else:
+                    # Engine exists: toggle its state
+                    self._engine._toggle_listening()
+                    # Sync daemon state with engine state
+                    if self._engine.is_listening:
+                        self.set_state("listening")
+                    else:
+                        self.set_state("off")
+
+            # Create engine outside lock to avoid blocking other requests
+            if needs_create:
+                self._create_engine(start_listening=True)
+
+            listening = self._engine.is_listening if self._engine else False
+            return ListenResponse(status="ok", listening=listening)
+        except Exception as e:
+            return ErrorResponse(error=str(e), code="ENGINE_ERROR")
+
+    def _handle_mode_set(self, request: ModeSetRequest) -> OkResponse | ErrorResponse:
+        """Handle mode.set request."""
+        try:
+            from voxtype.config import set_config_value
+
+            mode = request.mode
+            if mode not in ("keyboard", "agents"):
+                return ErrorResponse(error=f"Invalid mode: {mode}", code="INVALID_MODE")
+
+            self._output_mode = mode
+            set_config_value("output.mode", mode)
+
+            # Note: changing mode while engine is running would require restart
+            # For now, just update the config - next engine start will use new mode
+            return OkResponse()
+        except Exception as e:
+            return ErrorResponse(error=str(e), code="CONFIG_ERROR")
+
+    def _handle_processing_mode_toggle(
+        self, request: ProcessingModeToggleRequest
+    ) -> ProcessingModeResponse | ErrorResponse:
+        """Handle processing_mode.toggle request."""
+        try:
+            with self._engine_lock:
+                if self._engine is None:
+                    return ErrorResponse(error="Engine not running", code="ENGINE_NOT_RUNNING")
+
+                # Toggle processing mode (transcription <-> command)
+                self._engine._switch_processing_mode()
+                new_mode = self._engine.mode.value  # "transcription" or "command"
+
+            return ProcessingModeResponse(status="ok", processing_mode=new_mode)
+        except Exception as e:
+            return ErrorResponse(error=str(e), code="ENGINE_ERROR")
+
     def _handle_status_request(self, request: StatusRequest) -> StatusResponse:
         """Handle status request.
 
@@ -143,12 +329,37 @@ class DaemonServer:
             tts_loaded = len(self._tts_cache) > 0
             tts_engine = list(self._tts_cache.keys())[0] if self._tts_cache else None
 
+        with self._state_lock:
+            state = self._state
+            progress = self._progress
+            loading_stage = self._loading_stage
+
+        # Get engine state
+        current_agent: str | None = None
+        available_agents: list[str] = []
+        stt_loaded = False
+        processing_mode = "transcription"
+
+        with self._engine_lock:
+            if self._engine:
+                current_agent = self._engine.current_agent
+                available_agents = list(self._engine.agents)
+                stt_loaded = self._engine._stt is not None
+                processing_mode = self._engine.mode.value
+
         return StatusResponse(
             status="ok",
+            state=state,  # type: ignore[arg-type]
+            processing_mode=processing_mode,  # type: ignore[arg-type]
+            progress=progress,
+            loading_stage=loading_stage,
+            output_mode=self._output_mode,
+            current_agent=current_agent,
+            available_agents=available_agents,
             uptime_seconds=uptime,
             tts_engine=tts_engine,
             tts_loaded=tts_loaded,
-            stt_loaded=False,  # Not implemented yet
+            stt_loaded=stt_loaded,
             requests_served=self.requests_served,
         )
 
@@ -175,7 +386,7 @@ class DaemonServer:
             # Parse and handle request
             request = parse_request(data)
 
-            response: ErrorResponse | TTSResponse | StatusResponse
+            response: ErrorResponse | TTSResponse | StatusResponse | ListenResponse | ProcessingModeResponse | OkResponse
             if request is None:
                 response = ErrorResponse(error="Invalid request", code="INVALID_REQUEST")
             elif isinstance(request, TTSRequest):
@@ -184,7 +395,17 @@ class DaemonServer:
                 response = self._handle_status_request(request)
             elif isinstance(request, ShutdownRequest):
                 self.running = False
-                response = StatusResponse(status="ok", uptime_seconds=0)
+                response = OkResponse()
+            elif isinstance(request, ListenStartRequest):
+                response = self._handle_listen_start(request)
+            elif isinstance(request, ListenStopRequest):
+                response = self._handle_listen_stop(request)
+            elif isinstance(request, ListenToggleRequest):
+                response = self._handle_listen_toggle(request)
+            elif isinstance(request, ModeSetRequest):
+                response = self._handle_mode_set(request)
+            elif isinstance(request, ProcessingModeToggleRequest):
+                response = self._handle_processing_mode_toggle(request)
             else:
                 response = ErrorResponse(error="Unknown request type", code="UNKNOWN_REQUEST")
 

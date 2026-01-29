@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 
+from voxtype.agent.registrar import (
+    AgentRegistrar,
+    AutoDiscoveryRegistrar,
+    ManualAgentRegistrar,
+)
 from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import (
     EngineEvents,
@@ -42,18 +47,25 @@ class VoxtypeApp(EngineEvents):
         config: Config,
         logger: JSONLLogger | None = None,
         agent_mode: bool = False,
+        manual_agents: list[str] | None = None,
         realtime: bool = False,
+        discovery_method: str = "polling",
     ) -> None:
         """Initialize the application.
 
         Args:
             config: Application configuration.
             logger: Optional JSONL logger for structured logging.
-            agent_mode: Enable agent mode with auto-discovery of running agents.
+            agent_mode: Enable agent mode (output to agents instead of keyboard).
+            manual_agents: List of agent IDs for manual registration.
+                          If None and agent_mode=True, uses auto-discovery.
             realtime: Enable realtime transcription feedback while speaking.
+            discovery_method: Agent discovery method - "polling" (reliable) or
+                            "watchdog" (fast but may miss events).
         """
         self.config = config
         self._realtime = realtime
+        self._manual_agents = manual_agents
         self._console = Console(
             force_terminal=None,
             force_interactive=None,
@@ -78,6 +90,26 @@ class VoxtypeApp(EngineEvents):
             agent_mode=agent_mode,
             realtime=realtime,
         )
+
+        # Create agent registrar based on configuration
+        # - manual_agents provided → ManualAgentRegistrar
+        # - agent_mode but no manual_agents → AutoDiscoveryRegistrar
+        # - no agent_mode → register KeyboardAgent for local typing
+        self._registrar: AgentRegistrar | None = None
+        self._keyboard_agent: Any = None  # KeyboardAgent when not in agent mode
+        if agent_mode:
+            if manual_agents:
+                self._registrar = ManualAgentRegistrar(self._engine, manual_agents)
+            else:
+                self._registrar = AutoDiscoveryRegistrar(
+                    self._engine,
+                    monitor_type=discovery_method,
+                )
+        else:
+            # Local mode: create KeyboardAgent for direct typing
+            from voxtype.agent.keyboard import KeyboardAgent
+            self._keyboard_agent = KeyboardAgent(config)
+            self._engine.register_agent(self._keyboard_agent)
 
     # -------------------------------------------------------------------------
     # Delegate Properties to Engine
@@ -132,11 +164,8 @@ class VoxtypeApp(EngineEvents):
 
     def on_transcription(self, result: TranscriptionResult) -> None:
         """Handle transcription completion."""
-        if self.config.verbose:
-            self._console.print(f"[blue][DEBUG][/] {result.text}")
-
-        if self._realtime:
-            self._console.print(f"[bold green]Transcribed:[/] {result.text}")
+        # Note: verbose debug and realtime text go to status panel
+        # Don't print here - it corrupts the Live panel
 
         # Send to webhook if configured
         if self._webhook:
@@ -151,9 +180,7 @@ class VoxtypeApp(EngineEvents):
         # Update status panel with the text
         if self._status_panel:
             self._status_panel.update_text(result.text)
-
-        if self.config.verbose:
-            self._console.print(f"[dim]Injection ({result.method}): {result.success}[/]")
+        # Note: verbose injection debug removed - corrupts Live panel
 
         if not result.success:
             # Show graceful error message (e.g., "<agent 'claude' not running>")
@@ -223,9 +250,7 @@ class VoxtypeApp(EngineEvents):
         """Handle recording start."""
         if self._status_panel:
             self._status_panel.update_state("RECORDING")
-
-        if self.config.verbose:
-            self._console.print(f"[dim][DEBUG] Speech start: state={self.state.name}[/]")
+        # Note: verbose debug removed - corrupts Live panel
 
     def on_recording_end(self, duration_ms: float) -> None:
         """Handle recording end."""
@@ -234,27 +259,31 @@ class VoxtypeApp(EngineEvents):
 
     def on_max_duration_reached(self) -> None:
         """Handle max speech duration reached."""
-        self._console.print(
-            f"[yellow]Max duration ({self.config.audio.max_duration}s) - sending, still listening...[/]"
-        )
+        # Note: Don't print here - it corrupts the Live panel
+        # The beep provides audio feedback instead
         if self.config.audio.audio_feedback:
             from voxtype.audio.beep import play_beep_sent
             play_beep_sent()
 
     def on_vad_loading(self) -> None:
-        """Handle VAD model loading start."""
-        self._console.print("[dim]Loading VAD model...[/]")
+        """Handle VAD model loading start.
+
+        Note: Loading indicator is now shown by load_with_indicator().
+        """
+        pass
 
     def on_device_reconnect_attempt(self, attempt: int) -> None:
         """Handle device reconnection attempt."""
-        self._console.print(f" {attempt}", end="", highlight=False)
+        # Update status panel instead of printing (prevents breaking Rich Live)
+        if self._status_panel:
+            self._status_panel.update_text(f"Reconnecting... (attempt {attempt})")
 
     def on_device_reconnect_success(self, device_name: str | None) -> None:
         """Handle device reconnection success."""
-        if device_name:
-            self._console.print(f" [green]OK[/] ({device_name})")
-        else:
-            self._console.print(" [green]OK[/]")
+        # Update status panel instead of printing
+        if self._status_panel:
+            msg = f"Reconnected: {device_name}" if device_name else "Reconnected"
+            self._status_panel.update_text(msg)
 
     # -------------------------------------------------------------------------
     # Delegate Methods to Engine (for AppCommands compatibility)
@@ -291,7 +320,9 @@ class VoxtypeApp(EngineEvents):
     def _send_submit(self) -> None:
         """Send submit (Enter key) to the target."""
         self._engine._send_submit()
-        self._console.print("[green]Sent[/]")
+        # Update status panel instead of printing
+        if self._status_panel:
+            self._status_panel.update_text("[Submit sent]")
 
     def _discard_current(self) -> None:
         """Discard current recording/transcription."""
@@ -551,17 +582,12 @@ class VoxtypeApp(EngineEvents):
 
     def _run_vad_mode(self) -> None:
         """Run in VAD (voice activity detection) mode."""
-        # Show loading messages
-        self._console.print(f"[dim]Loading STT model ({self.config.stt.model})...[/]")
-
-        # Initialize engine components (this calls _init_vad_components internally)
+        # Initialize engine components (STT and VAD loading happens here with progress indicators)
         self._engine._init_vad_components()
 
-        # Show injector info
-        if self.config.verbose and self._engine._injector:
-            self._console.print(f"[dim]Injector: {self._engine._injector.get_name()}[/]")
-            if self._engine._hotkey:
-                self._console.print(f"[dim]Toggle hotkey: {self._engine._hotkey.get_key_name()}[/]")
+        # Show hotkey info
+        if self.config.verbose and self._engine._hotkey:
+            self._console.print(f"[dim]Toggle hotkey: {self._engine._hotkey.get_key_name()}[/]")
 
         # Note: agent sockets are printed after watcher starts (see below)
 
@@ -573,9 +599,10 @@ class VoxtypeApp(EngineEvents):
                 url=self.config.webhook.url,
                 timeout=self.config.webhook.timeout,
             )
-            self._webhook.set_error_callback(
-                lambda msg: self._console.print(f"[red]{msg}[/]") if self.config.verbose else None
-            )
+            def _webhook_error(msg: str) -> None:
+                if self._status_panel:
+                    self._status_panel.update_text(f"[Webhook error: {msg}]", is_error=True)
+            self._webhook.set_error_callback(_webhook_error if self.config.verbose else None)
             self._console.print(f"[dim]Webhook: {self.config.webhook.url}[/]")
 
         # Initialize SSE server if enabled
@@ -601,22 +628,23 @@ class VoxtypeApp(EngineEvents):
         self._engine._running = True
         self._engine._stats_start_time = __import__("time").time()
 
-        # Start agent watcher if in agent mode
-        if self._engine._agent_watcher:
-            self._engine._agent_watcher.start()
-            self._engine.agents = self._engine._agent_watcher.agent_ids
-            # Recreate injector now that agents are discovered
-            if self._engine.agents:
-                self._engine._injector = self._engine._create_injector()
-            # Print discovered agent sockets
+        # Start agent registrar if in agent mode, or keyboard agent if local mode
+        if self._registrar:
+            self._registrar.start()
+            # Print registered agent sockets
             if self.config.verbose and self._engine.agents:
-                from voxtype.injection.socket import get_socket_path
-                for agent in self._engine.agents:
-                    socket_path = get_socket_path(agent)
+                from voxtype.utils.platform import get_socket_dir
+                socket_dir = get_socket_dir()
+                for agent_id in self._engine.agents:
+                    socket_path = socket_dir / f"{agent_id}.sock"
                     self._console.print(f"[dim]Socket: {socket_path}[/]")
-            # Update status panel with discovered agents
+            # Update status panel with agents
             if self._status_panel:
                 self._status_panel.update_agents(self._engine.agents)
+        elif self._keyboard_agent:
+            self._keyboard_agent.start()
+            if self.config.verbose:
+                self._console.print("[dim]Output: keyboard (local)[/]")
 
         # Start the state controller (event queue processor)
         self._engine._controller.start()
@@ -693,6 +721,14 @@ class VoxtypeApp(EngineEvents):
 
         # Clear webhook
         self._webhook = None
+
+        # Stop agent registrar or keyboard agent
+        if self._registrar:
+            self._registrar.stop()
+            self._registrar = None
+        elif self._keyboard_agent:
+            self._keyboard_agent.stop()
+            self._keyboard_agent = None
 
         # Stop engine
         self._engine.stop()
