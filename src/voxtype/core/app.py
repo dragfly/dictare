@@ -20,6 +20,7 @@ from voxtype.core.events import (
     TTSCompleteEvent,
     TTSStartEvent,
 )
+from voxtype.core.openvip import create_message
 from voxtype.core.state import AppState
 
 if TYPE_CHECKING:
@@ -135,6 +136,11 @@ class VoxtypeApp(EngineEvents):
     # EngineEvents Implementation (UI callbacks)
     # -------------------------------------------------------------------------
 
+    def on_engine_ready(self) -> None:
+        """Handle engine ready event."""
+        # Engine is ready - could show notification or update status
+        return None
+
     def on_state_change(
         self, old: AppState, new: AppState, trigger: str
     ) -> None:
@@ -160,7 +166,8 @@ class VoxtypeApp(EngineEvents):
 
         # Send to SSE if running
         if self._sse:
-            self._sse.send_transcription_result(result, language=self.config.stt.language)
+            msg = create_message(result.text)
+            self._sse.send_message(msg)
 
     def on_injection(self, result: InjectionResult) -> None:
         """Handle text injection completion."""

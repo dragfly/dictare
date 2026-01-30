@@ -14,6 +14,7 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver
 
 from voxtype.utils.platform import get_socket_dir
 
@@ -47,7 +48,7 @@ class AgentWatcher:
 
     _agents: dict[str, Agent] = field(default_factory=dict, init=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False)
-    _observer: Observer | None = field(default=None, init=False)
+    _observer: BaseObserver | None = field(default=None, init=False)
     _socket_dir: Path | None = field(default=None, init=False)
 
     @property
@@ -141,14 +142,16 @@ class _AgentEventHandler(FileSystemEventHandler):
     def on_created(self, event: FileSystemEvent) -> None:
         if event.is_directory:
             return
-        path = Path(event.src_path)
+        src_path = event.src_path if isinstance(event.src_path, str) else event.src_path.decode()
+        path = Path(src_path)
         if path.suffix == ".sock":
             self._watcher._handle_socket_created(path)
 
     def on_deleted(self, event: FileSystemEvent) -> None:
         if event.is_directory:
             return
-        path = Path(event.src_path)
+        src_path = event.src_path if isinstance(event.src_path, str) else event.src_path.decode()
+        path = Path(src_path)
         if path.suffix == ".sock":
             self._watcher._handle_socket_deleted(path)
 

@@ -286,7 +286,8 @@ class WatchdogMonitor(BaseSocketMonitor):
             def on_created(self, event: FileSystemEvent) -> None:
                 if event.is_directory:
                     return
-                path = Path(event.src_path)
+                src_path = event.src_path if isinstance(event.src_path, str) else event.src_path.decode()
+                path = Path(src_path)
                 if path.suffix == ".sock":
                     agent = self._monitor._discover_socket(path)
                     if agent:
@@ -296,7 +297,8 @@ class WatchdogMonitor(BaseSocketMonitor):
             def on_deleted(self, event: FileSystemEvent) -> None:
                 if event.is_directory:
                     return
-                path = Path(event.src_path)
+                src_path = event.src_path if isinstance(event.src_path, str) else event.src_path.decode()
+                path = Path(src_path)
                 if path.suffix == ".sock":
                     agent_id = path.stem
                     if agent_id not in INTERNAL_SOCKETS:
