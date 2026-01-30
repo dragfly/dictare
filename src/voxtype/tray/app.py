@@ -121,10 +121,10 @@ class TrayApp:
         """Create the tray menu."""
         import pystray
 
-        # Status line: state + processing mode
+        # Status line
         if self._state == "loading":
-            stage_text = f" {self._loading_stage}" if self._loading_stage else ""
-            status_text = f"Loading...{stage_text} ({self._progress}%)"
+            stage_text = f" {self._loading_stage}..." if self._loading_stage else ""
+            status_text = f"Loading{stage_text}"
         else:
             state_display = self._state.upper()  # OFF or LISTENING
             status_text = state_display
