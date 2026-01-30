@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.68.0] - 2026-01-30
+
+### Fixed - Daemon Agent Discovery
+- **daemon/server.py**: Daemon was not discovering agents at all
+  - Added `AutoDiscoveryRegistrar` to discover and register socket agents
+  - Agents are now properly discovered when daemon starts in agent mode
+- **tray/app.py**: Removed useless loading percentage (always 0%)
+- **cli.py**: Enhanced `daemon status` to always show agent count for debugging
+
 ## [2.67.0] - 2026-01-30
 
 ### Fixed - Tray Sync and Command Mode Cleanup
