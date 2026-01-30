@@ -57,7 +57,7 @@ def _discover_entrypoint_plugins() -> Iterator[type[Plugin]]:
         for ep in eps:
             try:
                 plugin_cls = ep.load()
-                if isinstance(plugin_cls, type) and issubclass(plugin_cls, Plugin):
+                if isinstance(plugin_cls, type) and issubclass(plugin_cls, Plugin):  # type: ignore[misc]
                     yield plugin_cls
             except Exception as e:
                 import logging
@@ -127,7 +127,7 @@ def _load_user_plugin(path: Path) -> type[Plugin] | None:
             isinstance(attr, type)
             and attr is not Plugin
             and attr is not BasePlugin
-            and issubclass(attr, Plugin)
+            and issubclass(attr, Plugin)  # type: ignore[misc]
         ):
             return attr
 

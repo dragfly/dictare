@@ -62,16 +62,6 @@ class AppCommands:
             lambda: self._app._toggle_listening(),
         )
 
-        # Mode control
-        self.register(
-            CommandSchema(
-                name="toggle-mode",
-                description="Switch between transcription and command mode",
-                category="mode",
-            ),
-            lambda: self._app._switch_processing_mode(),
-        )
-
         # Project/target switching
         self.register(
             CommandSchema(
@@ -126,15 +116,6 @@ class AppCommands:
         )
 
         # Text operations
-        self.register(
-            CommandSchema(
-                name="repeat",
-                description="Repeat last sent text",
-                category="text",
-            ),
-            lambda: self._app._repeat_last_injection(),
-        )
-
         self.register(
             CommandSchema(
                 name="discard",

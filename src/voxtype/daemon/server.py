@@ -286,7 +286,7 @@ class DaemonServer:
         self._engine = VoxtypeEngine(
             config=config,
             agent_mode=agent_mode,
-            events=DaemonEvents(),
+            events=DaemonEvents(),  # type: ignore[arg-type]
         )
 
         # Start engine in background thread
@@ -387,19 +387,12 @@ class DaemonServer:
     def _handle_processing_mode_toggle(
         self, request: ProcessingModeToggleRequest
     ) -> ProcessingModeResponse | ErrorResponse:
-        """Handle processing_mode.toggle request."""
-        try:
-            with self._engine_lock:
-                if self._engine is None:
-                    return ErrorResponse(error="Engine not running", code="ENGINE_NOT_RUNNING")
+        """Handle processing_mode.toggle request.
 
-                # Toggle processing mode (transcription <-> command)
-                self._engine._switch_processing_mode()
-                new_mode = self._engine.mode.value  # "transcription" or "command"
-
-            return ProcessingModeResponse(status="ok", processing_mode=new_mode)
-        except Exception as e:
-            return ErrorResponse(error=str(e), code="ENGINE_ERROR")
+        Note: ProcessingMode was removed in v2.61.0. This endpoint is deprecated.
+        """
+        # ProcessingMode removed - always transcription mode now
+        return ProcessingModeResponse(status="ok", processing_mode="transcription")
 
     def _handle_status_request(self, request: StatusRequest) -> StatusResponse:
         """Handle status request.
@@ -432,7 +425,7 @@ class DaemonServer:
                 current_agent = self._engine.current_agent
                 available_agents = list(self._engine.agents)
                 stt_loaded = self._engine._stt is not None
-                processing_mode = self._engine.mode.value
+                # ProcessingMode removed in v2.61.0 - always transcription
 
         # Also check standalone STT engine (for service layer usage)
         with self._stt_lock:

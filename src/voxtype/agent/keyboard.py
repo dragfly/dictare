@@ -145,7 +145,7 @@ class KeyboardAgent(BaseAgent):
         visual_newline = message.get("visual_newline", False)
 
         # Get config values
-        delay_ms = self.config.output.typing_delay
+        delay_ms = self.config.output.typing_delay_ms
         auto_enter = self.config.output.auto_enter if not submit else True
         submit_keys = self.config.output.submit_keys
         newline_keys = self.config.output.newline_keys
