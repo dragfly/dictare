@@ -76,7 +76,7 @@ class VoxtypeApp(EngineEvents):
         # Use shared initialization logic (same as daemon)
         from voxtype.core.engine import create_engine
 
-        self._engine, self._registrar = create_engine(
+        self._engine, self._registrar, self._keyboard_agent = create_engine(
             config=config,
             events=self,
             logger=logger,

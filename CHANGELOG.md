@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.70.2] - 2026-01-30
+
+### Fixed - Mypy Type Errors
+- **core/engine.py**: Fixed type annotation for registrar variable
+- **core/engine.py**: `create_engine()` now returns 3-tuple: (engine, registrar, keyboard_agent)
+- **core/app.py**: Updated to unpack keyboard_agent from create_engine
+- **daemon/server.py**: Updated to handle 3-tuple return
+
 ## [2.70.1] - 2026-01-30
 
 ### Fixed - Tray UI Blocking
