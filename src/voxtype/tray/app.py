@@ -396,20 +396,26 @@ def main() -> None:
     if not is_daemon_running():
         print("Warning: Daemon is not running. Start it with 'voxtype daemon start'", file=sys.stderr)
 
-    # Connect tray callbacks to daemon client
+    # Connect tray callbacks to daemon client (all async to not block UI)
     def on_toggle_listening() -> None:
-        try:
-            response = client.toggle_listening()
-            # Don't stop polling - always keep in sync with daemon
-            # The polling will update the tray state based on daemon response
-        except Exception as e:
-            print(f"Error toggling listening: {e}", file=sys.stderr)
+        def do_toggle() -> None:
+            try:
+                client.toggle_listening()
+                # Polling will update the tray state
+            except Exception as e:
+                print(f"Error toggling listening: {e}", file=sys.stderr)
+
+        # Run in background thread to not block UI
+        threading.Thread(target=do_toggle, daemon=True).start()
 
     def on_output_mode_change(mode: str) -> None:
-        try:
-            client.set_mode(mode)
-        except Exception as e:
-            print(f"Error setting output mode: {e}", file=sys.stderr)
+        def do_change() -> None:
+            try:
+                client.set_mode(mode)
+            except Exception as e:
+                print(f"Error setting output mode: {e}", file=sys.stderr)
+
+        threading.Thread(target=do_change, daemon=True).start()
 
     app.on_toggle_listening(on_toggle_listening)
     app.on_output_mode_change(on_output_mode_change)
