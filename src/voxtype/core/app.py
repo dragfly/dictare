@@ -76,7 +76,7 @@ class VoxtypeApp(EngineEvents):
         # Use shared initialization logic (same as daemon)
         from voxtype.core.engine import create_engine
 
-        self._engine, self._registrar, self._keyboard_agent = create_engine(
+        self._engine, self._registrar = create_engine(
             config=config,
             events=self,
             logger=logger,
@@ -571,8 +571,8 @@ class VoxtypeApp(EngineEvents):
             # Update status panel with agents
             if self._status_panel:
                 self._status_panel.update_agents(self._engine.agents)
-        elif self._keyboard_agent:
-            self._keyboard_agent.start()
+        else:
+            # Keyboard mode - engine manages KeyboardAgent lifecycle
             if self.config.verbose:
                 self._console.print("[dim]Output: keyboard (local)[/]")
 
@@ -649,9 +649,7 @@ class VoxtypeApp(EngineEvents):
         if self._registrar:
             self._registrar.stop()
             self._registrar = None
-        elif self._keyboard_agent:
-            self._keyboard_agent.stop()
-            self._keyboard_agent = None
+        # Note: KeyboardAgent lifecycle is managed by engine.stop()
 
         # Stop engine
         self._engine.stop()
