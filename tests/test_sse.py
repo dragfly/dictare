@@ -359,22 +359,6 @@ class TestSSEServerEvents:
             data = args[0][1]
             assert data["state"] == expected_openvip, f"Failed for {app_state}"
 
-    def test_send_mode_change(self) -> None:
-        """send_mode_change broadcasts state event with x_mode."""
-        from voxtype.core.state import ProcessingMode
-
-        server = SSEServer()
-        client = MagicMock(spec=SSEHandler)
-        client._send_event.return_value = True
-        server._add_client(client)
-
-        server.send_mode_change(ProcessingMode.COMMAND)
-
-        args = client._send_event.call_args
-        assert args[0][0] == "state"
-        data = args[0][1]
-        assert data["x_mode"] == "command"
-
     def test_send_agent_change(self) -> None:
         """send_agent_change broadcasts state event with x_agent."""
         server = SSEServer()

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from voxtype.core.state import AppState, ProcessingMode
+    from voxtype.core.state import AppState
 
 # =============================================================================
 # State Events (for Event Queue Architecture)
@@ -155,14 +155,6 @@ class EngineEvents(Protocol):
 
         Args:
             result: Injection result with success status.
-        """
-        ...
-
-    def on_mode_change(self, mode: ProcessingMode) -> None:
-        """Called when processing mode changes.
-
-        Args:
-            mode: New processing mode (TRANSCRIPTION or COMMAND).
         """
         ...
 

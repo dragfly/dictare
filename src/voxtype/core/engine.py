@@ -15,7 +15,6 @@ from voxtype.core.events import (
     AgentSwitchEvent,
     DiscardCurrentEvent,
     EngineEvents,
-    HotkeyDoubleTapEvent,
     HotkeyToggleEvent,
     InjectionResult,
     SetListeningEvent,
@@ -25,22 +24,20 @@ from voxtype.core.events import (
     TranscriptionResult,
 )
 from voxtype.core.openvip import create_message
-from voxtype.core.state import AppState, ProcessingMode, StateManager
+from voxtype.core.state import AppState, StateManager
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
 from voxtype.stt.base import STTEngine
 
 if TYPE_CHECKING:
     from voxtype.config import Config
-    from voxtype.llm import LLMProcessor, LLMResponse
     from voxtype.logging.jsonl import JSONLLogger
 
 class VoxtypeEngine:
     """Core engine for voice-to-text processing.
 
     Coordinates audio capture, STT, hotkey detection, and text injection.
-    Uses LLM-first architecture: ALL transcribed text goes through the LLM
-    which decides what action to take.
+    Implements OpenVIP v1.0 protocol for voice input.
 
     This class contains NO UI code - use VoxtypeApp for the full application
     with console output, status panels, and audio feedback.
@@ -96,7 +93,6 @@ class VoxtypeEngine:
 
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
-        self.trigger_phrase = config.command.wake_word or None
 
         # Agent mode: whether we're outputting to agents (vs keyboard/clipboard)
         self.agent_mode = agent_mode
@@ -114,7 +110,6 @@ class VoxtypeEngine:
             on_state_change=lambda old, new, trigger: self._emit(
                 "on_state_change", old, new, trigger
             ),
-            on_mode_change=lambda: self._emit("on_mode_change", self._processing_mode),
             on_agent_change=lambda name, idx: self._emit("on_agent_change", name, idx),
         )
         self._controller.set_engine(self)
@@ -128,14 +123,13 @@ class VoxtypeEngine:
         self._agent_order: list[str] = []  # Ordered list of agent IDs for cycling
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
 
-        # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
-        self._processing_mode = ProcessingMode(config.command.mode)
-
         # Tap detection (isolated state machine)
+        # Single tap: toggle listening on/off
+        # Double tap: switch to next agent
         self._tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
             on_single_tap=lambda: self._controller.send(HotkeyToggleEvent(source="hotkey")),
-            on_double_tap=lambda: self._controller.send(HotkeyDoubleTapEvent(source="hotkey")),
+            on_double_tap=lambda: self._controller.send(AgentSwitchEvent(direction=1, source="hotkey")),
         )
 
         # Initialize components
@@ -144,9 +138,6 @@ class VoxtypeEngine:
         self._realtime_stt: STTEngine | None = None  # Separate fast model for realtime
         self._hotkey: HotkeyListener | None = None
         # Note: No more _injector - each Agent handles its own transport
-
-        # LLM processor for command mode
-        self._llm_processor: LLMProcessor | None = None
 
     def _emit(self, event: str, *args: Any, **kwargs: Any) -> None:
         """Emit event to handler if registered.
@@ -182,11 +173,6 @@ class VoxtypeEngine:
     def is_off(self) -> bool:
         """Check if in OFF state (mic disabled)."""
         return self._state_manager.is_off
-
-    @property
-    def mode(self) -> ProcessingMode:
-        """Get current processing mode."""
-        return self._processing_mode
 
     @property
     def agents(self) -> list[str]:
@@ -346,20 +332,10 @@ class VoxtypeEngine:
         )
 
     def _get_hotwords(self) -> str | None:
-        """Build hotwords string from config + wake_word."""
-        parts = []
-
-        # Add config hotwords
+        """Build hotwords string from config."""
         if self.config.stt.hotwords:
-            parts.append(self.config.stt.hotwords)
-
-        # Add wake word (lowercased, normalized)
-        if self.trigger_phrase:
-            normalized = self.trigger_phrase.lower().replace(",", " ").strip()
-            if normalized and normalized not in parts:
-                parts.append(normalized)
-
-        return ",".join(parts) if parts else None
+            return self.config.stt.hotwords
+        return None
 
     # -------------------------------------------------------------------------
     # Initialization
@@ -404,25 +380,11 @@ class VoxtypeEngine:
             )
             self._partial_worker.start()
 
-        # Create LLM processor for command mode
-        self._init_llm_processor()
-
         # Create hotkey listener for toggle (if available)
         try:
             self._hotkey = self._create_hotkey_listener()
         except RuntimeError:
             self._hotkey = None
-
-    def _init_llm_processor(self) -> None:
-        """Initialize the LLM-first processor."""
-        from voxtype.llm import LLMProcessor
-
-        self._llm_processor = LLMProcessor(
-            trigger_phrase=self.trigger_phrase,
-            ollama_model=self.config.command.ollama_model,
-            ollama_timeout=self.config.command.ollama_timeout,
-            console=None,  # No console in engine
-        )
 
     # -------------------------------------------------------------------------
     # VAD Callbacks
@@ -509,7 +471,7 @@ class VoxtypeEngine:
     # -------------------------------------------------------------------------
 
     def _transcribe_and_process(self, audio_data: Any, agent: Agent | None = None) -> None:
-        """Transcribe audio and process with LLM-first architecture.
+        """Transcribe audio and send to agent.
 
         Called by StateController when SpeechEndEvent is processed.
 
@@ -581,14 +543,6 @@ class VoxtypeEngine:
                     if self.is_off:
                         return
 
-                    # Process based on mode (command mode handles injection internally)
-                    if self._processing_mode == ProcessingMode.COMMAND and self._llm_processor:
-                        # Command mode: process through LLM
-                        response = self._llm_processor.process(text)
-                        self._execute_llm_response(response, text, agent=captured_agent)
-                        # Command mode handles its own injection, don't send to controller
-                        transcribed_text = ""
-
             except Exception as e:
                 if self._logger:
                     self._logger.log_error(str(e), context="transcribe_and_process")
@@ -635,66 +589,6 @@ class VoxtypeEngine:
                 )
             )
             return
-
-    # -------------------------------------------------------------------------
-    # LLM Response Execution
-    # -------------------------------------------------------------------------
-
-    def _execute_llm_response(
-        self, response: LLMResponse, original_text: str, *, agent: Agent | None = None
-    ) -> None:
-        """Execute the action decided by the LLM.
-
-        Args:
-            response: LLM response with action to execute
-            original_text: Original transcribed text
-            agent: Optional agent to use for injection
-        """
-        from voxtype.llm.models import Action
-
-        # Log the LLM decision
-        if self._logger:
-            current_llm_state = self._llm_processor.state.value if self._llm_processor else "unknown"
-            self._logger.log(
-                "llm_decision",
-                current_state=current_llm_state,
-                text=original_text,
-                action=response.action.value,
-                new_state=response.new_state.value if response.new_state else None,
-                command=response.command.value if response.command else None,
-                confidence=response.confidence,
-                backend=response.backend,
-                override_reason=response.override_reason,
-                raw_llm_response=response.raw_llm_response,
-                text_to_inject=response.text_to_inject,
-            )
-
-        if response.action == Action.IGNORE:
-            return
-
-        if response.action == Action.CHANGE_STATE:
-            if response.new_state == AppState.LISTENING:
-                self._enter_listening_mode()
-            elif response.new_state == AppState.OFF:
-                self._exit_listening_mode()
-            return
-
-        if response.action == Action.EXECUTE:
-            self._execute_command(response.command, response.command_args)
-            return
-
-        if response.action == Action.INJECT:
-            if response.text_to_inject:
-                self._state_manager.transition(AppState.INJECTING)
-                self._inject_text(response.text_to_inject, agent=agent)
-
-    def _execute_command(self, command: Any, args: dict[str, Any] | None) -> None:
-        """Execute a voice command."""
-        from voxtype.llm.models import Command
-
-        if command == Command.REPEAT:
-            if self._llm_processor and self._llm_processor.last_injection:
-                self._inject_text(self._llm_processor.last_injection)
 
     # -------------------------------------------------------------------------
     # Text Injection
@@ -801,21 +695,6 @@ class VoxtypeEngine:
     def _toggle_listening(self) -> None:
         """Toggle listening on/off - sends event to controller."""
         self._controller.send(HotkeyToggleEvent(source="api"))
-
-    def _switch_processing_mode(self) -> None:
-        """Switch between transcription and command mode - sends event."""
-        self._controller.send(HotkeyDoubleTapEvent(source="api"))
-
-    def _switch_processing_mode_internal(self) -> None:
-        """Internal: Actually switch processing mode. Called by controller."""
-        if self._processing_mode == ProcessingMode.TRANSCRIPTION:
-            self._processing_mode = ProcessingMode.COMMAND
-        else:
-            self._processing_mode = ProcessingMode.TRANSCRIPTION
-
-        # Sync LLM processor state
-        if self._llm_processor:
-            self._llm_processor.set_listening(self.is_listening)
 
     def _set_listening(self, on: bool) -> None:
         """Set listening state on/off - sends event to controller."""
@@ -1004,11 +883,6 @@ class VoxtypeEngine:
         self._emit("on_agent_change", self._current_agent_id, actual_idx)
         return True
 
-    def _repeat_last_injection(self) -> None:
-        """Repeat the last injected text."""
-        if self._llm_processor and self._llm_processor.last_injection:
-            self._inject_text(self._llm_processor.last_injection)
-
     def _send_submit(self) -> None:
         """Send submit (Enter key) to the target."""
         agent = self._get_current_agent()
@@ -1072,10 +946,6 @@ class VoxtypeEngine:
                 old_state = self.state
                 self._state_manager.transition(AppState.LISTENING)
                 self._emit("on_state_change", old_state, AppState.LISTENING, "start")
-
-                # Sync LLM processor state
-                if self._llm_processor:
-                    self._llm_processor.set_listening(True)
 
             # Keep main thread alive
             while self._running:

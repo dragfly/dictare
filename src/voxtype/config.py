@@ -125,30 +125,6 @@ class OutputConfig(BaseModel):
         description="Key combination for visual newline (when auto_enter=false). Default: alt+enter (Linux), shift+enter (macOS)",
     )
 
-class CommandConfig(BaseModel):
-    """Voice command configuration."""
-
-    enabled: bool = Field(
-        default=True,
-        description="Enable voice command processing",
-    )
-    wake_word: str = Field(
-        default="",
-        description="Wake word to activate (e.g., 'Joshua')",
-    )
-    mode: Literal["transcription", "command"] = Field(
-        default="transcription",
-        description="Processing mode: transcription (fast) or command (LLM)",
-    )
-    ollama_model: str = Field(
-        default="qwen2.5:1.5b",
-        description="Ollama model for intent classification",
-    )
-    ollama_timeout: float = Field(
-        default=5.0,
-        description="Ollama request timeout in seconds",
-    )
-
 class KeyboardConfig(BaseModel):
     """Keyboard shortcuts configuration."""
 
@@ -245,7 +221,6 @@ class Config(BaseModel):
     tts: TTSConfig = Field(default_factory=TTSConfig)
     hotkey: HotkeyConfig = Field(default_factory=HotkeyConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
-    command: CommandConfig = Field(default_factory=CommandConfig)
     keyboard: KeyboardConfig = Field(default_factory=KeyboardConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -471,7 +446,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "command", "keyboard", "server", "logging", "stats", "daemon"):
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "logging", "stats", "daemon"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -491,7 +466,6 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("tts", TTSConfig),
         ("hotkey", HotkeyConfig),
         ("output", OutputConfig),
-        ("command", CommandConfig),
         ("keyboard", KeyboardConfig),
         ("server", ServerConfig),
         ("logging", LoggingConfig),
@@ -563,13 +537,6 @@ typing_delay_ms = 5
 auto_enter = false     # Visual newline only
 # submit_keys = "enter"         # Keys for submit (when auto_enter=true)
 # newline_keys = "{newline_keys}"  # Keys for visual newline (when auto_enter=false)
-
-[command]
-enabled = true
-wake_word = ""         # e.g., "hey joshua"
-mode = "transcription" # transcription or command
-ollama_model = "qwen2.5:1.5b"
-ollama_timeout = 5.0
 
 # Keyboard shortcuts - configure interactively with: voxtype config shortcuts
 # Example:

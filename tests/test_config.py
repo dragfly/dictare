@@ -5,7 +5,6 @@ from pathlib import Path
 
 from voxtype.config import (
     AudioConfig,
-    CommandConfig,
     Config,
     HotkeyConfig,
     OutputConfig,
@@ -49,12 +48,6 @@ class TestConfigDefaults:
         assert config.typing_delay_ms == 5
         assert config.auto_enter is False
 
-    def test_command_config_defaults(self) -> None:
-        """Test CommandConfig has correct defaults."""
-        config = CommandConfig()
-        assert config.enabled is True
-        assert config.ollama_timeout == 5.0
-
     def test_full_config_defaults(self) -> None:
         """Test Config has all sub-configs with defaults."""
         config = Config()
@@ -62,7 +55,6 @@ class TestConfigDefaults:
         assert isinstance(config.stt, STTConfig)
         assert isinstance(config.hotkey, HotkeyConfig)
         assert isinstance(config.output, OutputConfig)
-        assert isinstance(config.command, CommandConfig)
 
 class TestConfigLoading:
     """Test configuration file loading."""

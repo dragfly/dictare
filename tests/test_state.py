@@ -8,7 +8,6 @@ import pytest
 from voxtype.core.state import (
     AppState,
     InvalidTransitionError,
-    ProcessingMode,
     StateManager,
 )
 
@@ -30,19 +29,6 @@ class TestAppState:
         assert str(AppState.LISTENING) == "Listening"
         assert str(AppState.RECORDING) == "Recording"
         assert str(AppState.TRANSCRIBING) == "Transcribing"
-
-class TestProcessingMode:
-    """Test ProcessingMode enum."""
-
-    def test_modes_exist(self) -> None:
-        """Verify processing modes are defined."""
-        assert ProcessingMode.TRANSCRIPTION
-        assert ProcessingMode.COMMAND
-
-    def test_values(self) -> None:
-        """Test mode values."""
-        assert ProcessingMode.TRANSCRIPTION.value == "transcription"
-        assert ProcessingMode.COMMAND.value == "command"
 
 class TestInvalidTransitionError:
     """Test InvalidTransitionError exception."""

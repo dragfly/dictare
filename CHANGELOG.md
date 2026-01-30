@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.61.0] - 2026-01-30
+
+### Removed - OpenVIP v1.0 Cleanup
+- **LLM Processor**: Removed `src/voxtype/llm/` directory entirely
+  - LLM-based command processing is out of scope for OpenVIP v1.0 core
+  - Will be available as optional plugin in future
+- **CommandConfig**: Removed `[command]` section from config
+  - `command.mode` - no longer needed (no LLM vs transcription mode)
+  - `command.wake_word` - removed
+  - `command.ollama_model` - removed
+  - `command.ollama_timeout` - removed
+- **ProcessingMode**: Removed `ProcessingMode` enum from state machine
+  - No more TRANSCRIPTION/COMMAND mode switching
+  - Double-tap hotkey now switches agents instead of modes
+- **Engine simplification**:
+  - Removed `trigger_phrase`, `_llm_processor`, `_processing_mode`
+  - Removed `_switch_processing_mode()`, `_repeat_last_injection()`
+  - Removed `on_mode_change` callback
+  - Hotwords now only from `stt.hotwords` config
+
+### Changed
+- **Engine docstring**: Now describes OpenVIP v1.0 protocol instead of "LLM-first architecture"
+- **Double-tap hotkey**: Now cycles to next agent (was: switch transcription/command mode)
+
 ## [2.60.0-alpha] - 2026-01-29
 
 ### Changed
