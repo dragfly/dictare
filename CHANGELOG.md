@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.70.1] - 2026-01-30
+
+### Fixed - Tray UI Blocking
+- **tray/app.py**: Menu actions now run in background threads
+  - "Start/Stop Listening" no longer freezes UI for seconds
+  - Output mode changes also async
+  - UI stays responsive, polling updates state
+
 ## [2.70.0] - 2026-01-30
 
 ### Fixed - Daemon State Synchronization
