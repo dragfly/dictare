@@ -1004,7 +1004,7 @@ def create_engine(
     realtime: bool | None = None,
     manual_agents: list[str] | None = None,
     discovery_method: str = "polling",
-) -> tuple[VoxtypeEngine, Any]:
+) -> tuple[VoxtypeEngine, Any, Any]:
     """Create a VoxtypeEngine with appropriate agent registration.
 
     This is the shared initialization logic used by both CLI (voxtype listen)
@@ -1021,7 +1021,9 @@ def create_engine(
         discovery_method: Agent discovery method - "polling" or "watchdog".
 
     Returns:
-        Tuple of (engine, registrar). Registrar is None if keyboard mode.
+        Tuple of (engine, registrar, keyboard_agent).
+        - registrar: AgentRegistrar if agent mode, None otherwise.
+        - keyboard_agent: KeyboardAgent if keyboard mode, None otherwise.
         Caller must call registrar.start() after engine.start() if not None.
     """
     from voxtype.agent.registrar import AutoDiscoveryRegistrar, ManualAgentRegistrar
@@ -1038,7 +1040,8 @@ def create_engine(
         realtime=effective_realtime,
     )
 
-    registrar = None
+    registrar: ManualAgentRegistrar | AutoDiscoveryRegistrar | None = None
+    keyboard_agent = None
     if effective_agent_mode:
         if manual_agents:
             registrar = ManualAgentRegistrar(engine, manual_agents)
@@ -1054,4 +1057,4 @@ def create_engine(
         keyboard_agent = KeyboardAgent(config)
         engine.register_agent(keyboard_agent)
 
-    return engine, registrar
+    return engine, registrar, keyboard_agent
