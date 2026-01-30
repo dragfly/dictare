@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 from voxtype.agent.base import OpenVIPMessage
 from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import InjectionResult, TranscriptionResult
-from voxtype.core.state import AppState, ProcessingMode
+from voxtype.core.state import AppState
 
 class MockAgent:
     """Mock agent for testing."""
@@ -59,13 +59,6 @@ class MockConfig:
         self.audio.audio_feedback = False
         self.audio.headphones_mode = True
 
-        # Command config
-        self.command = MagicMock()
-        self.command.wake_word = None
-        self.command.mode = "transcription"
-        self.command.ollama_model = "llama3.2"
-        self.command.ollama_timeout = 30
-
         # Output config
         self.output = MagicMock()
         self.output.mode = "keyboard"
@@ -93,7 +86,6 @@ class MockEventHandler:
         self.state_changes: list[tuple[AppState, AppState, str]] = []
         self.transcriptions: list[TranscriptionResult] = []
         self.injections: list[InjectionResult] = []
-        self.mode_changes: list[ProcessingMode] = []
         self.agent_changes: list[tuple[str, int]] = []
         self.errors: list[tuple[str, str]] = []
         self.partial_transcriptions: list[str] = []
@@ -108,9 +100,6 @@ class MockEventHandler:
 
     def on_injection(self, result: InjectionResult) -> None:
         self.injections.append(result)
-
-    def on_mode_change(self, mode: ProcessingMode) -> None:
-        self.mode_changes.append(mode)
 
     def on_agent_change(self, agent_name: str, index: int) -> None:
         self.agent_changes.append((agent_name, index))
@@ -138,17 +127,6 @@ class TestVoxtypeEngineInit:
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
         assert engine.state == AppState.OFF
-
-    def test_initial_mode_from_config(self) -> None:
-        """Processing mode comes from config."""
-        config = MockConfig()
-        config.command.mode = "transcription"
-        engine = VoxtypeEngine(config=config)
-        assert engine.mode == ProcessingMode.TRANSCRIPTION
-
-        config.command.mode = "command"
-        engine = VoxtypeEngine(config=config)
-        assert engine.mode == ProcessingMode.COMMAND
 
     def test_is_off_initially(self) -> None:
         """is_off returns True initially."""
@@ -178,12 +156,6 @@ class TestVoxtypeEngineProperties:
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
         assert engine.state == AppState.OFF
-
-    def test_mode_property(self) -> None:
-        """mode property returns processing mode."""
-        config = MockConfig()
-        engine = VoxtypeEngine(config=config)
-        assert engine.mode == ProcessingMode.TRANSCRIPTION
 
     def test_stats_properties_initially_zero(self) -> None:
         """Stats are zero initially."""
@@ -326,45 +298,6 @@ class TestStateControl:
             engine._set_listening(True)  # Already on
             _wait_for_controller()
             assert len(events.state_changes) == 0
-        finally:
-            engine._controller.stop()
-
-class TestModeSwitch:
-    """Test processing mode switching.
-
-    Note: Mode switch is now async via the event queue.
-    """
-
-    def test_switch_mode_transcription_to_command(self) -> None:
-        """Switch from transcription to command mode."""
-        config = MockConfig()
-        config.command.mode = "transcription"
-        events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
-        engine._controller.start()
-
-        try:
-            engine._switch_processing_mode()
-            _wait_for_controller()
-            assert engine.mode == ProcessingMode.COMMAND
-            assert len(events.mode_changes) == 1
-            assert events.mode_changes[0] == ProcessingMode.COMMAND
-        finally:
-            engine._controller.stop()
-
-    def test_switch_mode_command_to_transcription(self) -> None:
-        """Switch from command to transcription mode."""
-        config = MockConfig()
-        config.command.mode = "command"
-        events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
-        engine._controller.start()
-
-        try:
-            engine._switch_processing_mode()
-            _wait_for_controller()
-            assert engine.mode == ProcessingMode.TRANSCRIPTION
-            assert events.mode_changes[0] == ProcessingMode.TRANSCRIPTION
         finally:
             engine._controller.stop()
 
@@ -552,31 +485,10 @@ class TestHotwords:
         result = engine._get_hotwords()
         assert result == "voxtype,hey claude"
 
-    def test_get_hotwords_with_trigger_phrase(self) -> None:
-        """Hotwords includes trigger phrase."""
-        config = MockConfig()
-        config.command.wake_word = "hey joshua"
-        engine = VoxtypeEngine(config=config)
-
-        result = engine._get_hotwords()
-        assert result == "hey joshua"
-
-    def test_get_hotwords_both(self) -> None:
-        """Hotwords combines config and trigger phrase."""
-        config = MockConfig()
-        config.stt.hotwords = "voxtype"
-        config.command.wake_word = "hey joshua"
-        engine = VoxtypeEngine(config=config)
-
-        result = engine._get_hotwords()
-        assert "voxtype" in result
-        assert "hey joshua" in result
-
     def test_get_hotwords_none(self) -> None:
         """No hotwords returns None."""
         config = MockConfig()
         config.stt.hotwords = None
-        config.command.wake_word = None
         engine = VoxtypeEngine(config=config)
 
         result = engine._get_hotwords()
@@ -644,31 +556,6 @@ class TestThreadSafety:
         assert len(errors) == 0
         # State should be valid
         assert engine.state in AppState
-
-    def test_concurrent_mode_switches(self) -> None:
-        """Concurrent mode switches don't corrupt mode."""
-        config = MockConfig()
-        engine = VoxtypeEngine(config=config)
-        errors = []
-
-        def switch_many_times() -> None:
-            try:
-                for _ in range(50):
-                    engine._switch_processing_mode()
-                    time.sleep(0.001)
-            except Exception as e:
-                errors.append(e)
-
-        threads = [threading.Thread(target=switch_many_times) for _ in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        # No exceptions
-        assert len(errors) == 0
-        # Mode should be valid
-        assert engine.mode in ProcessingMode
 
     def test_concurrent_agent_switches(self) -> None:
         """Concurrent agent switches don't corrupt index."""
