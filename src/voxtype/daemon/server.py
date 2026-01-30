@@ -277,13 +277,21 @@ class DaemonServer:
         # Event to signal when engine is ready
         engine_ready = threading.Event()
 
-        # Event handler to capture on_engine_ready
+        # Event handler to sync daemon state with engine
+        server = self  # Capture reference for inner class
+
         class DaemonEvents:
             def on_engine_ready(self) -> None:
                 engine_ready.set()
 
             def on_state_change(self, old, new, trigger) -> None:
-                pass  # We sync state after ready
+                # Sync daemon state with engine state
+                from voxtype.core.state import AppState
+                if new == AppState.LISTENING:
+                    server.set_state("listening")
+                elif new == AppState.OFF:
+                    server.set_state("off")
+                # RECORDING state stays "listening" for daemon purposes
 
         # Use shared initialization logic (same as CLI voxtype listen)
         self._engine, self._registrar = create_engine(

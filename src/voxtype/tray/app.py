@@ -400,11 +400,8 @@ def main() -> None:
     def on_toggle_listening() -> None:
         try:
             response = client.toggle_listening()
-            if hasattr(response, "listening"):
-                if response.listening:
-                    app.start_status_polling()
-                else:
-                    app.stop_status_polling()
+            # Don't stop polling - always keep in sync with daemon
+            # The polling will update the tray state based on daemon response
         except Exception as e:
             print(f"Error toggling listening: {e}", file=sys.stderr)
 

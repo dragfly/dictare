@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.70.0] - 2026-01-30
+
+### Fixed - Daemon State Synchronization
+- **daemon/server.py**: Daemon now properly syncs state with engine
+  - `on_state_change` callback now updates daemon state (was doing nothing!)
+  - Hotkey toggles now correctly update daemon state
+  - State changes from any source (hotkey, API, tray) now reflected correctly
+- **tray/app.py**: Don't stop polling when stopping listening
+  - Tray always polls to stay in sync with daemon
+
 ## [2.69.2] - 2026-01-30
 
 ### Fixed - Daemon Crash on Start Listening
