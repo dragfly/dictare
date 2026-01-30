@@ -416,6 +416,36 @@ def main() -> None:
     app.on_toggle_listening(on_toggle_listening)
     app.on_output_mode_change(on_output_mode_change)
 
+    # Start global hotkey listener (runs on main thread - works on macOS!)
+    # Hotkey press toggles listening via daemon
+    def start_hotkey_listener() -> None:
+        try:
+            from voxtype.config import load_config
+            from voxtype.hotkey import create_listener
+            from voxtype.hotkey.tap_detector import TapDetector
+
+            config = load_config()
+            hotkey = create_listener(config.keyboard.hotkey)
+
+            # Tap detector: single tap = toggle, double tap = switch agent
+            tap_detector = TapDetector(
+                threshold=0.3,
+                on_single_tap=on_toggle_listening,
+                on_double_tap=lambda: None,  # TODO: switch agent
+            )
+
+            hotkey.start(
+                on_press=tap_detector.on_key_down,
+                on_release=tap_detector.on_key_up,
+                on_other_key=tap_detector.on_other_key,
+            )
+            print(f"Hotkey registered: {config.keyboard.hotkey}", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Could not register hotkey: {e}", file=sys.stderr)
+
+    # Start hotkey in background thread (pynput creates its own listener thread)
+    threading.Thread(target=start_hotkey_listener, daemon=True).start()
+
     # Start polling to sync state with daemon
     app.start_status_polling()
 
