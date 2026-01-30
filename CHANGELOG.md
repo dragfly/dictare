@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.66.0] - 2026-01-30
+
+### Fixed - Config Set TOML Serialization
+- **config.py**: Fixed `_format_toml_value()` to properly serialize lists and dicts to TOML
+  - Lists of inline tables (like `keyboard.shortcuts`) now use correct TOML syntax
+  - Was using Python `str()` which produced invalid syntax like `[{'key': 'value'}]`
+  - Now outputs valid TOML: `[{ key = "value" }]`
+
 ## [2.65.0] - 2026-01-30
 
 ### Fixed - CLI Command Options Cleanup
