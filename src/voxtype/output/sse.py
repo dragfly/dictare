@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any
 
 from voxtype import __version__
-from voxtype.core.openvip import create_partial, create_status
+from voxtype.core.openvip import StatusValue, create_partial, create_status
 
 if TYPE_CHECKING:
     from voxtype.core.state import AppState
@@ -227,7 +227,7 @@ class SSEServer:
             trigger: What triggered the change (unused, for logging).
         """
         # Map voxtype states to OpenVIP status values
-        state_map = {
+        state_map: dict[str, StatusValue] = {
             "OFF": "idle",
             "LISTENING": "listening",
             "RECORDING": "recording",
@@ -235,7 +235,7 @@ class SSEServer:
             "INJECTING": "transcribing",  # Still processing
             "PLAYING": "listening",  # TTS feedback
         }
-        status = state_map.get(new.name, "idle")
+        status: StatusValue = state_map.get(new.name, "idle")
         self._broadcast("status", create_status(status))
 
     def send_agent_change(self, agent_name: str, index: int) -> None:
