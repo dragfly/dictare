@@ -1015,7 +1015,7 @@ def create_engine(
         events: Event handler callbacks.
         logger: Optional JSONL logger.
         agent_mode: Override config.output.mode. If None, uses config.
-        realtime: Override config.realtime. If None, uses config.
+        realtime: Enable realtime transcription. Defaults to False.
         manual_agents: List of agent IDs for manual registration.
                       If None and agent mode, uses auto-discovery.
         discovery_method: Agent discovery method - "polling" or "watchdog".
@@ -1026,9 +1026,9 @@ def create_engine(
     """
     from voxtype.agent.registrar import AutoDiscoveryRegistrar, ManualAgentRegistrar
 
-    # Use overrides or fall back to config
+    # Use overrides or fall back to config/defaults
     effective_agent_mode = agent_mode if agent_mode is not None else (config.output.mode == "agents")
-    effective_realtime = realtime if realtime is not None else config.realtime
+    effective_realtime = realtime if realtime is not None else False  # realtime is CLI-only, default off
 
     engine = VoxtypeEngine(
         config=config,
