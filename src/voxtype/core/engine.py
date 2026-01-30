@@ -60,6 +60,7 @@ class VoxtypeEngine:
         logger: JSONLLogger | None = None,
         agent_mode: bool = False,
         realtime: bool = False,
+        hotkey_enabled: bool = True,
     ) -> None:
         """Initialize the engine.
 
@@ -69,7 +70,10 @@ class VoxtypeEngine:
             logger: Optional JSONL logger for structured logging.
             agent_mode: Enable agent mode with auto-discovery.
             realtime: Enable realtime transcription feedback while speaking.
+            hotkey_enabled: Enable hotkey listener. Set False for daemon mode
+                           (macOS requires main thread for hotkey events).
         """
+        self._hotkey_enabled = hotkey_enabled
         self.config = config
         self._events = events
         self._realtime = realtime
@@ -123,6 +127,7 @@ class VoxtypeEngine:
         self._current_agent_id: str | None = None  # ID of currently selected agent
         self._agent_order: list[str] = []  # Ordered list of agent IDs for cycling
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
+        self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
 
         # Tap detection (isolated state machine)
         # Single tap: toggle listening on/off
@@ -381,10 +386,14 @@ class VoxtypeEngine:
             )
             self._partial_worker.start()
 
-        # Create hotkey listener for toggle (if available)
-        try:
-            self._hotkey = self._create_hotkey_listener()
-        except RuntimeError:
+        # Create hotkey listener for toggle (if available and enabled)
+        # Note: hotkey disabled in daemon mode - macOS requires main thread
+        if self._hotkey_enabled:
+            try:
+                self._hotkey = self._create_hotkey_listener()
+            except RuntimeError:
+                self._hotkey = None
+        else:
             self._hotkey = None
 
     # -------------------------------------------------------------------------
@@ -918,8 +927,9 @@ class VoxtypeEngine:
         self._running = True
         self._stats_start_time = time.time()
 
-        # Note: Agent registration is handled externally by AgentRegistrar
-        # before run() is called. The registrar calls register_agent().
+        # Start keyboard agent if in keyboard mode (special built-in agent)
+        if self._keyboard_agent:
+            self._keyboard_agent.start()
 
         # Start the state controller (event queue processor)
         self._controller.start()
@@ -989,6 +999,11 @@ class VoxtypeEngine:
         if self._input_manager:
             self._input_manager.stop()
 
+        # Stop keyboard agent if in keyboard mode
+        if self._keyboard_agent:
+            self._keyboard_agent.stop()
+            self._keyboard_agent = None
+
         # Note: AgentRegistrar.stop() is called by the app, not here
 
         if self._hotkey:
@@ -1002,9 +1017,10 @@ def create_engine(
     logger: JSONLLogger | None = None,
     agent_mode: bool | None = None,
     realtime: bool | None = None,
+    hotkey_enabled: bool = True,
     manual_agents: list[str] | None = None,
     discovery_method: str = "polling",
-) -> tuple[VoxtypeEngine, Any, Any]:
+) -> tuple[VoxtypeEngine, Any]:
     """Create a VoxtypeEngine with appropriate agent registration.
 
     This is the shared initialization logic used by both CLI (voxtype listen)
@@ -1016,15 +1032,17 @@ def create_engine(
         logger: Optional JSONL logger.
         agent_mode: Override config.output.mode. If None, uses config.
         realtime: Enable realtime transcription. Defaults to False.
+        hotkey_enabled: Enable hotkey listener. Set False for daemon mode
+                       (macOS requires main thread for hotkey events).
         manual_agents: List of agent IDs for manual registration.
                       If None and agent mode, uses auto-discovery.
         discovery_method: Agent discovery method - "polling" or "watchdog".
 
     Returns:
-        Tuple of (engine, registrar, keyboard_agent).
-        - registrar: AgentRegistrar if agent mode, None otherwise.
-        - keyboard_agent: KeyboardAgent if keyboard mode, None otherwise.
+        Tuple of (engine, registrar).
+        - registrar: AgentRegistrar if agent mode, None if keyboard mode.
         Caller must call registrar.start() after engine.start() if not None.
+        KeyboardAgent lifecycle is managed internally by the engine.
     """
     from voxtype.agent.registrar import AutoDiscoveryRegistrar, ManualAgentRegistrar
 
@@ -1038,10 +1056,10 @@ def create_engine(
         logger=logger,
         agent_mode=effective_agent_mode,
         realtime=effective_realtime,
+        hotkey_enabled=hotkey_enabled,
     )
 
     registrar: ManualAgentRegistrar | AutoDiscoveryRegistrar | None = None
-    keyboard_agent = None
     if effective_agent_mode:
         if manual_agents:
             registrar = ManualAgentRegistrar(engine, manual_agents)
@@ -1051,10 +1069,11 @@ def create_engine(
                 monitor_type=discovery_method,
             )
     else:
-        # Keyboard mode: register KeyboardAgent for local typing
+        # Keyboard mode: create KeyboardAgent (engine manages its lifecycle)
         from voxtype.agent.keyboard import KeyboardAgent
 
         keyboard_agent = KeyboardAgent(config)
+        engine._keyboard_agent = keyboard_agent  # Engine owns it
         engine.register_agent(keyboard_agent)
 
-    return engine, registrar, keyboard_agent
+    return engine, registrar
