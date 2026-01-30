@@ -293,9 +293,11 @@ class DaemonServer:
                 # RECORDING state stays "listening" for daemon purposes
 
         # Use shared initialization logic (same as CLI voxtype listen)
-        self._engine, self._registrar, _ = create_engine(
+        # Note: hotkey disabled in daemon mode - macOS requires main thread for events
+        self._engine, self._registrar = create_engine(
             config=config,
             events=DaemonEvents(),  # type: ignore[arg-type]
+            hotkey_enabled=False,
         )
 
         # Start engine in background thread

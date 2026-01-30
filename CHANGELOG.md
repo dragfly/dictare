@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.71.0] - 2026-01-30
+
+### Changed - Engine Manages KeyboardAgent Lifecycle
+- **core/engine.py**: Engine now owns and manages KeyboardAgent lifecycle
+  - KeyboardAgent is started/stopped automatically in engine.start()/stop()
+  - No longer needs to be returned from create_engine or managed by app
+  - Added `hotkey_enabled` parameter (default True)
+- **daemon/server.py**: Disabled hotkey in daemon mode
+  - macOS requires main thread for hotkey events, but daemon runs engine in background
+  - Users toggle via tray menu instead
+
 ## [2.70.2] - 2026-01-30
 
 ### Fixed - Mypy Type Errors
