@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.60.0-alpha] - 2026-01-29
 
+### Changed
+- **OpenVIP spec**: Removed duplicate internal spec, now points to official https://github.com/open-voice-input/spec
+- **spec/README.md**: Documents voxtype-specific extensions (`x_submit`, `x_visual_newline`)
+
 ### Added
 - **Service Layer**: New `voxtype.services` module with high-level APIs
   - `STTService`: Speech-to-text with daemon integration and local fallback
