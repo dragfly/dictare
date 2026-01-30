@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.64.0] - 2026-01-30
+
+### Fixed - Mypy Type Errors
+- **stats.py**: Added `model_load_times` to `StatsData` TypedDict
+- **watcher.py**: Fixed `Observer` type annotation, handle `bytes | str` paths
+- **monitor.py**: Handle `bytes | str` paths from watchdog events
+- **status.py**: Removed reference to deleted `config.command.mode`
+- **keyboard.py**: Fixed `typing_delay` → `typing_delay_ms`
+- **daemon/server.py**: Removed references to deleted `mode` property
+- **app_commands.py**: Removed commands for deleted methods (`toggle-mode`, `repeat`)
+- **app.py**: Added `on_engine_ready()` implementation, use `create_message()`
+- **plugins/__init__.py**: Added type ignore for Protocol `issubclass()` checks
+
+### Changed
+- **CI workflow**: Now runs on all branches (not just main)
+
 ## [2.63.0] - 2026-01-30
 
 ### Changed - OpenVIP v1.0 Protocol Simplification
