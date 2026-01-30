@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.69.0] - 2026-01-30
+
+### Refactored - Unified Engine Initialization
+- **core/engine.py**: Added `create_engine()` factory function
+  - Shared initialization logic for both daemon and CLI
+  - Supports override parameters (agent_mode, realtime, manual_agents)
+  - Ensures identical behavior between `voxtype listen` and daemon
+- **core/app.py**: Now uses `create_engine()` instead of duplicated code
+- **daemon/server.py**: Now uses `create_engine()` instead of duplicated code
+
 ## [2.68.0] - 2026-01-30
 
 ### Fixed - Daemon Agent Discovery

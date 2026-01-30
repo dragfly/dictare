@@ -993,3 +993,65 @@ class VoxtypeEngine:
 
         if self._hotkey:
             self._hotkey.stop()
+
+
+def create_engine(
+    config: Config,
+    events: EngineEvents,
+    *,
+    logger: JSONLLogger | None = None,
+    agent_mode: bool | None = None,
+    realtime: bool | None = None,
+    manual_agents: list[str] | None = None,
+    discovery_method: str = "polling",
+) -> tuple[VoxtypeEngine, Any]:
+    """Create a VoxtypeEngine with appropriate agent registration.
+
+    This is the shared initialization logic used by both CLI (voxtype listen)
+    and daemon. Ensures consistent behavior.
+
+    Args:
+        config: Application configuration.
+        events: Event handler callbacks.
+        logger: Optional JSONL logger.
+        agent_mode: Override config.output.mode. If None, uses config.
+        realtime: Override config.realtime. If None, uses config.
+        manual_agents: List of agent IDs for manual registration.
+                      If None and agent mode, uses auto-discovery.
+        discovery_method: Agent discovery method - "polling" or "watchdog".
+
+    Returns:
+        Tuple of (engine, registrar). Registrar is None if keyboard mode.
+        Caller must call registrar.start() after engine.start() if not None.
+    """
+    from voxtype.agent.registrar import AutoDiscoveryRegistrar, ManualAgentRegistrar
+
+    # Use overrides or fall back to config
+    effective_agent_mode = agent_mode if agent_mode is not None else (config.output.mode == "agents")
+    effective_realtime = realtime if realtime is not None else config.realtime
+
+    engine = VoxtypeEngine(
+        config=config,
+        events=events,
+        logger=logger,
+        agent_mode=effective_agent_mode,
+        realtime=effective_realtime,
+    )
+
+    registrar = None
+    if effective_agent_mode:
+        if manual_agents:
+            registrar = ManualAgentRegistrar(engine, manual_agents)
+        else:
+            registrar = AutoDiscoveryRegistrar(
+                engine,
+                monitor_type=discovery_method,
+            )
+    else:
+        # Keyboard mode: register KeyboardAgent for local typing
+        from voxtype.agent.keyboard import KeyboardAgent
+
+        keyboard_agent = KeyboardAgent(config)
+        engine.register_agent(keyboard_agent)
+
+    return engine, registrar

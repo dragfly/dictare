@@ -3,16 +3,10 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from voxtype.agent.registrar import (
-    AgentRegistrar,
-    AutoDiscoveryRegistrar,
-    ManualAgentRegistrar,
-)
-from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import (
     EngineEvents,
     InjectionResult,
@@ -80,34 +74,18 @@ class VoxtypeApp(EngineEvents):
         # HTTP/SSE server (set in run() if configured)
         self._sse: SSEServer | None = None
 
-        # Create engine with self as event handler
-        self._engine = VoxtypeEngine(
+        # Use shared initialization logic (same as daemon)
+        from voxtype.core.engine import create_engine
+
+        self._engine, self._registrar = create_engine(
             config=config,
             events=self,
             logger=logger,
             agent_mode=agent_mode,
             realtime=realtime,
+            manual_agents=manual_agents,
+            discovery_method=discovery_method,
         )
-
-        # Create agent registrar based on configuration
-        # - manual_agents provided → ManualAgentRegistrar
-        # - agent_mode but no manual_agents → AutoDiscoveryRegistrar
-        # - no agent_mode → register KeyboardAgent for local typing
-        self._registrar: AgentRegistrar | None = None
-        self._keyboard_agent: Any = None  # KeyboardAgent when not in agent mode
-        if agent_mode:
-            if manual_agents:
-                self._registrar = ManualAgentRegistrar(self._engine, manual_agents)
-            else:
-                self._registrar = AutoDiscoveryRegistrar(
-                    self._engine,
-                    monitor_type=discovery_method,
-                )
-        else:
-            # Local mode: create KeyboardAgent for direct typing
-            from voxtype.agent.keyboard import KeyboardAgent
-            self._keyboard_agent = KeyboardAgent(config)
-            self._engine.register_agent(self._keyboard_agent)
 
     # -------------------------------------------------------------------------
     # Delegate Properties to Engine

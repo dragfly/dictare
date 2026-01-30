@@ -267,13 +267,10 @@ class DaemonServer:
                            If False, stay in OFF state.
         """
         from voxtype.config import load_config
-        from voxtype.core.engine import VoxtypeEngine
+        from voxtype.core.engine import create_engine
 
         config = load_config()
         self._output_mode = config.output.mode
-
-        # Determine if agent mode based on output mode
-        agent_mode = self._output_mode == "agents"
 
         # Event to signal when engine is ready
         engine_ready = threading.Event()
@@ -286,9 +283,9 @@ class DaemonServer:
             def on_state_change(self, old, new, trigger) -> None:
                 pass  # We sync state after ready
 
-        self._engine = VoxtypeEngine(
+        # Use shared initialization logic (same as CLI voxtype listen)
+        self._engine, self._registrar = create_engine(
             config=config,
-            agent_mode=agent_mode,
             events=DaemonEvents(),  # type: ignore[arg-type]
         )
 
@@ -305,11 +302,8 @@ class DaemonServer:
         if not engine_ready.wait(timeout=60.0):
             raise TimeoutError("Engine failed to initialize within 60 seconds")
 
-        # Start agent discovery if in agent mode
-        if agent_mode and self._engine:
-            from voxtype.agent.registrar import AutoDiscoveryRegistrar
-
-            self._registrar = AutoDiscoveryRegistrar(self._engine)
+        # Start agent discovery after engine is ready
+        if self._registrar:
             self._registrar.start()
 
         # Update state based on engine state
