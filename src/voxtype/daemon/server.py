@@ -76,6 +76,9 @@ class DaemonServer:
         self._engine_thread: threading.Thread | None = None
         self._engine_lock = threading.Lock()
 
+        # Agent registrar for discovering agents
+        self._registrar = None
+
         # Output mode tracking
         self._output_mode: str = "keyboard"  # "keyboard" | "agents"
 
@@ -301,6 +304,13 @@ class DaemonServer:
         # Wait for engine ready signal (with timeout)
         if not engine_ready.wait(timeout=60.0):
             raise TimeoutError("Engine failed to initialize within 60 seconds")
+
+        # Start agent discovery if in agent mode
+        if agent_mode and self._engine:
+            from voxtype.agent.registrar import AutoDiscoveryRegistrar
+
+            self._registrar = AutoDiscoveryRegistrar(self._engine)
+            self._registrar.start()
 
         # Update state based on engine state
         if self._engine:

@@ -1016,10 +1016,13 @@ def daemon_status_cmd() -> None:
                 console.print(f"  Uptime: {uptime_str}")
                 console.print(f"  Requests served: {response.requests_served}")
                 console.print(f"  Output mode: {response.output_mode}")
-                if response.current_agent:
-                    console.print(f"  Current agent: {response.current_agent}")
-                if response.available_agents:
-                    console.print(f"  Available agents: {', '.join(response.available_agents)}")
+                # Always show agents info for debugging
+                agents_list = response.available_agents or []
+                console.print(f"  Agents: {len(agents_list)} available")
+                if agents_list:
+                    for agent in agents_list:
+                        marker = " *" if agent == response.current_agent else ""
+                        console.print(f"    - {agent}{marker}")
                 console.print(f"  STT loaded: {'yes' if response.stt_loaded else 'no'}")
                 console.print(f"  TTS loaded: {'yes' if response.tts_loaded else 'no'}")
                 if response.tts_engine:
