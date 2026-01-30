@@ -456,6 +456,22 @@ def _format_toml_value(value: Any) -> str:
         return f'"{value}"'
     elif value is None:
         return '""'  # TOML doesn't have null, use empty string
+    elif isinstance(value, list):
+        if not value:
+            return "[]"
+        # Check if it's a list of dicts (inline tables)
+        if isinstance(value[0], dict):
+            items = []
+            for item in value:
+                pairs = ", ".join(f'{k} = {_format_toml_value(v)}' for k, v in item.items())
+                items.append(f"{{ {pairs} }}")
+            return "[\n    " + ",\n    ".join(items) + ",\n]"
+        else:
+            # Simple list
+            return "[" + ", ".join(_format_toml_value(v) for v in value) + "]"
+    elif isinstance(value, dict):
+        pairs = ", ".join(f'{k} = {_format_toml_value(v)}' for k, v in value.items())
+        return f"{{ {pairs} }}"
     else:
         return str(value)
 
