@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.65.0] - 2026-01-30
+
+### Fixed - CLI Command Options Cleanup
+- **cli.py**: Removed remaining `config.command` references that caused crash on startup
+  - Removed CLI options: `--wake-word`, `--initial-mode`, `--no-commands`, `--ollama-model`
+  - Removed LLM status display from `voxtype models list`
+  - Removed `--llm` option from `voxtype models use`
+  - Removed unused `_get_ollama_models()` function
+  - Cleaned up logger parameters (removed `trigger_phrase`)
+
 ## [2.64.0] - 2026-01-30
 
 ### Fixed - Mypy Type Errors

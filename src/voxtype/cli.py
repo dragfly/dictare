@@ -275,12 +275,8 @@ def _apply_cli_overrides(
     auto_enter: bool,
     max_duration: int | None,
     verbose: bool | None,
-    no_commands: bool,
     typing_delay: int | None,
-    ollama_model: str | None,
     silence_ms: int | None,
-    wake_word: str | None,
-    initial_mode: str | None,
     log_file: str | None,
     no_audio_feedback: bool,
     no_hw_accel: bool,
@@ -302,18 +298,10 @@ def _apply_cli_overrides(
         config.audio.max_duration = max_duration
     if verbose is not None:
         config.verbose = verbose
-    if no_commands:
-        config.command.enabled = False
     if typing_delay is not None:
         config.output.typing_delay_ms = typing_delay
-    if ollama_model:
-        config.command.ollama_model = ollama_model
     if silence_ms is not None:
         config.audio.silence_ms = silence_ms
-    if wake_word is not None:
-        config.command.wake_word = wake_word
-    if initial_mode:
-        config.command.mode = initial_mode
     if log_file:
         config.logging.log_file = log_file
     if no_audio_feedback:
@@ -357,7 +345,6 @@ def _create_logger(config, agents: list[str] | None = None):
 
     log_params = {
         "input_mode": "vad",  # PTT mode removed in v2.2.0
-        "trigger_phrase": config.command.wake_word,
         "log_level": level.name,
         "silence_ms": config.audio.silence_ms,
         "stt_model": config.stt.model,
@@ -443,23 +430,6 @@ def listen(
         bool,
         typer.Option("--auto-enter", help="Press Enter after typing to submit"),
     ] = False,
-    # Command options
-    wake_word: Annotated[
-        str | None,
-        typer.Option("--wake-word", "-w", help="Wake word to activate (e.g., 'hey joshua')"),
-    ] = None,
-    initial_mode: Annotated[
-        str | None,
-        typer.Option("--initial-mode", "-M", help="Starting mode: transcription or command"),
-    ] = None,
-    no_commands: Annotated[
-        bool,
-        typer.Option("--no-commands", help="Disable voice commands"),
-    ] = False,
-    ollama_model: Annotated[
-        str | None,
-        typer.Option("--ollama-model", "-O", help="Ollama model for command processing"),
-    ] = None,
     # Debug/logging options
     verbose: Annotated[
         bool | None,
@@ -485,7 +455,7 @@ def listen(
     """Start listening for voice input (foreground).
 
     Uses Voice Activity Detection (VAD) to automatically detect when you speak.
-    Tap the hotkey to toggle listening on/off, double-tap to switch mode.
+    Tap the hotkey to toggle listening on/off.
 
     Requires --keyboard or --agents:
 
@@ -525,12 +495,8 @@ def listen(
         auto_enter=auto_enter,
         max_duration=max_duration,
         verbose=verbose,
-        no_commands=no_commands,
         typing_delay=typing_delay,
-        ollama_model=ollama_model,
         silence_ms=silence_ms,
-        wake_word=wake_word,
-        initial_mode=initial_mode,
         log_file=log_file,
         no_audio_feedback=no_audio_feedback,
         no_hw_accel=no_hw_accel,
@@ -2214,31 +2180,6 @@ def _get_configured_models(config=None) -> dict[str, str]:
     return configured
 
 
-def _get_ollama_models() -> set[str]:
-    """Get list of locally available Ollama models."""
-    import subprocess
-
-    try:
-        result = subprocess.run(
-            ["ollama", "list"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode != 0:
-            return set()
-
-        models = set()
-        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
-            if line.strip():
-                # Format: "NAME    ID    SIZE    MODIFIED"
-                name = line.split()[0] if line.split() else ""
-                if name:
-                    models.add(name)
-        return models
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return set()
-
 
 def _check_required_models(config=None, for_command: str = "listen") -> bool:
     """Check if required models are cached.
@@ -2350,20 +2291,6 @@ def _show_models_list(config=None) -> None:
 
     console.print(table)
 
-    # Show LLM status
-    console.print()
-    ollama_model = config.command.ollama_model
-    ollama_cached = _get_ollama_models()
-    is_cached = ollama_model in ollama_cached or any(
-        m.startswith(ollama_model.split(":")[0]) for m in ollama_cached
-    )
-
-    if is_cached:
-        console.print(f"[green]LLM:[/] {ollama_model} [green](cached)[/]")
-    else:
-        console.print(f"[red]LLM:[/] {ollama_model} [red](not cached)[/]")
-        console.print(f"  [dim]Install: ollama pull {ollama_model}[/]")
-
 
 @models_app.command("list")
 def models_list() -> None:
@@ -2374,7 +2301,7 @@ def models_list() -> None:
     """
     _show_models_list()
     console.print()
-    console.print("[dim]Use:      voxtype models use <model> [--realtime|--tts|--llm][/]")
+    console.print("[dim]Use:      voxtype models use <model> [--realtime|--tts][/]")
     console.print("[dim]Resolve:  voxtype models resolve[/]")
     console.print("[dim]Download: voxtype models download <model>[/]")
 
@@ -2391,12 +2318,8 @@ def models_use(
         bool,
         typer.Option("--tts", "-t", help="Set as TTS model"),
     ] = False,
-    llm: Annotated[
-        bool,
-        typer.Option("--llm", "-l", help="Set as LLM model (Ollama)"),
-    ] = False,
 ) -> None:
-    """Set which model to use for STT, TTS, or LLM.
+    """Set which model to use for STT or TTS.
 
     By default sets the STT model. Use flags for other types.
 
@@ -2404,7 +2327,6 @@ def models_use(
         voxtype models use large-v3-turbo           # Set STT model
         voxtype models use tiny --realtime          # Set realtime STT model
         voxtype models use vyvotts-4bit --tts       # Set TTS model
-        voxtype models use qwen2.5:1.5b --llm       # Set Ollama LLM model
     """
     if model is None:
         import click
@@ -2412,13 +2334,6 @@ def models_use(
         raise typer.Exit(0)
 
     registry = _get_model_registry()
-
-    if llm:
-        # LLM: just set the config, Ollama handles downloads
-        set_config_value("command.ollama_model", model)
-        console.print(f"[green]✓[/] LLM set to [cyan]{model}[/]")
-        console.print(f"[dim]Download if needed: ollama pull {model}[/]")
-        return
 
     if tts:
         # TTS: find by model name or engine
