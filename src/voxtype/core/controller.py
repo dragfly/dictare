@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING, Any
 from voxtype.core.events import (
     AgentSwitchEvent,
     DiscardCurrentEvent,
-    HotkeyDoubleTapEvent,
     HotkeyToggleEvent,
     SetListeningEvent,
     SpeechEndEvent,
@@ -54,7 +53,6 @@ class StateController:
         on_recording_start: Callable[[], None] | None = None,
         on_recording_end: Callable[[float], None] | None = None,
         on_state_change: Callable[[AppState, AppState, str], None] | None = None,
-        on_mode_change: Callable[[], None] | None = None,
         on_agent_change: Callable[[str, int], None] | None = None,
     ) -> None:
         """Initialize the state controller.
@@ -64,7 +62,6 @@ class StateController:
             on_recording_start: Callback when recording starts
             on_recording_end: Callback when recording ends (with duration_ms)
             on_state_change: Callback on state transitions (old, new, trigger)
-            on_mode_change: Callback when processing mode changes
             on_agent_change: Callback when agent changes (name, index)
         """
         self._state_manager = state_manager
@@ -78,7 +75,6 @@ class StateController:
         self._on_recording_start = on_recording_start
         self._on_recording_end = on_recording_end
         self._on_state_change = on_state_change
-        self._on_mode_change = on_mode_change
         self._on_agent_change = on_agent_change
 
         # TTS state tracking with monotonic counter
@@ -172,8 +168,6 @@ class StateController:
             self._handle_tts_complete(event)
         elif isinstance(event, HotkeyToggleEvent):
             self._handle_hotkey_toggle(event)
-        elif isinstance(event, HotkeyDoubleTapEvent):
-            self._handle_hotkey_double_tap(event)
         elif isinstance(event, AgentSwitchEvent):
             self._handle_agent_switch(event)
         elif isinstance(event, SetListeningEvent):
@@ -329,9 +323,6 @@ class StateController:
             if self._state_manager.try_transition(AppState.LISTENING):
                 if self._on_state_change:
                     self._on_state_change(AppState.OFF, AppState.LISTENING, "hotkey_toggle")
-                # Sync LLM processor
-                if self._engine and self._engine._llm_processor:
-                    self._engine._llm_processor.set_listening(True)
         elif self.tts_in_progress:
             # TTS is playing - record user intent for later
             self._desired_state_after_tts = AppState.OFF
@@ -344,16 +335,6 @@ class StateController:
                     self._engine._discard_current_internal()
                 if self._on_state_change:
                     self._on_state_change(previous, AppState.OFF, "hotkey_toggle")
-                # Sync LLM processor
-                if self._engine and self._engine._llm_processor:
-                    self._engine._llm_processor.set_listening(False)
-
-    def _handle_hotkey_double_tap(self, event: HotkeyDoubleTapEvent) -> None:
-        """User double-tapped hotkey to switch mode."""
-        if self._engine:
-            self._engine._switch_processing_mode_internal()
-            if self._on_mode_change:
-                self._on_mode_change()
 
     def _handle_agent_switch(self, event: AgentSwitchEvent) -> None:
         """User wants to switch agent."""
@@ -387,14 +368,10 @@ class StateController:
             if self._state_manager.try_transition(AppState.LISTENING):
                 if self._on_state_change:
                     self._on_state_change(AppState.OFF, AppState.LISTENING, "set_listening")
-                if self._engine and self._engine._llm_processor:
-                    self._engine._llm_processor.set_listening(True)
         elif not event.on and current == AppState.LISTENING:
             if self._state_manager.try_transition(AppState.OFF):
                 if self._on_state_change:
                     self._on_state_change(AppState.LISTENING, AppState.OFF, "set_listening")
-                if self._engine and self._engine._llm_processor:
-                    self._engine._llm_processor.set_listening(False)
 
     def _handle_discard_current(self, event: DiscardCurrentEvent) -> None:
         """User wants to discard current recording."""

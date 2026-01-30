@@ -20,7 +20,7 @@ from voxtype.core.events import (
     TTSCompleteEvent,
     TTSStartEvent,
 )
-from voxtype.core.state import AppState, ProcessingMode
+from voxtype.core.state import AppState
 
 if TYPE_CHECKING:
     from voxtype.config import Config
@@ -128,11 +128,6 @@ class VoxtypeApp(EngineEvents):
         return self._engine.is_off
 
     @property
-    def mode(self) -> ProcessingMode:
-        """Get current processing mode."""
-        return self._engine.mode
-
-    @property
     def current_agent(self) -> str | None:
         """Get the name of the current agent."""
         return self._engine.current_agent
@@ -187,17 +182,6 @@ class VoxtypeApp(EngineEvents):
         if result.success and result.method.startswith("file:"):
             from voxtype.audio.beep import play_beep_sent
             play_beep_sent()
-
-    def on_mode_change(self, mode: ProcessingMode) -> None:
-        """Handle processing mode change."""
-        if self._status_panel:
-            self._status_panel.update_mode(mode.value)
-
-        # Send to SSE if running
-        if self._sse:
-            self._sse.send_mode_change(mode)
-
-        self._speak_mode_with_mute()
 
     def on_agent_change(self, agent_name: str, index: int) -> None:
         """Handle agent change."""
@@ -286,10 +270,6 @@ class VoxtypeApp(EngineEvents):
         """Toggle listening on/off."""
         self._engine._toggle_listening()
 
-    def _switch_processing_mode(self) -> None:
-        """Switch between transcription and command mode."""
-        self._engine._switch_processing_mode()
-
     def _set_listening(self, on: bool) -> None:
         """Set listening state on/off."""
         self._engine._set_listening(on)
@@ -305,10 +285,6 @@ class VoxtypeApp(EngineEvents):
     def _switch_to_agent_by_index(self, index: int) -> bool:
         """Switch to a specific agent by index (1-based)."""
         return self._engine._switch_to_agent_by_index(index)
-
-    def _repeat_last_injection(self) -> None:
-        """Repeat the last injected text."""
-        self._engine._repeat_last_injection()
 
     def _send_submit(self) -> None:
         """Send submit (Enter key) to the target."""
@@ -408,15 +384,6 @@ class VoxtypeApp(EngineEvents):
                 args=(tts_id,),
                 daemon=True,
             ).start()
-
-    def _speak_mode_with_mute(self) -> None:
-        """Speak the current mode using TTS."""
-        phrases = self._load_tts_phrases()
-        if self._engine.mode == ProcessingMode.TRANSCRIPTION:
-            text = phrases.get("transcription_mode", "transcription mode")
-        else:
-            text = phrases.get("command_mode", "command mode")
-        self._speak_text(text)
 
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS."""
@@ -645,10 +612,6 @@ class VoxtypeApp(EngineEvents):
             self._engine._state_manager.transition(AppState.LISTENING)
             if self._status_panel:
                 self._status_panel.update_state("LISTENING")
-
-            # Sync LLM processor state
-            if self._engine._llm_processor:
-                self._engine._llm_processor.set_listening(True)
 
             if self._engine._audio_manager:
                 self._engine._audio_manager.start_streaming(

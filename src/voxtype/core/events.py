@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from voxtype.core.state import AppState, ProcessingMode
+    from voxtype.core.state import AppState
 
 
 # =============================================================================
@@ -174,13 +174,6 @@ class EngineEvents(Protocol):
         """
         ...
 
-    def on_mode_change(self, mode: ProcessingMode) -> None:
-        """Called when processing mode changes.
-
-        Args:
-            mode: New processing mode (TRANSCRIPTION or COMMAND).
-        """
-        ...
 
     def on_agent_change(self, agent_name: str, index: int) -> None:
         """Called when the active agent changes.

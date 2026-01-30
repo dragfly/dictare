@@ -12,7 +12,6 @@ from voxtype.core.controller import StateController
 from voxtype.core.events import (
     AgentSwitchEvent,
     DiscardCurrentEvent,
-    HotkeyDoubleTapEvent,
     HotkeyToggleEvent,
     SetListeningEvent,
     SpeechEndEvent,
@@ -40,15 +39,11 @@ class MockEngine:
         self._audio_manager.reset_vad = MagicMock()
         self._audio_manager.clear_queue = MagicMock()
 
-        self._llm_processor = MagicMock()
-
         self.agents = ["claude", "cursor", "vscode"]
         self._current_agent_index = 0
-        self._processing_mode = "transcription"
 
         self.transcriptions: list[Any] = []
         self.injections: list[Any] = []
-        self.mode_switches = 0
         self.agent_switches: list[tuple[str, int]] = []
 
     def _transcribe_and_process(self, audio_data: Any, agent: Any = None) -> None:
@@ -59,13 +54,6 @@ class MockEngine:
 
     def _process_queued_audio(self) -> None:
         pass
-
-    def _switch_processing_mode_internal(self) -> None:
-        self.mode_switches += 1
-        if self._processing_mode == "transcription":
-            self._processing_mode = "command"
-        else:
-            self._processing_mode = "transcription"
 
     def _discard_current_internal(self) -> None:
         self._audio_manager.clear_queue()
@@ -469,27 +457,6 @@ class TestHotkeyEvents:
             _wait()
 
             assert sm.state == AppState.OFF
-        finally:
-            controller.stop()
-
-    def test_double_tap_switches_mode(self) -> None:
-        """HotkeyDoubleTapEvent switches processing mode."""
-        sm = StateManager(initial_state=AppState.LISTENING)
-        engine = MockEngine()
-        mode_changes = []
-        controller = StateController(
-            sm,
-            on_mode_change=lambda: mode_changes.append(True),
-        )
-        controller.set_engine(engine)
-        controller.start()
-
-        try:
-            controller.send(HotkeyDoubleTapEvent(source="hotkey"))
-            _wait()
-
-            assert engine.mode_switches == 1
-            assert len(mode_changes) == 1
         finally:
             controller.stop()
 
