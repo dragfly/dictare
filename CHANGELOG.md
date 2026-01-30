@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.63.0] - 2026-01-30
+
+### Changed - OpenVIP v1.0 Protocol Simplification
+- **Message types simplified to 3**: `message`, `partial`, `status`
+- **openvip.py**: New specific factories `create_message()`, `create_partial()`, `create_status()`
+- **SSE server**: Updated to emit v1.0 compliant messages
+  - `send_state_change()` now emits `status` type (was `state`)
+  - `send_error()` now emits `status` with `status: "error"` (was separate `error` type)
+  - State mapping: RECORDING→`recording`, TRANSCRIBING→`transcribing` (was both `listening`/`processing`)
+
+### Removed
+- **SSE methods**: `send_transcription()`, `send_transcription_result()`, `send_mode_change()`, `send_start()`, `send_end()`
+- **Message types**: `state`, `error`, `start`, `end` (consolidated into `status`)
+
+### Added
+- **Vision document**: Updated `docs/notes/mental-model.md` with OpenVIP Platform vision
+  - Three core services: STT, TTS, Translation
+  - Service modes: enabled, on-demand, disabled
+  - Services as protocol roles (Source, Sink, Pipeline Element)
+
 ## [2.62.0] - 2026-01-30
 
 ### Changed

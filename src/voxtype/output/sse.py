@@ -2,6 +2,11 @@
 
 Implements OpenVIP (Open Voice Input Protocol) v1.0.
 See: https://open-voice-input.org
+
+v1.0 Message Types:
+- message: Final text to inject
+- partial: Streaming partial transcription
+- status: Engine state (idle, listening, recording, transcribing, error)
 """
 
 from __future__ import annotations
@@ -12,11 +17,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any
 
 from voxtype import __version__
-from voxtype.core.openvip import create_event
+from voxtype.core.openvip import create_partial, create_status
 
 if TYPE_CHECKING:
-    from voxtype.core.events import TranscriptionResult
-    from voxtype.core.state import AppState, ProcessingMode
+    from voxtype.core.state import AppState
 
 class SSEHandler(BaseHTTPRequestHandler):
     """HTTP handler for SSE connections."""
@@ -98,8 +102,8 @@ class SSEServer:
         event: message
         data: {"openvip": "1.0", "type": "message", "id": "...", "text": "hello", ...}
 
-        event: state
-        data: {"openvip": "1.0", "type": "state", "id": "...", "state": "listening", ...}
+        event: status
+        data: {"openvip": "1.0", "type": "status", "id": "...", "status": "listening", ...}
 
     All events follow the OpenVIP v1.0 specification.
     See: https://open-voice-input.org
@@ -214,107 +218,51 @@ class SSEServer:
         event_type = message.get("type", "message")
         self._broadcast(event_type, message)
 
-    def send_transcription(
-        self,
-        text: str,
-        language: str | None = None,
-        audio_duration_ms: float | None = None,
-        transcription_ms: float | None = None,
-    ) -> None:
-        """Send a transcription event (OpenVIP type: message).
-
-        Args:
-            text: Transcribed text.
-            language: Language code.
-            audio_duration_ms: Audio duration in milliseconds.
-            transcription_ms: Transcription time in milliseconds.
-        """
-        kwargs: dict[str, Any] = {"text": text}
-        if language:
-            kwargs["language"] = language
-        if audio_duration_ms is not None:
-            kwargs["audio_duration_ms"] = int(audio_duration_ms)
-        if transcription_ms is not None:
-            kwargs["transcription_ms"] = int(transcription_ms)
-
-        self._broadcast("message", create_event("message", **kwargs))
-
-    def send_transcription_result(self, result: TranscriptionResult, language: str | None = None) -> None:
-        """Send a TranscriptionResult event.
-
-        Args:
-            result: Transcription result from the engine.
-            language: Language code.
-        """
-        self.send_transcription(
-            text=result.text,
-            language=language,
-            audio_duration_ms=result.audio_duration_seconds * 1000,
-            transcription_ms=result.transcription_seconds * 1000,
-        )
-
     def send_state_change(self, old: AppState, new: AppState, trigger: str) -> None:
-        """Send a state change event (OpenVIP type: state).
+        """Send a status message on state change (OpenVIP type: status).
 
         Args:
             old: Previous state.
             new: New state.
-            trigger: What triggered the change.
+            trigger: What triggered the change (unused, for logging).
         """
-        # Map voxtype states to OpenVIP states
+        # Map voxtype states to OpenVIP status values
         state_map = {
             "OFF": "idle",
             "LISTENING": "listening",
-            "RECORDING": "listening",
-            "TRANSCRIBING": "processing",
+            "RECORDING": "recording",
+            "TRANSCRIBING": "transcribing",
+            "INJECTING": "transcribing",  # Still processing
+            "PLAYING": "listening",  # TTS feedback
         }
-        openvip_state = state_map.get(new.name, "idle")
-        self._broadcast("state", create_event("state", state=openvip_state))
-
-    def send_mode_change(self, mode: ProcessingMode) -> None:
-        """Send a mode change event.
-
-        Note: Processing mode is voxtype-specific, sent as x_ extension.
-        """
-        self._broadcast("state", create_event(
-            "state",
-            state="listening",
-            x_mode=mode.value,
-        ))
+        status = state_map.get(new.name, "idle")
+        self._broadcast("status", create_status(status))
 
     def send_agent_change(self, agent_name: str, index: int) -> None:
-        """Send an agent change event.
+        """Send a status message with agent info (voxtype extension).
 
-        Note: Agent is voxtype-specific, sent as x_ extension.
+        Args:
+            agent_name: Name of the active agent.
+            index: Agent index in the list.
         """
-        self._broadcast("state", create_event(
-            "state",
-            state="listening",
-            x_agent=agent_name,
-            x_agent_index=index,
-        ))
+        msg = create_status("listening")
+        msg["x_agent"] = agent_name
+        msg["x_agent_index"] = index
+        self._broadcast("status", msg)
 
     def send_partial_transcription(self, text: str) -> None:
-        """Send a partial transcription event (OpenVIP type: partial).
+        """Send a partial transcription (OpenVIP type: partial).
 
         Args:
             text: Partial transcription text so far.
         """
-        self._broadcast("partial", create_event("partial", text=text))
+        self._broadcast("partial", create_partial(text))
 
-    def send_error(self, message: str, context: str) -> None:
-        """Send an error event (OpenVIP type: error).
+    def send_error(self, message: str, code: str | None = None) -> None:
+        """Send an error status (OpenVIP type: status with status=error).
 
         Args:
             message: Error message.
-            context: Context where the error occurred.
+            code: Optional error code.
         """
-        self._broadcast("error", create_event("error", error=message, code=context))
-
-    def send_start(self) -> None:
-        """Send a start event (recording started)."""
-        self._broadcast("start", create_event("start"))
-
-    def send_end(self) -> None:
-        """Send an end event (recording ended)."""
-        self._broadcast("end", create_event("end"))
+        self._broadcast("status", create_status("error", error_message=message, error_code=code))
