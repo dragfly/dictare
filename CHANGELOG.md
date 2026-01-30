@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.67.0] - 2026-01-30
+
+### Fixed - Tray Sync and Command Mode Cleanup
+- **tray/app.py**: Fixed tray not syncing with daemon state
+  - Removed `processing_mode` parameter from `set_state()` (was causing silent errors)
+  - Removed "Switch to Command Mode" menu item (command mode no longer exists)
+  - Removed "(Transcription)" from status display
+  - Added version display in tray menu (`voxtype vX.Y.Z`)
+  - Added error logging for poll failures instead of silent ignore
+
 ## [2.66.0] - 2026-01-30
 
 ### Fixed - Config Set TOML Serialization
