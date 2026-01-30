@@ -79,8 +79,10 @@ class DaemonServer:
         # Agent registrar for discovering agents
         self._registrar = None
 
-        # Output mode tracking
-        self._output_mode: str = "keyboard"  # "keyboard" | "agents"
+        # Output mode from config (load eagerly for status display)
+        from voxtype.config import load_config
+        config = load_config()
+        self._output_mode: str = config.output.mode
 
     def set_state(
         self,
