@@ -293,7 +293,7 @@ class DaemonServer:
                 # RECORDING state stays "listening" for daemon purposes
 
         # Use shared initialization logic (same as CLI voxtype listen)
-        self._engine, self._registrar = create_engine(
+        self._engine, self._registrar, _ = create_engine(
             config=config,
             events=DaemonEvents(),  # type: ignore[arg-type]
         )
