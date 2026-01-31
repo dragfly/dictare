@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.73.0] - 2026-01-31
+
+### Added - New Engine Architecture (Phase 1)
+- **engine/**: New unified engine package for v3.0.0 architecture
+  - `engine/state.py`: EngineState dataclass with full status schema
+  - `engine/control.py`: OpenVIP control command handlers
+  - `engine/server.py`: HTTP + Unix socket transport layer
+  - `engine/engine.py`: Main Engine class with foreground/daemon modes
+- **State Schema**: Complete state exposed via `/status` endpoint
+  - STT, TTS, Translation service states
+  - Loading progress, output mode, hotkey binding
+  - Engine metadata (version, pid, uptime)
+- **OpenVIP Control**: All commands idempotent
+  - `stt.start`, `stt.stop`, `tts.speak`, `tts.stop`
+  - `output.set_mode`, `output.set_agent`
+  - `hotkey.bind`, `hotkey.unbind`
+  - `engine.shutdown`, `ping`
+- **Dual Transport**: Same API on both transports
+  - Unix socket: `~/.voxtype/engine.sock`
+  - HTTP: port 9876 with SSE events
+- **Metrics**: Session and lifetime metrics tracking
+
 ## [2.72.0] - 2026-01-30
 
 ### Added - Hotkey Support in Tray
