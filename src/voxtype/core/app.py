@@ -573,7 +573,9 @@ class VoxtypeApp(EngineEvents):
             if self._status_panel:
                 self._status_panel.update_agents(self._engine.agents)
         else:
-            # Keyboard mode - engine manages KeyboardAgent lifecycle
+            # Keyboard mode - start the KeyboardAgent
+            if self._engine._keyboard_agent:
+                self._engine._keyboard_agent.start()
             if self.config.verbose:
                 self._console.print("[dim]Output: keyboard (local)[/]")
 

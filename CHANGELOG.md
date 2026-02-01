@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.73.1] - 2026-02-01
+
+### Fixed - KeyboardAgent Not Starting with --keyboard Flag
+- **core/app.py**: KeyboardAgent.start() was never called in VoxtypeApp
+  - Now explicitly starts KeyboardAgent when not in agent mode
+- **cli.py**: config.output.mode not updated from CLI flags
+  - --keyboard now correctly sets config.output.mode = "keyboard"
+  - Status panel now shows correct output mode
+
 ## [2.73.0] - 2026-01-31
 
 ### Added - New Engine Architecture (Phase 1)

@@ -521,6 +521,9 @@ def listen(
     manual_agents: list[str] | None = agent if agent else None
     agent_mode = agents or manual_agents is not None  # Explicit from CLI, no config fallback
 
+    # Update config.output.mode to match CLI flag (overrides config file)
+    config.output.mode = "agents" if agent_mode else "keyboard"
+
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
 
