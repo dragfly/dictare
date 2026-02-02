@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.74.1] - 2026-02-02
+
+### Fixed - Agent Verbose Flag Parsing
+- **cli.py**: Fixed `--verbose` flag not working when placed after agent_id
+  - `voxtype agent claude --verbose -- cmd` now works correctly
+  - Flags after positional args were going to ctx.args due to allow_interspersed_args=False
+
 ## [2.74.0] - 2026-02-02
 
 ### Added - Verbose Mode for Agent
