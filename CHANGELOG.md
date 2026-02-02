@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.75.1] - 2026-02-02
+
+### Fixed - Session Log Formatting
+- **cli.py**: Fixed `voxtype log session` output formatting
+  - `session_start` now shows version and agent_id correctly
+  - `session_end` shows exit code and keystroke count
+  - `msg_read` and `msg_sent` now show message text (up to 80 chars)
+  - Fixed timestamp parsing for session files (`timestamp` vs `ts` field)
+
 ## [2.75.0] - 2026-02-02
 
 ### Added - Session Log Tail Command
