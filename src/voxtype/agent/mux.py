@@ -350,6 +350,28 @@ def _get_winsize() -> tuple[int, int]:
     except OSError:
         return 24, 80
 
+def _is_socket_active(socket_path: Path) -> bool:
+    """Check if a socket has an active listener.
+
+    Args:
+        socket_path: Path to the Unix socket.
+
+    Returns:
+        True if there's an active listener, False if socket is stale or doesn't exist.
+    """
+    if not socket_path.exists():
+        return False
+
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.5)
+            sock.connect(str(socket_path))
+        # Connection succeeded - there's an active listener
+        return True
+    except (ConnectionRefusedError, TimeoutError, OSError):
+        # No listener or socket is stale
+        return False
+
 def run_agent(
     agent_id: str,
     command: list[str],
@@ -369,6 +391,22 @@ def run_agent(
     """
     # Get socket path for this agent
     socket_path = get_socket_path(agent_id)
+
+    # Check if another agent with the same ID is already running
+    if _is_socket_active(socket_path):
+        print(
+            f"Error: Agent '{agent_id}' is already running.",
+            file=sys.stderr,
+        )
+        print(
+            f"Socket in use: {socket_path}",
+            file=sys.stderr,
+        )
+        print(
+            "Use a different agent ID or stop the existing agent first.",
+            file=sys.stderr,
+        )
+        return 1
 
     # Register cleanup handler (safety net for abnormal exits)
     import atexit
