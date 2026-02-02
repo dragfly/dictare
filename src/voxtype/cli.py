@@ -1836,7 +1836,8 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
         """Format a JSONL line for display."""
         try:
             entry = json.loads(line)
-            ts = entry.get("ts", "")
+            # Support both "ts" (msg events) and "timestamp" (session events)
+            ts = entry.get("ts") or entry.get("timestamp", "")
             level = entry.get("level", "INFO")
             event = entry.get("event", "")
 
@@ -1857,11 +1858,27 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
             # Format event-specific info
             extra = ""
             if event == "session_start":
-                version = entry.get("version", "?")
-                model = entry.get("stt_model", "?")
-                extra = f"v{version} model={model}"
+                # Support both listen logs and session logs
+                version = entry.get("version") or entry.get("voxtype_version", "?")
+                model = entry.get("stt_model")
+                agent_id = entry.get("agent_id")
+                if agent_id:
+                    extra = f"v{version} agent={agent_id}"
+                elif model:
+                    extra = f"v{version} model={model}"
+                else:
+                    extra = f"v{version}"
             elif event == "session_end":
-                extra = ""
+                keystrokes = entry.get("total_keystrokes", 0)
+                exit_code = entry.get("exit_code", "?")
+                extra = f"exit={exit_code} keystrokes={keystrokes}"
+            elif event in ("msg_read", "msg_sent"):
+                text = entry.get("text", "")
+                # Show up to 80 chars
+                display_text = text[:80]
+                if len(text) > 80:
+                    display_text += "..."
+                extra = display_text.replace("\n", "\\n")
             elif event == "transcription":
                 chars = entry.get("chars", 0)
                 words = entry.get("words", 0)
