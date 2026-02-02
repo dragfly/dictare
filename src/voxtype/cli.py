@@ -1790,8 +1790,16 @@ def agent(
 
     from voxtype.agent import run_agent
 
-    # Get command after -- (filter out the -- itself if present)
-    command = [arg for arg in ctx.args if arg != "--"]
+    # With allow_interspersed_args=False, flags after positional args go to ctx.args
+    # Check if our flags are in ctx.args and apply them
+    if "--verbose" in ctx.args or "-v" in ctx.args:
+        verbose = True
+    if "--quiet" in ctx.args or "-q" in ctx.args:
+        quiet = True
+
+    # Get command after -- (filter out --, and our own flags)
+    own_flags = {"--", "--verbose", "-v", "--quiet", "-q"}
+    command = [arg for arg in ctx.args if arg not in own_flags]
     if not command:
         console.print("[red]Error: No command specified[/]")
         console.print()
