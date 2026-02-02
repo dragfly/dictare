@@ -777,8 +777,9 @@ class VoxtypeEngine:
     def _switch_agent_internal(self, direction: int) -> None:
         """Internal: Actually switch agent. Called by controller.
 
-        Verifies the target agent is alive before switching.
-        If dead, unregisters it and tries the next one.
+        Switches to the next agent in the specified direction.
+        Agent liveness is verified lazily on send() - if an agent is dead,
+        repeated send failures will trigger auto-deregistration.
         """
         if not self._agent_order:
             return
@@ -788,32 +789,13 @@ class VoxtypeEngine:
         if self._current_agent_id and self._current_agent_id in self._agent_order:
             current_idx = self._agent_order.index(self._current_agent_id)
 
-        # Try to find a live agent (circular search, max one full loop)
-        tried = 0
-        while tried < len(self._agent_order):
-            new_idx = (current_idx + direction * (tried + 1)) % len(self._agent_order)
-            new_agent_id = self._agent_order[new_idx]
-            agent = self._agents.get(new_agent_id)
+        # Switch to next agent (simple circular)
+        new_idx = (current_idx + direction) % len(self._agent_order)
+        new_agent_id = self._agent_order[new_idx]
 
-            if agent:
-                # Check if agent is alive (if it has the method)
-                if hasattr(agent, "is_alive") and not agent.is_alive():
-                    # Agent is dead - unregister and try next
-                    self.unregister_agent(new_agent_id)
-                    tried += 1
-                    continue
-
-                # Agent is alive - switch to it
-                self._current_agent_id = new_agent_id
-                # Recalculate index after potential unregistrations
-                actual_idx = self._agent_order.index(new_agent_id) if new_agent_id in self._agent_order else 0
-                self._emit("on_agent_change", self._current_agent_id, actual_idx)
-                return
-
-            tried += 1
-
-        # No live agents found
-        self._current_agent_id = None
+        if new_agent_id in self._agents:
+            self._current_agent_id = new_agent_id
+            self._emit("on_agent_change", self._current_agent_id, new_idx)
 
     def _switch_to_agent_by_name(self, name: str) -> bool:
         """Switch to a specific agent by name - sends event to controller."""
@@ -823,8 +805,7 @@ class VoxtypeEngine:
     def _switch_to_agent_by_name_internal(self, name: str) -> bool:
         """Internal: Actually switch by name. Called by controller.
 
-        Verifies the target agent is alive before switching.
-        If dead, unregisters it and returns False.
+        Agent liveness is verified lazily on send().
         """
         if not self._agent_order:
             return False
@@ -832,18 +813,11 @@ class VoxtypeEngine:
         name_lower = name.lower()
 
         def try_switch(agent_id: str, idx: int) -> bool:
-            """Try to switch to an agent, verify it's alive."""
-            agent = self._agents.get(agent_id)
-            if not agent:
-                return False
-            # Check if agent is alive (if it has the method)
-            if hasattr(agent, "is_alive") and not agent.is_alive():
-                self.unregister_agent(agent_id)
+            """Try to switch to an agent."""
+            if agent_id not in self._agents:
                 return False
             self._current_agent_id = agent_id
-            # Recalculate index after potential unregistrations
-            actual_idx = self._agent_order.index(agent_id) if agent_id in self._agent_order else idx
-            self._emit("on_agent_change", agent_id, actual_idx)
+            self._emit("on_agent_change", agent_id, idx)
             return True
 
         # Try exact match first
@@ -866,8 +840,7 @@ class VoxtypeEngine:
     def _switch_to_agent_by_index_internal(self, index: int) -> bool:
         """Internal: Actually switch by index. Called by controller.
 
-        Verifies the target agent is alive before switching.
-        If dead, unregisters it and returns False.
+        Agent liveness is verified lazily on send().
         """
         if not self._agent_order:
             return False
@@ -877,19 +850,11 @@ class VoxtypeEngine:
             return False
 
         agent_id = self._agent_order[idx]
-        agent = self._agents.get(agent_id)
-        if not agent:
-            return False
-
-        # Check if agent is alive (if it has the method)
-        if hasattr(agent, "is_alive") and not agent.is_alive():
-            self.unregister_agent(agent_id)
+        if agent_id not in self._agents:
             return False
 
         self._current_agent_id = agent_id
-        # Recalculate index after potential unregistrations
-        actual_idx = self._agent_order.index(agent_id) if agent_id in self._agent_order else idx
-        self._emit("on_agent_change", self._current_agent_id, actual_idx)
+        self._emit("on_agent_change", self._current_agent_id, idx)
         return True
 
     def _send_submit(self) -> None:
