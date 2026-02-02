@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.73.2] - 2026-02-02
+
+### Fixed - Agent Messages Being Dropped (Race Conditions)
+- **agent/socket.py**: SocketAgent now has retry logic and failure threshold
+  - Retries up to 3 times with increasing timeouts (1s, 2s, 3s)
+  - Only triggers deregistration after 3 consecutive failures
+  - Single transient failure no longer removes agent permanently
+- **core/engine.py**: Removed aggressive `is_alive()` checks during agent switching
+  - Previously, switching agents would connect to socket to verify liveness
+  - If receiver was busy, agent got unregistered even if alive
+  - Now agent liveness is verified lazily on send()
+
 ## [2.73.1] - 2026-02-01
 
 ### Fixed - KeyboardAgent Not Starting with --keyboard Flag

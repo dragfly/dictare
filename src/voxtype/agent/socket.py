@@ -37,7 +37,11 @@ class SocketAgent(BaseAgent):
     sends the message, and closes. This is simple and reliable.
 
     Supports failure callback for auto-deregistration when socket is dead.
+    Uses consecutive failure tracking to avoid spurious deregistration.
     """
+
+    # Number of consecutive failures before triggering on_failure callback
+    FAILURE_THRESHOLD = 3
 
     def __init__(
         self,
@@ -48,12 +52,13 @@ class SocketAgent(BaseAgent):
 
         Args:
             agent_id: Agent identifier (socket filename without .sock).
-            on_failure: Optional callback called with agent_id when send fails.
-                       Use this to auto-deregister dead agents.
+            on_failure: Optional callback called with agent_id when send fails
+                       FAILURE_THRESHOLD consecutive times.
         """
         super().__init__(agent_id)
         self.socket_path = get_socket_path(agent_id)
         self._on_failure = on_failure
+        self._consecutive_failures = 0
 
     def is_available(self) -> bool:
         """Check if the agent socket file exists."""
@@ -81,10 +86,11 @@ class SocketAgent(BaseAgent):
             return False
 
     def send(self, message: OpenVIPMessage) -> bool:
-        """Send an OpenVIP message via socket.
+        """Send an OpenVIP message via socket with retry.
 
-        If send fails and on_failure callback is set, it will be called
-        with this agent's ID for auto-deregistration.
+        Retries up to 2 times with increasing timeout on transient failures.
+        Only triggers on_failure callback after FAILURE_THRESHOLD consecutive
+        failures across multiple send() calls.
 
         Args:
             message: OpenVIP message dict to send.
@@ -92,19 +98,43 @@ class SocketAgent(BaseAgent):
         Returns:
             True if sent successfully, False otherwise.
         """
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-                sock.settimeout(1.0)
-                sock.connect(str(self.socket_path))
-                data = json.dumps(message, ensure_ascii=False) + "\n"
-                sock.sendall(data.encode("utf-8"))
-            return True
-        except (OSError, ConnectionRefusedError) as e:
-            logger.debug(f"Failed to send to {self._id}: {e}")
-            # Notify failure for auto-deregistration
-            if self._on_failure:
-                self._on_failure(self._id)
-            return False
+        data = json.dumps(message, ensure_ascii=False) + "\n"
+        data_bytes = data.encode("utf-8")
+
+        # Retry with increasing timeouts: 1.0s, 2.0s, 3.0s
+        for attempt in range(3):
+            timeout = 1.0 + attempt
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(timeout)
+                    sock.connect(str(self.socket_path))
+                    sock.sendall(data_bytes)
+                # Success - reset failure counter
+                self._consecutive_failures = 0
+                return True
+            except (TimeoutError, BlockingIOError):
+                # Transient - retry with longer timeout
+                logger.debug(f"Timeout sending to {self._id}, attempt {attempt + 1}/3")
+                continue
+            except (OSError, ConnectionRefusedError) as e:
+                # Connection error - don't retry, but track failure
+                logger.debug(f"Failed to send to {self._id}: {e}")
+                break
+
+        # All attempts failed
+        self._consecutive_failures += 1
+        logger.debug(
+            f"Send to {self._id} failed, consecutive failures: {self._consecutive_failures}"
+        )
+
+        # Only trigger deregistration after multiple consecutive failures
+        if self._consecutive_failures >= self.FAILURE_THRESHOLD and self._on_failure:
+            logger.warning(
+                f"Agent {self._id} failed {self.FAILURE_THRESHOLD} times, triggering deregistration"
+            )
+            self._on_failure(self._id)
+
+        return False
 
     def __repr__(self) -> str:
         return f"SocketAgent(id={self._id!r}, socket={self.socket_path})"
