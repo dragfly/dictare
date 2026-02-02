@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.73.3] - 2026-02-02
+
+### Fixed - Duplicate Agent Names Allowed
+- **agent/mux.py**: Added `_is_socket_active()` check before starting agent
+  - Verifies if socket has active listener before allowing registration
+  - Returns error if agent with same ID is already running
+  - Prevents multiple agents binding to same socket path
+
 ## [2.73.2] - 2026-02-02
 
 ### Fixed - Agent Messages Being Dropped (Race Conditions)
