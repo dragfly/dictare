@@ -2075,6 +2075,65 @@ def log_list() -> None:
     console.print(table)
     console.print(f"\n[dim]Log directory: {DEFAULT_LOG_DIR}[/]")
 
+@log_app.command("session")
+def log_session(
+    ctx: typer.Context,
+    agent_id: Annotated[
+        str | None,
+        typer.Argument(help="Agent ID to view session for"),
+    ] = None,
+    follow: Annotated[
+        bool,
+        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", "-j", help="Output raw JSON lines"),
+    ] = False,
+    lines: Annotated[
+        int,
+        typer.Option("--lines", "-n", help="Number of lines to show"),
+    ] = 20,
+) -> None:
+    """View session log for an agent.
+
+    Shows the most recent session file from ~/.local/share/voxtype/sessions/
+
+    Examples:
+        voxtype log session claude        # Show latest claude session
+        voxtype log session claude -f     # Follow live
+        voxtype log session claude -n 50  # Show last 50 lines
+    """
+    if agent_id is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
+    from pathlib import Path
+
+    sessions_dir = Path.home() / ".local" / "share" / "voxtype" / "sessions"
+
+    if not sessions_dir.exists():
+        console.print(f"[yellow]Sessions directory not found: {sessions_dir}[/]")
+        raise typer.Exit(1)
+
+    # Find session files for this agent (format: YYYY-MM-DD_HH-MM-SS_voxtype-X.Y.Z_AGENT.session.jsonl)
+    pattern = f"*_{agent_id}.session.jsonl"
+    session_files = list(sessions_dir.glob(pattern))
+
+    if not session_files:
+        console.print(f"[yellow]No sessions found for agent: {agent_id}[/]")
+        raise typer.Exit(1)
+
+    # Sort by name (contains timestamp) and get the latest
+    session_files.sort(reverse=True)
+    latest_session = session_files[0]
+
+    if not json_output:
+        console.print(f"[dim]Session: {latest_session}[/]")
+
+    _tail_log(latest_session, follow, json_output, lines)
+
 def _load_model_registry() -> dict:
     """Load model registry from JSON file."""
     import json
