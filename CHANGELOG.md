@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.74.0] - 2026-02-02
+
+### Added - Verbose Mode for Agent
+- **cli.py**: Added `--verbose` / `-v` flag to `voxtype agent` command
+- **agent/mux.py**: When verbose, session log contains full text (not truncated to 50 chars)
+  - Useful for debugging message loss between listen and agent
+  - Compare `voxtype listen --verbose` output with `voxtype agent --verbose` session log
+
 ## [2.73.3] - 2026-02-02
 
 ### Fixed - Duplicate Agent Names Allowed

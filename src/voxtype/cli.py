@@ -1765,6 +1765,10 @@ def agent(
         bool,
         typer.Option("--quiet", "-q", help="Suppress info messages"),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Log full text in session file (not truncated)"),
+    ] = False,
 ) -> None:
     """Run a command with voxtype voice input via OpenVIP.
 
@@ -1795,7 +1799,7 @@ def agent(
         console.print("[dim]Example: voxtype agent claude -- claude[/]")
         raise typer.Exit(1)
 
-    exit_code = run_agent(agent_id, command, quiet=quiet)
+    exit_code = run_agent(agent_id, command, quiet=quiet, verbose=verbose)
     raise typer.Exit(exit_code)
 
 # Log subcommand for viewing logs
