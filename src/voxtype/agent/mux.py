@@ -157,6 +157,7 @@ def _read_from_socket(
     stop_event: threading.Event,
     session_path: Path | None = None,
     keystroke_counter: KeystrokeCounter | None = None,
+    verbose: bool = False,
 ) -> None:
     """Listen on Unix socket for OpenVIP messages.
 
@@ -234,9 +235,10 @@ def _read_from_socket(
 
                 msg_count += 1
                 if session_path:
+                    text = msg.get("text", "")
                     _log_event(session_path, "msg_read", {
                         "seq": msg_count,
-                        "text": msg.get("text", "")[:50],
+                        "text": text if verbose else text[:50],
                         "openvip_id": openvip_msg.get("id"),
                         "keystrokes": keystroke_counter.count if keystroke_counter else 0,
                     })
@@ -275,6 +277,7 @@ def _write_to_pty(
     stop_event: threading.Event,
     session_path: Path | None = None,
     keystroke_counter: KeystrokeCounter | None = None,
+    verbose: bool = False,
 ) -> None:
     """Consume from queue and write to PTY.
 
@@ -331,9 +334,10 @@ def _write_to_pty(
 
                 # Log message AFTER successful write AND drain
                 if session_path:
+                    text = data.get("text", "")
                     _log_event(session_path, "msg_sent", {
                         "seq": msg_count,
-                        "text": data.get("text", "")[:50],
+                        "text": text if verbose else text[:50],
                         "bytes": bytes_written,
                         "openvip_id": data.get("openvip_id"),
                         "openvip_ts": data.get("openvip_ts"),
@@ -392,6 +396,7 @@ def run_agent(
     agent_id: str,
     command: list[str],
     quiet: bool = False,
+    verbose: bool = False,
 ) -> int:
     """Run a command with multiplexed input from stdin and voxtype.
 
@@ -401,6 +406,7 @@ def run_agent(
         agent_id: Agent identifier (e.g., 'claude').
         command: Command and arguments to run.
         quiet: Suppress info messages.
+        verbose: Log full text in session file (not truncated to 50 chars).
 
     Returns:
         Exit code of the process.
@@ -510,13 +516,13 @@ def run_agent(
         )
         socket_thread = threading.Thread(
             target=_read_from_socket,
-            args=(socket_path, write_queue, stop_event, session_path, keystroke_counter),
+            args=(socket_path, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
         # Start consumer thread (read from queue, write to PTY)
         writer_thread = threading.Thread(
             target=_write_to_pty,
-            args=(master_fd, write_queue, stop_event, session_path, keystroke_counter),
+            args=(master_fd, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
 
