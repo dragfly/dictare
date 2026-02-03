@@ -1169,44 +1169,67 @@ def engine_start(
         import time
         time.sleep(0.3)
 
-        # Poll /status and show progress
+        # Poll /status and show progress using Rich Progress (updates in-place)
+        from rich.progress import (
+            BarColumn,
+            Progress,
+            SpinnerColumn,
+            TextColumn,
+            TimeRemainingColumn,
+        )
+
         status_url = f"http://{config.server.host}:{config.server.port}/status"
-        last_progress: dict[str, float] = {}
+        model_tasks: dict[str, int] = {}  # model_name -> task_id
+        completed_models: set[str] = set()
 
-        while not init_done.is_set():
-            try:
-                with urllib.request.urlopen(status_url, timeout=1) as response:
-                    status = json.loads(response.read().decode())
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            console=console,
+            transient=False,  # Keep completed tasks visible
+        ) as progress:
+            while not init_done.is_set():
+                try:
+                    with urllib.request.urlopen(status_url, timeout=1) as response:
+                        status = json.loads(response.read().decode())
 
-                loading = status.get("loading")
-                if loading and loading.get("active"):
-                    for model in loading.get("models", []):
-                        name = model.get("name", "")
-                        model_status = model.get("status", "")
-                        progress = model.get("progress", 0)
-                        elapsed = model.get("elapsed", 0)
-                        estimated = model.get("estimated", 0)
+                    loading = status.get("loading")
+                    if loading and loading.get("active"):
+                        for model in loading.get("models", []):
+                            name = model.get("name", "")
+                            model_status = model.get("status", "")
+                            elapsed = model.get("elapsed", 0)
+                            estimated = model.get("estimated", 0)
 
-                        # Only print when status changes or progress updates significantly
-                        prev_progress = last_progress.get(name, -1)
-                        if model_status == "loading" and progress - prev_progress >= 0.05:
-                            pct = int(progress * 100)
-                            eta = max(0, estimated - elapsed)
-                            console.print(
-                                f"[dim]Loading {name}... {pct}% "
-                                f"({elapsed:.1f}s / ~{estimated:.0f}s, ETA: {eta:.0f}s)[/]"
-                            )
-                            last_progress[name] = progress
-                        elif model_status == "done" and prev_progress < 1.0:
-                            console.print(
-                                f"[green]✓[/] {name} loaded in {elapsed:.1f}s"
-                            )
-                            last_progress[name] = 1.0
+                            # Create task if not exists
+                            if name and name not in model_tasks:
+                                task_id = progress.add_task(
+                                    f"Loading {name}...",
+                                    total=estimated if estimated > 0 else 30.0,
+                                )
+                                model_tasks[name] = task_id
 
-            except (urllib.error.URLError, json.JSONDecodeError):
-                pass  # Server not ready yet or parsing error
+                            if name in model_tasks:
+                                task_id = model_tasks[name]
+                                if model_status == "loading":
+                                    # Update progress based on elapsed time
+                                    progress.update(task_id, completed=elapsed)
+                                elif model_status == "done" and name not in completed_models:
+                                    # Mark complete
+                                    progress.update(
+                                        task_id,
+                                        completed=estimated if estimated > 0 else elapsed,
+                                        description=f"[green]✓[/] {name} loaded ({elapsed:.1f}s)",
+                                    )
+                                    completed_models.add(name)
 
-            time.sleep(0.5)
+                except (urllib.error.URLError, json.JSONDecodeError):
+                    pass  # Server not ready yet or parsing error
+
+                time.sleep(0.2)
 
         # Check for initialization error
         if init_error:
