@@ -2206,18 +2206,29 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
                     display_text += "..."
                 extra = display_text.replace("\n", "\\n")
             elif event == "transcription":
-                chars = entry.get("chars", 0)
-                words = entry.get("words", 0)
+                text = entry.get("text", "")
                 duration = entry.get("duration_ms", 0)
-                extra = f"{words}w {chars}c {duration:.0f}ms"
+                # Show text (truncated to 60 chars)
+                display = text[:60].replace("\n", "\\n")
+                if len(text) > 60:
+                    display += "..."
+                extra = f'{duration:.0f}ms "{display}"'
             elif event == "transcription_text":
+                # Legacy format (kept for old logs)
                 text = entry.get("text", "")[:60]
                 extra = f'"{text}"' + ("..." if len(entry.get("text", "")) > 60 else "")
             elif event == "injection":
-                chars = entry.get("chars", 0)
+                text = entry.get("text", "")
                 method = entry.get("method", "?")
-                success = "ok" if entry.get("success") else "fail"
-                extra = f"{chars}c via {method} [{success}]"
+                trigger = entry.get("submit_trigger")
+                # Show text (truncated to 60 chars)
+                display = text[:60].replace("\n", "\\n")
+                if len(text) > 60:
+                    display += "..."
+                extra = f'via {method} "{display}"'
+                if trigger:
+                    conf = entry.get("submit_confidence", 0)
+                    extra += f' [SUBMIT: "{trigger}" {conf:.0%}]'
             elif event == "state_change":
                 old = entry.get("old_state", "?")
                 new = entry.get("new_state", "?")
