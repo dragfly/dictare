@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.77.0] - 2026-02-03
+
+### Added - Language-Based Trigger Words
+- **submit_filter.py**: Trigger words now organized by language code
+  - Triggers for detected message language + English (always)
+  - Supports it, en, es, de, fr out of the box
+  - Easy to add new languages without touching existing ones
+- **config.py**: Updated trigger config structure
+  - `triggers` is now a dict keyed by language code (e.g., `triggers.it`, `triggers.en`)
+  - Each language has its own list of trigger patterns
+- **Language detection**: Uses `language` field from Whisper transcription
+  - Falls back to English if language unknown
+  - Normalizes codes like "en-US" to "en"
+
 ## [2.76.0] - 2026-02-03
 
 ### Added - Pipeline Filter System
