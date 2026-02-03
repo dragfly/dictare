@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.84.0] - 2026-02-03
+
+### Added - AgentFilter Pipeline Integration
+
+- **engine.py**: Integrates AgentFilter with engine and event bus
+  - Publishes `agents.changed` event on register/unregister
+  - Creates AgentFilter from config if `pipeline.agent_filter.enabled`
+  - Handles `x_agent_switch` field: switches to target agent
+- **config.py**: Added `AgentFilterConfig`
+  - `enabled`: false by default (opt-in)
+  - `triggers`: ["agent", "agente"]
+  - `match_threshold`: 0.5
+- Added to `PipelineConfig.agent_filter`
+
+### Usage
+
+Enable in `~/.config/voxtype/config.toml`:
+
+```toml
+[pipeline.agent_filter]
+enabled = true
+```
+
+Then say "agent voxtype" or "agente claude" to switch agents.
+
 ## [2.83.0] - 2026-02-03
 
 ### Added - Internal Event Bus
