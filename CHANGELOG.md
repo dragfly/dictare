@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.81.0] - 2026-02-03
+
+### Added - Italian "in via" Trigger
+- **submit_filter.py**: Added "in via" as submit trigger for Italian
+  - Whisper often transcribes "invia" as "in via"
+  - Added both `["in", "via"]` and `["ok", "in", "via"]` patterns
+- **test_pipeline.py**: Added test for "in via" trigger
+
+### Fixed - CI Pipeline
+- **ci.yml**: Fixed Linux runners by using `uv venv` + `uv pip install`
+  - Previous `uv sync` approach had issues with dev dependencies
+  - macOS still uses `uv sync` (was working)
+
 ## [2.80.0] - 2026-02-03
 
 ### Fixed - CI Pipeline Mypy Errors
