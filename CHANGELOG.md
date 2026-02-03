@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.79.0] - 2026-02-03
+
+### Added - Idiomatic Python Logging
+- **logging/setup.py**: NEW - Idiomatic Python structured logging
+  - Uses standard `logging.getLogger(__name__)` pattern (thread-safe, global)
+  - `python-json-logger` for JSON formatting
+  - `VoxtypeJsonFormatter`: Adds ts, level, event, logger fields
+  - `setup_logging()`: Configure once at app startup
+  - `shutdown_logging()`: Clean shutdown with session_end event
+- **logging/__init__.py**: Exports new idiomatic API alongside legacy
+  - New: `setup_logging`, `shutdown_logging`, `DEFAULT_LOG_DIR`, `get_default_log_path`
+  - Legacy (deprecated): `JSONLLogger`, `LogLevel`
+- **submit_filter.py**: Migrated to idiomatic logging
+  - Uses `logger = logging.getLogger(__name__)`
+  - Logs `submit_trigger` event with pattern, matched_tokens, confidence
+- **tests/test_logging.py**: NEW - Tests for logging setup
+  - Tests for `VoxtypeJsonFormatter`, `setup_logging`, `shutdown_logging`
+  - Tests module-level logger pattern
+
 ## [2.78.1] - 2026-02-03
 
 ### Added - Submit Filter Logging
