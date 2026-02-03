@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.76.0] - 2026-02-03
+
+### Added - Pipeline Filter System
+- **pipeline/**: New message processing pipeline with filter architecture
+  - `pipeline/base.py`: Filter protocol, FilterAction, FilterResult, Pipeline classes
+  - `pipeline/submit_filter.py`: Submit trigger detection filter
+  - Messages flow through configurable filters before delivery to agents
+- **SubmitFilter**: Detects trigger words at end of text for automatic submit
+  - Trigger words: "ok invia", "submit", "send", "fatto", "manda", etc.
+  - Position-weighted confidence: words closer to end have higher weight
+  - Configurable threshold, decay rate, and max scan distance
+  - Removes trigger words and sets `x_submit=true` on message
+- **config.py**: New `[pipeline]` configuration section
+  - `pipeline.enabled`: Enable/disable the pipeline (default: true)
+  - `pipeline.submit_filter.*`: Configure submit filter behavior
+- **engine.py**: Pipeline integration in `_inject_text()` method
+
 ## [2.75.1] - 2026-02-02
 
 ### Fixed - Session Log Formatting

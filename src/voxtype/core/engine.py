@@ -27,6 +27,7 @@ from voxtype.core.openvip import create_message
 from voxtype.core.state import AppState, StateManager
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
+from voxtype.pipeline import Pipeline, SubmitFilter
 from voxtype.stt.base import STTEngine
 
 if TYPE_CHECKING:
@@ -122,6 +123,9 @@ class VoxtypeEngine:
         self._running = False
         self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
+
+        # Pipeline for message processing
+        self._pipeline = self._create_pipeline()
 
         # Agent state
         self._current_agent_id: str | None = None  # ID of currently selected agent
@@ -342,6 +346,30 @@ class VoxtypeEngine:
         if self.config.stt.hotwords:
             return self.config.stt.hotwords
         return None
+
+    def _create_pipeline(self) -> Pipeline | None:
+        """Create message pipeline from config.
+
+        Returns:
+            Pipeline if enabled, None otherwise.
+        """
+        if not self.config.pipeline.enabled:
+            return None
+
+        pipeline = Pipeline()
+
+        # Add submit filter if enabled
+        submit_cfg = self.config.pipeline.submit_filter
+        if submit_cfg.enabled:
+            submit_filter = SubmitFilter(
+                triggers=submit_cfg.triggers,
+                confidence_threshold=submit_cfg.confidence_threshold,
+                max_scan_words=submit_cfg.max_scan_words,
+                decay_rate=submit_cfg.decay_rate,
+            )
+            pipeline.add_filter(submit_filter)
+
+        return pipeline if len(pipeline) > 0 else None
 
     # -------------------------------------------------------------------------
     # Initialization
@@ -613,9 +641,10 @@ class VoxtypeEngine:
         - SSEAgent: sends via Server-Sent Events
         - WebhookAgent: sends via HTTP POST
 
-        Message termination based on auto_enter:
-        - auto_enter=true: text + submit flag
-        - auto_enter=false: text + visual newline flag
+        Message processing:
+        1. Build initial message with auto_enter setting
+        2. Apply pipeline filters (may set x_submit, modify text, etc.)
+        3. Send processed message(s) to agent
 
         Args:
             text: Text to inject
@@ -636,6 +665,11 @@ class VoxtypeEngine:
             visual_newline=not auto_enter,
         )
 
+        # Apply pipeline filters (may modify message, set x_submit, etc.)
+        messages_to_send = [message]
+        if self._pipeline:
+            messages_to_send = self._pipeline.process(message)
+
         # Lock to prevent concurrent injections
         error_msg: str | None = None
         with self._injection_lock:
@@ -644,7 +678,12 @@ class VoxtypeEngine:
             if target_agent:
                 # Send to agent - agent handles its own transport
                 method = f"agent:{target_agent.id}"
-                success = target_agent.send(message)
+
+                # Send all processed messages
+                for msg in messages_to_send:
+                    msg_success = target_agent.send(msg)
+                    if msg_success:
+                        success = True
 
                 # Set helpful error message for failures
                 if not success:
@@ -656,19 +695,23 @@ class VoxtypeEngine:
 
             self._stats_injection_seconds += time.time() - inject_start
 
+        # Determine final text (after pipeline processing)
+        final_text = messages_to_send[0].get("text", text) if messages_to_send else text
+        pipeline_submit = messages_to_send[0].get("x_submit", False) if messages_to_send else False
+
         # Emit injection event
         self._emit(
             "on_injection",
-            InjectionResult(text=text, success=success, method=method, error=error_msg),
+            InjectionResult(text=final_text, success=success, method=method, error=error_msg),
         )
 
         # Log injection
         if self._logger:
             self._logger.log_injection(
-                text=text,
+                text=final_text,
                 method=method,
                 success=success,
-                auto_enter=auto_enter,
+                auto_enter=auto_enter or pipeline_submit,
                 enter_sent=None,  # Agents handle their own submission
             )
 
