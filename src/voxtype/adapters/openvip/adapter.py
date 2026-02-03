@@ -592,7 +592,7 @@ class OpenVIPAdapter:
 
         # Load models
         self._update_loading("stt", "loading")
-        self._engine._init_vad_components(headless=headless)
+        self._engine.init_components(headless=headless)
 
         # Update state after loading
         self._update_loading("stt", "done")
@@ -602,9 +602,9 @@ class OpenVIPAdapter:
         self.state.stt.model_name = self._config.stt.model
         self.state.stt.language = self._config.stt.language
 
-        # Start listening if requested (avoids race condition with run())
-        if start_listening and self._engine:
-            self._engine._set_listening(True)
+        # Start engine runtime (controller, audio streaming, optional listening)
+        self._engine.start_runtime(start_listening=start_listening)
+        if start_listening:
             self.state.stt.state = "listening"
 
     def run(self, *, start_listening: bool = True) -> None:
@@ -612,11 +612,8 @@ class OpenVIPAdapter:
 
         Args:
             start_listening: If True, start STT in listening mode.
+                Note: This is now handled by initialize_engine(), kept for API compat.
         """
-        if start_listening and self._engine:
-            self._engine._set_listening(True)
-            self.state.stt.state = "listening"
-
         try:
             while self._running and not self._shutdown_requested:
                 # Update uptime

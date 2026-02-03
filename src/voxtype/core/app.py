@@ -528,7 +528,7 @@ class VoxtypeApp(EngineEvents):
     def _run_vad_mode(self) -> None:
         """Run in VAD (voice activity detection) mode."""
         # Initialize engine components (STT and VAD loading happens here with progress indicators)
-        self._engine._init_vad_components()
+        self._engine.init_components()
 
         # Show hotkey info
         if self.config.verbose and self._engine._hotkey:
