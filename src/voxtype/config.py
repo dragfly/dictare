@@ -181,24 +181,46 @@ class SubmitFilterConfig(BaseModel):
     """Submit filter configuration."""
 
     enabled: bool = Field(default=True, description="Enable submit trigger detection")
-    triggers: list[list[str]] = Field(
-        default_factory=lambda: [
-            ["ok", "invia"],
-            ["ok", "manda"],
-            ["ok", "fatto"],
-            ["va", "bene", "invia"],
-            ["invia"],
-            ["manda"],
-            ["fatto"],
-            ["ok", "send"],
-            ["ok", "submit"],
-            ["go", "ahead"],
-            ["submit"],
-            ["send"],
-            ["adesso"],
-            ["go"],
-        ],
-        description="Trigger patterns (list of word sequences)",
+    triggers: dict[str, list[list[str]]] = Field(
+        default_factory=lambda: {
+            "it": [
+                ["ok", "invia"],
+                ["ok", "manda"],
+                ["ok", "fatto"],
+                ["va", "bene", "invia"],
+                ["invia"],
+                ["manda"],
+                ["fatto"],
+                ["adesso"],
+            ],
+            "en": [
+                ["ok", "send"],
+                ["ok", "submit"],
+                ["go", "ahead"],
+                ["submit"],
+                ["send"],
+                ["go"],
+            ],
+            "es": [
+                ["ok", "enviar"],
+                ["enviar"],
+                ["envía"],
+                ["listo"],
+            ],
+            "de": [
+                ["ok", "senden"],
+                ["senden"],
+                ["abschicken"],
+                ["fertig"],
+            ],
+            "fr": [
+                ["ok", "envoyer"],
+                ["envoyer"],
+                ["envoie"],
+                ["terminé"],
+            ],
+        },
+        description="Trigger patterns by language code (checked: message language + English)",
     )
     confidence_threshold: float = Field(
         default=0.85,
