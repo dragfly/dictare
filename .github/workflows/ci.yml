@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  UV_FROZEN: 1  # Prevent uv run from re-syncing
+
 jobs:
   test-linux:
     runs-on: [self-hosted, Linux, X64]
@@ -16,9 +19,11 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
+        env:
+          UV_FROZEN: 0  # Allow sync during install
         run: |
           rm -rf .venv
-          uv sync --python 3.11 --extra dev --prerelease=allow --no-cache
+          uv sync --python 3.11 --extra dev --prerelease=allow
 
       - name: Run linter
         run: uv run ruff check .
@@ -35,6 +40,8 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
+        env:
+          UV_FROZEN: 0  # Allow sync during install
         run: uv sync --python 3.11 --extra dev --prerelease=allow
 
       - name: Run linter
@@ -52,9 +59,11 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
+        env:
+          UV_FROZEN: 0  # Allow sync during install
         run: |
           rm -rf .venv
-          uv sync --python 3.11 --extra dev --prerelease=allow --no-cache
+          uv sync --python 3.11 --extra dev --prerelease=allow
 
       - name: Run mypy
         run: uv run mypy src/
