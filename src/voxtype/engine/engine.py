@@ -422,6 +422,30 @@ class Engine:
             def on_error(self, message: str, context: str) -> None:
                 outer_self._emit_error(message, context)
 
+            def on_engine_ready(self) -> None:
+                pass
+
+            def on_recording_start(self) -> None:
+                pass
+
+            def on_recording_end(self, duration_ms: float) -> None:
+                pass
+
+            def on_max_duration_reached(self) -> None:
+                pass
+
+            def on_vad_loading(self) -> None:
+                pass
+
+            def on_device_reconnect_attempt(self, attempt: int) -> None:
+                pass
+
+            def on_device_reconnect_success(self, device_name: str | None) -> None:
+                pass
+
+            def on_injection(self, result: Any) -> None:
+                pass
+
         # Create STT service (reuses existing VoxtypeEngine)
         events = STTEventHandler(self)
         self._stt_service, _ = create_engine(
