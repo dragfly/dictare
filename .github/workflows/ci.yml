@@ -21,7 +21,7 @@ jobs:
           uv sync --python 3.11 --extra dev --prerelease=allow --no-cache
 
       - name: Run linter
-        run: uv run ruff check .
+        run: uv tool run ruff check .
 
       - name: Run tests
         run: uv run pytest tests/ -v
@@ -38,7 +38,7 @@ jobs:
         run: uv sync --python 3.11 --extra dev --prerelease=allow
 
       - name: Run linter
-        run: uv run ruff check .
+        run: uv tool run ruff check .
 
       - name: Run tests
         run: uv run pytest tests/ -v
@@ -57,4 +57,4 @@ jobs:
           uv sync --python 3.11 --extra dev --prerelease=allow --no-cache
 
       - name: Run mypy
-        run: uv run mypy src/
+        run: uv tool run mypy src/
