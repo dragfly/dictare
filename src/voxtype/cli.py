@@ -1039,6 +1039,54 @@ def daemon_restart(
 # Engine commands (new architecture)
 # =============================================================================
 
+def _init_engine_and_adapter(
+    *,
+    adapter: Any,  # OpenVIPAdapter (import deferred)
+    engine: Any,  # VoxtypeEngine (import deferred)
+    registrar: Any | None,  # AgentRegistrar (import deferred)
+    mode: str = "foreground",
+    start_listening: bool = True,
+) -> None:
+    """Initialize engine and adapter (COMMON for foreground/daemon).
+
+    This is the shared initialization sequence for both foreground and daemon modes.
+    The only difference is:
+    - Foreground: mode="foreground", start_listening=True
+    - Daemon: mode="daemon", start_listening=False (waits for trigger)
+
+    Args:
+        adapter: OpenVIPAdapter instance.
+        engine: VoxtypeEngine instance.
+        registrar: AgentRegistrar for agent discovery (optional).
+        mode: "foreground" or "daemon".
+        start_listening: If True, start in listening mode immediately.
+    """
+    # 1. Set mode
+    adapter.state.mode = mode
+
+    # 2. Start adapter servers (HTTP + Unix socket)
+    adapter.start()
+
+    # 3. Setup loading state for progress tracking
+    adapter.setup_loading_state()
+
+    # 4. Initialize engine (load models)
+    engine.init_components(headless=True)
+
+    # 5. Start engine runtime (controller, audio streaming)
+    engine.start_runtime(start_listening=start_listening)
+
+    # 6. Mark loading complete and update state
+    adapter.mark_loading_complete()
+    adapter.update_engine_state(
+        listening=start_listening,
+        hotkey_bound=engine._hotkey is not None,
+    )
+
+    # 7. Start agent discovery
+    if registrar:
+        registrar.start()
+
 @engine_app.command("start")
 def engine_start(
     daemon: Annotated[
@@ -1185,10 +1233,44 @@ def engine_start(
     adapter = OpenVIPAdapter(voxtype_engine, config)
 
     if daemon:
-        console.print("[dim]Starting in daemon mode...[/]")
-        # TODO: Implement daemon mode with fork
-        console.print("[red]Daemon mode not yet implemented for OpenVIPAdapter[/]")
-        raise typer.Exit(1)
+        # Daemon mode: headless, no UI, start_listening=False
+        import signal
+
+        console.print(f"[dim]Starting engine in daemon mode (PID: {os.getpid()})...[/]")
+        console.print(f"[dim]HTTP: http://{config.server.host}:{config.server.port}[/]")
+
+        # Initialize engine and adapter (COMMON init, daemon mode)
+        try:
+            _init_engine_and_adapter(
+                adapter=adapter,
+                engine=voxtype_engine,
+                registrar=registrar,
+                mode="daemon",
+                start_listening=False,  # Privacy-aware: don't listen until triggered
+            )
+        except Exception as e:
+            console.print(f"[red]Failed to start engine: {e}[/]")
+            raise typer.Exit(1)
+
+        console.print("[green]Engine ready[/] (IDLE - waiting for trigger)")
+
+        # Setup signal handlers
+        def signal_handler(signum: int, frame: Any) -> None:
+            console.print("\n[yellow]Shutting down...[/]")
+            adapter.request_shutdown()
+
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+
+        # Run adapter main loop (blocks until shutdown)
+        try:
+            adapter.run(start_listening=False)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            adapter.stop()
+
+        console.print("[dim]Engine stopped[/]")
     else:
         # Foreground mode: StatusPanel polls /status and shows UI
         import signal
@@ -1204,31 +1286,13 @@ def engine_start(
             """Initialize engine and adapter (COMMON for foreground/daemon)."""
             nonlocal init_error
             try:
-                # === COMMON INIT (same for foreground and daemon) ===
-                adapter.state.mode = "foreground"
-
-                # 1. Start adapter servers (HTTP + Unix socket)
-                adapter.start()
-
-                # 2. Setup loading state for progress tracking
-                adapter.setup_loading_state()
-
-                # 3. Initialize engine (load models)
-                voxtype_engine.init_components(headless=True)
-
-                # 4. Start engine runtime (controller, audio streaming)
-                voxtype_engine.start_runtime(start_listening=True)
-
-                # 5. Mark loading complete and update state
-                adapter.mark_loading_complete()
-                adapter.update_engine_state(
-                    listening=True,
-                    hotkey_bound=voxtype_engine._hotkey is not None,
+                _init_engine_and_adapter(
+                    adapter=adapter,
+                    engine=voxtype_engine,
+                    registrar=registrar,
+                    mode="foreground",
+                    start_listening=True,
                 )
-
-                # 6. Start agent discovery
-                if registrar:
-                    registrar.start()
             except Exception as e:
                 init_error = e
             finally:
