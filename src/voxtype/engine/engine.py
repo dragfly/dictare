@@ -97,6 +97,7 @@ class Engine:
 
         # Services (initialized on demand)
         self._stt_service: STTService | None = None
+        self._registrar: Any = None  # Agent registrar
 
         # Transport
         self._http_server: HTTPServer | None = None
@@ -519,12 +520,16 @@ class Engine:
 
         # Create STT service (reuses existing VoxtypeEngine)
         events = STTEventHandler(self)
-        self._stt_service, _ = create_engine(
+        self._stt_service, self._registrar = create_engine(
             config=self._config,
             events=events,
             agent_mode=(self._config.output.mode == "agents"),
             hotkey_enabled=False,  # Engine handles hotkey separately
         )
+
+        # Load models (STT and VAD) - this is where the actual loading happens
+        # on_vad_loading callback will update loading state for STT->done, VAD->loading
+        self._stt_service._init_vad_components()
 
         # Mark VAD as done (all models loaded)
         self._update_model_loading("vad", "done")
