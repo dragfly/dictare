@@ -628,6 +628,24 @@ class TestAgentFilterDetection:
         if result.action == FilterAction.AUGMENT:
             assert result.messages[0]["x_agent_switch"] == "voxtype"
 
+    def test_english_uses_phonetic_for_triggers(self) -> None:
+        """English messages use phonetic+edit for trigger matching."""
+        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
+        # "ajent" sounds like "agent" in English (phonetic: AJNT vs AJNT)
+        msg = {"text": "ajent voxtype", "language": "en"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_agent_switch"] == "voxtype"
+
+    def test_italian_uses_edit_only_for_triggers(self) -> None:
+        """Italian messages use edit distance only for trigger matching."""
+        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
+        # "adziente" doesn't match "agente" phonetically, but does via edit distance
+        msg = {"text": "adziente voxtype", "language": "it"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_agent_switch"] == "voxtype"
+
 
 class TestAgentFilterWithPipeline:
     """Test AgentFilter integration with Pipeline."""
