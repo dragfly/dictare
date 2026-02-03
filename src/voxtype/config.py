@@ -223,6 +223,22 @@ class SubmitFilterConfig(BaseModel):
         description="Confidence decay rate per word from end (0.95 = 5% per word)",
     )
 
+class AgentFilterConfig(BaseModel):
+    """Agent switch filter configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable voice-controlled agent switching (say 'agent <name>')",
+    )
+    triggers: list[str] = Field(
+        default_factory=lambda: ["agent", "agente"],
+        description="Trigger words that precede agent name",
+    )
+    match_threshold: float = Field(
+        default=0.5,
+        description="Minimum fuzzy match score for agent name (0.0-1.0)",
+    )
+
 class PipelineConfig(BaseModel):
     """Pipeline filter configuration."""
 
@@ -230,6 +246,10 @@ class PipelineConfig(BaseModel):
     submit_filter: SubmitFilterConfig = Field(
         default_factory=SubmitFilterConfig,
         description="Submit trigger detection filter",
+    )
+    agent_filter: AgentFilterConfig = Field(
+        default_factory=AgentFilterConfig,
+        description="Voice-controlled agent switching filter",
     )
 
 class DaemonConfig(BaseModel):
