@@ -25,9 +25,10 @@ from voxtype.core.events import (
 )
 from voxtype.core.openvip import create_message
 from voxtype.core.state import AppState, StateManager
+from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
-from voxtype.pipeline import Pipeline, SubmitFilter
+from voxtype.pipeline import AgentFilter, Pipeline, SubmitFilter
 from voxtype.stt.base import STTEngine
 
 if TYPE_CHECKING:
@@ -357,6 +358,17 @@ class VoxtypeEngine:
 
         pipeline = Pipeline()
 
+        # Add agent filter if enabled (runs first to set x_agent_switch)
+        agent_cfg = self.config.pipeline.agent_filter
+        if agent_cfg.enabled:
+            agent_filter = AgentFilter(
+                agent_ids=self.agents,  # Initial list, will update via events
+                triggers=agent_cfg.triggers,
+                match_threshold=agent_cfg.match_threshold,
+                subscribe_to_events=True,  # Auto-update when agents change
+            )
+            pipeline.add_filter(agent_filter)
+
         # Add submit filter if enabled
         submit_cfg = self.config.pipeline.submit_filter
         if submit_cfg.enabled:
@@ -675,6 +687,14 @@ class VoxtypeEngine:
         if self._pipeline:
             messages_to_send = self._pipeline.process(message)
 
+        # Handle x_agent_switch from pipeline (voice-controlled agent switch)
+        if messages_to_send:
+            switch_target = messages_to_send[0].get("x_agent_switch")
+            if switch_target:
+                # Switch to the requested agent
+                self._switch_to_agent_by_name_internal(switch_target)
+                target_agent = self._get_current_agent()
+
         # Lock to prevent concurrent injections
         error_msg: str | None = None
         with self._injection_lock:
@@ -785,6 +805,7 @@ class VoxtypeEngine:
             self._current_agent_id = agent.id
 
         self._emit("on_agents_changed", self.agents)
+        bus.publish("agents.changed", agent_ids=self.agents)
         return True
 
     def unregister_agent(self, agent_id: str) -> bool:
@@ -817,6 +838,7 @@ class VoxtypeEngine:
             self._current_agent_id = None
 
         self._emit("on_agents_changed", self.agents)
+        bus.publish("agents.changed", agent_ids=self.agents)
         return True
 
     def _switch_agent(self, direction: int) -> None:
