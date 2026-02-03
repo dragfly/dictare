@@ -64,6 +64,7 @@ class STTState:
     model_loaded: bool = False
     model_name: str | None = None
     language: str | None = None
+    last_text: str = ""  # Last transcribed text
 
 @dataclass
 class OutputState:
@@ -141,6 +142,7 @@ class AdapterState:
                 "model_loaded": self.stt.model_loaded,
                 "model_name": self.stt.model_name,
                 "language": self.stt.language,
+                "last_text": self.stt.last_text,
             },
             "output": {
                 "mode": self.output.mode,
@@ -587,6 +589,10 @@ class OpenVIPAdapter:
         self._engine.start_runtime(start_listening=start_listening)
         if start_listening:
             self.state.stt.state = "listening"
+
+        # Update hotkey bound state
+        if self._engine._hotkey:
+            self.state.hotkey.bound = True
 
     def run(self, *, start_listening: bool = True) -> None:
         """Run the adapter main loop (blocking).
