@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.100.2] - 2026-02-03
+
+### Changed - Verbose logging by default
+
+Logs now show actual text for debugging:
+
+```
+23:30:32 INFO  transcription        6240ms "ciao come stai oggi"
+23:30:32 INFO  injection            via agent:voxtype "ciao come stai" [SUBMIT: "submit" 95%]
+```
+
+- `voxtype log engine -f` now shows transcription text
+- Shows submit trigger word and confidence when detected
+- Privacy mode can be re-added later if needed
+
 ## [2.100.1] - 2026-02-03
 
 ### Changed - File-based agent lifecycle

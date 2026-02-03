@@ -140,31 +140,20 @@ class JSONLLogger:
         duration_ms: float | None = None,
         language: str | None = None,
     ) -> None:
-        """Log a transcription event.
-
-        At INFO level: logs only metadata (chars, word count, duration)
-        At DEBUG level: also logs the actual text
-        """
+        """Log a transcription event with text."""
         chars = len(text)
         words = len(text.split())
 
-        # INFO level: metadata only (privacy)
+        # Always include text for debugging
         self._log_internal(
             "transcription",
             LogLevel.INFO,
+            text=text,
             chars=chars,
             words=words,
             duration_ms=duration_ms,
             language=language,
         )
-
-        # DEBUG level: include text content
-        if self.level >= LogLevel.DEBUG:
-            self._log_internal(
-                "transcription_text",
-                LogLevel.DEBUG,
-                text=text,
-            )
 
     def log_wake_word_check(
         self,
@@ -235,10 +224,11 @@ class JSONLLogger:
         submit_trigger: str | None = None,
         submit_confidence: float | None = None,
     ) -> None:
-        """Log a text injection."""
+        """Log a text injection with text."""
         chars = len(text)
-        # INFO: metadata only
+        # Always include text for debugging
         extra: dict = {
+            "text": text,
             "chars": chars,
             "method": method,
             "success": success,
@@ -250,13 +240,6 @@ class JSONLLogger:
             extra["submit_trigger"] = submit_trigger
             extra["submit_confidence"] = submit_confidence
         self._log_internal("injection", LogLevel.INFO, **extra)
-        # DEBUG: include text
-        if self.level >= LogLevel.DEBUG:
-            self._log_internal(
-                "injection_text",
-                LogLevel.DEBUG,
-                text=text,
-            )
 
     def log_vad_event(
         self,
