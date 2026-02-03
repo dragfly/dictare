@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.97.0] - 2026-02-03
+
+### Added - COMMON init and daemon mode
+
+- **`_init_engine_and_adapter()`**: Extracted shared initialization logic
+  - Used by both foreground and daemon modes
+  - Parameters: `mode` ("foreground"/"daemon"), `start_listening` (True/False)
+- **Daemon mode implemented**: `voxtype engine start -d`
+  - Headless operation, no UI
+  - `start_listening=False` (privacy-aware default)
+  - Waits for trigger via HTTP/socket API
+  - Shows HTTP endpoint URL on startup
+
+### Changed
+
+- Foreground mode now uses shared `_init_engine_and_adapter()` function
+- Cleaner separation between COMMON and mode-specific code
+
 ## [2.96.2] - 2026-02-03
 
 ### Fixed - Mypy type errors
