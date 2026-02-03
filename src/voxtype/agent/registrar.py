@@ -72,15 +72,14 @@ class ManualAgentRegistrar(AgentRegistrar):
         self._agent_ids = agent_ids
 
     def start(self) -> None:
-        """Register all agents from the list (as SocketAgents)."""
-        from voxtype.agent.socket import SocketAgent
+        """Register all agents from the list (as FileAgents).
 
-        def on_agent_failure(agent_id: str) -> None:
-            """Auto-deregister agent when it fails."""
-            self._registry.unregister_agent(agent_id)
+        Uses file-based IPC (more reliable than sockets).
+        """
+        from voxtype.agent.file import FileAgent
 
         for agent_id in self._agent_ids:
-            agent = SocketAgent(agent_id, on_failure=on_agent_failure)
+            agent = FileAgent(agent_id)
             self._registry.register_agent(agent)
 
     def stop(self) -> None:
@@ -115,17 +114,16 @@ class AutoDiscoveryRegistrar(AgentRegistrar):
         self._monitor: Any = None
 
     def start(self) -> None:
-        """Start monitoring for agents and register existing ones."""
-        from voxtype.agent.monitor import create_monitor
-        from voxtype.agent.socket import SocketAgent
+        """Start monitoring for agents and register existing ones.
 
-        def on_agent_failure(agent_id: str) -> None:
-            """Auto-deregister agent when it fails."""
-            self._registry.unregister_agent(agent_id)
+        Uses file-based IPC (more reliable than sockets).
+        """
+        from voxtype.agent.file import FileAgent
+        from voxtype.agent.monitor import create_monitor
 
         def on_agent_added(discovered_agent: Any) -> None:
-            """Create SocketAgent and register it."""
-            agent = SocketAgent(discovered_agent.id, on_failure=on_agent_failure)
+            """Create FileAgent and register it."""
+            agent = FileAgent(discovered_agent.id)
             self._registry.register_agent(agent)
 
         def on_agent_removed(discovered_agent: Any) -> None:
@@ -142,7 +140,7 @@ class AutoDiscoveryRegistrar(AgentRegistrar):
 
         # Register agents discovered at startup
         for agent_id in self._monitor.agent_ids:
-            agent = SocketAgent(agent_id, on_failure=on_agent_failure)
+            agent = FileAgent(agent_id)
             self._registry.register_agent(agent)
 
     def stop(self) -> None:

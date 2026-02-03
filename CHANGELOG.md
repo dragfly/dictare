@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.99.0] - 2026-02-03
+
+### Changed - File-based IPC (replacing sockets)
+
+Switched from Unix socket to file-based IPC for engine→agent communication.
+This fixes message loss issues that were occurring with socket-based transport.
+
+- **FileAgent**: New agent that writes OpenVIP messages to JSONL files
+- **Agent files**: Now stored in `~/.local/share/voxtype/agents/{agent_id}.jsonl`
+- **Mux reader**: Uses unbuffered file I/O with tail-f style polling
+- **Socket code**: Kept but disabled (can be re-enabled for debugging)
+
+### Added
+
+- `_read_from_file()` function in mux.py for reliable file-based message reading
+- `FileAgent` class in `agent/file.py`
+- `get_agent_dir()` function in monitor.py
+
+### Removed
+
+- Socket-based agent discovery (replaced by file-based)
+
 ## [2.98.3] - 2026-02-03
 
 ### Added

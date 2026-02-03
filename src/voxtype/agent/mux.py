@@ -254,6 +254,99 @@ def _read_from_socket(
             socket_path.unlink()
 
 
+def _read_from_file(
+    file_path: Path,
+    write_queue: queue.Queue,
+    stop_event: threading.Event,
+    session_path: Path | None = None,
+    keystroke_counter: KeystrokeCounter | None = None,
+    verbose: bool = False,
+) -> None:
+    """Monitor file and put parsed messages in queue (tail -f style).
+
+    Reads OpenVIP messages appended to file by FileAgent.
+    More reliable than socket - no message loss.
+
+    Uses unbuffered I/O to avoid Python file buffer caching issues.
+    """
+    msg_count = 0
+    line_buffer = b""
+
+    # Create file if doesn't exist
+    if not file_path.exists():
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.touch()
+
+    try:
+        # Use unbuffered I/O
+        fd = os.open(str(file_path), os.O_RDONLY)
+        try:
+            # Seek to end (tail -f style)
+            os.lseek(fd, 0, os.SEEK_END)
+
+            while not stop_event.is_set():
+                chunk = os.read(fd, 4096)
+                if chunk:
+                    line_buffer += chunk
+
+                    # Process all complete lines
+                    while b"\n" in line_buffer:
+                        line_bytes, line_buffer = line_buffer.split(b"\n", 1)
+                        line = line_bytes.decode("utf-8", errors="replace").strip()
+
+                        if not line:
+                            continue
+
+                        try:
+                            openvip_msg = json.loads(line)
+                        except json.JSONDecodeError:
+                            if session_path:
+                                _log_event(session_path, "parse_error", {"line": line[:100]})
+                            continue
+
+                        # Skip non-message types
+                        if openvip_msg.get("type") != "message":
+                            continue
+
+                        # Convert OpenVIP to internal format
+                        msg: dict[str, Any] = {
+                            "text": openvip_msg.get("text", ""),
+                            "openvip_id": openvip_msg.get("id"),
+                            "openvip_ts": openvip_msg.get("timestamp"),
+                        }
+                        if openvip_msg.get("x_submit"):
+                            msg["submit"] = True
+                        if openvip_msg.get("x_visual_newline"):
+                            msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
+
+                        msg_count += 1
+                        if session_path:
+                            text = msg.get("text", "")
+                            _log_event(session_path, "msg_read", {
+                                "seq": msg_count,
+                                "text": text if verbose else text[:50],
+                                "openvip_id": openvip_msg.get("id"),
+                                "keystrokes": keystroke_counter.count if keystroke_counter else 0,
+                            })
+
+                        write_queue.put(("msg", msg))
+                else:
+                    # No new data - wait before retry
+                    time.sleep(0.05)
+        finally:
+            os.close(fd)
+    except (BrokenPipeError, OSError) as e:
+        if session_path:
+            _log_event(session_path, "reader_error", {"error": str(e)})
+    finally:
+        # Clean up file on exit
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except OSError:
+                pass
+
+
 def _write_all(fd: int, data: bytes) -> int:
     """Write all bytes to fd, handling short writes.
 
@@ -392,6 +485,22 @@ def _is_socket_active(socket_path: Path) -> bool:
         return False
 
 
+def get_file_path(agent_id: str) -> Path:
+    """Get file path for an agent.
+
+    Uses ~/.local/share/voxtype/agents/ for agent files.
+
+    Args:
+        agent_id: Agent identifier.
+
+    Returns:
+        Path to file (e.g., ~/.local/share/voxtype/agents/claude.jsonl).
+    """
+    file_dir = Path.home() / ".local" / "share" / "voxtype" / "agents"
+    file_dir.mkdir(parents=True, exist_ok=True)
+    return file_dir / f"{agent_id}.jsonl"
+
+
 def run_agent(
     agent_id: str,
     command: list[str],
@@ -400,7 +509,7 @@ def run_agent(
 ) -> int:
     """Run a command with multiplexed input from stdin and voxtype.
 
-    Listens on a Unix socket for OpenVIP messages from voxtype listen.
+    Reads OpenVIP messages from a file (more reliable than socket).
 
     Args:
         agent_id: Agent identifier (e.g., 'claude').
@@ -411,44 +520,47 @@ def run_agent(
     Returns:
         Exit code of the process.
     """
-    # Get socket path for this agent
+    # Get file path for this agent
+    file_path = get_file_path(agent_id)
+
+    # Also get socket path for backwards compatibility check
     socket_path = get_socket_path(agent_id)
 
-    # Check if another agent with the same ID is already running
+    # Check if another agent with the same ID is already running (socket check)
     if _is_socket_active(socket_path):
         print(
-            f"Error: Agent '{agent_id}' is already running.",
-            file=sys.stderr,
-        )
-        print(
-            f"Socket in use: {socket_path}",
-            file=sys.stderr,
-        )
-        print(
-            "Use a different agent ID or stop the existing agent first.",
+            f"Error: Agent '{agent_id}' is already running (socket mode).",
             file=sys.stderr,
         )
         return 1
 
-    # Register cleanup handler (safety net for abnormal exits)
+    # Check if file already exists (another file-mode agent)
+    if file_path.exists():
+        print(
+            f"Warning: Clearing stale file {file_path}",
+            file=sys.stderr,
+        )
+        file_path.unlink()
+
+    # Register cleanup handler
     import atexit
 
-    def cleanup_socket():
-        if socket_path.exists():
+    def cleanup_file():
+        if file_path.exists():
             try:
-                socket_path.unlink()
+                file_path.unlink()
             except OSError:
                 pass
 
-    atexit.register(cleanup_socket)
+    atexit.register(cleanup_file)
 
     # Create session log
     session_path = _get_session_log_path(agent_id)
-    _write_session_start(session_path, agent_id, command, socket_path)
+    _write_session_start(session_path, agent_id, command, file_path)
 
     if not quiet:
         print(f"[voxtype {__version__}] Agent: {agent_id}", file=sys.stderr)
-        print(f"[voxtype {__version__}] Socket: {socket_path}", file=sys.stderr)
+        print(f"[voxtype {__version__}] File: {file_path}", file=sys.stderr)
         print(f"[voxtype {__version__}] Session: {session_path}", file=sys.stderr)
         print(f"[voxtype {__version__}] Running: {' '.join(command)}", file=sys.stderr)
 
@@ -508,17 +620,24 @@ def run_agent(
         # Create keystroke counter for session statistics
         keystroke_counter = KeystrokeCounter()
 
-        # Start producer threads (read from stdin/socket, put in queue)
+        # Start producer threads (read from stdin/file, put in queue)
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
             args=(write_queue, stop_event, keystroke_counter),
             daemon=True,
         )
-        socket_thread = threading.Thread(
-            target=_read_from_socket,
-            args=(socket_path, write_queue, stop_event, session_path, keystroke_counter, verbose),
+        # Use file-based IPC (more reliable than socket)
+        file_thread = threading.Thread(
+            target=_read_from_file,
+            args=(file_path, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
+        # NOTE: Socket-based IPC kept for reference - had message loss issues
+        # socket_thread = threading.Thread(
+        #     target=_read_from_socket,
+        #     args=(socket_path, write_queue, stop_event, session_path, keystroke_counter, verbose),
+        #     daemon=True,
+        # )
         # Start consumer thread (read from queue, write to PTY)
         writer_thread = threading.Thread(
             target=_write_to_pty,
@@ -527,7 +646,7 @@ def run_agent(
         )
 
         stdin_thread.start()
-        socket_thread.start()
+        file_thread.start()
         writer_thread.start()
 
         # Read from PTY and write to stdout
