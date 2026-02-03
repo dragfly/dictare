@@ -541,6 +541,10 @@ class Engine:
         self.state.stt.model_name = self._config.stt.model
         self.state.stt.language = self._config.stt.language
 
+        # Start agent discovery (if in agent mode)
+        if self._registrar is not None:
+            self._registrar.start()
+
     def _update_model_loading(
         self, model_name: str, status: str
     ) -> None:
