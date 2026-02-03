@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.95.0] - 2026-02-03
+
+### Changed - VoxtypeEngine lifecycle refactoring
+
+- **`init_components(headless=False)`**: Load models (STT, VAD, audio, hotkey)
+- **`start_runtime(start_listening=False)`**: Start controller, audio streaming
+  - Default `start_listening=False` (privacy-aware, conservative)
+- **`run()`**: Blocking loop for standalone use
+- **`start()`**: Convenience method (init_components + start_runtime + run)
+- Renamed `_init_vad_components` → `init_components` (public API)
+- Adapter no longer accesses engine internals
+
 ## [2.94.0] - 2026-02-03
 
 ### Changed - Unified StatusPanel design

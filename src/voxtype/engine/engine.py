@@ -530,7 +530,7 @@ class Engine:
         # Load models (STT and VAD) - this is where the actual loading happens
         # on_vad_loading callback will update loading state for STT->done, VAD->loading
         # headless=True: Engine is headless, progress is shown by CLI polling /status
-        self._stt_service._init_vad_components(headless=True)
+        self._stt_service.init_components(headless=True)
 
         # Mark VAD as done (all models loaded)
         self._update_model_loading("vad", "done")
