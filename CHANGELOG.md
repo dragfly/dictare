@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.91.2] - 2026-02-03
+
+### Fixed - Actually load models in engine init
+
+- **engine.py**: Call `_init_vad_components()` after `create_engine()`
+  - `create_engine()` only creates the engine, doesn't load models
+  - Models are loaded in `_init_vad_components()` which triggers events
+  - Now STT→done and VAD→done states are correctly updated
+
 ## [2.91.1] - 2026-02-03
 
 ### Fixed - Signal handlers in main thread
