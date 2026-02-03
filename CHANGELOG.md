@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.91.3] - 2026-02-03
+
+### Changed - Headless Engine (no internal progress bars)
+
+- **Engine is now headless**: No Rich progress bars during model loading
+  - All console output suppressed when running via `voxtype engine start`
+  - Progress visualization is responsibility of CLI/UI polling `/status`
+  - Stats (load times) are still tracked for historical estimates
+- **headless parameter** propagated through loading chain:
+  - `load_with_indicator(headless=True)` skips Rich console output
+  - `SileroVAD._load_model(headless=True)` skips VAD progress bar
+  - `MLXWhisperEngine.load_model(headless=True)` skips STT progress bar
+  - `AudioManager.initialize(headless=True)` passed to VAD
+  - `VoxtypeEngine._init_vad_components(headless=True)` passed from Engine
+- **Architecture**: Clean separation between Engine (data/state) and UI (rendering)
+
 ## [2.91.2] - 2026-02-03
 
 ### Fixed - Actually load models in engine init

@@ -18,6 +18,8 @@ def load_with_indicator(
     model_name: str,
     load_fn: Callable[[], T],
     console: Any | None = None,
+    *,
+    headless: bool = False,
 ) -> T:
     """Load a model with progress bar or elapsed time indicator.
 
@@ -30,6 +32,7 @@ def load_with_indicator(
         model_name: Display name (e.g., 'STT model', 'VAD model').
         load_fn: Function that loads the model.
         console: Optional Rich Console instance.
+        headless: If True, skip all console output (for Engine/daemon mode).
 
     Returns:
         Result of load_fn().
@@ -41,6 +44,16 @@ def load_with_indicator(
             lambda: ModelHolder.get_model(path, mx.float16),
         )
     """
+    from voxtype.utils.stats import get_model_load_time, save_model_load_time
+
+    # Headless mode: just load and save stats, no console output
+    if headless:
+        start_time = time.time()
+        result = load_fn()
+        load_time = time.time() - start_time
+        save_model_load_time(model_id, load_time)
+        return result
+
     from rich.console import Console
     from rich.progress import (
         BarColumn,
@@ -50,8 +63,6 @@ def load_with_indicator(
         TimeElapsedColumn,
         TimeRemainingColumn,
     )
-
-    from voxtype.utils.stats import get_model_load_time, save_model_load_time
 
     if console is None:
         console = Console()

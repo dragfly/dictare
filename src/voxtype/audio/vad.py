@@ -68,11 +68,12 @@ class SileroVAD(VADEngine):
         self._c: Any = None
         self._context: Any = None
 
-    def _load_model(self, with_indicator: bool = False) -> None:
+    def _load_model(self, with_indicator: bool = False, *, headless: bool = False) -> None:
         """Load the Silero VAD model.
 
         Args:
-            with_indicator: If True, show loading progress indicator.
+            with_indicator: If True, show loading progress indicator (ignored if headless).
+            headless: If True, skip all console output (for Engine/daemon mode).
         """
         if self._model is not None:
             return
@@ -82,13 +83,15 @@ class SileroVAD(VADEngine):
 
             return get_vad_model()
 
-        if with_indicator:
+        if with_indicator or headless:
+            # Use load_with_indicator for stats tracking, but headless mode suppresses UI
             from voxtype.utils.loading import load_with_indicator
 
             self._model = load_with_indicator(
                 "silero-vad",
                 "VAD model",
                 load_vad_fn,
+                headless=headless,
             )
         else:
             from faster_whisper.vad import get_vad_model
