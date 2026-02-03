@@ -156,8 +156,8 @@ class StatusPanel:
 
         filled = int(progress * width)
         empty = width - filled
-        # Magenta for loading progress, dim for remaining
-        return "[bold magenta]" + "━" * filled + "[/][dim]" + "━" * empty + "[/]"
+        # Bright cyan for loading progress, dim for remaining
+        return "[bright_cyan]" + "━" * filled + "[/][dim]" + "━" * empty + "[/]"
 
     def _build_model_line(
         self,
