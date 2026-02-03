@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.88.0] - 2026-02-03
+
+### Simplified - Exact Match for Trigger Words
+
+- **agent_filter.py**: Removed fuzzy matching for trigger words
+  - Trigger "agent" now uses exact match only
+  - Fuzzy/phonetic matching only for agent IDs (where it's needed)
+  - Removed language-aware matching strategy (unnecessary complexity)
+  - Code is simpler and easier to understand
+- **Rationale**: "agent" is a common word Whisper recognizes reliably
+  - Fuzzy matching on triggers added complexity without real benefit
+  - Agent IDs can be arbitrary names → fuzzy matching valuable there
+
 ## [2.87.1] - 2026-02-03
 
 ### Changed - Default AgentFilter Triggers
