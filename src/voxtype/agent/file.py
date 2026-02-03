@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -62,28 +64,50 @@ class FileAgent(BaseAgent):
     def send(self, message: OpenVIPMessage) -> bool:
         """Send an OpenVIP message by appending to file.
 
+        Retries up to 3 times on failure with small delays.
+
         Args:
             message: OpenVIP message dict to send.
 
         Returns:
             True if written successfully, False otherwise.
         """
-        try:
-            # Add metadata
-            msg = dict(message)
-            msg["_written_ts"] = datetime.now(timezone.utc).isoformat()
-            msg["_written_v"] = __version__
+        # Add metadata
+        msg = dict(message)
+        msg["_written_ts"] = datetime.now(timezone.utc).isoformat()
+        msg["_written_v"] = __version__
 
-            data = json.dumps(msg, ensure_ascii=False) + "\n"
+        data = json.dumps(msg, ensure_ascii=False) + "\n"
+        data_bytes = data.encode("utf-8")
 
-            with open(self.file_path, "a") as f:
-                f.write(data)
-                f.flush()
+        # Retry up to 3 times
+        for attempt in range(3):
+            try:
+                # Use low-level I/O for reliability
+                # O_APPEND ensures atomic append even with concurrent writers
+                fd = os.open(
+                    str(self.file_path),
+                    os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                    0o644,
+                )
+                try:
+                    written = os.write(fd, data_bytes)
+                    os.fsync(fd)  # Force to disk
+                    if written == len(data_bytes):
+                        return True
+                    else:
+                        logger.warning(
+                            f"Partial write to {self._id}: {written}/{len(data_bytes)} bytes"
+                        )
+                finally:
+                    os.close(fd)
+            except OSError as e:
+                logger.warning(f"Failed to write to {self._id} (attempt {attempt + 1}): {e}")
+                if attempt < 2:
+                    time.sleep(0.1)  # Wait 100ms before retry
 
-            return True
-        except OSError as e:
-            logger.debug(f"Failed to write to {self._id}: {e}")
-            return False
+        logger.error(f"All retries failed for {self._id}")
+        return False
 
     def __repr__(self) -> str:
         return f"FileAgent(id={self._id!r}, file={self.file_path})"

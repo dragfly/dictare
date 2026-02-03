@@ -65,6 +65,7 @@ class JSONLLogger:
         self.log_path = Path(log_path)
         self.version = version
         self.level = level
+        self._params = params or {}
         self._file = None
 
         # Ensure parent directory exists
@@ -136,20 +137,25 @@ class JSONLLogger:
         duration_ms: float | None = None,
         language: str | None = None,
     ) -> None:
-        """Log a transcription event with text."""
+        """Log a transcription event.
+
+        Text is included only if verbose=True in logger params.
+        Otherwise only metadata (chars, words, duration) is logged.
+        """
         chars = len(text)
         words = len(text.split())
 
-        # Always include text for debugging
-        self._log_internal(
-            "transcription",
-            LogLevel.INFO,
-            text=text,
-            chars=chars,
-            words=words,
-            duration_ms=duration_ms,
-            language=language,
-        )
+        extra: dict = {
+            "chars": chars,
+            "words": words,
+            "duration_ms": duration_ms,
+            "language": language,
+        }
+        # Include text only in verbose mode
+        if self._params.get("verbose"):
+            extra["text"] = text
+
+        self._log_internal("transcription", LogLevel.INFO, **extra)
 
     def log_wake_word_check(
         self,
@@ -220,18 +226,23 @@ class JSONLLogger:
         submit_trigger: str | None = None,
         submit_confidence: float | None = None,
     ) -> None:
-        """Log a text injection with text."""
+        """Log a text injection.
+
+        Text is included only if verbose=True in logger params.
+        Submit trigger info is always included (useful for debugging).
+        """
         chars = len(text)
-        # Always include text for debugging
         extra: dict = {
-            "text": text,
             "chars": chars,
             "method": method,
             "success": success,
             "auto_enter": auto_enter,
             "enter_sent": enter_sent,
         }
-        # Add trigger info if submit was triggered by voice
+        # Include text only in verbose mode
+        if self._params.get("verbose"):
+            extra["text"] = text
+        # Always include trigger info (useful for debugging false positives)
         if submit_trigger:
             extra["submit_trigger"] = submit_trigger
             extra["submit_confidence"] = submit_confidence

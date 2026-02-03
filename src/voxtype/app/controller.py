@@ -133,7 +133,11 @@ class AppController:
             log_path,
             __version__,
             level=log_level,
-            params={"mode": mode, "output": self._config.output.mode},
+            params={
+                "mode": mode,
+                "output": self._config.output.mode,
+                "verbose": self._config.verbose,  # Include text in logs
+            },
         )
 
         # 2. Create engine with logger
