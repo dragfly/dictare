@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.93.2] - 2026-02-03
+
+### Fixed - StatusPanel improvements
+
+- **Loading progress**: Progress bars now animate properly (track `elapsed` time)
+- **IDLE → LISTENING**: Fix race condition, state set in `initialize_engine()`
+- **Server URL**: Panel now shows HTTP server URL for easy reference
+
 ## [2.93.1] - 2026-02-03
 
 ### Removed - core/openvip.py backwards compatibility

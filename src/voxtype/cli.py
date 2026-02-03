@@ -1201,7 +1201,7 @@ def engine_start(
             try:
                 adapter.state.mode = "foreground"
                 adapter.start()  # Start HTTP/socket servers
-                adapter.initialize_engine(headless=True)  # Load models
+                adapter.initialize_engine(headless=True, start_listening=True)
                 # Start agent discovery
                 if registrar:
                     registrar.start()

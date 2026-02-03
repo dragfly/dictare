@@ -96,9 +96,16 @@ class LoadingProgress:
     status: str = "pending"  # pending, loading, done, error
     elapsed: float = 0.0
     estimated: float = 0.0
+    start_time: float = 0.0  # When loading started (time.time())
+
+    def update_elapsed(self) -> None:
+        """Update elapsed time if currently loading."""
+        if self.status == "loading" and self.start_time > 0:
+            self.elapsed = time.time() - self.start_time
 
     def to_dict(self) -> dict:
         """Convert to dict for JSON."""
+        self.update_elapsed()
         progress = 0.0
         if self.status == "done":
             progress = 1.0
@@ -554,11 +561,14 @@ class OpenVIPAdapter:
 
         logger.info(f"OpenVIPAdapter started (PID: {os.getpid()})")
 
-    def initialize_engine(self, *, headless: bool = True) -> None:
+    def initialize_engine(
+        self, *, headless: bool = True, start_listening: bool = False
+    ) -> None:
         """Initialize the engine (load models).
 
         Args:
             headless: If True, suppress console output during loading.
+            start_listening: If True, start STT in listening mode after loading.
         """
         from voxtype.utils.stats import get_model_load_time
 
@@ -592,8 +602,10 @@ class OpenVIPAdapter:
         self.state.stt.model_name = self._config.stt.model
         self.state.stt.language = self._config.stt.language
 
-        # Start agent discovery
-        # Note: VoxtypeEngine handles agent registration internally
+        # Start listening if requested (avoids race condition with run())
+        if start_listening and self._engine:
+            self._engine._set_listening(True)
+            self.state.stt.state = "listening"
 
     def run(self, *, start_listening: bool = True) -> None:
         """Run the adapter main loop (blocking).
@@ -708,10 +720,10 @@ class OpenVIPAdapter:
             if model.name == model_name:
                 model.status = status
                 if status == "loading":
+                    model.start_time = time.time()
                     model.elapsed = 0.0
                 elif status == "done":
-                    # Calculate elapsed from start_time
-                    pass
+                    model.update_elapsed()
                 break
 
     def _sync_state_from_engine(self) -> None:
