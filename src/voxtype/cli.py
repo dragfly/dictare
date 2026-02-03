@@ -1235,13 +1235,32 @@ def engine_start(
         init_done = threading.Event()
 
         def do_init() -> None:
-            """Initialize adapter in background thread."""
+            """Initialize engine and adapter (COMMON for foreground/daemon)."""
             nonlocal init_error
             try:
+                # === COMMON INIT (same for foreground and daemon) ===
                 adapter.state.mode = "foreground"
-                adapter.start()  # Start HTTP/socket servers
-                adapter.initialize_engine(headless=True, start_listening=True)
-                # Start agent discovery
+
+                # 1. Start adapter servers (HTTP + Unix socket)
+                adapter.start()
+
+                # 2. Setup loading state for progress tracking
+                adapter.setup_loading_state()
+
+                # 3. Initialize engine (load models)
+                voxtype_engine.init_components(headless=True)
+
+                # 4. Start engine runtime (controller, audio streaming)
+                voxtype_engine.start_runtime(start_listening=True)
+
+                # 5. Mark loading complete and update state
+                adapter.mark_loading_complete()
+                adapter.update_engine_state(
+                    listening=True,
+                    hotkey_bound=voxtype_engine._hotkey is not None,
+                )
+
+                # 6. Start agent discovery
                 if registrar:
                     registrar.start()
             except Exception as e:

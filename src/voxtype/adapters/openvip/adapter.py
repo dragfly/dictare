@@ -563,18 +563,14 @@ class OpenVIPAdapter:
 
         logger.info(f"OpenVIPAdapter started (PID: {os.getpid()})")
 
-    def initialize_engine(
-        self, *, headless: bool = True, start_listening: bool = False
-    ) -> None:
-        """Initialize the engine (load models).
+    def setup_loading_state(self) -> None:
+        """Setup loading state for progress tracking.
 
-        Args:
-            headless: If True, suppress console output during loading.
-            start_listening: If True, start STT in listening mode after loading.
+        Call this before engine.init_components() to enable progress tracking
+        via the /status endpoint.
         """
         from voxtype.utils.stats import get_model_load_time
 
-        # Setup loading state
         stt_model_id = self._get_stt_model_id()
         self.state.loading = LoadingState(
             active=True,
@@ -591,12 +587,14 @@ class OpenVIPAdapter:
                 ),
             ],
         )
-
-        # Load models
+        # Mark STT as loading (first model)
         self._update_loading("stt", "loading")
-        self._engine.init_components(headless=headless)
 
-        # Update state after loading
+    def mark_loading_complete(self) -> None:
+        """Mark loading as complete and update model info.
+
+        Call this after engine.init_components() and engine.start_runtime().
+        """
         self._update_loading("stt", "done")
         self._update_loading("vad", "done")
         self.state.loading.active = False
@@ -604,14 +602,16 @@ class OpenVIPAdapter:
         self.state.stt.model_name = self._config.stt.model
         self.state.stt.language = self._config.stt.language
 
-        # Start engine runtime (controller, audio streaming, optional listening)
-        self._engine.start_runtime(start_listening=start_listening)
-        if start_listening:
-            self.state.stt.state = "listening"
+    def update_engine_state(self, *, listening: bool = False, hotkey_bound: bool = False) -> None:
+        """Update adapter state based on engine state.
 
-        # Update hotkey bound state
-        if self._engine._hotkey:
-            self.state.hotkey.bound = True
+        Args:
+            listening: Whether engine is in listening mode.
+            hotkey_bound: Whether hotkey is bound.
+        """
+        if listening:
+            self.state.stt.state = "listening"
+        self.state.hotkey.bound = hotkey_bound
 
     def run(self, *, start_listening: bool = True) -> None:
         """Run the adapter main loop (blocking).

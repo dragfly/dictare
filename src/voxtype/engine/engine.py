@@ -542,7 +542,8 @@ class Engine:
         self._update_model_loading("vad", "done")
 
         # Loading complete
-        self.state.loading.active = False
+        if self.state.loading:
+            self.state.loading.active = False
         self.state.stt.model_loaded = True
         self.state.stt.model_name = self._config.stt.model
         self.state.stt.language = self._config.stt.language
