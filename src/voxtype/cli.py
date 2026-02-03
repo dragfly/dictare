@@ -1080,7 +1080,10 @@ def engine_start(
     In daemon mode, the engine preloads models but stays IDLE until activated
     via tray click, hotkey, or API call.
     """
-    from voxtype.engine import Engine, get_pid_path
+    from voxtype.adapters.openvip import OpenVIPAdapter
+    from voxtype.adapters.openvip.adapter import get_pid_path
+    from voxtype.core.engine import create_engine
+    from voxtype.core.events import EngineEvents
 
     # Validate: require --keyboard or --agents
     if not keyboard and not agents:
@@ -1127,13 +1130,26 @@ def engine_start(
     if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
         config.hotkey.key = "KEY_RIGHTMETA"
 
-    engine = Engine(config)
+    # Create VoxtypeEngine with minimal event handler
+    class MinimalEvents(EngineEvents):
+        """Minimal event handler - adapter syncs state via polling."""
+        pass
+
+    voxtype_engine, registrar = create_engine(
+        config=config,
+        events=MinimalEvents(),
+        agent_mode=(config.output.mode == "agents"),
+        hotkey_enabled=False,  # Adapter handles this
+    )
+
+    # Create OpenVIP adapter
+    adapter = OpenVIPAdapter(voxtype_engine, config)
 
     if daemon:
-        console.print("[dim]Starting engine in daemon mode...[/]")
-        # Daemon mode: start_listening=False (wait for trigger)
-        engine.start(daemon=True)
-        # Parent process exits here, child continues
+        console.print("[dim]Starting in daemon mode...[/]")
+        # TODO: Implement daemon mode with fork
+        console.print("[red]Daemon mode not yet implemented for OpenVIPAdapter[/]")
+        raise typer.Exit(1)
     else:
         # Foreground mode: StatusPanel polls /status and shows UI
         import signal
@@ -1146,38 +1162,38 @@ def engine_start(
         init_done = threading.Event()
 
         def do_init() -> None:
-            """Initialize engine in background thread."""
+            """Initialize adapter in background thread."""
             nonlocal init_error
             try:
-                engine.state.engine.mode = "foreground"
-                engine._do_initialize(setup_signals=False)
+                adapter.state.mode = "foreground"
+                adapter.start()  # Start HTTP/socket servers
+                adapter.initialize_engine(headless=True)  # Load models
+                # Start agent discovery
+                if registrar:
+                    registrar.start()
             except Exception as e:
                 init_error = e
             finally:
                 init_done.set()
 
-        def run_engine() -> None:
-            """Run engine main loop after init completes."""
+        def run_adapter() -> None:
+            """Run adapter main loop after init completes."""
             init_done.wait()
             if init_error:
                 return
-            # Register hotkey (must be after init, in this thread is ok)
-            engine._register_hotkey()
-            engine.state.hotkey.bound = True
-            # Run main loop (handles audio/STT)
-            engine.run(start_listening=True)
+            adapter.run(start_listening=True)
 
-        # Start engine initialization
+        # Start initialization
         init_thread = threading.Thread(target=do_init, daemon=True)
         init_thread.start()
 
-        # Start engine main loop (waits for init, then processes audio)
-        engine_thread = threading.Thread(target=run_engine, daemon=True)
-        engine_thread.start()
+        # Start main loop
+        adapter_thread = threading.Thread(target=run_adapter, daemon=True)
+        adapter_thread.start()
 
         # Setup signal handlers in main thread
         def signal_handler(signum: int, frame: Any) -> None:
-            engine._shutdown_requested = True
+            adapter.request_shutdown()
 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
@@ -1191,8 +1207,7 @@ def engine_start(
             pass
         finally:
             panel.stop()
-            engine.stop()
-            engine.stop()
+            adapter.stop()
 
 @engine_app.command("stop")
 def engine_stop() -> None:
