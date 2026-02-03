@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.93.0] - 2026-02-03
+
+### Changed - OpenVIP adapter architecture
+
+- **adapters/openvip/**: New adapter package
+  - `adapter.py`: `OpenVIPAdapter` wraps VoxtypeEngine and exposes OpenVIP protocol (HTTP + Unix socket)
+  - `messages.py`: OpenVIP message creation functions (moved from core/openvip.py)
+- **core/openvip.py**: Now re-exports from adapters/openvip/messages for backwards compatibility
+- **cli.py**: `engine start` uses OpenVIPAdapter instead of direct engine wrapper
+- **Architecture**: VoxtypeEngine (pure Python) + OpenVIPAdapter (protocol translation)
+
 ## [2.92.2] - 2026-02-03
 
 ### Fixed - Agent discovery in Engine
