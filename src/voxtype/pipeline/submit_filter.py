@@ -196,10 +196,12 @@ class SubmitFilter:
             # Log trigger detection
             matched_tokens = tokens[match.start_idx : match.end_idx]
             logger.info(
-                f"SUBMIT TRIGGER: pattern={match.pattern} "
-                f"matched_tokens={matched_tokens} "
-                f"confidence={match.confidence:.2f} "
-                f"text='{text[-50:]}'"
+                "submit_trigger",
+                extra={
+                    "pattern": match.pattern,
+                    "matched_tokens": matched_tokens,
+                    "confidence": match.confidence,
+                },
             )
 
             # Remove trigger words from original text
