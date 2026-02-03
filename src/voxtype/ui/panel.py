@@ -81,13 +81,17 @@ class StatusPanel:
         self._loading_complete = False
         self._model_tasks: dict[str, Any] = {}  # For progress tracking
 
+        # Connection tracking (to detect engine shutdown)
+        self._was_connected = False
+        self._consecutive_failures = 0
+
     def _fetch_status(self) -> dict[str, Any] | None:
         """Fetch /status from engine."""
         try:
             url = f"{self._base_url}/status"
             with urllib.request.urlopen(url, timeout=2) as response:
                 return json.loads(response.read().decode())
-        except (urllib.error.URLError, json.JSONDecodeError, TimeoutError):
+        except (urllib.error.URLError, json.JSONDecodeError, TimeoutError, ConnectionResetError, OSError):
             return None
 
     def _format_state(self, state: str) -> str:
@@ -238,10 +242,12 @@ class StatusPanel:
     def run(self) -> None:
         """Run the panel (blocking).
 
-        Polls /status and updates display until stopped or error.
+        Polls /status and updates display until stopped or engine shuts down.
         """
         self._running = True
         self._stop_event.clear()
+        self._was_connected = False
+        self._consecutive_failures = 0
 
         with Live(
             Panel("[dim]Connecting...[/]", title="voxtype", border_style="yellow", width=self.PANEL_WIDTH),
@@ -254,17 +260,24 @@ class StatusPanel:
                 status = self._fetch_status()
 
                 if status is None:
-                    # Connection error
+                    self._consecutive_failures += 1
+                    # If we were connected and now failing, engine probably shut down
+                    if self._was_connected and self._consecutive_failures >= 3:
+                        # Engine shut down, exit gracefully
+                        break
+                    # Show error while waiting for connection
                     live.update(
                         Panel(
-                            "[red]Cannot connect to engine[/]\n"
+                            "[dim]Connecting to engine...[/]\n"
                             f"[dim]URL: {self._base_url}/status[/]",
-                            title="voxtype - Error",
-                            border_style="red",
+                            title="voxtype",
+                            border_style="yellow",
                             width=self.PANEL_WIDTH,
                         )
                     )
                 else:
+                    self._was_connected = True
+                    self._consecutive_failures = 0
                     self._status = status
 
                     # Choose display based on loading state
