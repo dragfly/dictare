@@ -271,18 +271,11 @@ def _write_to_pty(
 
     This is the ONLY thread that writes to master_fd, ensuring serialization.
     Logs every message sent for debugging.
-
-    Text from voice input is written character-by-character with a small delay
-    to avoid overwhelming interactive terminals like Claude Code.
     """
     # Alt+Enter for visual newline (ESC + CR)
     alt_enter = b"\x1b\r"
     enter_key = b"\r"
     msg_count = 0
-
-    # Delay between characters for voice input (seconds)
-    # 0.003 = 3ms = ~333 chars/sec, fast but digestible for interactive terminals
-    char_delay = 0.003
 
     while not stop_event.is_set():
         try:
@@ -295,11 +288,11 @@ def _write_to_pty(
 
         try:
             if msg_type == "raw":
-                # Raw bytes from stdin - write directly, no delay (user typing)
+                # Raw bytes from stdin - write directly, handle short writes
                 _write_all(master_fd, data)
             elif msg_type == "msg":
                 msg_count += 1
-                # Parsed JSONL message from voice input
+                # Parsed JSONL message from file
                 text = data.get("text", "")
                 bytes_written = 0
 
@@ -309,20 +302,17 @@ def _write_to_pty(
                         text = text.rstrip("\n")
 
                     if text:
-                        # Write character by character with delay
                         text_bytes = text.encode()
-                        for byte in text_bytes:
-                            os.write(master_fd, bytes([byte]))
-                            bytes_written += 1
-                            time.sleep(char_delay)
-                        # Drain to ensure all bytes reach slave side
+                        bytes_written += _write_all(master_fd, text_bytes)
+                        # Drain to ensure bytes reach slave side
                         termios.tcdrain(master_fd)
+                        time.sleep(0.1)  # 100ms delay for Claude Code to process
 
                     # Send Alt+Enter for visual newline
                     if has_visual_newline:
                         bytes_written += _write_all(master_fd, alt_enter)
                         termios.tcdrain(master_fd)
-                        time.sleep(0.05)  # 50ms delay after newline
+                        time.sleep(0.1)  # 100ms delay
 
                 # Handle submit flag
                 if data.get("submit"):
