@@ -8,6 +8,7 @@ import time
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
+from voxtype.adapters.openvip.messages import create_message
 from voxtype.agent.base import Agent
 from voxtype.core.audio_manager import AudioManager
 from voxtype.core.controller import StateController
@@ -23,7 +24,6 @@ from voxtype.core.events import (
     TranscriptionCompleteEvent,
     TranscriptionResult,
 )
-from voxtype.core.openvip import create_message
 from voxtype.core.state import AppState, StateManager
 from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener

@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any
 
 from voxtype import __version__
-from voxtype.core.openvip import StatusValue, create_partial, create_status
+from voxtype.adapters.openvip.messages import StatusValue, create_partial, create_status
 
 if TYPE_CHECKING:
     from voxtype.core.state import AppState
