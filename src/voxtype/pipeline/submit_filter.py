@@ -4,6 +4,10 @@ Detects trigger words at the end of text that indicate the user
 wants to submit/send the message. When detected, the trigger words
 are removed and x_submit is set to true.
 
+Trigger words are organized by language. The filter checks triggers for:
+1. The detected language of the message (from Whisper)
+2. English (always, as a lingua franca)
+
 Examples:
     "ho un bug nel parser ok invia" -> "ho un bug nel parser" + x_submit=true
     "fammi vedere il codice submit" -> "fammi vedere il codice" + x_submit=true
@@ -17,30 +21,51 @@ from dataclasses import dataclass, field
 
 from voxtype.pipeline.base import FilterResult
 
-# Default trigger word patterns
-# Each item is a list of words that must appear consecutively (or close together)
+# Default trigger word patterns organized by language
+# Each language has a list of patterns (each pattern is a list of words)
 # Order matters: longer/more specific patterns should come first
-DEFAULT_SUBMIT_TRIGGERS: list[list[str]] = [
-    # Italian - multi-word (higher priority)
-    ["ok", "invia"],
-    ["ok", "manda"],
-    ["ok", "fatto"],
-    ["va", "bene", "invia"],
-    # Italian - single word
-    ["invia"],
-    ["manda"],
-    ["fatto"],
-    # English - multi-word
-    ["ok", "send"],
-    ["ok", "submit"],
-    ["go", "ahead"],
-    # English - single word
-    ["submit"],
-    ["send"],
-    # Common
-    ["adesso"],  # "invia adesso", "manda adesso"
-    ["go"],
-]
+DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {
+    "it": [
+        # Multi-word (higher priority)
+        ["ok", "invia"],
+        ["ok", "manda"],
+        ["ok", "fatto"],
+        ["va", "bene", "invia"],
+        # Single word
+        ["invia"],
+        ["manda"],
+        ["fatto"],
+        ["adesso"],  # "invia adesso", "manda adesso"
+    ],
+    "en": [
+        # Multi-word (higher priority)
+        ["ok", "send"],
+        ["ok", "submit"],
+        ["go", "ahead"],
+        # Single word
+        ["submit"],
+        ["send"],
+        ["go"],
+    ],
+    "es": [
+        ["ok", "enviar"],
+        ["enviar"],
+        ["envía"],
+        ["listo"],
+    ],
+    "de": [
+        ["ok", "senden"],
+        ["senden"],
+        ["abschicken"],
+        ["fertig"],
+    ],
+    "fr": [
+        ["ok", "envoyer"],
+        ["envoyer"],
+        ["envoie"],
+        ["terminé"],
+    ],
+}
 
 def _normalize(text: str) -> str:
     """Normalize text for comparison.
@@ -78,14 +103,20 @@ class SubmitFilter:
     When a trigger is detected with sufficient confidence, the trigger words
     are removed from the text and x_submit is set to true.
 
+    Triggers are organized by language code. The filter checks:
+    1. Triggers for the message's detected language
+    2. English triggers (always, as lingua franca)
+
     Attributes:
-        triggers: List of trigger patterns (each pattern is a list of words).
+        triggers: Dict mapping language codes to trigger patterns.
         confidence_threshold: Minimum confidence to trigger submit (0.0-1.0).
         max_scan_words: Maximum words from end to scan for triggers.
         decay_rate: How fast confidence decays with position (0.95 = 5% per word).
     """
 
-    triggers: list[list[str]] = field(default_factory=lambda: DEFAULT_SUBMIT_TRIGGERS)
+    triggers: dict[str, list[list[str]]] = field(
+        default_factory=lambda: DEFAULT_SUBMIT_TRIGGERS
+    )
     confidence_threshold: float = 0.85
     max_scan_words: int = 15
     decay_rate: float = 0.95
@@ -94,11 +125,45 @@ class SubmitFilter:
     def name(self) -> str:
         return "submit_filter"
 
+    def _get_triggers_for_message(self, message: dict) -> list[list[str]]:
+        """Get combined trigger patterns for a message based on its language.
+
+        Returns triggers for the message's language plus English (always).
+        Language-specific triggers come first (higher priority).
+
+        Args:
+            message: OpenVIP message with optional 'language' field.
+
+        Returns:
+            Combined list of trigger patterns.
+        """
+        # Get message language, default to English
+        lang = message.get("language", "en")
+
+        # Normalize language code (e.g., "en-US" -> "en")
+        if lang and "-" in lang:
+            lang = lang.split("-")[0]
+        lang = lang.lower() if lang else "en"
+
+        combined: list[list[str]] = []
+
+        # Add language-specific triggers first (higher priority)
+        if lang in self.triggers:
+            combined.extend(self.triggers[lang])
+
+        # Always add English triggers (lingua franca)
+        if lang != "en" and "en" in self.triggers:
+            combined.extend(self.triggers["en"])
+
+        return combined
+
     def process(self, message: dict) -> FilterResult:
         """Process message, detecting submit triggers.
 
+        Checks triggers for the message's detected language plus English.
+
         Args:
-            message: OpenVIP message dict with 'text' field.
+            message: OpenVIP message dict with 'text' field and optional 'language'.
 
         Returns:
             FilterResult with potentially modified message.
@@ -116,8 +181,13 @@ class SubmitFilter:
         if not tokens:
             return FilterResult.passed(message)
 
+        # Get triggers for this message's language
+        active_triggers = self._get_triggers_for_message(message)
+        if not active_triggers:
+            return FilterResult.passed(message)
+
         # Find best trigger match
-        match = self._find_best_match(tokens)
+        match = self._find_best_match(tokens, active_triggers)
 
         if match and match.confidence >= self.confidence_threshold:
             # Remove trigger words from original text
@@ -135,7 +205,9 @@ class SubmitFilter:
 
         return FilterResult.passed(message)
 
-    def _find_best_match(self, tokens: list[str]) -> TriggerMatch | None:
+    def _find_best_match(
+        self, tokens: list[str], triggers: list[list[str]]
+    ) -> TriggerMatch | None:
         """Find the best trigger match in tokens.
 
         Scans from the end of the token list, looking for trigger patterns.
@@ -143,11 +215,12 @@ class SubmitFilter:
 
         Args:
             tokens: Normalized tokens from text.
+            triggers: List of trigger patterns to check.
 
         Returns:
             Best TriggerMatch or None if no match found.
         """
-        if not tokens:
+        if not tokens or not triggers:
             return None
 
         # Only scan last N tokens
@@ -156,7 +229,7 @@ class SubmitFilter:
 
         best_match: TriggerMatch | None = None
 
-        for pattern in self.triggers:
+        for pattern in triggers:
             match = self._match_pattern(scan_tokens, pattern, offset)
             if match:
                 if best_match is None or match.confidence > best_match.confidence:
