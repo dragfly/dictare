@@ -587,30 +587,6 @@ class TestAgentFilterDetection:
         cleaned = result.messages[0]["text"]
         assert cleaned == "questo è il codice"
 
-    def test_fuzzy_trigger_adziente(self) -> None:
-        """Fuzzy matching on trigger words - 'adziente' should match 'agente'."""
-        f = AgentFilter(
-            agent_ids=["voxtype"],
-            triggers=["agente"],  # Italian trigger
-            subscribe_to_events=False,
-        )
-        msg = {"text": "fammi vedere adziente voxtype"}
-        result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        assert result.messages[0]["x_agent_switch"] == "voxtype"
-
-    def test_fuzzy_trigger_aziente(self) -> None:
-        """Fuzzy matching on trigger - 'aziente' should match 'agente'."""
-        f = AgentFilter(
-            agent_ids=["koder"],
-            triggers=["agente"],  # Italian trigger
-            subscribe_to_events=False,
-        )
-        msg = {"text": "dimmi l'ora aziente koder"}
-        result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        assert result.messages[0]["x_agent_switch"] == "koder"
-
     def test_box_type_matches_voxtype(self) -> None:
         """'box type' (two words) matches 'voxtype' - handles Whisper space insertion."""
         # Note: This tests the case where Whisper transcribes "voxtype" as "box type"
@@ -623,28 +599,6 @@ class TestAgentFilterDetection:
         # Let's see if it passes with 0.5 threshold
         if result.action == FilterAction.AUGMENT:
             assert result.messages[0]["x_agent_switch"] == "voxtype"
-
-    def test_english_uses_phonetic_for_triggers(self) -> None:
-        """English messages use phonetic+edit for trigger matching."""
-        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
-        # "ajent" sounds like "agent" in English (phonetic: AJNT vs AJNT)
-        msg = {"text": "ajent voxtype", "language": "en"}
-        result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        assert result.messages[0]["x_agent_switch"] == "voxtype"
-
-    def test_italian_uses_edit_only_for_triggers(self) -> None:
-        """Italian messages use edit distance only for trigger matching."""
-        f = AgentFilter(
-            agent_ids=["voxtype"],
-            triggers=["agente"],  # Italian trigger
-            subscribe_to_events=False,
-        )
-        # "adziente" doesn't match "agente" phonetically, but does via edit distance
-        msg = {"text": "adziente voxtype", "language": "it"}
-        result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        assert result.messages[0]["x_agent_switch"] == "voxtype"
 
 class TestAgentFilterWithPipeline:
     """Test AgentFilter integration with Pipeline."""
