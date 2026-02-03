@@ -1135,13 +1135,94 @@ def engine_start(
         engine.start(daemon=True)
         # Parent process exits here, child continues
     else:
-        console.print("[dim]Starting engine in foreground...[/]")
+        # Foreground mode: use initialize() + polling + run()
+        console.print("[dim]Starting engine...[/]")
         console.print(f"[dim]Output mode: {config.output.mode}[/]")
+        console.print(f"[dim]HTTP server: http://{config.server.host}:{config.server.port}[/]")
+
+        # Initialize engine (starts HTTP server, loads models)
+        # Models load in main thread, but HTTP server responds in separate threads
+        import json
+        import threading
+        import urllib.error
+        import urllib.request
+
+        # Start initialization in a thread so we can poll status
+        init_error: Exception | None = None
+        init_done = threading.Event()
+
+        def do_init() -> None:
+            nonlocal init_error
+            try:
+                engine.state.engine.mode = "foreground"
+                engine._do_initialize()
+            except Exception as e:
+                init_error = e
+            finally:
+                init_done.set()
+
+        init_thread = threading.Thread(target=do_init, daemon=True)
+        init_thread.start()
+
+        # Wait a bit for HTTP server to start
+        import time
+        time.sleep(0.3)
+
+        # Poll /status and show progress
+        status_url = f"http://{config.server.host}:{config.server.port}/status"
+        last_progress: dict[str, float] = {}
+
+        while not init_done.is_set():
+            try:
+                with urllib.request.urlopen(status_url, timeout=1) as response:
+                    status = json.loads(response.read().decode())
+
+                loading = status.get("loading")
+                if loading and loading.get("active"):
+                    for model in loading.get("models", []):
+                        name = model.get("name", "")
+                        model_status = model.get("status", "")
+                        progress = model.get("progress", 0)
+                        elapsed = model.get("elapsed", 0)
+                        estimated = model.get("estimated", 0)
+
+                        # Only print when status changes or progress updates significantly
+                        prev_progress = last_progress.get(name, -1)
+                        if model_status == "loading" and progress - prev_progress >= 0.05:
+                            pct = int(progress * 100)
+                            eta = max(0, estimated - elapsed)
+                            console.print(
+                                f"[dim]Loading {name}... {pct}% "
+                                f"({elapsed:.1f}s / ~{estimated:.0f}s, ETA: {eta:.0f}s)[/]"
+                            )
+                            last_progress[name] = progress
+                        elif model_status == "done" and prev_progress < 1.0:
+                            console.print(
+                                f"[green]✓[/] {name} loaded in {elapsed:.1f}s"
+                            )
+                            last_progress[name] = 1.0
+
+            except (urllib.error.URLError, json.JSONDecodeError):
+                pass  # Server not ready yet or parsing error
+
+            time.sleep(0.5)
+
+        # Check for initialization error
+        if init_error:
+            console.print(f"[red]Engine initialization failed: {init_error}[/]")
+            raise typer.Exit(1)
+
+        # Initialization complete
         console.print(f"[dim]Hotkey: {config.hotkey.key}[/]")
         console.print("[dim]Press Ctrl+C to stop[/]")
+
+        # Register hotkey (foreground only)
+        engine._register_hotkey()
+        engine.state.hotkey.bound = True
+
         try:
-            # Foreground mode: start_listening=True (ready immediately)
-            engine.start(daemon=False)
+            # Run main loop (listening immediately in foreground)
+            engine.run(start_listening=True)
         except KeyboardInterrupt:
             console.print("\n[yellow]Shutting down...[/]")
             engine.stop()
