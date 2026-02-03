@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.92.0] - 2026-02-03
+
+### Added - StatusPanel with HTTP polling (Phase 5)
+
+- **ui/panel.py**: New `StatusPanel` class that polls `/status`
+  - During loading: shows progress bars for each model (stt, vad)
+  - After loading: shows normal status panel (state, last text, agents)
+  - Same visual style as `LiveStatusPanel`
+  - Poll interval: 300ms
+- **cli.py**: `engine start` now uses `StatusPanel`
+  - Engine init runs in background thread
+  - Engine main loop runs in background thread
+  - StatusPanel runs in main thread (handles Ctrl+C)
+  - Clean shutdown on interrupt
+
 ## [2.91.6] - 2026-02-03
 
 ### Changed - Remove progress bars from engine start (defer to Panel)
