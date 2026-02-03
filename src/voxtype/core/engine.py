@@ -390,8 +390,11 @@ class VoxtypeEngine:
     # Initialization
     # -------------------------------------------------------------------------
 
-    def _init_vad_components(self, *, headless: bool = False) -> None:
-        """Initialize components for VAD mode.
+    def init_components(self, *, headless: bool = False) -> None:
+        """Initialize engine components (STT, VAD, audio, hotkey).
+
+        Call this before start_runtime(). This loads models and creates
+        the audio manager, but does not start listening.
 
         Args:
             headless: If True, skip all console output (for Engine/daemon mode).
@@ -958,15 +961,16 @@ class VoxtypeEngine:
     # Lifecycle
     # -------------------------------------------------------------------------
 
-    def start(self, *, start_listening: bool = True) -> None:
-        """Start the engine main loop.
+    def start_runtime(self, *, start_listening: bool = False) -> None:
+        """Start engine runtime components.
+
+        Call this after init_components(). Starts the controller, audio streaming,
+        and optionally transitions to LISTENING state.
 
         Args:
-            start_listening: If True, immediately transition to LISTENING state.
-                           If False, stay in OFF state (daemon mode - wait for hotkey/API).
+            start_listening: If True, transition to LISTENING state.
+                           If False (default), stay in OFF state (privacy-aware).
         """
-        self._init_vad_components()
-
         self._running = True
         self._stats_start_time = time.time()
 
@@ -977,32 +981,37 @@ class VoxtypeEngine:
         # Start the state controller (event queue processor)
         self._controller.start()
 
+        # Start hotkey listener (tap detector handles single/double tap)
+        if self._hotkey:
+            self._hotkey.start(
+                on_press=self._tap_detector.on_key_down,
+                on_release=self._tap_detector.on_key_up,
+                on_other_key=self._tap_detector.on_other_key,
+            )
+
+        # Start audio streaming (always needed for VAD to work)
+        if self._audio_manager:
+            self._audio_manager.start_streaming(
+                should_process=lambda: self._state_manager.should_process_audio,
+                is_running=lambda: self._running,
+            )
+
+        # Engine is now ready (STT, VAD, hotkey all initialized)
+        self._emit("on_engine_ready")
+
+        # Transition to initial state
+        if start_listening:
+            old_state = self.state
+            self._state_manager.transition(AppState.LISTENING)
+            self._emit("on_state_change", old_state, AppState.LISTENING, "start")
+
+    def run(self) -> None:
+        """Run the engine main loop (blocking).
+
+        Call start_runtime() first. This keeps the main thread alive and
+        handles audio device reconnection.
+        """
         try:
-            # Start hotkey listener (tap detector handles single/double tap)
-            if self._hotkey:
-                self._hotkey.start(
-                    on_press=self._tap_detector.on_key_down,
-                    on_release=self._tap_detector.on_key_up,
-                    on_other_key=self._tap_detector.on_other_key,
-                )
-
-            # Start audio streaming (always needed for VAD to work)
-            if self._audio_manager:
-                self._audio_manager.start_streaming(
-                    should_process=lambda: self._state_manager.should_process_audio,
-                    is_running=lambda: self._running,
-                )
-
-            # Engine is now ready (STT, VAD, hotkey all initialized)
-            self._emit("on_engine_ready")
-
-            # Transition to initial state
-            if start_listening:
-                old_state = self.state
-                self._state_manager.transition(AppState.LISTENING)
-                self._emit("on_state_change", old_state, AppState.LISTENING, "start")
-
-            # Keep main thread alive
             while self._running:
                 time.sleep(0.1)
                 if self._audio_manager and self._audio_manager.needs_reconnect():
@@ -1010,6 +1019,21 @@ class VoxtypeEngine:
                         break
         except KeyboardInterrupt:
             pass
+
+    def start(self, *, start_listening: bool = True) -> None:
+        """Initialize and start the engine (convenience method).
+
+        This is equivalent to:
+            engine.init_components()
+            engine.start_runtime(start_listening=start_listening)
+            engine.run()
+
+        Args:
+            start_listening: If True, immediately transition to LISTENING state.
+        """
+        self.init_components()
+        self.start_runtime(start_listening=start_listening)
+        self.run()
 
     def stop(self) -> None:
         """Stop the engine."""
