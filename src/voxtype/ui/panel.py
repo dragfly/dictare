@@ -1,8 +1,8 @@
 """Status panel with HTTP polling for Engine architecture.
 
 Polls /status endpoint and renders a Rich panel with:
-- Progress bars during model loading
-- Status panel when ready (listening/recording/etc.)
+- Model loading progress (always visible at top)
+- Status info when ready (listening/recording/etc.)
 """
 
 from __future__ import annotations
@@ -17,19 +17,18 @@ from typing import TYPE_CHECKING, Any
 
 from rich.live import Live
 from rich.panel import Panel
-from rich.table import Table
 
 from voxtype import __version__
 
 if TYPE_CHECKING:
-    from rich.console import Console, RenderableType
+    from rich.console import Console
 
 class StatusPanel:
     """Status panel that polls /status endpoint.
 
-    Displays:
-    - Progress bars during model loading phase
-    - Status panel when engine is ready
+    Displays a unified panel with:
+    - Model loading progress at the top (STT, VAD, TTS)
+    - Status info below when loading is complete
 
     Usage:
         panel = StatusPanel(console, "http://127.0.0.1:8765")
@@ -38,6 +37,9 @@ class StatusPanel:
 
     # Fixed panel width (content width, excluding borders)
     PANEL_WIDTH = 72
+
+    # Progress bar width (characters)
+    PROGRESS_BAR_WIDTH = 25
 
     # Max chars for "Last:" text
     LAST_TEXT_MAX_CHARS = 55
@@ -75,11 +77,6 @@ class StatusPanel:
         # Cached status data
         self._status: dict[str, Any] = {}
         self._last_text = ""
-        self._last_error: str | None = None
-
-        # Loading state tracking
-        self._loading_complete = False
-        self._model_tasks: dict[str, Any] = {}  # For progress tracking
 
         # Connection tracking (to detect engine shutdown)
         self._was_connected = False
@@ -142,33 +139,154 @@ class StatusPanel:
             return f'"{self._last_text[:self.LAST_TEXT_MAX_CHARS]}..."'
         return f'"{self._last_text}"'
 
+    def _build_progress_bar(self, progress: float, done: bool = False) -> str:
+        """Build a progress bar string.
+
+        Args:
+            progress: Progress from 0.0 to 1.0
+            done: If True, show completed bar in green
+
+        Returns:
+            Styled progress bar string
+        """
+        width = self.PROGRESS_BAR_WIDTH
+        if done:
+            return "[green]" + "━" * width + "[/]"
+
+        filled = int(progress * width)
+        empty = width - filled
+        # Magenta for loading progress, dim for remaining
+        return "[bold magenta]" + "━" * filled + "[/][dim]" + "━" * empty + "[/]"
+
+    def _build_model_line(
+        self,
+        label: str,
+        model_name: str,
+        device: str | None,
+        status: str,
+        elapsed: float,
+        estimated: float,
+    ) -> str:
+        """Build a single model status line.
+
+        Args:
+            label: Model label (STT, VAD, TTS)
+            model_name: Model name or "(disabled)"
+            device: Device string (e.g., "MLX") or None
+            status: Loading status (pending, loading, done)
+            elapsed: Elapsed time in seconds
+            estimated: Estimated total time in seconds
+
+        Returns:
+            Formatted line string
+        """
+        # Format label and model name
+        if model_name == "(disabled)":
+            name_part = f"[dim]{label}: (disabled)[/]"
+            return name_part
+
+        device_str = f" on [bold green]{device}[/]" if device else ""
+        name_part = f"[cyan]{label}:[/] {model_name}{device_str}"
+
+        # Pad name to fixed width for alignment
+        # We need to account for markup when calculating visible length
+        visible_name = f"{label}: {model_name}" + (f" on {device}" if device else "")
+        name_width = 28
+        padding = " " * max(0, name_width - len(visible_name))
+
+        if status == "done":
+            bar = self._build_progress_bar(1.0, done=True)
+            time_str = f"[green]✓ {elapsed:.1f}s[/]"
+        elif status == "loading":
+            progress = min(elapsed / estimated, 0.99) if estimated > 0 else 0
+            bar = self._build_progress_bar(progress)
+            eta = max(0, estimated - elapsed)
+            time_str = f"[dim]ETA {eta:.0f}s[/]"
+        else:  # pending
+            bar = self._build_progress_bar(0.0)
+            time_str = "[dim]waiting[/]"
+
+        return f"{name_part}{padding}  {bar}  {time_str}"
+
+    def _is_loading(self) -> bool:
+        """Check if engine is still loading."""
+        loading = self._status.get("loading", {})
+        return loading.get("active", False)
+
     def _build_panel(self) -> Panel:
-        """Build the status panel from cached data."""
+        """Build the unified status panel."""
         stt = self._status.get("stt", {})
         output = self._status.get("output", {})
         hotkey = self._status.get("hotkey", {})
         engine = self._status.get("engine", {})
+        loading = self._status.get("loading", {})
+        models = loading.get("models", [])
 
-        # STT info
-        model = stt.get("model_name", "unknown")
-        language = stt.get("language", "auto")
-        state = stt.get("state", "idle")
+        # Get model info
+        stt_model = stt.get("model_name", "unknown")
+        stt_state = stt.get("state", "idle")
 
-        # Format device (simplified - could be enhanced)
-        device_str = "[bold green]MLX[/]" if sys.platform == "darwin" else "[dim]CPU[/]"
+        # Device detection (could be enhanced with actual hardware info)
+        device = "MLX" if sys.platform == "darwin" else "CPU"
 
-        content = (
-            f"Mode: [cyan]transcription[/]\n"
-            f"STT: [cyan]{model}[/] on {device_str}\n"
-            f"Language: [cyan]{language}[/]\n"
-            f"Output: {self._format_output(output)}\n"
-            f"Hotkey: {self._format_hotkey(hotkey)}\n"
-            f"Server: [dim]{self._base_url}[/]\n"
-            f"\n"
-            f"Status: {self._format_state(state)}\n"
-            f"Last: {self._format_last_text()}"
-        )
+        # Build model status lines
+        lines = []
 
+        # Find model loading info
+        stt_loading = next((m for m in models if m.get("name") == "stt"), None)
+        vad_loading = next((m for m in models if m.get("name") == "vad"), None)
+
+        # STT line
+        if stt_loading:
+            lines.append(self._build_model_line(
+                "STT",
+                stt_model,
+                device,
+                stt_loading.get("status", "done"),
+                stt_loading.get("elapsed", 0),
+                stt_loading.get("estimated", 20),
+            ))
+        else:
+            # No loading info, assume loaded
+            lines.append(self._build_model_line("STT", stt_model, device, "done", 0, 0))
+
+        # VAD line
+        if vad_loading:
+            lines.append(self._build_model_line(
+                "VAD",
+                "silero-vad",
+                None,
+                vad_loading.get("status", "done"),
+                vad_loading.get("elapsed", 0),
+                vad_loading.get("estimated", 5),
+            ))
+        else:
+            lines.append(self._build_model_line("VAD", "silero-vad", None, "done", 0, 0))
+
+        # TTS line (placeholder - disabled for now)
+        lines.append("[dim]TTS: (disabled)[/]")
+
+        # If loading, show minimal panel
+        if self._is_loading():
+            content = "\n".join(lines)
+            version = engine.get("version", __version__)
+            return Panel(
+                content,
+                title=f"voxtype v{version} - Loading",
+                border_style="yellow",
+                width=self.PANEL_WIDTH,
+            )
+
+        # Full panel with status info
+        lines.append("")  # Blank line separator
+        lines.append(f"Output: {self._format_output(output)}")
+        lines.append(f"Hotkey: {self._format_hotkey(hotkey)}")
+        lines.append(f"Server: [dim]{self._base_url}[/]")
+        lines.append("")  # Blank line separator
+        lines.append(f"Status: {self._format_state(stt_state)}")
+        lines.append(f"Last: {self._format_last_text()}")
+
+        content = "\n".join(lines)
         version = engine.get("version", __version__)
         return Panel(
             content,
@@ -176,69 +294,6 @@ class StatusPanel:
             border_style="green",
             width=self.PANEL_WIDTH,
         )
-
-    def _build_loading_display(self) -> RenderableType:
-        """Build loading display with progress bars."""
-        loading = self._status.get("loading", {})
-        models = loading.get("models", [])
-
-        if not models:
-            return Panel(
-                "[dim]Initializing...[/]",
-                title=f"voxtype v{__version__}",
-                border_style="yellow",
-                width=self.PANEL_WIDTH,
-            )
-
-        # Build a table with progress info
-        table = Table.grid(padding=(0, 1))
-        table.add_column(style="bold blue", width=20)
-        table.add_column(width=40)
-        table.add_column(style="dim", width=10)
-
-        for model in models:
-            name = model.get("name", "")
-            status = model.get("status", "pending")
-            elapsed = model.get("elapsed", 0)
-            estimated = model.get("estimated", 30)
-
-            if status == "done":
-                # Completed
-                table.add_row(
-                    f"[green]\u2713[/] {name}",
-                    "[green]" + "\u2501" * 30 + "[/]",
-                    f"[green]{elapsed:.1f}s[/]",
-                )
-            elif status == "loading":
-                # In progress - show bar
-                progress = min(elapsed / estimated, 0.99) if estimated > 0 else 0
-                filled = int(progress * 30)
-                bar = "[cyan]" + "\u2501" * filled + "[/]" + "[dim]" + "\u2501" * (30 - filled) + "[/]"
-                eta = max(0, estimated - elapsed)
-                table.add_row(
-                    f"[cyan]\u25cf[/] {name}",
-                    bar,
-                    f"[dim]ETA {eta:.0f}s[/]",
-                )
-            else:
-                # Pending
-                table.add_row(
-                    f"[dim]\u25cb[/] {name}",
-                    "[dim]" + "\u2501" * 30 + "[/]",
-                    "[dim]waiting[/]",
-                )
-
-        return Panel(
-            table,
-            title=f"voxtype v{__version__} - Loading",
-            border_style="yellow",
-            width=self.PANEL_WIDTH,
-        )
-
-    def _is_loading(self) -> bool:
-        """Check if engine is still loading."""
-        loading = self._status.get("loading", {})
-        return loading.get("active", False)
 
     def run(self) -> None:
         """Run the panel (blocking).
@@ -280,11 +335,8 @@ class StatusPanel:
                     self._consecutive_failures = 0
                     self._status = status
 
-                    # Choose display based on loading state
-                    if self._is_loading():
-                        live.update(self._build_loading_display())
-                    else:
-                        live.update(self._build_panel())
+                    # Build unified panel (handles both loading and ready states)
+                    live.update(self._build_panel())
 
                 time.sleep(self._poll_interval)
 

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.94.0] - 2026-02-03
+
+### Changed - Unified StatusPanel design
+
+- Models (STT, VAD, TTS) always visible at top of panel
+- Progress bars show loading progress with magenta color
+- After loading: model lines show ✓ and load time
+- Status info appears below models when ready
+- Proper VAD loading tracking via `on_vad_loading` event
+- Cleaner visual hierarchy
+
 ## [2.93.3] - 2026-02-03
 
 ### Fixed - Clean exit on Ctrl+C
