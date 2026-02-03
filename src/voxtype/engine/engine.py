@@ -710,7 +710,7 @@ class Engine:
 
     def _emit_status(self, service: str, state: str) -> None:
         """Emit status change event."""
-        from voxtype.core.openvip import create_status
+        from voxtype.adapters.openvip.messages import create_status
 
         # Map to OpenVIP status values
         status_map = {
@@ -728,7 +728,7 @@ class Engine:
 
     def _emit_partial(self, text: str) -> None:
         """Emit partial transcription event."""
-        from voxtype.core.openvip import create_partial
+        from voxtype.adapters.openvip.messages import create_partial
 
         event = create_partial(text)
         self._broadcast_event(event)
