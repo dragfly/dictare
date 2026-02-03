@@ -1216,6 +1216,40 @@ def engine_start(
         model_tasks: dict[str, int] = {}  # model_name -> task_id
         completed_models: set[str] = set()
 
+        def update_progress_from_status(progress: Progress, status: dict) -> None:
+            """Update progress bars from /status response."""
+            loading = status.get("loading")
+            if not loading:
+                return
+
+            for model in loading.get("models", []):
+                name = model.get("name", "")
+                model_status = model.get("status", "")
+                elapsed = model.get("elapsed", 0)
+                estimated = model.get("estimated", 0)
+
+                # Create task if not exists
+                if name and name not in model_tasks:
+                    task_id = progress.add_task(
+                        f"Loading {name}...",
+                        total=estimated if estimated > 0 else 30.0,
+                    )
+                    model_tasks[name] = task_id
+
+                if name in model_tasks:
+                    task_id = model_tasks[name]
+                    if model_status == "loading":
+                        # Update progress based on elapsed time
+                        progress.update(task_id, completed=elapsed)
+                    elif model_status == "done" and name not in completed_models:
+                        # Mark complete
+                        progress.update(
+                            task_id,
+                            completed=estimated if estimated > 0 else elapsed,
+                            description=f"[green]✓[/] {name} loaded ({elapsed:.1f}s)",
+                        )
+                        completed_models.add(name)
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[bold blue]{task.description}"),
@@ -1229,41 +1263,19 @@ def engine_start(
                 try:
                     with urllib.request.urlopen(status_url, timeout=1) as response:
                         status = json.loads(response.read().decode())
-
-                    loading = status.get("loading")
-                    if loading and loading.get("active"):
-                        for model in loading.get("models", []):
-                            name = model.get("name", "")
-                            model_status = model.get("status", "")
-                            elapsed = model.get("elapsed", 0)
-                            estimated = model.get("estimated", 0)
-
-                            # Create task if not exists
-                            if name and name not in model_tasks:
-                                task_id = progress.add_task(
-                                    f"Loading {name}...",
-                                    total=estimated if estimated > 0 else 30.0,
-                                )
-                                model_tasks[name] = task_id
-
-                            if name in model_tasks:
-                                task_id = model_tasks[name]
-                                if model_status == "loading":
-                                    # Update progress based on elapsed time
-                                    progress.update(task_id, completed=elapsed)
-                                elif model_status == "done" and name not in completed_models:
-                                    # Mark complete
-                                    progress.update(
-                                        task_id,
-                                        completed=estimated if estimated > 0 else elapsed,
-                                        description=f"[green]✓[/] {name} loaded ({elapsed:.1f}s)",
-                                    )
-                                    completed_models.add(name)
-
+                    update_progress_from_status(progress, status)
                 except (urllib.error.URLError, json.JSONDecodeError):
                     pass  # Server not ready yet or parsing error
 
                 time.sleep(0.2)
+
+            # Final poll to catch any models that finished during the last iteration
+            try:
+                with urllib.request.urlopen(status_url, timeout=1) as response:
+                    status = json.loads(response.read().decode())
+                update_progress_from_status(progress, status)
+            except (urllib.error.URLError, json.JSONDecodeError):
+                pass
 
         # Check for initialization error
         if init_error:
