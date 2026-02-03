@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.91.0] - 2026-02-03
+
+### Added - Polling-based loading progress in CLI
+
+- **cli.py**: `engine start` now polls `/status` during model loading
+  - Shows real-time progress: `Loading stt... 63% (17.0s / ~27s, ETA: 10s)`
+  - Shows completion: `✓ stt loaded in 21.1s`
+  - Runs initialization in thread, polls HTTP endpoint
+- **Testing**: Can verify `/status` returns correct loading progress
+
 ## [2.90.0] - 2026-02-03
 
 ### Changed - Engine Architecture: Separate initialize/run
