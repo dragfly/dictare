@@ -67,11 +67,12 @@ class STTService(BaseService):
         # MLX on macOS or faster-whisper on Linux - both are always available to try
         return True
 
-    def _ensure_engine(self, model_size: str | None = None) -> STTEngine:
+    def _ensure_engine(self, model_size: str | None = None, *, headless: bool = False) -> STTEngine:
         """Ensure local STT engine is loaded.
 
         Args:
             model_size: Model size to load. If None, uses config.stt.model.
+            headless: If True, skip all console output (for Engine/daemon mode).
 
         Returns:
             Loaded STT engine.
@@ -101,6 +102,7 @@ class STTService(BaseService):
                 device=self.config.stt.device,
                 compute_type=self.config.stt.compute_type,
                 verbose=self.config.verbose,
+                headless=headless,
             )
             self._engine_model_size = target_size
 

@@ -92,6 +92,8 @@ class AudioManager:
         on_max_speech: Callable[[], None],
         on_partial_audio: Callable[[object], None] | None = None,
         on_vad_loading: Callable[[], None] | None = None,
+        *,
+        headless: bool = False,
     ) -> None:
         """Initialize audio capture and VAD components.
 
@@ -101,6 +103,7 @@ class AudioManager:
             on_max_speech: Callback when max speech duration reached
             on_partial_audio: Callback for partial audio during speech (realtime feedback)
             on_vad_loading: Callback when VAD model starts loading
+            headless: If True, skip all console output (for Engine/daemon mode)
         """
         self._on_speech_start = on_speech_start
         self._on_speech_end = on_speech_end
@@ -127,8 +130,8 @@ class AudioManager:
             min_silence_ms=self._config.silence_ms,
             min_speech_ms=250,
         )
-        # Pre-load the model now with progress indicator
-        self._vad._load_model(with_indicator=True)
+        # Pre-load the model now (headless mode skips progress indicator)
+        self._vad._load_model(with_indicator=not headless, headless=headless)
 
         # Create streaming VAD processor
         self._streaming_vad = StreamingVAD(

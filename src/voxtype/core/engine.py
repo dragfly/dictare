@@ -251,11 +251,14 @@ class VoxtypeEngine:
     # Factory Methods
     # -------------------------------------------------------------------------
 
-    def _create_stt_engine(self, model_size: str | None = None) -> STTEngine:
+    def _create_stt_engine(
+        self, model_size: str | None = None, *, headless: bool = False
+    ) -> STTEngine:
         """Create and load STT engine.
 
         Args:
             model_size: Model size to load. If None, uses config.stt.model.
+            headless: If True, skip all console output (for Engine/daemon mode).
         """
         from voxtype.utils.hardware import is_mlx_available
 
@@ -276,6 +279,7 @@ class VoxtypeEngine:
             compute_type=self.config.stt.compute_type,
             console=None,  # No console in engine
             verbose=self.config.verbose,
+            headless=headless,
         )
 
         return engine
@@ -387,9 +391,13 @@ class VoxtypeEngine:
     # Initialization
     # -------------------------------------------------------------------------
 
-    def _init_vad_components(self) -> None:
-        """Initialize components for VAD mode."""
-        self._stt = self._create_stt_engine()
+    def _init_vad_components(self, *, headless: bool = False) -> None:
+        """Initialize components for VAD mode.
+
+        Args:
+            headless: If True, skip all console output (for Engine/daemon mode).
+        """
+        self._stt = self._create_stt_engine(headless=headless)
 
         # Load separate fast model for realtime partial transcriptions
         if self._realtime:
@@ -409,6 +417,7 @@ class VoxtypeEngine:
             on_max_speech=self._on_max_speech_duration,
             on_partial_audio=self._on_partial_audio if self._realtime else None,
             on_vad_loading=lambda: self._emit("on_vad_loading"),
+            headless=headless,
         )
         # Set reconnect callbacks
         self._audio_manager.set_reconnect_callbacks(
