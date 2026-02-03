@@ -56,6 +56,10 @@ app.add_typer(deps_app, name="dependencies")
 tray_app = typer.Typer(help="System tray integration", no_args_is_help=True)
 app.add_typer(tray_app, name="tray")
 
+# Engine subcommand (new architecture)
+engine_app = typer.Typer(help="Engine management (new architecture)", no_args_is_help=True)
+app.add_typer(engine_app, name="engine")
+
 def _register_plugins() -> None:
     """Discover and register plugin commands."""
     import logging
@@ -1030,6 +1034,252 @@ def daemon_restart(
         else:
             console.print("[red]Daemon failed to start[/]")
             raise typer.Exit(1)
+
+# =============================================================================
+# Engine commands (new architecture)
+# =============================================================================
+
+@engine_app.command("start")
+def engine_start(
+    daemon: Annotated[
+        bool,
+        typer.Option("--daemon", "-d", help="Run as background daemon"),
+    ] = False,
+    config_file: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config file"),
+    ] = None,
+    # STT options
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Whisper model (tiny/base/small/medium/large-v3)"),
+    ] = None,
+    language: Annotated[
+        str | None,
+        typer.Option("--language", "-l", help="Language code or 'auto'"),
+    ] = None,
+    # Output mode
+    keyboard: Annotated[
+        bool,
+        typer.Option("--keyboard", "-K", help="Keyboard mode - types what you say"),
+    ] = False,
+    agents: Annotated[
+        bool,
+        typer.Option("--agents", "-A", help="Agent mode - sends to socket agents"),
+    ] = False,
+) -> None:
+    """Start the VoxType engine.
+
+    Foreground mode (default):
+        voxtype engine start --keyboard    # Types what you say, listening immediately
+        voxtype engine start --agents      # Agent mode, listening immediately
+
+    Daemon mode (background):
+        voxtype engine start -d --agents   # Background, models loaded, waiting for trigger
+
+    In daemon mode, the engine preloads models but stays IDLE until activated
+    via tray click, hotkey, or API call.
+    """
+    from voxtype.engine import Engine, get_pid_path
+
+    # Validate: require --keyboard or --agents
+    if not keyboard and not agents:
+        console.print("[red]Error: Must specify --keyboard or --agents[/]")
+        console.print("[dim]Examples:[/]")
+        console.print("[dim]  voxtype engine start --keyboard    # Types what you say[/]")
+        console.print("[dim]  voxtype engine start --agents      # Sends to socket agents[/]")
+        raise typer.Exit(1)
+    if keyboard and agents:
+        console.print("[red]Error: Cannot use --keyboard with --agents[/]")
+        raise typer.Exit(1)
+
+    # Check if engine already running
+    pid_path = get_pid_path()
+    if pid_path.exists():
+        try:
+            pid = int(pid_path.read_text().strip())
+            # Check if process is actually running
+            import os
+            os.kill(pid, 0)  # Doesn't kill, just checks
+            console.print(f"[yellow]Engine already running[/] (PID: {pid})")
+            raise typer.Exit(0)
+        except (ProcessLookupError, ValueError):
+            # Stale PID file, remove it
+            pid_path.unlink(missing_ok=True)
+
+    config = load_config(config_file)
+
+    # Apply CLI overrides
+    if model:
+        config.stt.model = model
+    if language:
+        config.stt.language = language
+    config.output.mode = "agents" if agents else "keyboard"
+
+    # Quick check: verify required models are cached
+    if not _check_required_models(config, for_command="engine"):
+        raise typer.Exit(1)
+
+    # Auto-detect hardware acceleration
+    _auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
+
+    # Auto-detect hotkey based on platform
+    if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
+        config.hotkey.key = "KEY_RIGHTMETA"
+
+    engine = Engine(config)
+
+    if daemon:
+        console.print("[dim]Starting engine in daemon mode...[/]")
+        # Daemon mode: start_listening=False (wait for trigger)
+        engine.start(daemon=True)
+        # Parent process exits here, child continues
+    else:
+        console.print("[dim]Starting engine in foreground...[/]")
+        console.print(f"[dim]Output mode: {config.output.mode}[/]")
+        console.print(f"[dim]Hotkey: {config.hotkey.key}[/]")
+        console.print("[dim]Press Ctrl+C to stop[/]")
+        try:
+            # Foreground mode: start_listening=True (ready immediately)
+            engine.start(daemon=False)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Shutting down...[/]")
+            engine.stop()
+
+@engine_app.command("stop")
+def engine_stop() -> None:
+    """Stop the running engine."""
+    from voxtype.engine import get_pid_path
+
+    pid_path = get_pid_path()
+    if not pid_path.exists():
+        console.print("[yellow]Engine is not running[/]")
+        raise typer.Exit(0)
+
+    try:
+        pid = int(pid_path.read_text().strip())
+    except ValueError:
+        console.print("[red]Invalid PID file[/]")
+        pid_path.unlink(missing_ok=True)
+        raise typer.Exit(1)
+
+    import os
+    import signal
+
+    try:
+        os.kill(pid, 0)  # Check if running
+    except ProcessLookupError:
+        console.print("[yellow]Engine is not running (stale PID file)[/]")
+        pid_path.unlink(missing_ok=True)
+        raise typer.Exit(0)
+
+    console.print(f"[dim]Stopping engine (PID: {pid})...[/]")
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        # Wait for process to exit
+        import time
+        for _ in range(30):  # 3 seconds timeout
+            time.sleep(0.1)
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                console.print("[green]Engine stopped[/]")
+                return
+        # Still running, force kill
+        console.print("[yellow]Engine not responding, forcing...[/]")
+        os.kill(pid, signal.SIGKILL)
+        console.print("[green]Engine stopped (forced)[/]")
+    except Exception as e:
+        console.print(f"[red]Failed to stop engine: {e}[/]")
+        raise typer.Exit(1)
+
+@engine_app.command("status")
+def engine_status(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", "-j", help="Output as JSON"),
+    ] = False,
+) -> None:
+    """Show engine status."""
+    import json
+
+    from voxtype.engine import get_pid_path
+
+    pid_path = get_pid_path()
+    if not pid_path.exists():
+        if json_output:
+            console.print(json.dumps({"running": False}))
+        else:
+            console.print("[yellow]Engine is not running[/]")
+        raise typer.Exit(0)
+
+    try:
+        pid = int(pid_path.read_text().strip())
+        import os
+        os.kill(pid, 0)  # Check if running
+    except (ValueError, ProcessLookupError):
+        if json_output:
+            console.print(json.dumps({"running": False, "stale_pid": True}))
+        else:
+            console.print("[yellow]Engine is not running (stale PID file)[/]")
+        raise typer.Exit(0)
+
+    # Engine is running, try to get status via HTTP
+    import urllib.error
+    import urllib.request
+
+    try:
+        config = load_config()
+        url = f"http://{config.server.host}:{config.server.port}/status"
+        with urllib.request.urlopen(url, timeout=2) as response:
+            data = json.loads(response.read().decode())
+
+        if json_output:
+            data["running"] = True
+            data["pid"] = pid
+            console.print(json.dumps(data, indent=2))
+        else:
+            console.print(f"[green]Engine is running[/] (PID: {pid})")
+            engine_state = data.get("engine", {})
+            stt_state = data.get("stt", {})
+            output_state = data.get("output", {})
+
+            console.print(f"  Mode: {engine_state.get('mode', 'unknown')}")
+            console.print(f"  Version: {engine_state.get('version', 'unknown')}")
+
+            uptime = engine_state.get("uptime_seconds", 0)
+            if uptime < 60:
+                uptime_str = f"{uptime:.0f}s"
+            elif uptime < 3600:
+                uptime_str = f"{uptime / 60:.1f}m"
+            else:
+                uptime_str = f"{uptime / 3600:.1f}h"
+            console.print(f"  Uptime: {uptime_str}")
+
+            console.print(f"  STT state: {stt_state.get('state', 'unknown')}")
+            console.print(f"  STT model: {stt_state.get('model_name', 'not loaded')}")
+            console.print(f"  Output mode: {output_state.get('mode', 'unknown')}")
+
+            agents = output_state.get("available_agents", [])
+            if agents:
+                current = output_state.get("current_agent", "")
+                console.print(f"  Agents: {len(agents)} available")
+                for agent in agents:
+                    marker = " *" if agent == current else ""
+                    console.print(f"    - {agent}{marker}")
+    except urllib.error.URLError:
+        if json_output:
+            console.print(json.dumps({"running": True, "pid": pid, "http_unavailable": True}))
+        else:
+            console.print(f"[green]Engine is running[/] (PID: {pid})")
+            console.print("[dim]  HTTP endpoint not available[/]")
+    except Exception as e:
+        if json_output:
+            console.print(json.dumps({"running": True, "pid": pid, "error": str(e)}))
+        else:
+            console.print(f"[green]Engine is running[/] (PID: {pid})")
+            console.print(f"[dim]  Could not get status: {e}[/]")
 
 @app.command()
 def speak(

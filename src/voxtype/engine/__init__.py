@@ -18,7 +18,7 @@ Usage:
 See docs/specs/engine-architecture.md for the full specification.
 """
 
-from voxtype.engine.engine import Engine
+from voxtype.engine.engine import Engine, get_pid_path, get_socket_path
 from voxtype.engine.state import (
     EngineMetadata,
     EngineMetrics,
@@ -39,6 +39,9 @@ from voxtype.engine.state import (
 __all__ = [
     # Main class
     "Engine",
+    # Utility functions
+    "get_pid_path",
+    "get_socket_path",
     # State classes
     "EngineState",
     "ServiceSTTState",
