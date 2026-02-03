@@ -122,7 +122,7 @@ class EngineHTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         # Register for events
-        event_queue: Queue[dict] = Queue()
+        event_queue: Queue[dict[Any, Any] | None] = Queue()
         self.engine.register_event_listener(event_queue)
 
         try:

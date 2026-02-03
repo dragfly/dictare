@@ -99,9 +99,9 @@ class ControlHandler:
                 ),
             )
 
-    def _create_response(self, msg_id: str, result: ControlResponse) -> dict:
+    def _create_response(self, msg_id: str, result: ControlResponse) -> dict[str, Any]:
         """Create OpenVIP control response message."""
-        response = {
+        response: dict[str, Any] = {
             "openvip": "1.0",
             "type": "control.response",
             "id": msg_id,

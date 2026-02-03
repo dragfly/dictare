@@ -425,11 +425,11 @@ def main() -> None:
     def start_hotkey_listener() -> None:
         try:
             from voxtype.config import load_config
-            from voxtype.hotkey import create_listener
+            from voxtype.hotkey.pynput_listener import PynputHotkeyListener
             from voxtype.hotkey.tap_detector import TapDetector
 
             config = load_config()
-            hotkey = create_listener(config.keyboard.hotkey)
+            hotkey = PynputHotkeyListener(config.hotkey.key)
 
             # Tap detector: single tap = toggle, double tap = switch agent
             tap_detector = TapDetector(
@@ -443,7 +443,7 @@ def main() -> None:
                 on_release=tap_detector.on_key_up,
                 on_other_key=tap_detector.on_other_key,
             )
-            print(f"Hotkey registered: {config.keyboard.hotkey}", file=sys.stderr)
+            print(f"Hotkey registered: {config.hotkey.key}", file=sys.stderr)
         except Exception as e:
             print(f"Warning: Could not register hotkey: {e}", file=sys.stderr)
 

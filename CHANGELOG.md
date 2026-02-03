@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.80.0] - 2026-02-03
+
+### Fixed - CI Pipeline Mypy Errors
+- **tray/app.py**: Fixed hotkey listener creation
+  - Use `PynputHotkeyListener` directly instead of non-existent `create_listener`
+  - Fix config access: `config.hotkey.key` instead of `config.keyboard.hotkey`
+- **engine/server.py**: Fixed Queue type annotation for SSE events
+  - `Queue[dict[Any, Any] | None]` to allow None sentinel
+- **engine/control.py**: Fixed response dict type annotation
+  - `dict[str, Any]` to allow nested error dict
+- **engine/engine.py**: Fixed STTEventHandler abstract class
+  - Added all missing method stubs (on_engine_ready, on_recording_start, etc.)
+
 ## [2.79.0] - 2026-02-03
 
 ### Added - Idiomatic Python Logging
