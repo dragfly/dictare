@@ -127,6 +127,15 @@ class TestSubmitFilterTriggerDetection:
         assert result.messages[0]["x_submit"] is True
         assert result.messages[0]["text"] == "ho un bug nel parser"
 
+    def test_italian_in_via_trigger(self) -> None:
+        """Italian 'in via' (misheard 'invia') trigger is detected."""
+        f = SubmitFilter()
+        msg = {"text": "ho un bug nel parser in via", "language": "it"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_submit"] is True
+        assert result.messages[0]["text"] == "ho un bug nel parser"
+
     def test_multi_word_trigger(self) -> None:
         """Multi-word trigger (ok invia) is detected."""
         f = SubmitFilter()

@@ -31,11 +31,14 @@ DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {
     "it": [
         # Multi-word (higher priority)
         ["ok", "invia"],
+        ["ok", "in", "via"],  # "invia" often heard as "in via"
         ["ok", "manda"],
         ["ok", "fatto"],
         ["va", "bene", "invia"],
-        # Single word
+        ["va", "bene", "in", "via"],
+        # Single word / two-word variants
         ["invia"],
+        ["in", "via"],  # "invia" often heard as "in via"
         ["manda"],
         ["fatto"],
         ["adesso"],  # "invia adesso", "manda adesso"
