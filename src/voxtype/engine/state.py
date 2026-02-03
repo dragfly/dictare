@@ -72,17 +72,44 @@ class ServiceTranslationState:
 
 
 @dataclass
+class ModelLoadingProgress:
+    """Progress for a single model loading."""
+
+    name: str = ""  # "stt", "vad", "tts"
+    status: Literal["pending", "loading", "done", "error"] = "pending"
+    started_at: float = 0.0  # time.time() when loading started
+    elapsed: float = 0.0  # seconds elapsed (calculated on-the-fly)
+    estimated: float = 0.0  # historical load time from stats
+    error: str | None = None
+
+
+@dataclass
 class LoadingState:
     """Loading progress state.
 
-    When a service is loading (model download, initialization),
-    this object is populated. Otherwise it's None.
+    When engine is loading models, this object tracks progress.
+    Progress is calculated on-the-fly: elapsed / estimated.
     """
 
     active: bool = True
-    service: str = ""  # "stt", "tts", "translation"
-    stage: str = "loading"  # "downloading", "loading", "initializing"
-    percent: int = 0
+    models: list[ModelLoadingProgress] = field(default_factory=list)
+
+    def get_progress(self, model_name: str) -> float:
+        """Get progress (0.0-1.0) for a model, calculated on-the-fly."""
+        import time
+
+        for model in self.models:
+            if model.name == model_name:
+                if model.status == "done":
+                    return 1.0
+                if model.status == "pending":
+                    return 0.0
+                if model.estimated <= 0:
+                    return 0.0
+                elapsed = time.time() - model.started_at
+                # Cap at 99% until actually done
+                return min(elapsed / model.estimated, 0.99)
+        return 0.0
 
 
 @dataclass
@@ -165,9 +192,21 @@ class EngineState:
             "loading": (
                 {
                     "active": self.loading.active,
-                    "service": self.loading.service,
-                    "stage": self.loading.stage,
-                    "percent": self.loading.percent,
+                    "models": [
+                        {
+                            "name": m.name,
+                            "status": m.status,
+                            "progress": self.loading.get_progress(m.name),
+                            "elapsed": (
+                                __import__("time").time() - m.started_at
+                                if m.status == "loading"
+                                else m.elapsed
+                            ),
+                            "estimated": m.estimated,
+                            "error": m.error,
+                        }
+                        for m in self.loading.models
+                    ],
                 }
                 if self.loading
                 else None
