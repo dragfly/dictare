@@ -2253,26 +2253,38 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
                     display_text += "..."
                 extra = display_text.replace("\n", "\\n")
             elif event == "transcription":
-                text = entry.get("text", "")
+                chars = entry.get("chars", 0)
+                words = entry.get("words", 0)
                 duration = entry.get("duration_ms", 0)
-                # Show text (truncated to 60 chars)
-                display = text[:60].replace("\n", "\\n")
-                if len(text) > 60:
-                    display += "..."
-                extra = f'{duration:.0f}ms "{display}"'
+                text = entry.get("text")  # May be None (privacy mode)
+                if text:
+                    # Verbose mode - show text
+                    display = text[:60].replace("\n", "\\n")
+                    if len(text) > 60:
+                        display += "..."
+                    extra = f'{duration:.0f}ms "{display}"'
+                else:
+                    # Privacy mode - show only metadata
+                    extra = f"{words}w {chars}c {duration:.0f}ms"
             elif event == "transcription_text":
                 # Legacy format (kept for old logs)
                 text = entry.get("text", "")[:60]
                 extra = f'"{text}"' + ("..." if len(entry.get("text", "")) > 60 else "")
             elif event == "injection":
-                text = entry.get("text", "")
+                chars = entry.get("chars", 0)
                 method = entry.get("method", "?")
                 trigger = entry.get("submit_trigger")
-                # Show text (truncated to 60 chars)
-                display = text[:60].replace("\n", "\\n")
-                if len(text) > 60:
-                    display += "..."
-                extra = f'via {method} "{display}"'
+                text = entry.get("text")  # May be None (privacy mode)
+                if text:
+                    # Verbose mode - show text
+                    display = text[:60].replace("\n", "\\n")
+                    if len(text) > 60:
+                        display += "..."
+                    extra = f'via {method} "{display}"'
+                else:
+                    # Privacy mode - show only metadata
+                    extra = f"{chars}c via {method}"
+                # Always show trigger (even in privacy mode)
                 if trigger:
                     conf = entry.get("submit_confidence", 0)
                     extra += f' [SUBMIT: "{trigger}" {conf:.0%}]'

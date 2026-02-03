@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.100.4] - 2026-02-03
+
+### Fixed - JSONLLogger missing `_params` attribute
+
+Fixed `AttributeError: 'JSONLLogger' object has no attribute '_params'` when
+logging injections with verbose mode check.
+
+## [2.100.3] - 2026-02-03
+
+### Fixed - FileAgent reliability
+
+FileAgent.send() now uses low-level I/O for reliability:
+- `os.open()` with `O_APPEND | O_CREAT` (atomic append)
+- `os.fsync()` to force data to disk
+- Retry up to 3 times on failure with 100ms delay
+- Better logging for debugging (warnings on failure)
+
+### Changed - Verbose logging configurable
+
+Logging now respects `--verbose` flag:
+- With `--verbose`: shows actual text in logs
+- Without: shows only metadata (chars, words, duration)
+- Submit trigger is ALWAYS shown (useful for debugging)
+
 ## [2.100.2] - 2026-02-03
 
 ### Changed - Verbose logging by default
