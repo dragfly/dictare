@@ -53,6 +53,7 @@ class AppController:
         self._adapter: OpenVIPAdapter | None = None
         self._registrar: Any = None  # AgentRegistrar
         self._bindings: KeyboardBindingManager | None = None
+        self._logger: Any = None  # JSONLLogger
         self._running = False
         self._shutdown_event = threading.Event()
 
@@ -123,12 +124,26 @@ class AppController:
                     elif new == AppState.OFF:
                         play_beep_stop()
 
-        # 1. Create engine
+        # 1. Create logger for engine
+        from voxtype import __version__
+        from voxtype.logging.jsonl import JSONLLogger, LogLevel, get_default_log_path
+
+        log_level = LogLevel.DEBUG if self._config.verbose else LogLevel.INFO
+        log_path = get_default_log_path("engine")
+        self._logger = JSONLLogger(
+            log_path,
+            __version__,
+            level=log_level,
+            params={"mode": mode, "output": self._config.output.mode},
+        )
+
+        # 2. Create engine with logger
         self._engine, self._registrar = create_engine(
             config=self._config,
             events=ControllerEvents(),
             agent_mode=(self._config.output.mode == "agents"),
             hotkey_enabled=True,
+            logger=self._logger,
         )
 
         # 2. Create adapter
@@ -194,6 +209,11 @@ class AppController:
             self._adapter = None
 
         self._engine = None
+
+        # Close logger
+        if self._logger:
+            self._logger.close()
+            self._logger = None
 
         # Display session stats
         self._display_session_stats()
