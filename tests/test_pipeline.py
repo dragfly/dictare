@@ -615,15 +615,16 @@ class TestAgentFilterWithPipeline:
 class TestAgentFilterEventBus:
     """Test AgentFilter event bus integration."""
 
-    def test_subscribes_to_agents_changed_by_default(self) -> None:
-        """Filter subscribes to agents.changed event by default."""
+    def test_subscribes_to_agent_events_by_default(self) -> None:
+        """Filter subscribes to agent.registered/unregistered events by default."""
         f = AgentFilter()  # subscribe_to_events=True by default
         assert f.agent_ids == []
 
-        # Publish event
-        bus.publish("agents.changed", agent_ids=["voxtype", "koder"])
+        # Register agents via events
+        bus.publish("agent.registered", agent_id="voxtype")
+        bus.publish("agent.registered", agent_id="koder")
 
-        # Filter should have updated
+        # Filter should have both agents
         assert f.agent_ids == ["voxtype", "koder"]
 
     def test_dynamic_agent_update(self) -> None:
@@ -635,8 +636,8 @@ class TestAgentFilterEventBus:
         result = f.process(msg)
         assert result.action == FilterAction.PASS  # No agents to match
 
-        # Add agents via event
-        bus.publish("agents.changed", agent_ids=["voxtype"])
+        # Add agent via event
+        bus.publish("agent.registered", agent_id="voxtype")
 
         # Now should match
         result = f.process(msg)
@@ -647,8 +648,9 @@ class TestAgentFilterEventBus:
         """Filter stops matching agent when removed via event."""
         f = AgentFilter()
 
-        # Add agent
-        bus.publish("agents.changed", agent_ids=["voxtype", "koder"])
+        # Add agents
+        bus.publish("agent.registered", agent_id="voxtype")
+        bus.publish("agent.registered", agent_id="koder")
 
         # Should match voxtype
         msg = {"text": "agent voxtype"}
@@ -656,18 +658,23 @@ class TestAgentFilterEventBus:
         assert result.action == FilterAction.AUGMENT
 
         # Remove voxtype
-        bus.publish("agents.changed", agent_ids=["koder"])
+        bus.publish("agent.unregistered", agent_id="voxtype")
 
         # Should not match voxtype anymore
         result = f.process(msg)
         assert result.action == FilterAction.PASS
+
+        # koder should still work
+        msg = {"text": "agent koder"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
 
     def test_no_subscription_when_disabled(self) -> None:
         """Filter doesn't subscribe when subscribe_to_events=False."""
         f = AgentFilter(subscribe_to_events=False)
 
         # Publish event
-        bus.publish("agents.changed", agent_ids=["voxtype"])
+        bus.publish("agent.registered", agent_id="voxtype")
 
         # Filter should not have updated
         assert f.agent_ids == []
@@ -677,7 +684,24 @@ class TestAgentFilterEventBus:
         f1 = AgentFilter()
         f2 = AgentFilter()
 
-        bus.publish("agents.changed", agent_ids=["voxtype"])
+        bus.publish("agent.registered", agent_id="voxtype")
 
         assert f1.agent_ids == ["voxtype"]
         assert f2.agent_ids == ["voxtype"]
+
+    def test_duplicate_register_ignored(self) -> None:
+        """Registering same agent twice doesn't duplicate."""
+        f = AgentFilter()
+
+        bus.publish("agent.registered", agent_id="voxtype")
+        bus.publish("agent.registered", agent_id="voxtype")
+
+        assert f.agent_ids == ["voxtype"]
+
+    def test_unregister_nonexistent_ignored(self) -> None:
+        """Unregistering non-existent agent is a no-op."""
+        f = AgentFilter()
+
+        bus.publish("agent.unregistered", agent_id="voxtype")
+
+        assert f.agent_ids == []
