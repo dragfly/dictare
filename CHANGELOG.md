@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.97.1] - 2026-02-03
+
+### Fixed - SubmitFilter false positives (#35)
+
+- Remove single-word triggers that are too common:
+  - Italian: "fatto", "adesso"
+  - English: "go"
+- Keep only explicit submit commands like "invia", "manda", "send", "submit"
+- Multi-word triggers like "ok invia", "go ahead" still work
+
 ## [2.97.0] - 2026-02-03
 
 ### Added - COMMON init and daemon mode
