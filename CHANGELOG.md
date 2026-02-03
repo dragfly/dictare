@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.91.6] - 2026-02-03
+
+### Changed - Remove progress bars from engine start (defer to Panel)
+
+- **cli.py**: Simplified `engine start` foreground mode
+  - Removed Rich Progress bars (will be in Panel, Phase 5)
+  - Simple spinner "Loading models..." during initialization
+  - Progress data still available via `/status` for polling
+- **Architecture alignment**: Engine is headless, Panel handles all UI
+
 ## [2.91.5] - 2026-02-03
 
 ### Fixed - Progress bar reaches 100% for all models

@@ -1,3 +1,3 @@
 """voxtype: Voice-to-text for your terminal."""
 
-__version__ = "2.91.5"
+__version__ = "2.91.6"

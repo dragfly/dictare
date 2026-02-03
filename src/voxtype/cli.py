@@ -1141,14 +1141,10 @@ def engine_start(
         console.print(f"[dim]HTTP server: http://{config.server.host}:{config.server.port}[/]")
 
         # Initialize engine (starts HTTP server, loads models)
-        # Models load in main thread, but HTTP server responds in separate threads
-        import json
+        # Note: This blocks while loading models. Progress is available via /status
+        # but will be displayed by the Panel in a future phase.
         import threading
-        import urllib.error
-        import urllib.request
 
-        # Start initialization in a thread so we can poll status
-        # Note: signals must be registered in main thread, so pass setup_signals=False
         init_error: Exception | None = None
         init_done = threading.Event()
 
@@ -1162,86 +1158,11 @@ def engine_start(
             finally:
                 init_done.set()
 
-        init_thread = threading.Thread(target=do_init, daemon=True)
-        init_thread.start()
-
-        # Wait a bit for HTTP server to start
-        import time
-        time.sleep(0.3)
-
-        # Poll /status and show progress using Rich Progress (updates in-place)
-        from rich.progress import (
-            BarColumn,
-            Progress,
-            SpinnerColumn,
-            TextColumn,
-            TimeRemainingColumn,
-        )
-
-        status_url = f"http://{config.server.host}:{config.server.port}/status"
-        model_tasks: dict[str, int] = {}  # model_name -> task_id
-        completed_models: set[str] = set()
-
-        def update_progress_from_status(progress: Progress, status: dict) -> None:
-            """Update progress bars from /status response."""
-            loading = status.get("loading")
-            if not loading:
-                return
-
-            for model in loading.get("models", []):
-                name = model.get("name", "")
-                model_status = model.get("status", "")
-                elapsed = model.get("elapsed", 0)
-                estimated = model.get("estimated", 0)
-
-                # Create task if not exists
-                if name and name not in model_tasks:
-                    task_id = progress.add_task(
-                        f"Loading {name}...",
-                        total=estimated if estimated > 0 else 30.0,
-                    )
-                    model_tasks[name] = task_id
-
-                if name in model_tasks:
-                    task_id = model_tasks[name]
-                    if model_status == "loading":
-                        # Update progress based on elapsed time
-                        progress.update(task_id, completed=elapsed)
-                    elif model_status == "done" and name not in completed_models:
-                        # Mark complete
-                        progress.update(
-                            task_id,
-                            completed=estimated if estimated > 0 else elapsed,
-                            description=f"[green]✓[/] {name} loaded ({elapsed:.1f}s)",
-                        )
-                        completed_models.add(name)
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeRemainingColumn(),
-            console=console,
-            transient=False,  # Keep completed tasks visible
-        ) as progress:
-            while not init_done.is_set():
-                try:
-                    with urllib.request.urlopen(status_url, timeout=1) as response:
-                        status = json.loads(response.read().decode())
-                    update_progress_from_status(progress, status)
-                except (urllib.error.URLError, json.JSONDecodeError):
-                    pass  # Server not ready yet or parsing error
-
-                time.sleep(0.2)
-
-            # Final poll to catch any models that finished during the last iteration
-            try:
-                with urllib.request.urlopen(status_url, timeout=1) as response:
-                    status = json.loads(response.read().decode())
-                update_progress_from_status(progress, status)
-            except (urllib.error.URLError, json.JSONDecodeError):
-                pass
+        # Show spinner while loading (progress bars will be in Panel, Phase 5)
+        with console.status("[bold blue]Loading models...", spinner="dots"):
+            init_thread = threading.Thread(target=do_init, daemon=True)
+            init_thread.start()
+            init_done.wait()
 
         # Check for initialization error
         if init_error:
