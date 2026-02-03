@@ -211,11 +211,8 @@ class AgentFilter:
         if len(tokens) < 2:  # Need at least "agent <name>"
             return FilterResult.passed(message)
 
-        # Get language for phonetic matching strategy
-        language = message.get("language", "").lower()[:2]  # "en", "it", etc.
-
         # Find agent switch pattern
-        match = self._find_agent_match(tokens, language)
+        match = self._find_agent_match(tokens)
 
         if match and match.score >= self.match_threshold:
             logger.info(
@@ -240,75 +237,45 @@ class AgentFilter:
 
         return FilterResult.passed(message)
 
-    def _match_trigger(self, token: str, language: str) -> str | None:
-        """Match token against trigger words.
-
-        Uses different matching strategies based on language:
-        - English: phonetic + edit distance (metaphone works well)
-        - Other languages: edit distance only (metaphone unreliable)
-
-        Args:
-            token: Normalized token to match.
-            language: ISO 639-1 language code (e.g., "en", "it").
-
-        Returns:
-            The matched trigger word, or None if no match above threshold.
-        """
-        trigger_threshold = 0.6  # 60% similarity required
-        use_phonetic = language == "en"
-
-        for trigger in self.triggers:
-            trigger_norm = _normalize(trigger)
-            token_norm = _normalize(token)
-
-            if use_phonetic:
-                # English: use combined phonetic + edit distance
-                score = fuzzy_match_score(token_norm, trigger_norm)
-            else:
-                # Non-English: edit distance only (metaphone unreliable)
-                score = edit_score(token_norm, trigger_norm)
-
-            if score >= trigger_threshold:
-                return trigger
-
-        return None
-
-    def _find_agent_match(self, tokens: list[str], language: str) -> AgentMatch | None:
+    def _find_agent_match(self, tokens: list[str]) -> AgentMatch | None:
         """Find agent switch pattern in tokens.
 
-        Looks for "agent/agente <word>" near the end and matches <word>
+        Looks for "agent <word>" near the end and matches <word>
         against known agent IDs using fuzzy matching.
 
-        Also uses fuzzy matching on trigger words to handle Whisper errors
-        like "adziente" for "agente".
+        Trigger matching is exact (no fuzzy) - "agent" is a common word
+        that Whisper recognizes reliably. Fuzzy matching is only used
+        for agent IDs which can be arbitrary names.
 
         Args:
             tokens: Normalized tokens from text.
-            language: ISO 639-1 language code for matching strategy.
 
         Returns:
             AgentMatch if found, None otherwise.
         """
+        # Normalize triggers once
+        normalized_triggers = {_normalize(t): t for t in self.triggers}
+
         # Only scan last N tokens
         scan_start = max(0, len(tokens) - self.max_scan_words)
         scan_tokens = tokens[scan_start:]
 
         # Look for trigger word followed by potential agent name
         for i, token in enumerate(scan_tokens):
-            matched_trigger = self._match_trigger(token, language)
-            if matched_trigger:
+            # Exact match on trigger (no fuzzy - "agent" is well-recognized)
+            if token in normalized_triggers:
                 # Check if there's a word after the trigger
                 if i + 1 < len(scan_tokens):
                     heard_word = scan_tokens[i + 1]
 
-                    # Try to match against known agents
+                    # Try to match against known agents (fuzzy match on ID)
                     best_match = self._match_agent(heard_word)
                     if best_match:
                         return AgentMatch(
                             agent_id=best_match[0],
                             heard_word=heard_word,
                             score=best_match[1],
-                            trigger_word=matched_trigger,
+                            trigger_word=normalized_triggers[token],
                         )
 
         return None
