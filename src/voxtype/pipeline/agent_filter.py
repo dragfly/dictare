@@ -6,6 +6,11 @@ uses phonetic matching to find the best matching agent ID.
 When detected, the trigger words are removed and x_agent_switch is set
 to the matched agent ID.
 
+Dynamic Agent List
+------------------
+The filter subscribes to the "agents.changed" event on the internal event bus.
+When agents are added/removed, the filter automatically updates its list.
+
 Examples:
     "fammi vedere il codice agent voxtype" -> "fammi vedere il codice" + x_agent_switch="voxtype"
     "questo bug agent koder" -> "questo bug" + x_agent_switch="koder" (even if heard as "coder")
@@ -20,6 +25,7 @@ from dataclasses import dataclass, field
 
 import jellyfish
 
+from voxtype.events import bus
 from voxtype.pipeline.base import FilterResult
 
 logger = logging.getLogger(__name__)
@@ -119,17 +125,46 @@ class AgentFilter:
     Looks for patterns like "agent <name>" or "agente <name>" and uses
     phonetic matching to find the best matching agent ID.
 
+    Dynamic Updates
+    ---------------
+    If `subscribe_to_events=True` (default), the filter automatically
+    subscribes to "agents.changed" events on the internal event bus.
+    When agents are added/removed, the filter updates its list.
+
     Attributes:
-        agent_ids: List of valid agent IDs to match against.
+        agent_ids: Initial list of agent IDs. Updated dynamically if subscribed.
         triggers: Words that trigger agent switch (default: ["agent", "agente"]).
         match_threshold: Minimum score to consider a match (0.0-1.0).
         max_scan_words: Maximum words from end to scan for triggers.
+        subscribe_to_events: Whether to auto-subscribe to agents.changed events.
     """
 
     agent_ids: list[str] = field(default_factory=list)
     triggers: list[str] = field(default_factory=lambda: AGENT_TRIGGERS.copy())
     match_threshold: float = 0.5
     max_scan_words: int = 10
+    subscribe_to_events: bool = True
+
+    def __post_init__(self) -> None:
+        """Subscribe to event bus after initialization."""
+        if self.subscribe_to_events:
+            bus.subscribe("agents.changed", self._on_agents_changed)
+            logger.debug(
+                "agent_filter_subscribed",
+                extra={"event": "agents.changed"},
+            )
+
+    def _on_agents_changed(self, agent_ids: list[str]) -> None:
+        """Handle agents.changed event from event bus.
+
+        Args:
+            agent_ids: Updated list of agent IDs.
+        """
+        self.agent_ids = agent_ids.copy()
+        logger.info(
+            "agent_filter_updated",
+            extra={"agent_ids": self.agent_ids},
+        )
 
     @property
     def name(self) -> str:

@@ -1,6 +1,9 @@
 """Tests for the pipeline filter system."""
 
 
+import pytest
+
+from voxtype.events import bus
 from voxtype.pipeline import (
     AgentFilter,
     FilterAction,
@@ -18,6 +21,14 @@ from voxtype.pipeline.submit_filter import (
     _normalize,
     _tokenize,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_event_bus():
+    """Reset event bus before each test."""
+    bus.reset()
+    yield
+    bus.reset()
 
 
 class TestHelperFunctions:
@@ -482,26 +493,26 @@ class TestAgentFilterBasics:
 
     def test_name_property(self) -> None:
         """Filter has correct name."""
-        f = AgentFilter()
+        f = AgentFilter(subscribe_to_events=False)
         assert f.name == "agent_filter"
 
     def test_empty_text_passes(self) -> None:
         """Empty text passes through."""
-        f = AgentFilter(agent_ids=["voxtype"])
+        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         msg = {"text": ""}
         result = f.process(msg)
         assert result.action == FilterAction.PASS
 
     def test_no_agents_passes(self) -> None:
         """Message passes if no agents configured."""
-        f = AgentFilter(agent_ids=[])
+        f = AgentFilter(agent_ids=[], subscribe_to_events=False)
         msg = {"text": "agent voxtype"}
         result = f.process(msg)
         assert result.action == FilterAction.PASS
 
     def test_existing_agent_switch_passes(self) -> None:
         """Message with existing x_agent_switch passes through."""
-        f = AgentFilter(agent_ids=["voxtype"])
+        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         msg = {"text": "agent voxtype", "x_agent_switch": "other"}
         result = f.process(msg)
         assert result.action == FilterAction.PASS
@@ -512,7 +523,7 @@ class TestAgentFilterDetection:
 
     def test_exact_match(self) -> None:
         """Exact agent name match is detected."""
-        f = AgentFilter(agent_ids=["voxtype", "koder"])
+        f = AgentFilter(agent_ids=["voxtype", "koder"], subscribe_to_events=False)
         msg = {"text": "fammi vedere il codice agent voxtype"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -522,7 +533,7 @@ class TestAgentFilterDetection:
 
     def test_phonetic_match_koder_coder(self) -> None:
         """Phonetic match: 'coder' matches 'koder'."""
-        f = AgentFilter(agent_ids=["koder", "voxtype"])
+        f = AgentFilter(agent_ids=["koder", "voxtype"], subscribe_to_events=False)
         msg = {"text": "questo bug agent coder"}  # Heard as "coder"
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -530,7 +541,7 @@ class TestAgentFilterDetection:
 
     def test_phonetic_match_koder_quant(self) -> None:
         """Phonetic match: 'quant' matches 'koder'."""
-        f = AgentFilter(agent_ids=["koder", "voxtype"])
+        f = AgentFilter(agent_ids=["koder", "voxtype"], subscribe_to_events=False)
         msg = {"text": "questo bug agent quant"}  # Heard as "quant"
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -538,7 +549,7 @@ class TestAgentFilterDetection:
 
     def test_italian_agente_trigger(self) -> None:
         """Italian 'agente' trigger is detected."""
-        f = AgentFilter(agent_ids=["voxtype"])
+        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         msg = {"text": "fammi vedere agente voxtype"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -546,7 +557,7 @@ class TestAgentFilterDetection:
 
     def test_case_insensitive(self) -> None:
         """Agent matching is case insensitive."""
-        f = AgentFilter(agent_ids=["VoxType"])
+        f = AgentFilter(agent_ids=["VoxType"], subscribe_to_events=False)
         msg = {"text": "agent voxtype"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -554,7 +565,7 @@ class TestAgentFilterDetection:
 
     def test_no_match_below_threshold(self) -> None:
         """No match if score is below threshold."""
-        f = AgentFilter(agent_ids=["voxtype"], match_threshold=0.95)
+        f = AgentFilter(agent_ids=["voxtype"], match_threshold=0.95, subscribe_to_events=False)
         msg = {"text": "agent boxtype"}  # Similar but not identical
         result = f.process(msg)
         # boxtype vs voxtype: edit=0.857, phonetic different (B vs F/V)
@@ -563,7 +574,7 @@ class TestAgentFilterDetection:
 
     def test_best_match_selected(self) -> None:
         """Best matching agent is selected when multiple could match."""
-        f = AgentFilter(agent_ids=["koder", "quant-analysis"])
+        f = AgentFilter(agent_ids=["koder", "quant-analysis"], subscribe_to_events=False)
         msg = {"text": "agent coder"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -572,7 +583,7 @@ class TestAgentFilterDetection:
 
     def test_trigger_in_middle_not_detected(self) -> None:
         """Trigger in middle of text (not at end) is not detected."""
-        f = AgentFilter(agent_ids=["voxtype"], max_scan_words=5)
+        f = AgentFilter(agent_ids=["voxtype"], max_scan_words=5, subscribe_to_events=False)
         # agent voxtype is more than 5 words from end
         msg = {"text": "agent voxtype one two three four five six"}
         result = f.process(msg)
@@ -580,7 +591,7 @@ class TestAgentFilterDetection:
 
     def test_text_cleaned_after_match(self) -> None:
         """Text is cleaned up after agent switch match."""
-        f = AgentFilter(agent_ids=["voxtype"])
+        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         msg = {"text": "questo è il codice agent voxtype"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -594,7 +605,7 @@ class TestAgentFilterWithPipeline:
 
     def test_agent_filter_before_submit_filter(self) -> None:
         """Agent filter can run before submit filter in pipeline."""
-        agent_f = AgentFilter(agent_ids=["voxtype"])
+        agent_f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         submit_f = SubmitFilter()
 
         p = Pipeline([agent_f, submit_f])
@@ -606,7 +617,7 @@ class TestAgentFilterWithPipeline:
 
     def test_agent_and_submit_in_same_message(self) -> None:
         """Both agent switch and submit can be detected."""
-        agent_f = AgentFilter(agent_ids=["voxtype"])
+        agent_f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         submit_f = SubmitFilter()
 
         # Agent filter first, then submit filter
@@ -617,3 +628,74 @@ class TestAgentFilterWithPipeline:
         msg = {"text": "hello submit"}
         result = p.process(msg)
         assert result[0].get("x_submit") is True
+
+
+class TestAgentFilterEventBus:
+    """Test AgentFilter event bus integration."""
+
+    def test_subscribes_to_agents_changed_by_default(self) -> None:
+        """Filter subscribes to agents.changed event by default."""
+        f = AgentFilter()  # subscribe_to_events=True by default
+        assert f.agent_ids == []
+
+        # Publish event
+        bus.publish("agents.changed", agent_ids=["voxtype", "koder"])
+
+        # Filter should have updated
+        assert f.agent_ids == ["voxtype", "koder"]
+
+    def test_dynamic_agent_update(self) -> None:
+        """Filter updates agent_ids when event is published."""
+        f = AgentFilter()
+
+        # Initially no agents
+        msg = {"text": "agent voxtype"}
+        result = f.process(msg)
+        assert result.action == FilterAction.PASS  # No agents to match
+
+        # Add agents via event
+        bus.publish("agents.changed", agent_ids=["voxtype"])
+
+        # Now should match
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_agent_switch"] == "voxtype"
+
+    def test_agent_removed_via_event(self) -> None:
+        """Filter stops matching agent when removed via event."""
+        f = AgentFilter()
+
+        # Add agent
+        bus.publish("agents.changed", agent_ids=["voxtype", "koder"])
+
+        # Should match voxtype
+        msg = {"text": "agent voxtype"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+
+        # Remove voxtype
+        bus.publish("agents.changed", agent_ids=["koder"])
+
+        # Should not match voxtype anymore
+        result = f.process(msg)
+        assert result.action == FilterAction.PASS
+
+    def test_no_subscription_when_disabled(self) -> None:
+        """Filter doesn't subscribe when subscribe_to_events=False."""
+        f = AgentFilter(subscribe_to_events=False)
+
+        # Publish event
+        bus.publish("agents.changed", agent_ids=["voxtype"])
+
+        # Filter should not have updated
+        assert f.agent_ids == []
+
+    def test_multiple_filters_receive_event(self) -> None:
+        """Multiple filters all receive the event."""
+        f1 = AgentFilter()
+        f2 = AgentFilter()
+
+        bus.publish("agents.changed", agent_ids=["voxtype"])
+
+        assert f1.agent_ids == ["voxtype"]
+        assert f2.agent_ids == ["voxtype"]
