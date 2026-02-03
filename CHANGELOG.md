@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.78.0] - 2026-02-03
+
+### Fixed - Pipeline Now Receives Language
+- **openvip.py**: Added `language` parameter to `create_message()`
+- **engine.py**: Passes configured STT language to messages
+  - If `stt.language` is set (e.g., "it"), uses that
+  - If "auto", defaults to "it" (temporary workaround)
+- This enables language-based trigger detection in the pipeline
+
 ## [2.77.0] - 2026-02-03
 
 ### Added - Language-Based Trigger Words
