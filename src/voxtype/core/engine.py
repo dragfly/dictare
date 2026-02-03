@@ -658,11 +658,17 @@ class VoxtypeEngine:
         # Use provided agent or fall back to current
         target_agent = agent if agent is not None else self._get_current_agent()
 
+        # Get language for pipeline filters
+        # TODO: Use detected language from Whisper once we propagate it
+        stt_language = self.config.stt.language
+        message_language = stt_language if stt_language != "auto" else "it"
+
         # Build OpenVIP message with unique ID
         message = create_message(
             text,
             submit=auto_enter,
             visual_newline=not auto_enter,
+            language=message_language,
         )
 
         # Apply pipeline filters (may modify message, set x_submit, etc.)
