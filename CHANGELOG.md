@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.93.3] - 2026-02-03
+
+### Fixed - Clean exit on Ctrl+C
+
+- StatusPanel exits immediately when engine shuts down (no "Connecting..." message)
+
 ## [2.93.2] - 2026-02-03
 
 ### Fixed - StatusPanel improvements

@@ -262,11 +262,10 @@ class StatusPanel:
 
                 if status is None:
                     self._consecutive_failures += 1
-                    # If we were connected and now failing, engine probably shut down
-                    if self._was_connected and self._consecutive_failures >= 3:
-                        # Engine shut down, exit gracefully
+                    # If we were connected and now failing, engine shut down - exit immediately
+                    if self._was_connected:
                         break
-                    # Show error while waiting for connection
+                    # Show message while waiting for initial connection
                     live.update(
                         Panel(
                             "[dim]Connecting to engine...[/]\n"
