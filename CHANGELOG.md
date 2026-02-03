@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.96.0] - 2026-02-03
+
+### Added - Adapter event handling
+
+- **last_text**: Panel now shows last transcribed text
+- **hotkey.bound**: Auto-binds when engine starts with hotkey enabled
+- **Audio feedback**: Beep on state change (LISTENING on/off), respects config
+- `AdapterEvents` handles: `on_transcription`, `on_state_change`, `on_vad_loading`
+- `hotkey_enabled=True` in engine creation (was False)
+
 ## [2.95.0] - 2026-02-03
 
 ### Changed - VoxtypeEngine lifecycle refactoring

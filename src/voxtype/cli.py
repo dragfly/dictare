@@ -1169,7 +1169,7 @@ def engine_start(
     adapter: OpenVIPAdapter | None = None
 
     class AdapterEvents(EngineEvents):
-        """Event handler that forwards loading events to adapter."""
+        """Event handler that forwards events to adapter."""
 
         def on_vad_loading(self) -> None:
             """Called when VAD model starts loading (after STT is done)."""
@@ -1177,11 +1177,42 @@ def engine_start(
                 adapter._update_loading("stt", "done")
                 adapter._update_loading("vad", "loading")
 
+        def on_transcription(self, result: Any) -> None:
+            """Called when transcription is complete."""
+            if adapter and hasattr(result, "text"):
+                adapter.state.stt.last_text = result.text
+
+        def on_state_change(self, old: Any, new: Any, trigger: str) -> None:
+            """Called when engine state changes - play audio feedback."""
+            from voxtype.core.state import AppState
+
+            if not config.audio.audio_feedback:
+                return
+
+            # Update adapter state
+            if adapter:
+                if new == AppState.LISTENING:
+                    adapter.state.stt.state = "listening"
+                elif new == AppState.OFF:
+                    adapter.state.stt.state = "idle"
+                elif new == AppState.RECORDING:
+                    adapter.state.stt.state = "recording"
+                elif new == AppState.TRANSCRIBING:
+                    adapter.state.stt.state = "transcribing"
+
+            # Play beep
+            from voxtype.audio.beep import play_beep_start, play_beep_stop
+
+            if new == AppState.LISTENING:
+                play_beep_start()
+            elif new == AppState.OFF:
+                play_beep_stop()
+
     voxtype_engine, registrar = create_engine(
         config=config,
         events=AdapterEvents(),
         agent_mode=(config.output.mode == "agents"),
-        hotkey_enabled=False,  # Adapter handles this
+        hotkey_enabled=True,  # Enable hotkey for toggle
     )
 
     # Create OpenVIP adapter

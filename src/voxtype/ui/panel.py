@@ -133,12 +133,16 @@ class StatusPanel:
 
     def _format_last_text(self) -> str:
         """Format the last transcribed text."""
-        if not self._last_text:
+        # Get last_text from status (synced from engine)
+        stt = self._status.get("stt", {})
+        last_text = stt.get("last_text", "") or self._last_text
+
+        if not last_text:
             return "[dim]--[/]"
 
-        if len(self._last_text) > self.LAST_TEXT_MAX_CHARS:
-            return f'"{self._last_text[:self.LAST_TEXT_MAX_CHARS]}..."'
-        return f'"{self._last_text}"'
+        if len(last_text) > self.LAST_TEXT_MAX_CHARS:
+            return f'"{last_text[:self.LAST_TEXT_MAX_CHARS]}..."'
+        return f'"{last_text}"'
 
     def _build_progress_bar(self, progress: float, done: bool = False) -> str:
         """Build a progress bar string.
