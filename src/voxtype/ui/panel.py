@@ -163,6 +163,7 @@ class StatusPanel:
             f"Language: [cyan]{language}[/]\n"
             f"Output: {self._format_output(output)}\n"
             f"Hotkey: {self._format_hotkey(hotkey)}\n"
+            f"Server: [dim]{self._base_url}[/]\n"
             f"\n"
             f"Status: {self._format_state(state)}\n"
             f"Last: {self._format_last_text()}"
