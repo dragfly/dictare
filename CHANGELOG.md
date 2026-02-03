@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.85.0] - 2026-02-03
+
+### Changed - Event Sourcing Semantics
+
+Changed event bus semantics from snapshot-based to proper event sourcing:
+
+- **Before**: `agents.changed` with full list `["a", "b", "c"]`
+- **After**: `agent.registered` / `agent.unregistered` with single `agent_id`
+
+This is the correct event-driven architecture:
+- Each event is atomic and immutable
+- Events shouldn't be lost; if they are, it's an architectural problem
+- Subscribers maintain their own state from event stream
+
+**Engine** now publishes:
+- `agent.registered` with `agent_id` on register
+- `agent.unregistered` with `agent_id` on unregister
+
+**AgentFilter** now subscribes to both events and maintains its agent list.
+
 ## [2.84.0] - 2026-02-03
 
 ### Added - AgentFilter Pipeline Integration

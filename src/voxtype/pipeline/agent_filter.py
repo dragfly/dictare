@@ -148,23 +148,38 @@ class AgentFilter:
     def __post_init__(self) -> None:
         """Subscribe to event bus after initialization."""
         if self.subscribe_to_events:
-            bus.subscribe("agents.changed", self._on_agents_changed)
+            bus.subscribe("agent.registered", self._on_agent_registered)
+            bus.subscribe("agent.unregistered", self._on_agent_unregistered)
             logger.debug(
                 "agent_filter_subscribed",
-                extra={"event": "agents.changed"},
+                extra={"events": ["agent.registered", "agent.unregistered"]},
             )
 
-    def _on_agents_changed(self, agent_ids: list[str]) -> None:
-        """Handle agents.changed event from event bus.
+    def _on_agent_registered(self, agent_id: str) -> None:
+        """Handle agent.registered event from event bus.
 
         Args:
-            agent_ids: Updated list of agent IDs.
+            agent_id: ID of the registered agent.
         """
-        self.agent_ids = agent_ids.copy()
-        logger.info(
-            "agent_filter_updated",
-            extra={"agent_ids": self.agent_ids},
-        )
+        if agent_id not in self.agent_ids:
+            self.agent_ids.append(agent_id)
+            logger.info(
+                "agent_filter_agent_added",
+                extra={"agent_id": agent_id, "agent_ids": self.agent_ids},
+            )
+
+    def _on_agent_unregistered(self, agent_id: str) -> None:
+        """Handle agent.unregistered event from event bus.
+
+        Args:
+            agent_id: ID of the unregistered agent.
+        """
+        if agent_id in self.agent_ids:
+            self.agent_ids.remove(agent_id)
+            logger.info(
+                "agent_filter_agent_removed",
+                extra={"agent_id": agent_id, "agent_ids": self.agent_ids},
+            )
 
     @property
     def name(self) -> str:

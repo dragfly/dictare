@@ -806,7 +806,7 @@ class VoxtypeEngine:
             self._current_agent_id = agent.id
 
         self._emit("on_agents_changed", self.agents)
-        bus.publish("agents.changed", agent_ids=self.agents)
+        bus.publish("agent.registered", agent_id=agent.id)
         return True
 
     def unregister_agent(self, agent_id: str) -> bool:
@@ -839,7 +839,7 @@ class VoxtypeEngine:
             self._current_agent_id = None
 
         self._emit("on_agents_changed", self.agents)
-        bus.publish("agents.changed", agent_ids=self.agents)
+        bus.publish("agent.unregistered", agent_id=agent_id)
         return True
 
     def _switch_agent(self, direction: int) -> None:
