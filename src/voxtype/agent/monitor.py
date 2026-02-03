@@ -1,14 +1,15 @@
-"""Socket monitoring for agent discovery.
+"""Agent file monitoring for discovery.
 
 Provides pluggable monitoring strategies:
 - WatchdogMonitor: Uses filesystem events (fast, but potentially unreliable)
 - PollingMonitor: Polls directory periodically (reliable, 1-second delay)
+
+Agents are discovered by looking for .jsonl files in ~/.local/share/voxtype/
 """
 
 from __future__ import annotations
 
 import logging
-import socket
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -17,26 +18,33 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from voxtype.utils.platform import get_socket_dir
-
 logger = logging.getLogger(__name__)
 
-# Internal sockets to exclude from agent discovery
-INTERNAL_SOCKETS = {"daemon.sock", "control.sock"}
+# Internal files to exclude from agent discovery
+INTERNAL_FILES = {"daemon.jsonl", "control.jsonl"}
+
+def get_agent_dir() -> Path:
+    """Get the directory where agent files are stored.
+
+    Returns ~/.local/share/voxtype/agents/
+    """
+    agent_dir = Path.home() / ".local" / "share" / "voxtype" / "agents"
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    return agent_dir
 
 @dataclass
 class DiscoveredAgent:
-    """Info about a discovered agent socket."""
+    """Info about a discovered agent file."""
 
     id: str
-    socket_path: Path
-    created_at: float  # mtime of socket file
+    file_path: Path
+    created_at: float  # mtime of file
 
-class SocketMonitor(Protocol):
-    """Protocol for socket directory monitors.
+class AgentMonitor(Protocol):
+    """Protocol for agent directory monitors.
 
-    Implementations watch the socket directory and notify when
-    agent sockets appear or disappear.
+    Implementations watch the agent directory and notify when
+    agent files appear or disappear.
     """
 
     on_agent_added: Callable[[DiscoveredAgent], None] | None
@@ -55,8 +63,8 @@ class SocketMonitor(Protocol):
         """Stop monitoring."""
         ...
 
-class BaseSocketMonitor(ABC):
-    """Base class for socket monitors with common functionality."""
+class BaseAgentMonitor(ABC):
+    """Base class for agent monitors with common functionality."""
 
     def __init__(
         self,
@@ -67,7 +75,7 @@ class BaseSocketMonitor(ABC):
         self.on_agent_removed = on_agent_removed
         self._agents: dict[str, DiscoveredAgent] = {}
         self._lock = threading.Lock()
-        self._socket_dir: Path | None = None
+        self._agent_dir: Path | None = None
 
     @property
     def agent_ids(self) -> list[str]:
@@ -114,12 +122,12 @@ class BaseSocketMonitor(ABC):
             self.on_agent_removed(agent)
         return True
 
-    def _discover_socket(self, path: Path) -> DiscoveredAgent | None:
-        """Check a socket file and return DiscoveredAgent if valid.
+    def _discover_agent_file(self, path: Path) -> DiscoveredAgent | None:
+        """Check an agent file and return DiscoveredAgent if valid.
 
-        Returns None if socket is invalid, stale, or internal.
+        Returns None if file is invalid or internal.
         """
-        if path.name in INTERNAL_SOCKETS:
+        if path.name in INTERNAL_FILES:
             return None
 
         if not path.exists():
@@ -127,29 +135,18 @@ class BaseSocketMonitor(ABC):
 
         agent_id = path.stem
 
-        # Check if socket is alive (has a listener)
-        if not is_socket_alive(path):
-            # Stale socket, try to clean up
-            try:
-                path.unlink()
-                logger.debug(f"Removed stale socket: {path}")
-            except OSError:
-                pass
-            return None
-
         # Get creation time
         try:
             created_at = path.stat().st_mtime
         except OSError:
             return None
 
-        return DiscoveredAgent(id=agent_id, socket_path=path, created_at=created_at)
+        return DiscoveredAgent(id=agent_id, file_path=path, created_at=created_at)
 
-class PollingMonitor(BaseSocketMonitor):
-    """Socket monitor that polls the directory periodically.
+class PollingMonitor(BaseAgentMonitor):
+    """Agent monitor that polls the directory periodically.
 
     Reliable but with a small delay (default 1 second).
-    Also checks if existing sockets are still alive.
     """
 
     def __init__(
@@ -161,8 +158,8 @@ class PollingMonitor(BaseSocketMonitor):
         """Initialize polling monitor.
 
         Args:
-            on_agent_added: Callback when agent socket appears.
-            on_agent_removed: Callback when agent socket disappears.
+            on_agent_added: Callback when agent file appears.
+            on_agent_removed: Callback when agent file disappears.
             poll_interval: Seconds between polls (default 1.0).
         """
         super().__init__(on_agent_added, on_agent_removed)
@@ -175,7 +172,7 @@ class PollingMonitor(BaseSocketMonitor):
         if self._running:
             return
 
-        self._socket_dir = get_socket_dir()
+        self._agent_dir = get_agent_dir()
         self._running = True
 
         # Initial discovery (no callbacks)
@@ -185,7 +182,7 @@ class PollingMonitor(BaseSocketMonitor):
         self._thread = threading.Thread(
             target=self._poll_loop,
             daemon=True,
-            name="polling-socket-monitor",
+            name="polling-agent-monitor",
         )
         self._thread.start()
         logger.debug(f"PollingMonitor started (interval={self._poll_interval}s)")
@@ -210,51 +207,40 @@ class PollingMonitor(BaseSocketMonitor):
                 logger.exception(f"Error in polling loop: {e}")
 
     def _scan_directory(self, *, emit_callbacks: bool = True) -> None:
-        """Scan socket directory for changes."""
-        if not self._socket_dir or not self._socket_dir.exists():
+        """Scan agent directory for changes."""
+        if not self._agent_dir or not self._agent_dir.exists():
             return
 
-        # Find current sockets
-        current_sockets: dict[str, Path] = {}
-        for sock_file in self._socket_dir.glob("*.sock"):
-            if sock_file.name not in INTERNAL_SOCKETS:
-                current_sockets[sock_file.stem] = sock_file
+        # Find current agent files
+        current_files: dict[str, Path] = {}
+        for agent_file in self._agent_dir.glob("*.jsonl"):
+            if agent_file.name not in INTERNAL_FILES:
+                current_files[agent_file.stem] = agent_file
 
-        # Check for new sockets
-        for agent_id, sock_path in current_sockets.items():
+        # Check for new files
+        for agent_id, file_path in current_files.items():
             with self._lock:
                 if agent_id in self._agents:
                     continue  # Already tracked
 
-            # New socket - verify it's alive
-            agent = self._discover_socket(sock_path)
+            # New file - add it
+            agent = self._discover_agent_file(file_path)
             if agent:
                 self._add_agent(agent, emit_callback=emit_callbacks)
                 logger.debug(f"Discovered agent: {agent_id}")
 
-        # Check for removed sockets or dead sockets
+        # Check for removed files
         with self._lock:
             tracked_ids = list(self._agents.keys())
 
         for agent_id in tracked_ids:
-            if agent_id not in current_sockets:
-                # Socket file removed
+            if agent_id not in current_files:
+                # File removed
                 self._remove_agent(agent_id)
-                logger.debug(f"Agent socket removed: {agent_id}")
-            else:
-                # Socket file exists - check if still alive
-                sock_path = current_sockets[agent_id]
-                if not is_socket_alive(sock_path):
-                    self._remove_agent(agent_id)
-                    logger.debug(f"Agent socket dead: {agent_id}")
-                    # Clean up stale socket
-                    try:
-                        sock_path.unlink()
-                    except OSError:
-                        pass
+                logger.debug(f"Agent file removed: {agent_id}")
 
-class WatchdogMonitor(BaseSocketMonitor):
-    """Socket monitor using filesystem events via watchdog.
+class WatchdogMonitor(BaseAgentMonitor):
+    """Agent monitor using filesystem events via watchdog.
 
     Fast (near-instant) but may miss events on some platforms/configurations.
     """
@@ -271,7 +257,7 @@ class WatchdogMonitor(BaseSocketMonitor):
         """Start watching."""
         from watchdog.observers import Observer
 
-        self._socket_dir = get_socket_dir()
+        self._agent_dir = get_agent_dir()
 
         # Initial discovery (no callbacks)
         self._discover_existing(emit_callbacks=False)
@@ -288,8 +274,8 @@ class WatchdogMonitor(BaseSocketMonitor):
                     return
                 src_path = event.src_path if isinstance(event.src_path, str) else event.src_path.decode()
                 path = Path(src_path)
-                if path.suffix == ".sock":
-                    agent = self._monitor._discover_socket(path)
+                if path.suffix == ".jsonl":
+                    agent = self._monitor._discover_agent_file(path)
                     if agent:
                         self._monitor._add_agent(agent)
                         logger.debug(f"Watchdog: agent created: {agent.id}")
@@ -299,14 +285,14 @@ class WatchdogMonitor(BaseSocketMonitor):
                     return
                 src_path = event.src_path if isinstance(event.src_path, str) else event.src_path.decode()
                 path = Path(src_path)
-                if path.suffix == ".sock":
+                if path.suffix == ".jsonl":
                     agent_id = path.stem
-                    if agent_id not in INTERNAL_SOCKETS:
+                    if agent_id not in INTERNAL_FILES:
                         self._monitor._remove_agent(agent_id)
                         logger.debug(f"Watchdog: agent deleted: {agent_id}")
 
         self._observer = Observer()
-        self._observer.schedule(Handler(self), str(self._socket_dir), recursive=False)
+        self._observer.schedule(Handler(self), str(self._agent_dir), recursive=False)
         self._observer.start()
         logger.debug("WatchdogMonitor started")
 
@@ -320,45 +306,20 @@ class WatchdogMonitor(BaseSocketMonitor):
 
     def _discover_existing(self, *, emit_callbacks: bool = True) -> None:
         """Discover agents that already exist."""
-        if not self._socket_dir:
+        if not self._agent_dir:
             return
 
-        for sock_file in self._socket_dir.glob("*.sock"):
-            agent = self._discover_socket(sock_file)
+        for agent_file in self._agent_dir.glob("*.jsonl"):
+            agent = self._discover_agent_file(agent_file)
             if agent:
                 self._add_agent(agent, emit_callback=emit_callbacks)
-
-def is_socket_alive(path: Path) -> bool:
-    """Check if a Unix socket has an active listener.
-
-    Attempts to connect to the socket. If connection succeeds,
-    there's a listener. If ECONNREFUSED, the socket is stale.
-
-    Args:
-        path: Path to the socket file.
-
-    Returns:
-        True if socket has a listener, False otherwise.
-    """
-    try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(0.5)
-        s.connect(str(path))
-        s.close()
-        return True
-    except ConnectionRefusedError:
-        # Socket exists but no one is listening (stale)
-        return False
-    except (FileNotFoundError, OSError):
-        # Socket doesn't exist or other error
-        return False
 
 def create_monitor(
     monitor_type: str = "polling",
     on_agent_added: Callable[[DiscoveredAgent], None] | None = None,
     on_agent_removed: Callable[[DiscoveredAgent], None] | None = None,
     poll_interval: float = 1.0,
-) -> BaseSocketMonitor:
+) -> BaseAgentMonitor:
     """Factory function to create a socket monitor.
 
     Args:
