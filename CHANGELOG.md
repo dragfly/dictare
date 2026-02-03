@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.83.0] - 2026-02-03
+
+### Added - Internal Event Bus
+
+- **events/bus.py**: NEW - Thread-safe internal event bus
+  - Publish/subscribe pattern for decoupled component communication
+  - Global singleton `bus` instance for app-wide usage
+  - Thread-safe with `threading.Lock`
+  - `bus.subscribe(event, callback)` / `bus.publish(event, **data)`
+  - `bus.reset()` for test isolation
+  - Custom implementation (~40 lines) - no external dependencies
+- **events/__init__.py**: NEW - Exports `EventBus`, `bus`
+- **pipeline/agent_filter.py**: Now subscribes to "agents.changed" event
+  - Dynamic agent list updates without manual refresh
+  - `subscribe_to_events=True` by default
+- **tests/test_event_bus.py**: NEW - 14 tests for EventBus
+  - Basic subscribe/publish/unsubscribe
+  - Thread safety (concurrent publish/subscribe)
+  - Error handling (callback exceptions don't stop others)
+- **tests/test_pipeline.py**: Added 5 EventBus integration tests for AgentFilter
+
 ## [2.82.0] - 2026-02-03
 
 ### Added - Agent Filter with Phonetic Matching
