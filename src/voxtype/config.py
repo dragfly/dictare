@@ -165,6 +165,51 @@ class StatsConfig(BaseModel):
         description="Average typing speed in words per minute (for time saved calculation)",
     )
 
+class SubmitFilterConfig(BaseModel):
+    """Submit filter configuration."""
+
+    enabled: bool = Field(default=True, description="Enable submit trigger detection")
+    triggers: list[list[str]] = Field(
+        default_factory=lambda: [
+            ["ok", "invia"],
+            ["ok", "manda"],
+            ["ok", "fatto"],
+            ["va", "bene", "invia"],
+            ["invia"],
+            ["manda"],
+            ["fatto"],
+            ["ok", "send"],
+            ["ok", "submit"],
+            ["go", "ahead"],
+            ["submit"],
+            ["send"],
+            ["adesso"],
+            ["go"],
+        ],
+        description="Trigger patterns (list of word sequences)",
+    )
+    confidence_threshold: float = Field(
+        default=0.85,
+        description="Minimum confidence to trigger submit (0.0-1.0)",
+    )
+    max_scan_words: int = Field(
+        default=15,
+        description="Maximum words from end to scan for triggers",
+    )
+    decay_rate: float = Field(
+        default=0.95,
+        description="Confidence decay rate per word from end (0.95 = 5% per word)",
+    )
+
+class PipelineConfig(BaseModel):
+    """Pipeline filter configuration."""
+
+    enabled: bool = Field(default=True, description="Enable the message pipeline")
+    submit_filter: SubmitFilterConfig = Field(
+        default_factory=SubmitFilterConfig,
+        description="Submit trigger detection filter",
+    )
+
 class DaemonConfig(BaseModel):
     """Daemon configuration."""
 
@@ -226,6 +271,7 @@ class Config(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     stats: StatsConfig = Field(default_factory=StatsConfig)
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
+    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
 
     verbose: bool = Field(default=False, description="Enable verbose output")
 
@@ -462,7 +508,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "logging", "stats", "daemon"):
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "logging", "stats", "daemon", "pipeline"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -487,6 +533,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("logging", LoggingConfig),
         ("stats", StatsConfig),
         ("daemon", DaemonConfig),
+        ("pipeline", PipelineConfig),
     ]
 
     for section_name, section_class in sections:

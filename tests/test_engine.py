@@ -78,6 +78,10 @@ class MockConfig:
         self.stats = MagicMock()
         self.stats.typing_wpm = 40
 
+        # Pipeline config
+        self.pipeline = MagicMock()
+        self.pipeline.enabled = False  # Disabled in tests for simplicity
+
 class MockEventHandler:
     """Mock event handler that records all events."""
 
