@@ -116,8 +116,32 @@ class Engine:
     # Public API - Lifecycle
     # -------------------------------------------------------------------------
 
+    def initialize(self) -> None:
+        """Initialize the engine (non-blocking).
+
+        Starts HTTP/socket servers, then loads models.
+        Call this before run() for fine-grained control.
+
+        The loading progress is available via get_status()["loading"].
+        """
+        self._do_initialize()
+
+    def run(self, *, start_listening: bool = True) -> None:
+        """Run the main loop (blocking).
+
+        Call after initialize() for fine-grained control.
+
+        Args:
+            start_listening: If True, start in LISTENING state.
+                           If False, start IDLE (wait for trigger).
+        """
+        self._main_loop(start_listening=start_listening)
+
     def start(self, *, daemon: bool = False) -> None:
-        """Start the engine.
+        """Start the engine (convenience method).
+
+        Calls initialize() then run(). For fine-grained control,
+        call initialize() and run() separately.
 
         Args:
             daemon: If True, fork and run as daemon. If False, run in foreground.
@@ -293,14 +317,14 @@ class Engine:
         """Start engine in foreground mode."""
         logger.info("Starting engine in foreground mode...")
         self.state.engine.mode = "foreground"
-        self._initialize()
+        self._do_initialize()
 
         # Register hotkey
         self._register_hotkey()
         self.state.hotkey.bound = True
 
-        # Keep running until shutdown
-        self._main_loop()
+        # Keep running until shutdown (listening immediately)
+        self._main_loop(start_listening=True)
 
     def _start_daemon(self) -> None:
         """Start engine as daemon (fork and detach)."""
@@ -324,15 +348,15 @@ class Engine:
 
         logger.info("Starting engine in daemon mode...")
         self.state.engine.mode = "daemon"
-        self._initialize()
+        self._do_initialize()
 
         # Do NOT register hotkey in daemon mode
         # Tray will register it and send hotkey.bind
 
-        # Keep running until shutdown
-        self._main_loop()
+        # Keep running until shutdown (IDLE, wait for trigger)
+        self._main_loop(start_listening=False)
 
-    def _initialize(self) -> None:
+    def _do_initialize(self) -> None:
         """Initialize engine (common for foreground and daemon)."""
         self._start_time = time.time()
         self._running = True
@@ -366,25 +390,64 @@ class Engine:
         logger.info(f"Engine initialized (PID: {os.getpid()}, version: {__version__})")
 
     def _initialize_services(self) -> None:
-        """Initialize services based on configuration."""
-        # STT: always enabled for now
+        """Initialize services based on configuration.
+
+        Sets up LoadingState with historical times, then loads models.
+        Progress is calculated on-the-fly when /status is polled.
+        """
+        from voxtype.engine.state import ModelLoadingProgress
+        from voxtype.utils.stats import get_model_load_time
+
+        # Get model IDs for historical times
+        stt_model_id = self._get_stt_model_id()
+        vad_model_id = "silero-vad"
+
+        # Create loading state with estimated times
+        self.state.loading = LoadingState(
+            active=True,
+            models=[
+                ModelLoadingProgress(
+                    name="stt",
+                    status="pending",
+                    estimated=get_model_load_time(stt_model_id) or 20.0,
+                ),
+                ModelLoadingProgress(
+                    name="vad",
+                    status="pending",
+                    estimated=get_model_load_time(vad_model_id) or 5.0,
+                ),
+            ],
+        )
+
+        # Load STT (will update loading state)
         self._initialize_stt()
 
         # TTS: on-demand (loaded when first used)
         # Translation: disabled (placeholder)
 
+    def _get_stt_model_id(self) -> str:
+        """Get the model ID for STT based on config."""
+        from voxtype.utils.hardware import is_mlx_available
+
+        model = self._config.stt.model
+        if self._config.stt.hw_accel and is_mlx_available():
+            # MLX model path
+            return f"mlx-community/whisper-{model}"
+        # Faster-whisper model
+        return f"faster-whisper-{model}"
+
     def _initialize_stt(self) -> None:
-        """Initialize STT service."""
+        """Initialize STT service.
+
+        Updates LoadingState as models load:
+        - STT: loading → done (when VAD starts loading)
+        - VAD: loading → done (when create_engine returns)
+        """
         from voxtype.core.engine import create_engine
         from voxtype.core.events import EngineEvents
 
-        # Update loading state
-        self.state.loading = LoadingState(
-            active=True,
-            service="stt",
-            stage="loading",
-            percent=0,
-        )
+        # Mark STT as loading
+        self._update_model_loading("stt", "loading")
 
         # Create event handler that updates engine state
         # Use closure to capture outer self
@@ -435,7 +498,9 @@ class Engine:
                 pass
 
             def on_vad_loading(self) -> None:
-                pass
+                # STT finished loading, VAD starting
+                outer_self._update_model_loading("stt", "done")
+                outer_self._update_model_loading("vad", "loading")
 
             def on_device_reconnect_attempt(self, attempt: int) -> None:
                 pass
@@ -455,11 +520,37 @@ class Engine:
             hotkey_enabled=False,  # Engine handles hotkey separately
         )
 
-        # Update state after loading
-        self.state.loading = None
+        # Mark VAD as done (all models loaded)
+        self._update_model_loading("vad", "done")
+
+        # Loading complete
+        self.state.loading.active = False
         self.state.stt.model_loaded = True
         self.state.stt.model_name = self._config.stt.model
         self.state.stt.language = self._config.stt.language
+
+    def _update_model_loading(
+        self, model_name: str, status: str
+    ) -> None:
+        """Update loading status for a model.
+
+        Args:
+            model_name: Model name ("stt", "vad", etc.)
+            status: New status ("pending", "loading", "done", "error")
+        """
+        if not self.state.loading:
+            return
+
+        for model in self.state.loading.models:
+            if model.name == model_name:
+                model.status = status  # type: ignore
+                if status == "loading":
+                    model.started_at = time.time()
+                elif status == "done":
+                    # Calculate final elapsed time
+                    if model.started_at > 0:
+                        model.elapsed = time.time() - model.started_at
+                break
 
     def _start_servers(self) -> None:
         """Start transport servers."""
@@ -520,8 +611,17 @@ class Engine:
         logger.info(f"Received signal {signum}, shutting down...")
         self._shutdown_requested = True
 
-    def _main_loop(self) -> None:
-        """Main event loop."""
+    def _main_loop(self, *, start_listening: bool = True) -> None:
+        """Main event loop.
+
+        Args:
+            start_listening: If True, transition to LISTENING state.
+                           If False, stay IDLE (daemon mode).
+        """
+        # Start listening if requested (foreground mode)
+        if start_listening and self._stt_service:
+            self.start_stt()
+
         try:
             while self._running and not self._shutdown_requested:
                 time.sleep(0.1)
