@@ -1135,20 +1135,18 @@ def engine_start(
         engine.start(daemon=True)
         # Parent process exits here, child continues
     else:
-        # Foreground mode: use initialize() + polling + run()
-        console.print("[dim]Starting engine...[/]")
-        console.print(f"[dim]Output mode: {config.output.mode}[/]")
-        console.print(f"[dim]HTTP server: http://{config.server.host}:{config.server.port}[/]")
-
-        # Initialize engine (starts HTTP server, loads models)
-        # Note: This blocks while loading models. Progress is available via /status
-        # but will be displayed by the Panel in a future phase.
+        # Foreground mode: StatusPanel polls /status and shows UI
+        import signal
         import threading
 
+        from voxtype.ui.panel import StatusPanel
+
+        base_url = f"http://{config.server.host}:{config.server.port}"
         init_error: Exception | None = None
         init_done = threading.Event()
 
         def do_init() -> None:
+            """Initialize engine in background thread."""
             nonlocal init_error
             try:
                 engine.state.engine.mode = "foreground"
@@ -1158,35 +1156,42 @@ def engine_start(
             finally:
                 init_done.set()
 
-        # Show spinner while loading (progress bars will be in Panel, Phase 5)
-        with console.status("[bold blue]Loading models...", spinner="dots"):
-            init_thread = threading.Thread(target=do_init, daemon=True)
-            init_thread.start()
+        def run_engine() -> None:
+            """Run engine main loop after init completes."""
             init_done.wait()
+            if init_error:
+                return
+            # Register hotkey (must be after init, in this thread is ok)
+            engine._register_hotkey()
+            engine.state.hotkey.bound = True
+            # Run main loop (handles audio/STT)
+            engine.run(start_listening=True)
 
-        # Check for initialization error
-        if init_error:
-            console.print(f"[red]Engine initialization failed: {init_error}[/]")
-            raise typer.Exit(1)
+        # Start engine initialization
+        init_thread = threading.Thread(target=do_init, daemon=True)
+        init_thread.start()
 
-        # Setup signal handlers in main thread (couldn't do in init thread)
-        import signal
-        signal.signal(signal.SIGTERM, engine._signal_handler)
-        signal.signal(signal.SIGINT, engine._signal_handler)
+        # Start engine main loop (waits for init, then processes audio)
+        engine_thread = threading.Thread(target=run_engine, daemon=True)
+        engine_thread.start()
 
-        # Initialization complete
-        console.print(f"[dim]Hotkey: {config.hotkey.key}[/]")
-        console.print("[dim]Press Ctrl+C to stop[/]")
+        # Setup signal handlers in main thread
+        def signal_handler(signum: int, frame: Any) -> None:
+            engine._shutdown_requested = True
 
-        # Register hotkey (foreground only)
-        engine._register_hotkey()
-        engine.state.hotkey.bound = True
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+
+        # Run StatusPanel in main thread (polls /status, shows UI)
+        panel = StatusPanel(console, base_url)
 
         try:
-            # Run main loop (listening immediately in foreground)
-            engine.run(start_listening=True)
+            panel.run()
         except KeyboardInterrupt:
-            console.print("\n[yellow]Shutting down...[/]")
+            pass
+        finally:
+            panel.stop()
+            engine.stop()
             engine.stop()
 
 @engine_app.command("stop")
