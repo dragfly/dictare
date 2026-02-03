@@ -228,19 +228,24 @@ class JSONLLogger:
         success: bool,
         auto_enter: bool = False,
         enter_sent: bool | None = None,
+        submit_trigger: str | None = None,
+        submit_confidence: float | None = None,
     ) -> None:
         """Log a text injection."""
         chars = len(text)
         # INFO: metadata only
-        self._log_internal(
-            "injection",
-            LogLevel.INFO,
-            chars=chars,
-            method=method,
-            success=success,
-            auto_enter=auto_enter,
-            enter_sent=enter_sent,
-        )
+        extra: dict = {
+            "chars": chars,
+            "method": method,
+            "success": success,
+            "auto_enter": auto_enter,
+            "enter_sent": enter_sent,
+        }
+        # Add trigger info if submit was triggered by voice
+        if submit_trigger:
+            extra["submit_trigger"] = submit_trigger
+            extra["submit_confidence"] = submit_confidence
+        self._log_internal("injection", LogLevel.INFO, **extra)
         # DEBUG: include text
         if self.level >= LogLevel.DEBUG:
             self._log_internal(
