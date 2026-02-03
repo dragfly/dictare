@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.86.0] - 2026-02-03
+
+### Added - Fuzzy Matching for Trigger Words
+
+- **agent_filter.py**: Apply fuzzy matching to trigger words
+  - Handles STT errors like "adziente" → "agente", "aziente" → "agente"
+  - Uses edit distance only (metaphone doesn't work well for non-English)
+  - 60% character similarity threshold for triggers
+- **tests**: Added fuzzy trigger tests
+
 ## [2.85.1] - 2026-02-03
 
 ### Fixed - Pipeline Initialization Order

@@ -237,11 +237,39 @@ class AgentFilter:
 
         return FilterResult.passed(message)
 
+    def _match_trigger(self, token: str) -> str | None:
+        """Match token against trigger words using edit distance.
+
+        Uses only edit distance (not phonetic) because metaphone doesn't
+        handle Italian pronunciation well (e.g., "adziente" → ATSNT vs
+        "agente" → AJNT produces phonetic score of 0).
+
+        Args:
+            token: Normalized token to match.
+
+        Returns:
+            The matched trigger word, or None if no match above threshold.
+        """
+        # Use edit distance only - phonetic doesn't work for Italian triggers
+        trigger_threshold = 0.6  # 60% character similarity required
+
+        for trigger in self.triggers:
+            trigger_norm = _normalize(trigger)
+            token_norm = _normalize(token)
+            score = edit_score(token_norm, trigger_norm)
+            if score >= trigger_threshold:
+                return trigger
+
+        return None
+
     def _find_agent_match(self, tokens: list[str]) -> AgentMatch | None:
         """Find agent switch pattern in tokens.
 
         Looks for "agent/agente <word>" near the end and matches <word>
         against known agent IDs using fuzzy matching.
+
+        Also uses fuzzy matching on trigger words to handle Whisper errors
+        like "adziente" for "agente".
 
         Args:
             tokens: Normalized tokens from text.
@@ -255,11 +283,11 @@ class AgentFilter:
 
         # Look for trigger word followed by potential agent name
         for i, token in enumerate(scan_tokens):
-            if token in [_normalize(t) for t in self.triggers]:
+            matched_trigger = self._match_trigger(token)
+            if matched_trigger:
                 # Check if there's a word after the trigger
                 if i + 1 < len(scan_tokens):
                     heard_word = scan_tokens[i + 1]
-                    trigger_word = token
 
                     # Try to match against known agents
                     best_match = self._match_agent(heard_word)
@@ -268,7 +296,7 @@ class AgentFilter:
                             agent_id=best_match[0],
                             heard_word=heard_word,
                             score=best_match[1],
-                            trigger_word=trigger_word,
+                            trigger_word=matched_trigger,
                         )
 
         return None
