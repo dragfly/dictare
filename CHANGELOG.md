@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.92.1] - 2026-02-03
+
+### Fixed - Graceful shutdown on Ctrl+C
+
+- **ui/panel.py**: Handle connection errors gracefully
+  - Catch `ConnectionResetError` and `OSError` in `_fetch_status()`
+  - Track connection state to detect engine shutdown
+  - Exit cleanly after 3 consecutive failures (engine stopped)
+  - Show "Connecting..." instead of error during startup
+
 ## [2.92.0] - 2026-02-03
 
 ### Added - StatusPanel with HTTP polling (Phase 5)
