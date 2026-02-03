@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.100.0] - 2026-02-03
+
+### Fixed
+
+**Socket persistent connection:**
+- Bug: socket opened/closed for EVERY message → backlog overflow when speaking fast
+- Fix: now uses persistent connection (connect once, send many messages)
+
+**Submit trigger cleanup:**
+- Bug: only trigger word was removed, leaving trailing text
+- Fix: removes trigger word AND everything after it
+- Example: "blabla submit della frase" → "blabla" (not "blabla della frase")
+
+### Added
+
+- Submit trigger logging: `x_submit_trigger` and `x_submit_confidence` in injection logs
+- `voxtype log engine -f | grep submit_trigger` to debug false triggers
+- `SocketAgent.connect()` and `SocketAgent.disconnect()` for persistent connections
+
 ## [2.99.0] - 2026-02-03
 
 ### Changed - File-based IPC (replacing sockets)
@@ -15,17 +34,13 @@ This fixes message loss issues that were occurring with socket-based transport.
 - **FileAgent**: New agent that writes OpenVIP messages to JSONL files
 - **Agent files**: Now stored in `~/.local/share/voxtype/agents/{agent_id}.jsonl`
 - **Mux reader**: Uses unbuffered file I/O with tail-f style polling
-- **Socket code**: Kept but disabled (can be re-enabled for debugging)
+- **Socket code**: Kept but fixed with persistent connection
 
 ### Added
 
 - `_read_from_file()` function in mux.py for reliable file-based message reading
 - `FileAgent` class in `agent/file.py`
 - `get_agent_dir()` function in monitor.py
-
-### Removed
-
-- Socket-based agent discovery (replaced by file-based)
 
 ## [2.98.3] - 2026-02-03
 

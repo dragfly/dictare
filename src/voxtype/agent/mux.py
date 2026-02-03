@@ -161,11 +161,17 @@ def _read_from_socket(
 ) -> None:
     """Listen on Unix socket for OpenVIP messages.
 
+    Uses PERSISTENT connection:
+    - Accept ONE connection from engine
+    - Read messages in loop on same connection
+    - Connection closes only when engine disconnects
+
     Receives OpenVIP messages and converts to internal format:
     - {"type": "message", "text": "hello", "x_submit": true} -> {"text": "hello", "submit": true}
     - {"type": "message", "text": "\\n", "x_visual_newline": true} -> {"text": "\\n"}
     """
     msg_count = 0
+    line_buffer = b""
 
     # Remove stale socket file
     if socket_path.exists():
@@ -175,80 +181,113 @@ def _read_from_socket(
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(str(socket_path))
-    server.listen(5)
+    server.listen(1)  # Only one connection (engine)
     server.setblocking(False)
+
+    conn: socket.socket | None = None
 
     try:
         while not stop_event.is_set():
-            # Check for new connections with timeout
+            # If no connection, wait for one
+            if conn is None:
+                try:
+                    ready, _, _ = select.select([server], [], [], 0.1)
+                except (ValueError, OSError):
+                    break
+
+                if ready:
+                    try:
+                        conn, _ = server.accept()
+                        conn.setblocking(False)
+                        if session_path:
+                            _log_event(session_path, "engine_connected", {})
+                    except BlockingIOError:
+                        pass
+                continue
+
+            # We have a connection - read from it
             try:
-                ready, _, _ = select.select([server], [], [], 0.1)
+                ready, _, _ = select.select([conn], [], [], 0.1)
             except (ValueError, OSError):
-                break
+                # Connection broken
+                conn = None
+                line_buffer = b""
+                continue
 
             if not ready:
                 continue
 
             try:
-                conn, _ = server.accept()
-            except BlockingIOError:
-                continue
-
-            # Read data from connection
-            try:
-                data = b""
-                while True:
-                    chunk = conn.recv(4096)
-                    if not chunk:
-                        break
-                    data += chunk
-                conn.close()
-            except OSError:
-                continue
-
-            # Parse OpenVIP message(s) - one per line
-            for line in data.decode("utf-8").strip().split("\n"):
-                if not line:
-                    continue
-
-                try:
-                    openvip_msg = json.loads(line)
-                except json.JSONDecodeError:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    # Engine disconnected
                     if session_path:
-                        _log_event(session_path, "parse_error", {"line": line[:100]})
+                        _log_event(session_path, "engine_disconnected", {})
+                    conn.close()
+                    conn = None
+                    line_buffer = b""
                     continue
 
-                # Skip non-message types
-                if openvip_msg.get("type") != "message":
-                    continue
+                line_buffer += chunk
 
-                # Convert OpenVIP to internal format, preserving metadata for tracing
-                msg: dict[str, Any] = {
-                    "text": openvip_msg.get("text", ""),
-                    "openvip_id": openvip_msg.get("id"),
-                    "openvip_ts": openvip_msg.get("timestamp"),
-                }
-                if openvip_msg.get("x_submit"):
-                    msg["submit"] = True
-                if openvip_msg.get("x_visual_newline"):
-                    msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
+                # Process complete lines (messages are newline-delimited)
+                while b"\n" in line_buffer:
+                    line_bytes, line_buffer = line_buffer.split(b"\n", 1)
+                    line = line_bytes.decode("utf-8", errors="replace").strip()
 
-                msg_count += 1
-                if session_path:
-                    text = msg.get("text", "")
-                    _log_event(session_path, "msg_read", {
-                        "seq": msg_count,
-                        "text": text if verbose else text[:50],
+                    if not line:
+                        continue
+
+                    try:
+                        openvip_msg = json.loads(line)
+                    except json.JSONDecodeError:
+                        if session_path:
+                            _log_event(session_path, "parse_error", {"line": line[:100]})
+                        continue
+
+                    # Skip non-message types
+                    if openvip_msg.get("type") != "message":
+                        continue
+
+                    # Convert OpenVIP to internal format
+                    msg: dict[str, Any] = {
+                        "text": openvip_msg.get("text", ""),
                         "openvip_id": openvip_msg.get("id"),
-                        "keystrokes": keystroke_counter.count if keystroke_counter else 0,
-                    })
+                        "openvip_ts": openvip_msg.get("timestamp"),
+                    }
+                    if openvip_msg.get("x_submit"):
+                        msg["submit"] = True
+                    if openvip_msg.get("x_visual_newline"):
+                        msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
 
-                write_queue.put(("msg", msg))
+                    msg_count += 1
+                    if session_path:
+                        text = msg.get("text", "")
+                        _log_event(session_path, "msg_read", {
+                            "seq": msg_count,
+                            "text": text if verbose else text[:50],
+                            "openvip_id": openvip_msg.get("id"),
+                            "keystrokes": keystroke_counter.count if keystroke_counter else 0,
+                        })
+
+                    write_queue.put(("msg", msg))
+
+            except (BlockingIOError, InterruptedError):
+                # No data available yet
+                continue
+            except OSError:
+                # Connection error
+                if conn:
+                    conn.close()
+                conn = None
+                line_buffer = b""
 
     except (BrokenPipeError, OSError) as e:
         if session_path:
             _log_event(session_path, "reader_error", {"error": str(e)})
     finally:
+        if conn:
+            conn.close()
         server.close()
         if socket_path.exists():
             socket_path.unlink()

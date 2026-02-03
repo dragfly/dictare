@@ -738,9 +738,12 @@ class VoxtypeEngine:
 
             self._stats_injection_seconds += time.time() - inject_start
 
-        # Determine final text (after pipeline processing)
-        final_text = messages_to_send[0].get("text", text) if messages_to_send else text
-        pipeline_submit = messages_to_send[0].get("x_submit", False) if messages_to_send else False
+        # Determine final text and submit info (after pipeline processing)
+        first_msg = messages_to_send[0] if messages_to_send else {}
+        final_text = first_msg.get("text", text)
+        pipeline_submit = first_msg.get("x_submit", False)
+        submit_trigger = first_msg.get("x_submit_trigger")  # e.g., "submit", "invia"
+        submit_confidence = first_msg.get("x_submit_confidence")  # e.g., 0.95
 
         # Emit injection event
         self._emit(
@@ -756,6 +759,8 @@ class VoxtypeEngine:
                 success=success,
                 auto_enter=auto_enter or pipeline_submit,
                 enter_sent=None,  # Agents handle their own submission
+                submit_trigger=submit_trigger,
+                submit_confidence=submit_confidence,
             )
 
     # -------------------------------------------------------------------------
