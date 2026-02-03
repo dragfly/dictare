@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.98.1] - 2026-02-03
+
+### Added
+
+- Session stats display in AppController (`_display_session_stats`)
+
+### Note
+
+- `core/app.py` (VoxtypeApp) kept as reference only - use `engine start` instead
+
 ## [2.98.0] - 2026-02-03
 
 ### Added - AppController architecture
