@@ -6,30 +6,28 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  UV_FROZEN: 1  # Prevent uv run from re-syncing
-
 jobs:
   test-linux:
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install dependencies
-        env:
-          UV_FROZEN: 0  # Allow sync during install
+      - name: Set up Python
         run: |
-          rm -rf .venv
-          uv sync --python 3.11 --extra dev --prerelease=allow
+          python3.11 -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -e ".[dev]"
 
       - name: Run linter
-        run: uv run ruff check .
+        run: |
+          . .venv/bin/activate
+          ruff check .
 
       - name: Run tests
-        run: uv run pytest tests/ -v
+        run: |
+          . .venv/bin/activate
+          pytest tests/ -v
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
@@ -40,8 +38,6 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        env:
-          UV_FROZEN: 0  # Allow sync during install
         run: uv sync --python 3.11 --extra dev --prerelease=allow
 
       - name: Run linter
@@ -55,15 +51,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install dependencies
-        env:
-          UV_FROZEN: 0  # Allow sync during install
+      - name: Set up Python
         run: |
-          rm -rf .venv
-          uv sync --python 3.11 --extra dev --prerelease=allow
+          python3.11 -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -e ".[dev]"
 
       - name: Run mypy
-        run: uv run mypy src/
+        run: |
+          . .venv/bin/activate
+          mypy src/
