@@ -2309,6 +2309,38 @@ def log_listen(
     log_path = get_default_log_path("listen")
     _tail_log(log_path, follow, json_output, lines)
 
+@log_app.command("engine")
+def log_engine(
+    follow: Annotated[
+        bool,
+        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", "-j", help="Output raw JSON lines"),
+    ] = False,
+    lines: Annotated[
+        int,
+        typer.Option("--lines", "-n", help="Number of lines to show"),
+    ] = 20,
+) -> None:
+    """View logs from voxtype engine sessions.
+
+    Shows recent log entries from ~/.local/share/voxtype/logs/engine.jsonl
+
+    Use --verbose flag when starting engine to see full text in logs.
+
+    Examples:
+        voxtype log engine              # Show last 20 entries
+        voxtype log engine -f           # Follow live
+        voxtype log engine -n 50        # Show last 50 entries
+        voxtype log engine --json       # Output raw JSON
+    """
+    from voxtype.logging.jsonl import get_default_log_path
+
+    log_path = get_default_log_path("engine")
+    _tail_log(log_path, follow, json_output, lines)
+
 @log_app.command("agent")
 def log_agent(
     ctx: typer.Context,
