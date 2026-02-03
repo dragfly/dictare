@@ -29,29 +29,30 @@ logger = logging.getLogger(__name__)
 # Order matters: longer/more specific patterns should come first
 DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {
     "it": [
-        # Multi-word (higher priority)
+        # Multi-word (higher priority) - these are explicit submit commands
         ["ok", "invia"],
         ["ok", "in", "via"],  # "invia" often heard as "in via"
         ["ok", "manda"],
         ["ok", "fatto"],
         ["va", "bene", "invia"],
         ["va", "bene", "in", "via"],
-        # Single word / two-word variants
+        ["invia", "adesso"],
+        ["manda", "adesso"],
+        # Single word - only explicit submit words
         ["invia"],
         ["in", "via"],  # "invia" often heard as "in via"
         ["manda"],
-        ["fatto"],
-        ["adesso"],  # "invia adesso", "manda adesso"
+        # NOTE: "fatto" and "adesso" removed - too common, caused false positives
     ],
     "en": [
         # Multi-word (higher priority)
         ["ok", "send"],
         ["ok", "submit"],
         ["go", "ahead"],
-        # Single word
+        # Single word - only explicit submit words
         ["submit"],
         ["send"],
-        ["go"],
+        # NOTE: "go" removed - too common, caused false positives
     ],
     "es": [
         ["ok", "enviar"],
