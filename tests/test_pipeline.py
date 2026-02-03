@@ -532,8 +532,12 @@ class TestAgentFilterDetection:
         assert result.messages[0]["x_agent_switch"] == "koder"
 
     def test_italian_agente_trigger(self) -> None:
-        """Italian 'agente' trigger is detected."""
-        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
+        """Italian 'agente' trigger is detected when configured."""
+        f = AgentFilter(
+            agent_ids=["voxtype"],
+            triggers=["agent", "agente"],  # User must add "agente" for Italian
+            subscribe_to_events=False,
+        )
         msg = {"text": "fammi vedere agente voxtype"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -585,7 +589,11 @@ class TestAgentFilterDetection:
 
     def test_fuzzy_trigger_adziente(self) -> None:
         """Fuzzy matching on trigger words - 'adziente' should match 'agente'."""
-        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
+        f = AgentFilter(
+            agent_ids=["voxtype"],
+            triggers=["agente"],  # Italian trigger
+            subscribe_to_events=False,
+        )
         msg = {"text": "fammi vedere adziente voxtype"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -593,7 +601,11 @@ class TestAgentFilterDetection:
 
     def test_fuzzy_trigger_aziente(self) -> None:
         """Fuzzy matching on trigger - 'aziente' should match 'agente'."""
-        f = AgentFilter(agent_ids=["koder"], subscribe_to_events=False)
+        f = AgentFilter(
+            agent_ids=["koder"],
+            triggers=["agente"],  # Italian trigger
+            subscribe_to_events=False,
+        )
         msg = {"text": "dimmi l'ora aziente koder"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -623,7 +635,11 @@ class TestAgentFilterDetection:
 
     def test_italian_uses_edit_only_for_triggers(self) -> None:
         """Italian messages use edit distance only for trigger matching."""
-        f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
+        f = AgentFilter(
+            agent_ids=["voxtype"],
+            triggers=["agente"],  # Italian trigger
+            subscribe_to_events=False,
+        )
         # "adziente" doesn't match "agente" phonetically, but does via edit distance
         msg = {"text": "adziente voxtype", "language": "it"}
         result = f.process(msg)

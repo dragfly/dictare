@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.87.1] - 2026-02-03
+
+### Changed - Default AgentFilter Triggers
+
+- **config.py**: Default triggers now English-only: `["agent"]`
+  - Removed "agente" from defaults (users add their language triggers)
+  - Consistent with open-source approach: English defaults, users customize
+  - If we include Italian, we'd need French, German, Spanish, etc.
+- **tests**: Updated to pass triggers explicitly when testing non-English
+
 ## [2.87.0] - 2026-02-03
 
 ### Changed - Language-Aware Trigger Matching
