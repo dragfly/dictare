@@ -197,8 +197,10 @@ class SubmitFilter:
         match = self._find_best_match(tokens, active_triggers)
 
         if match and match.confidence >= self.confidence_threshold:
-            # Log trigger detection
+            # Get matched tokens for logging
             matched_tokens = tokens[match.start_idx : match.end_idx]
+
+            # Log trigger detection (standard logging)
             logger.info(
                 "submit_trigger",
                 extra={
@@ -208,13 +210,16 @@ class SubmitFilter:
                 },
             )
 
-            # Remove trigger words from original text
+            # Remove trigger and everything after from original text
             cleaned_text = self._remove_trigger_from_text(text, match, tokens)
 
-            # Create new message with submit flag
+            # Create new message with submit flag and trigger metadata
             new_message = message.copy()
             new_message["text"] = cleaned_text
             new_message["x_submit"] = True
+            # Add trigger details for debugging/logging
+            new_message["x_submit_trigger"] = " ".join(matched_tokens)
+            new_message["x_submit_confidence"] = round(match.confidence, 3)
 
             # Remove visual_newline if present (submit takes precedence)
             new_message.pop("x_visual_newline", None)
@@ -331,11 +336,16 @@ class SubmitFilter:
     def _remove_trigger_from_text(
         self, text: str, match: TriggerMatch, tokens: list[str]
     ) -> str:
-        """Remove matched trigger words from the original text.
+        """Remove trigger and everything after it from the original text.
 
-        This is tricky because we need to map normalized tokens back to
-        the original text. We use a simple approach: find and remove
-        the matched words from the end of the text.
+        When a trigger is detected, everything from the FIRST trigger word
+        to the END of the text is removed. The trigger word marks the start
+        of a "command", not content.
+
+        Example:
+            "ho un bug submit della frase" -> "ho un bug"
+            "ok invia questo messaggio" -> "ok invia questo messaggio"
+                (if "ok invia" is the trigger, but it's at the start)
 
         Args:
             text: Original text.
@@ -343,36 +353,32 @@ class SubmitFilter:
             tokens: Normalized tokens.
 
         Returns:
-            Text with trigger words removed.
+            Text with trigger and everything after removed.
         """
-        # Get the trigger words we need to remove
-        trigger_tokens = set(tokens[match.start_idx : match.end_idx])
+        # Get the first trigger word (where to cut)
+        first_trigger_token = tokens[match.start_idx]
 
         # Work with the original text, find words from the end
         # Split preserving whitespace info
         words = re.findall(r"\S+|\s+", text)
 
-        # Find which word segments to remove (from the end)
-        to_remove: set[int] = set()
-        remaining_triggers = trigger_tokens.copy()
+        # Find the position of the first trigger word (scanning from end)
+        cut_position: int | None = None
 
-        # Scan from end
         for i in range(len(words) - 1, -1, -1):
             word = words[i]
             if word.strip():  # Non-whitespace
-                # Check if this word contains any trigger token
                 word_tokens = _tokenize(word)
-                for wt in word_tokens:
-                    if wt in remaining_triggers:
-                        to_remove.add(i)
-                        remaining_triggers.discard(wt)
-                        break
+                if first_trigger_token in word_tokens:
+                    cut_position = i
+                    break
 
-            if not remaining_triggers:
-                break
+        if cut_position is None:
+            # Trigger not found in original text (shouldn't happen)
+            return text
 
-        # Remove marked words and trailing whitespace
-        result_words = [w for i, w in enumerate(words) if i not in to_remove]
+        # Keep everything BEFORE the trigger word
+        result_words = words[:cut_position]
 
         # Join and clean up trailing whitespace
         result = "".join(result_words).rstrip()
