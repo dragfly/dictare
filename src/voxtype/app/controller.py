@@ -338,6 +338,120 @@ class AppController:
 
     def _display_session_stats(self) -> None:
         """Display session statistics on exit."""
-        # TODO: Implement session stats display
-        # Should show: total recordings, total time, etc.
-        pass
+        import random
+        from datetime import datetime
+
+        from rich.columns import Columns
+        from rich.console import Console
+        from rich.table import Table
+
+        from voxtype.utils.stats import update_stats
+
+        if not self._engine:
+            return
+
+        # Skip if no transcriptions were made
+        if self._engine.stats_count == 0:
+            return
+
+        console = Console()
+
+        # Get stats from engine
+        stats_count = self._engine.stats_count
+        stats_chars = self._engine.stats_chars
+        stats_words = self._engine.stats_words
+        stats_audio_seconds = self._engine.stats_audio_seconds
+        stats_transcription_seconds = self._engine.stats_transcription_seconds
+        stats_injection_seconds = self._engine.stats_injection_seconds
+
+        # Average typing speed from config
+        typing_wpm = self._config.stats.typing_wpm
+        chars_per_minute = typing_wpm * 5
+
+        typing_time_minutes = stats_chars / chars_per_minute
+        total_voxtype_seconds = (
+            stats_audio_seconds + stats_transcription_seconds + stats_injection_seconds
+        )
+        total_voxtype_minutes = total_voxtype_seconds / 60
+
+        effective_wpm = (
+            stats_words / total_voxtype_minutes if total_voxtype_minutes > 0 else 0
+        )
+
+        time_saved_minutes = typing_time_minutes - total_voxtype_minutes
+        time_saved_seconds = time_saved_minutes * 60
+
+        # Update persistent stats
+        lifetime = update_stats(
+            transcriptions=stats_count,
+            words=stats_words,
+            chars=stats_chars,
+            audio_seconds=stats_audio_seconds,
+            transcription_seconds=stats_transcription_seconds,
+            injection_seconds=stats_injection_seconds,
+            time_saved_seconds=max(0, time_saved_seconds),
+        )
+
+        # Create two-column stats layout
+        left_table = Table(title="Output", expand=False, show_header=False, box=None)
+        left_table.add_column("Metric", style="dim")
+        left_table.add_column("Value", style="cyan")
+        left_table.add_row("Transcriptions", str(stats_count))
+        left_table.add_row("Words", str(stats_words))
+        left_table.add_row("Characters", str(stats_chars))
+        left_table.add_row("Effective WPM", f"{effective_wpm:.0f}")
+
+        right_table = Table(title="Timing", expand=False, show_header=False, box=None)
+        right_table.add_column("Metric", style="dim")
+        right_table.add_column("Value", style="cyan")
+        right_table.add_row("Audio", f"{stats_audio_seconds:.1f}s")
+        right_table.add_row("STT", f"{stats_transcription_seconds:.1f}s")
+        right_table.add_row("Injection", f"{stats_injection_seconds:.1f}s")
+        right_table.add_row("Processing", f"{total_voxtype_seconds:.1f}s")
+
+        console.print()
+        console.print(Columns([left_table, right_table], padding=(0, 4)))
+
+        # Fun phrases for session time saved
+        if time_saved_seconds > 0:
+            time_saved_phrases = [
+                "Saved you [bold]{time}[/]. You're welcome.",
+                "[bold]{time}[/] back in your pocket.",
+                "Time saved: [bold]{time}[/]. My pleasure!",
+                "[bold]{time}[/] extra for coffee.",
+                "[bold]{time}[/] gained. Use them wisely!",
+            ]
+
+            if time_saved_seconds >= 60:
+                time_str = f"{time_saved_minutes:.1f} minutes"
+            else:
+                time_str = f"{time_saved_seconds:.0f} seconds"
+
+            phrase = random.choice(time_saved_phrases).format(time=time_str)
+            console.print()
+            console.print(f"[green bold]{phrase}[/]")
+
+        # Lifetime stats line
+        lifetime_saved = lifetime["total_time_saved_seconds"]
+        if lifetime_saved >= 3600:
+            lifetime_time_str = f"{lifetime_saved / 3600:.1f} hours"
+        elif lifetime_saved >= 60:
+            lifetime_time_str = f"{lifetime_saved / 60:.0f} minutes"
+        else:
+            lifetime_time_str = f"{lifetime_saved:.0f} seconds"
+
+        sessions_str = (
+            f"{lifetime['sessions']} session"
+            if lifetime["sessions"] == 1
+            else f"{lifetime['sessions']} sessions"
+        )
+        if lifetime["first_use"]:
+            try:
+                first_use = datetime.fromisoformat(lifetime["first_use"])
+                since_str = first_use.strftime("%b %d, %Y")
+                console.print(
+                    f"[dim]All time: [green]{lifetime_time_str}[/] saved "
+                    f"across {sessions_str} (since {since_str})[/]"
+                )
+            except ValueError:
+                pass
