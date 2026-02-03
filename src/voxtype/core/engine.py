@@ -125,12 +125,12 @@ class VoxtypeEngine:
         self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
 
-        # Pipeline for message processing
-        self._pipeline = self._create_pipeline()
-
-        # Agent state
+        # Agent state (must be initialized before pipeline)
         self._current_agent_id: str | None = None  # ID of currently selected agent
         self._agent_order: list[str] = []  # Ordered list of agent IDs for cycling
+
+        # Pipeline for message processing
+        self._pipeline = self._create_pipeline()
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
         self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
 
