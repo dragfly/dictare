@@ -1164,14 +1164,22 @@ def engine_start(
     if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
         config.hotkey.key = "KEY_RIGHTMETA"
 
-    # Create VoxtypeEngine with minimal event handler
-    class MinimalEvents(EngineEvents):
-        """Minimal event handler - adapter syncs state via polling."""
-        pass
+    # Create OpenVIP adapter first (needed for events)
+    # We'll set the engine later
+    adapter: OpenVIPAdapter | None = None
+
+    class AdapterEvents(EngineEvents):
+        """Event handler that forwards loading events to adapter."""
+
+        def on_vad_loading(self) -> None:
+            """Called when VAD model starts loading (after STT is done)."""
+            if adapter:
+                adapter._update_loading("stt", "done")
+                adapter._update_loading("vad", "loading")
 
     voxtype_engine, registrar = create_engine(
         config=config,
-        events=MinimalEvents(),
+        events=AdapterEvents(),
         agent_mode=(config.output.mode == "agents"),
         hotkey_enabled=False,  # Adapter handles this
     )
