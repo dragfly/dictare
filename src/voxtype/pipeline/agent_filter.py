@@ -1,0 +1,260 @@
+"""Agent switch detection filter.
+
+Detects "agent <name>" or "agente <name>" at the end of text and
+uses phonetic matching to find the best matching agent ID.
+
+When detected, the trigger words are removed and x_agent_switch is set
+to the matched agent ID.
+
+Examples:
+    "fammi vedere il codice agent voxtype" -> "fammi vedere il codice" + x_agent_switch="voxtype"
+    "questo bug agent koder" -> "questo bug" + x_agent_switch="koder" (even if heard as "coder")
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import unicodedata
+from dataclasses import dataclass, field
+
+import jellyfish
+
+from voxtype.pipeline.base import FilterResult
+
+logger = logging.getLogger(__name__)
+
+# Trigger words that precede agent name
+AGENT_TRIGGERS = ["agent", "agente"]
+
+def _normalize(text: str) -> str:
+    """Normalize text for comparison.
+
+    - Lowercase
+    - Remove accents
+    """
+    text = text.lower()
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+    return text
+
+def _tokenize(text: str) -> list[str]:
+    """Split text into words, keeping only alphanumeric tokens."""
+    return [w for w in re.split(r"[^a-zA-Z0-9]+", _normalize(text)) if w]
+
+def phonetic_score(word1: str, word2: str) -> float:
+    """Calculate phonetic similarity score between two words.
+
+    Uses Double Metaphone for phonetic comparison.
+
+    Returns:
+        Score between 0.0 and 1.0, where 1.0 means identical phonetic representation.
+    """
+    m1 = jellyfish.metaphone(word1)
+    m2 = jellyfish.metaphone(word2)
+
+    if m1 == m2:
+        return 1.0
+
+    # Partial match if one is prefix of the other
+    if m1.startswith(m2) or m2.startswith(m1):
+        return 0.7
+
+    return 0.0
+
+def edit_score(word1: str, word2: str) -> float:
+    """Calculate normalized edit distance score.
+
+    Returns:
+        Score between 0.0 and 1.0, where 1.0 means identical strings.
+    """
+    if not word1 or not word2:
+        return 0.0
+
+    distance = jellyfish.levenshtein_distance(word1, word2)
+    max_len = max(len(word1), len(word2))
+    return 1.0 - (distance / max_len)
+
+def fuzzy_match_score(heard: str, agent_id: str) -> float:
+    """Calculate combined fuzzy match score.
+
+    Combines phonetic similarity (60%) with edit distance (40%).
+
+    Args:
+        heard: The word heard by STT.
+        agent_id: The agent ID to match against.
+
+    Returns:
+        Score between 0.0 and 1.0.
+    """
+    heard_norm = _normalize(heard)
+    agent_norm = _normalize(agent_id)
+
+    p_score = phonetic_score(heard_norm, agent_norm)
+    e_score = edit_score(heard_norm, agent_norm)
+
+    # Weight phonetic higher since that's our main use case
+    return 0.6 * p_score + 0.4 * e_score
+
+@dataclass
+class AgentMatch:
+    """A matched agent."""
+
+    agent_id: str
+    heard_word: str
+    score: float
+    trigger_word: str  # "agent" or "agente"
+
+@dataclass
+class AgentFilter:
+    """Filter that detects agent switch commands at the end of text.
+
+    Looks for patterns like "agent <name>" or "agente <name>" and uses
+    phonetic matching to find the best matching agent ID.
+
+    Attributes:
+        agent_ids: List of valid agent IDs to match against.
+        triggers: Words that trigger agent switch (default: ["agent", "agente"]).
+        match_threshold: Minimum score to consider a match (0.0-1.0).
+        max_scan_words: Maximum words from end to scan for triggers.
+    """
+
+    agent_ids: list[str] = field(default_factory=list)
+    triggers: list[str] = field(default_factory=lambda: AGENT_TRIGGERS.copy())
+    match_threshold: float = 0.5
+    max_scan_words: int = 10
+
+    @property
+    def name(self) -> str:
+        return "agent_filter"
+
+    def process(self, message: dict) -> FilterResult:
+        """Process message, detecting agent switch commands.
+
+        Args:
+            message: OpenVIP message dict with 'text' field.
+
+        Returns:
+            FilterResult with potentially modified message.
+        """
+        text = message.get("text", "")
+        if not text:
+            return FilterResult.passed(message)
+
+        # Already has agent switch? Pass through
+        if message.get("x_agent_switch"):
+            return FilterResult.passed(message)
+
+        # No agents to match against
+        if not self.agent_ids:
+            return FilterResult.passed(message)
+
+        # Tokenize and scan for trigger pattern
+        tokens = _tokenize(text)
+        if len(tokens) < 2:  # Need at least "agent <name>"
+            return FilterResult.passed(message)
+
+        # Find agent switch pattern
+        match = self._find_agent_match(tokens)
+
+        if match and match.score >= self.match_threshold:
+            logger.info(
+                "agent_switch",
+                extra={
+                    "heard": match.heard_word,
+                    "matched": match.agent_id,
+                    "score": match.score,
+                    "trigger": match.trigger_word,
+                },
+            )
+
+            # Remove trigger and agent name from text
+            cleaned_text = self._remove_pattern_from_text(text, match, tokens)
+
+            # Create new message with agent switch flag
+            new_message = message.copy()
+            new_message["text"] = cleaned_text
+            new_message["x_agent_switch"] = match.agent_id
+
+            return FilterResult.augmented(new_message)
+
+        return FilterResult.passed(message)
+
+    def _find_agent_match(self, tokens: list[str]) -> AgentMatch | None:
+        """Find agent switch pattern in tokens.
+
+        Looks for "agent/agente <word>" near the end and matches <word>
+        against known agent IDs using fuzzy matching.
+
+        Args:
+            tokens: Normalized tokens from text.
+
+        Returns:
+            AgentMatch if found, None otherwise.
+        """
+        # Only scan last N tokens
+        scan_start = max(0, len(tokens) - self.max_scan_words)
+        scan_tokens = tokens[scan_start:]
+
+        # Look for trigger word followed by potential agent name
+        for i, token in enumerate(scan_tokens):
+            if token in [_normalize(t) for t in self.triggers]:
+                # Check if there's a word after the trigger
+                if i + 1 < len(scan_tokens):
+                    heard_word = scan_tokens[i + 1]
+                    trigger_word = token
+
+                    # Try to match against known agents
+                    best_match = self._match_agent(heard_word)
+                    if best_match:
+                        return AgentMatch(
+                            agent_id=best_match[0],
+                            heard_word=heard_word,
+                            score=best_match[1],
+                            trigger_word=trigger_word,
+                        )
+
+        return None
+
+    def _match_agent(self, heard: str) -> tuple[str, float] | None:
+        """Match heard word against known agent IDs.
+
+        Args:
+            heard: The word heard after "agent".
+
+        Returns:
+            Tuple of (agent_id, score) for best match, or None.
+        """
+        best_agent = None
+        best_score = 0.0
+
+        for agent_id in self.agent_ids:
+            score = fuzzy_match_score(heard, agent_id)
+            if score > best_score:
+                best_agent = agent_id
+                best_score = score
+
+        if best_agent and best_score >= self.match_threshold:
+            return (best_agent, best_score)
+
+        return None
+
+    def _remove_pattern_from_text(
+        self, text: str, match: AgentMatch, tokens: list[str]
+    ) -> str:
+        """Remove the trigger and agent name from original text.
+
+        Args:
+            text: Original text.
+            match: The agent match found.
+            tokens: Normalized tokens.
+
+        Returns:
+            Text with trigger pattern removed.
+        """
+        # Find the trigger and following word in original text
+        # Use regex to find "agent(e)? <word>" at the end
+        pattern = rf"\b({match.trigger_word})\s+\S+\s*$"
+        cleaned = re.sub(pattern, "", text, flags=re.IGNORECASE).rstrip()
+
+        return cleaned

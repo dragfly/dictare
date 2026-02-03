@@ -9,6 +9,7 @@ Each filter can:
 Filters are executed in the order they are configured.
 """
 
+from voxtype.pipeline.agent_filter import AgentFilter
 from voxtype.pipeline.base import (
     Filter,
     FilterAction,
@@ -18,6 +19,7 @@ from voxtype.pipeline.base import (
 from voxtype.pipeline.submit_filter import SubmitFilter
 
 __all__ = [
+    "AgentFilter",
     "Filter",
     "FilterAction",
     "FilterResult",
