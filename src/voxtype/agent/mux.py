@@ -306,14 +306,22 @@ def _read_from_file(
     Reads OpenVIP messages appended to file by FileAgent.
     More reliable than socket - no message loss.
 
+    File lifecycle:
+    - On start: if agent.jsonl.idle exists, rename to agent.jsonl
+    - On exit: rename agent.jsonl to agent.jsonl.idle (preserves history)
+    - Engine/monitor only sees .jsonl files (ignores .idle)
+
     Uses unbuffered I/O to avoid Python file buffer caching issues.
     """
     msg_count = 0
     line_buffer = b""
+    idle_path = Path(str(file_path) + ".idle")
 
-    # Create file if doesn't exist
-    if not file_path.exists():
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+    # Activate file: rename .idle to .jsonl if exists
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    if idle_path.exists():
+        idle_path.rename(file_path)
+    elif not file_path.exists():
         file_path.touch()
 
     try:
@@ -378,10 +386,11 @@ def _read_from_file(
         if session_path:
             _log_event(session_path, "reader_error", {"error": str(e)})
     finally:
-        # Clean up file on exit
+        # Mark file as idle (rename .jsonl → .jsonl.idle)
+        # Preserves session history, engine will see agent as gone
         if file_path.exists():
             try:
-                file_path.unlink()
+                file_path.rename(idle_path)
             except OSError:
                 pass
 
@@ -573,21 +582,24 @@ def run_agent(
         )
         return 1
 
-    # Check if file already exists (another file-mode agent)
+    # File lifecycle: .jsonl = active, .jsonl.idle = inactive
+    idle_path = Path(str(file_path) + ".idle")
+
+    # Check if another agent is already running (active .jsonl file)
     if file_path.exists():
         print(
-            f"Warning: Clearing stale file {file_path}",
+            f"Error: Agent '{agent_id}' is already running (file mode).",
             file=sys.stderr,
         )
-        file_path.unlink()
+        return 1
 
-    # Register cleanup handler
+    # Register cleanup handler (mark as idle on exit)
     import atexit
 
     def cleanup_file():
         if file_path.exists():
             try:
-                file_path.unlink()
+                file_path.rename(idle_path)
             except OSError:
                 pass
 

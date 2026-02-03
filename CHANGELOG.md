@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.100.1] - 2026-02-03
+
+### Changed - File-based agent lifecycle
+
+Agent files now use `.idle` extension when inactive (preserves history):
+
+- **Agent starts**: renames `agent.jsonl.idle` → `agent.jsonl`
+- **Agent exits**: renames `agent.jsonl` → `agent.jsonl.idle`
+- **Engine/monitor**: only sees `.jsonl` files (ignores `.idle`)
+
+Benefits:
+- Session history preserved across restarts
+- No file deletion needed
+- Clean state management via extension
+
 ## [2.100.0] - 2026-02-03
 
 ### Fixed
