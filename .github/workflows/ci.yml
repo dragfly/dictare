@@ -16,7 +16,9 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync --python 3.11 --extra dev --prerelease=allow
+        run: |
+          rm -rf .venv
+          uv sync --python 3.11 --extra dev --prerelease=allow --no-cache
 
       - name: Run linter
         run: uv run ruff check .
@@ -50,7 +52,9 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync --python 3.11 --extra dev --prerelease=allow
+        run: |
+          rm -rf .venv
+          uv sync --python 3.11 --extra dev --prerelease=allow --no-cache
 
       - name: Run mypy
         run: uv run mypy src/
