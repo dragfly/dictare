@@ -244,8 +244,8 @@ class AgentFilterConfig(BaseModel):
         description="Enable voice-controlled agent switching (say 'agent <name>')",
     )
     triggers: list[str] = Field(
-        default_factory=lambda: ["agent", "agente"],
-        description="Trigger words that precede agent name",
+        default_factory=lambda: ["agent"],
+        description="Trigger words that precede agent name (add your language: 'agente', 'agent', etc.)",
     )
     match_threshold: float = Field(
         default=0.5,
