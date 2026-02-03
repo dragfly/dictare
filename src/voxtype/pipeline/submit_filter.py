@@ -15,11 +15,14 @@ Examples:
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
 
 from voxtype.pipeline.base import FilterResult
+
+logger = logging.getLogger(__name__)
 
 # Default trigger word patterns organized by language
 # Each language has a list of patterns (each pattern is a list of words)
@@ -194,6 +197,15 @@ class SubmitFilter:
         match = self._find_best_match(tokens, active_triggers)
 
         if match and match.confidence >= self.confidence_threshold:
+            # Log trigger detection
+            matched_tokens = tokens[match.start_idx : match.end_idx]
+            logger.info(
+                f"SUBMIT TRIGGER: pattern={match.pattern} "
+                f"matched_tokens={matched_tokens} "
+                f"confidence={match.confidence:.2f} "
+                f"text='{text[-50:]}'"
+            )
+
             # Remove trigger words from original text
             cleaned_text = self._remove_trigger_from_text(text, match, tokens)
 
