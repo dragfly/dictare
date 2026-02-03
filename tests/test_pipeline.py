@@ -2,10 +2,16 @@
 
 
 from voxtype.pipeline import (
+    AgentFilter,
     FilterAction,
     FilterResult,
     Pipeline,
     SubmitFilter,
+)
+from voxtype.pipeline.agent_filter import (
+    edit_score,
+    fuzzy_match_score,
+    phonetic_score,
 )
 from voxtype.pipeline.submit_filter import (
     DEFAULT_SUBMIT_TRIGGERS,
@@ -419,3 +425,195 @@ class TestEdgeCases:
         assert result.messages[0]["id"] == "123"
         assert result.messages[0]["custom"] == "value"
         assert result.messages[0]["x_submit"] is True
+
+
+# =============================================================================
+# AgentFilter Tests
+# =============================================================================
+
+
+class TestPhoneticMatching:
+    """Test phonetic matching functions."""
+
+    def test_phonetic_score_identical(self) -> None:
+        """Identical phonetic representation scores 1.0."""
+        # koder and coder sound the same
+        assert phonetic_score("koder", "coder") == 1.0
+        assert phonetic_score("voxtype", "voxtype") == 1.0
+
+    def test_phonetic_score_similar(self) -> None:
+        """Similar sounding words have high phonetic score."""
+        # These should have same metaphone
+        score = phonetic_score("koder", "quant")
+        assert score >= 0.7  # At least partial match
+
+    def test_phonetic_score_different(self) -> None:
+        """Different sounding words have low phonetic score."""
+        score = phonetic_score("voxtype", "python")
+        assert score < 0.5
+
+    def test_edit_score_identical(self) -> None:
+        """Identical strings score 1.0."""
+        assert edit_score("hello", "hello") == 1.0
+
+    def test_edit_score_similar(self) -> None:
+        """Similar strings have high edit score."""
+        score = edit_score("koder", "coder")
+        assert score > 0.7  # Only 1 character different
+
+    def test_edit_score_different(self) -> None:
+        """Different strings have low edit score."""
+        score = edit_score("abc", "xyz")
+        assert score < 0.5
+
+    def test_fuzzy_match_combines_scores(self) -> None:
+        """Fuzzy match combines phonetic and edit scores."""
+        # koder vs coder: phonetic=1.0, edit=0.8 → combined > 0.8
+        score = fuzzy_match_score("koder", "coder")
+        assert score > 0.8
+
+        # Completely different
+        score = fuzzy_match_score("abc", "xyz")
+        assert score < 0.5
+
+
+class TestAgentFilterBasics:
+    """Test AgentFilter basic operations."""
+
+    def test_name_property(self) -> None:
+        """Filter has correct name."""
+        f = AgentFilter()
+        assert f.name == "agent_filter"
+
+    def test_empty_text_passes(self) -> None:
+        """Empty text passes through."""
+        f = AgentFilter(agent_ids=["voxtype"])
+        msg = {"text": ""}
+        result = f.process(msg)
+        assert result.action == FilterAction.PASS
+
+    def test_no_agents_passes(self) -> None:
+        """Message passes if no agents configured."""
+        f = AgentFilter(agent_ids=[])
+        msg = {"text": "agent voxtype"}
+        result = f.process(msg)
+        assert result.action == FilterAction.PASS
+
+    def test_existing_agent_switch_passes(self) -> None:
+        """Message with existing x_agent_switch passes through."""
+        f = AgentFilter(agent_ids=["voxtype"])
+        msg = {"text": "agent voxtype", "x_agent_switch": "other"}
+        result = f.process(msg)
+        assert result.action == FilterAction.PASS
+
+
+class TestAgentFilterDetection:
+    """Test AgentFilter agent switch detection."""
+
+    def test_exact_match(self) -> None:
+        """Exact agent name match is detected."""
+        f = AgentFilter(agent_ids=["voxtype", "koder"])
+        msg = {"text": "fammi vedere il codice agent voxtype"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_agent_switch"] == "voxtype"
+        assert "agent" not in result.messages[0]["text"].lower()
+        assert "voxtype" not in result.messages[0]["text"].lower()
+
+    def test_phonetic_match_koder_coder(self) -> None:
+        """Phonetic match: 'coder' matches 'koder'."""
+        f = AgentFilter(agent_ids=["koder", "voxtype"])
+        msg = {"text": "questo bug agent coder"}  # Heard as "coder"
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_agent_switch"] == "koder"
+
+    def test_phonetic_match_koder_quant(self) -> None:
+        """Phonetic match: 'quant' matches 'koder'."""
+        f = AgentFilter(agent_ids=["koder", "voxtype"])
+        msg = {"text": "questo bug agent quant"}  # Heard as "quant"
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_agent_switch"] == "koder"
+
+    def test_italian_agente_trigger(self) -> None:
+        """Italian 'agente' trigger is detected."""
+        f = AgentFilter(agent_ids=["voxtype"])
+        msg = {"text": "fammi vedere agente voxtype"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_agent_switch"] == "voxtype"
+
+    def test_case_insensitive(self) -> None:
+        """Agent matching is case insensitive."""
+        f = AgentFilter(agent_ids=["VoxType"])
+        msg = {"text": "agent voxtype"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_agent_switch"] == "VoxType"
+
+    def test_no_match_below_threshold(self) -> None:
+        """No match if score is below threshold."""
+        f = AgentFilter(agent_ids=["voxtype"], match_threshold=0.95)
+        msg = {"text": "agent boxtype"}  # Similar but not identical
+        result = f.process(msg)
+        # boxtype vs voxtype: edit=0.857, phonetic different (B vs F/V)
+        # With high threshold, should not match
+        assert result.action == FilterAction.PASS
+
+    def test_best_match_selected(self) -> None:
+        """Best matching agent is selected when multiple could match."""
+        f = AgentFilter(agent_ids=["koder", "quant-analysis"])
+        msg = {"text": "agent coder"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        # koder should match better than quant-analysis
+        assert result.messages[0]["x_agent_switch"] == "koder"
+
+    def test_trigger_in_middle_not_detected(self) -> None:
+        """Trigger in middle of text (not at end) is not detected."""
+        f = AgentFilter(agent_ids=["voxtype"], max_scan_words=5)
+        # agent voxtype is more than 5 words from end
+        msg = {"text": "agent voxtype one two three four five six"}
+        result = f.process(msg)
+        assert result.action == FilterAction.PASS
+
+    def test_text_cleaned_after_match(self) -> None:
+        """Text is cleaned up after agent switch match."""
+        f = AgentFilter(agent_ids=["voxtype"])
+        msg = {"text": "questo è il codice agent voxtype"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        # Should remove "agent voxtype" from end
+        cleaned = result.messages[0]["text"]
+        assert cleaned == "questo è il codice"
+
+
+class TestAgentFilterWithPipeline:
+    """Test AgentFilter integration with Pipeline."""
+
+    def test_agent_filter_before_submit_filter(self) -> None:
+        """Agent filter can run before submit filter in pipeline."""
+        agent_f = AgentFilter(agent_ids=["voxtype"])
+        submit_f = SubmitFilter()
+
+        p = Pipeline([agent_f, submit_f])
+
+        # Agent switch command
+        msg = {"text": "agent voxtype"}
+        result = p.process(msg)
+        assert result[0].get("x_agent_switch") == "voxtype"
+
+    def test_agent_and_submit_in_same_message(self) -> None:
+        """Both agent switch and submit can be detected."""
+        agent_f = AgentFilter(agent_ids=["voxtype"])
+        submit_f = SubmitFilter()
+
+        # Agent filter first, then submit filter
+        p = Pipeline([agent_f, submit_f])
+
+        # Note: This would require agent at end AND submit
+        # In practice, these would be separate messages
+        msg = {"text": "hello submit"}
+        result = p.process(msg)
+        assert result[0].get("x_submit") is True

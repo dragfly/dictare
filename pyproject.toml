@@ -47,6 +47,8 @@ dependencies = [
     "watchdog>=4.0.0",
     # Structured JSON logging (standard Python approach)
     "python-json-logger>=2.0.0",
+    # Phonetic matching for agent name recognition
+    "jellyfish>=1.0.0",
 ]
 
 [project.optional-dependencies]

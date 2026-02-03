@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.82.0] - 2026-02-03
+
+### Added - Agent Filter with Phonetic Matching
+- **pipeline/agent_filter.py**: NEW - Voice-controlled agent switching
+  - Detects "agent <name>" or "agente <name>" at end of text
+  - Uses **jellyfish** library for phonetic matching (Metaphone)
+  - Combined scoring: 60% phonetic + 40% edit distance (Levenshtein)
+  - Handles misheard names: "coder"/"quant" matches "koder"
+  - Sets `x_agent_switch` field with matched agent ID
+- **pyproject.toml**: Added `jellyfish>=1.0.0` dependency
+  - Lightweight (~100KB), C-based, zero dependencies
+- **pipeline/__init__.py**: Exports `AgentFilter`
+- **tests/test_pipeline.py**: 22 new tests for AgentFilter
+  - Phonetic matching functions
+  - Detection and fuzzy matching
+  - Pipeline integration
+
 ## [2.81.0] - 2026-02-03
 
 ### Added - Italian "in via" Trigger
