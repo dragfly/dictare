@@ -1182,6 +1182,7 @@ def engine_start(
         import urllib.request
 
         # Start initialization in a thread so we can poll status
+        # Note: signals must be registered in main thread, so pass setup_signals=False
         init_error: Exception | None = None
         init_done = threading.Event()
 
@@ -1189,7 +1190,7 @@ def engine_start(
             nonlocal init_error
             try:
                 engine.state.engine.mode = "foreground"
-                engine._do_initialize()
+                engine._do_initialize(setup_signals=False)
             except Exception as e:
                 init_error = e
             finally:
@@ -1245,6 +1246,11 @@ def engine_start(
         if init_error:
             console.print(f"[red]Engine initialization failed: {init_error}[/]")
             raise typer.Exit(1)
+
+        # Setup signal handlers in main thread (couldn't do in init thread)
+        import signal
+        signal.signal(signal.SIGTERM, engine._signal_handler)
+        signal.signal(signal.SIGINT, engine._signal_handler)
 
         # Initialization complete
         console.print(f"[dim]Hotkey: {config.hotkey.key}[/]")

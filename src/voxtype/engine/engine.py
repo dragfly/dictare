@@ -362,14 +362,20 @@ class Engine:
         # Keep running until shutdown (IDLE, wait for trigger)
         self._main_loop(start_listening=False)
 
-    def _do_initialize(self) -> None:
-        """Initialize engine (common for foreground and daemon)."""
+    def _do_initialize(self, *, setup_signals: bool = True) -> None:
+        """Initialize engine (common for foreground and daemon).
+
+        Args:
+            setup_signals: If True, register signal handlers. Set False when
+                          running in a thread (signals only work in main thread).
+        """
         self._start_time = time.time()
         self._running = True
 
-        # Setup signal handlers
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
+        # Setup signal handlers (only in main thread)
+        if setup_signals:
+            signal.signal(signal.SIGTERM, self._signal_handler)
+            signal.signal(signal.SIGINT, self._signal_handler)
 
         # Initialize state metadata
         self.state.engine.version = __version__
