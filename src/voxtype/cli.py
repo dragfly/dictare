@@ -1039,54 +1039,6 @@ def daemon_restart(
 # Engine commands (new architecture)
 # =============================================================================
 
-def _init_engine_and_adapter(
-    *,
-    adapter: Any,  # OpenVIPAdapter (import deferred)
-    engine: Any,  # VoxtypeEngine (import deferred)
-    registrar: Any | None,  # AgentRegistrar (import deferred)
-    mode: str = "foreground",
-    start_listening: bool = True,
-) -> None:
-    """Initialize engine and adapter (COMMON for foreground/daemon).
-
-    This is the shared initialization sequence for both foreground and daemon modes.
-    The only difference is:
-    - Foreground: mode="foreground", start_listening=True
-    - Daemon: mode="daemon", start_listening=False (waits for trigger)
-
-    Args:
-        adapter: OpenVIPAdapter instance.
-        engine: VoxtypeEngine instance.
-        registrar: AgentRegistrar for agent discovery (optional).
-        mode: "foreground" or "daemon".
-        start_listening: If True, start in listening mode immediately.
-    """
-    # 1. Set mode
-    adapter.state.mode = mode
-
-    # 2. Start adapter servers (HTTP + Unix socket)
-    adapter.start()
-
-    # 3. Setup loading state for progress tracking
-    adapter.setup_loading_state()
-
-    # 4. Initialize engine (load models)
-    engine.init_components(headless=True)
-
-    # 5. Start engine runtime (controller, audio streaming)
-    engine.start_runtime(start_listening=start_listening)
-
-    # 6. Mark loading complete and update state
-    adapter.mark_loading_complete()
-    adapter.update_engine_state(
-        listening=start_listening,
-        hotkey_bound=engine._hotkey is not None,
-    )
-
-    # 7. Start agent discovery
-    if registrar:
-        registrar.start()
-
 @engine_app.command("start")
 def engine_start(
     daemon: Annotated[
@@ -1128,10 +1080,8 @@ def engine_start(
     In daemon mode, the engine preloads models but stays IDLE until activated
     via tray click, hotkey, or API call.
     """
-    from voxtype.adapters.openvip import OpenVIPAdapter
     from voxtype.adapters.openvip.adapter import get_pid_path
-    from voxtype.core.engine import create_engine
-    from voxtype.core.events import EngineEvents
+    from voxtype.app import AppController
 
     # Validate: require --keyboard or --agents
     if not keyboard and not agents:
@@ -1149,13 +1099,10 @@ def engine_start(
     if pid_path.exists():
         try:
             pid = int(pid_path.read_text().strip())
-            # Check if process is actually running
-            import os
             os.kill(pid, 0)  # Doesn't kill, just checks
             console.print(f"[yellow]Engine already running[/] (PID: {pid})")
             raise typer.Exit(0)
         except (ProcessLookupError, ValueError):
-            # Stale PID file, remove it
             pid_path.unlink(missing_ok=True)
 
     config = load_config(config_file)
@@ -1178,75 +1125,21 @@ def engine_start(
     if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
         config.hotkey.key = "KEY_RIGHTMETA"
 
-    # Create OpenVIP adapter first (needed for events)
-    # We'll set the engine later
-    adapter: OpenVIPAdapter | None = None
-
-    class AdapterEvents(EngineEvents):
-        """Event handler that forwards events to adapter."""
-
-        def on_vad_loading(self) -> None:
-            """Called when VAD model starts loading (after STT is done)."""
-            if adapter:
-                adapter._update_loading("stt", "done")
-                adapter._update_loading("vad", "loading")
-
-        def on_transcription(self, result: Any) -> None:
-            """Called when transcription is complete."""
-            if adapter and hasattr(result, "text"):
-                adapter.state.stt.last_text = result.text
-
-        def on_state_change(self, old: Any, new: Any, trigger: str) -> None:
-            """Called when engine state changes - play audio feedback."""
-            from voxtype.core.state import AppState
-
-            if not config.audio.audio_feedback:
-                return
-
-            # Update adapter state
-            if adapter:
-                if new == AppState.LISTENING:
-                    adapter.state.stt.state = "listening"
-                elif new == AppState.OFF:
-                    adapter.state.stt.state = "idle"
-                elif new == AppState.RECORDING:
-                    adapter.state.stt.state = "recording"
-                elif new == AppState.TRANSCRIBING:
-                    adapter.state.stt.state = "transcribing"
-
-            # Play beep
-            from voxtype.audio.beep import play_beep_start, play_beep_stop
-
-            if new == AppState.LISTENING:
-                play_beep_start()
-            elif new == AppState.OFF:
-                play_beep_stop()
-
-    voxtype_engine, registrar = create_engine(
-        config=config,
-        events=AdapterEvents(),
-        agent_mode=(config.output.mode == "agents"),
-        hotkey_enabled=True,  # Enable hotkey for toggle
-    )
-
-    # Create OpenVIP adapter
-    adapter = OpenVIPAdapter(voxtype_engine, config)
+    # Create AppController
+    controller = AppController(config)
 
     if daemon:
-        # Daemon mode: headless, no UI, start_listening=False
+        # Daemon mode: headless, no UI, no bindings, start_listening=False
         import signal
 
         console.print(f"[dim]Starting engine in daemon mode (PID: {os.getpid()})...[/]")
         console.print(f"[dim]HTTP: http://{config.server.host}:{config.server.port}[/]")
 
-        # Initialize engine and adapter (COMMON init, daemon mode)
         try:
-            _init_engine_and_adapter(
-                adapter=adapter,
-                engine=voxtype_engine,
-                registrar=registrar,
-                mode="daemon",
+            controller.start(
                 start_listening=False,  # Privacy-aware: don't listen until triggered
+                mode="daemon",
+                with_bindings=False,  # No keyboard bindings in daemon mode
             )
         except Exception as e:
             console.print(f"[red]Failed to start engine: {e}[/]")
@@ -1257,22 +1150,22 @@ def engine_start(
         # Setup signal handlers
         def signal_handler(signum: int, frame: Any) -> None:
             console.print("\n[yellow]Shutting down...[/]")
-            adapter.request_shutdown()
+            controller.request_shutdown()
 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
 
-        # Run adapter main loop (blocks until shutdown)
+        # Run main loop (blocks until shutdown)
         try:
-            adapter.run(start_listening=False)
+            controller.run()
         except KeyboardInterrupt:
             pass
         finally:
-            adapter.stop()
+            controller.stop()
 
         console.print("[dim]Engine stopped[/]")
     else:
-        # Foreground mode: StatusPanel polls /status and shows UI
+        # Foreground mode: AppController + StatusPanel UI
         import signal
         import threading
 
@@ -1283,39 +1176,37 @@ def engine_start(
         init_done = threading.Event()
 
         def do_init() -> None:
-            """Initialize engine and adapter (COMMON for foreground/daemon)."""
+            """Initialize AppController."""
             nonlocal init_error
             try:
-                _init_engine_and_adapter(
-                    adapter=adapter,
-                    engine=voxtype_engine,
-                    registrar=registrar,
-                    mode="foreground",
+                controller.start(
                     start_listening=True,
+                    mode="foreground",
+                    with_bindings=True,
                 )
             except Exception as e:
                 init_error = e
             finally:
                 init_done.set()
 
-        def run_adapter() -> None:
-            """Run adapter main loop after init completes."""
+        def run_controller() -> None:
+            """Run controller main loop after init completes."""
             init_done.wait()
             if init_error:
                 return
-            adapter.run(start_listening=True)
+            controller.run()
 
         # Start initialization
         init_thread = threading.Thread(target=do_init, daemon=True)
         init_thread.start()
 
         # Start main loop
-        adapter_thread = threading.Thread(target=run_adapter, daemon=True)
-        adapter_thread.start()
+        controller_thread = threading.Thread(target=run_controller, daemon=True)
+        controller_thread.start()
 
         # Setup signal handlers in main thread
         def signal_handler(signum: int, frame: Any) -> None:
-            adapter.request_shutdown()
+            controller.request_shutdown()
 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
@@ -1329,7 +1220,7 @@ def engine_start(
             pass
         finally:
             panel.stop()
-            adapter.stop()
+            controller.stop()
 
 @engine_app.command("stop")
 def engine_stop() -> None:
