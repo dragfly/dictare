@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.89.0] - 2026-02-03
+
+### Added - Engine CLI Commands
+
+- **cli.py**: New `voxtype engine` command group for new architecture
+  - `voxtype engine start --keyboard` - foreground mode, listening immediately
+  - `voxtype engine start --agents` - agent mode, listening immediately
+  - `voxtype engine start -d --agents` - daemon mode, models preloaded but IDLE
+  - `voxtype engine stop` - stop running engine via PID
+  - `voxtype engine status` - show engine status (supports `--json`)
+- **engine/__init__.py**: Export `get_pid_path`, `get_socket_path` utilities
+- **Strategy**: Incremental migration from `core/` to `engine/`
+  - `voxtype listen` continues to work (uses `core/`)
+  - `voxtype engine start` uses new `engine/` architecture
+  - Both can be tested in parallel before final migration
+
 ## [2.88.0] - 2026-02-03
 
 ### Simplified - Exact Match for Trigger Words
