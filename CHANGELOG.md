@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.98.0] - 2026-02-03
+
+### Added - AppController architecture
+
+New clean separation between Engine (atomic operations) and App (stateful logic):
+
+- **`AppController`**: Central coordinator for foreground mode
+  - Creates and manages Engine, Adapter, KeyboardBindingManager
+  - Exposes app commands: `toggle_listening()`, `next_agent()`, `prev_agent()`
+  - Used by both CLI and Tray (same code)
+
+- **`KeyboardBindingManager`**: Handles all input bindings
+  - Hotkeys (ScrollLock → toggle)
+  - Keyboard shortcuts (Ctrl+Alt+→ → next_agent)
+  - Device profiles (presenter buttons)
+
+- **Architecture documentation**: `docs/specs/app-controller-architecture.md`
+
+### Changed
+
+- `engine start` now uses `AppController` instead of inline code
+- `InputManager` accepts generic `CommandExecutor` protocol (not just `AppCommands`)
+- Removed `_init_engine_and_adapter()` helper (logic moved to AppController)
+
 ## [2.97.1] - 2026-02-03
 
 ### Fixed - SubmitFilter false positives (#35)
