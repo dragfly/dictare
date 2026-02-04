@@ -150,11 +150,15 @@ class KeyboardConfig(BaseModel):
     )
 
 class ServerConfig(BaseModel):
-    """HTTP/SSE server configuration."""
+    """OpenVIP HTTP/SSE server configuration.
+
+    The server is always started in agent mode (--agents flag).
+    Set enabled=true to also start it in keyboard mode (for StatusPanel monitoring).
+    """
 
     enabled: bool = Field(
         default=False,
-        description="Enable HTTP server for streaming events",
+        description="Enable HTTP server in keyboard mode (always on in agent mode)",
     )
     host: str = Field(
         default="127.0.0.1",
@@ -162,7 +166,7 @@ class ServerConfig(BaseModel):
     )
     port: int = Field(
         default=8765,
-        description="Port for HTTP server",
+        description="Port for OpenVIP HTTP server",
     )
 
 class LoggingConfig(BaseModel):

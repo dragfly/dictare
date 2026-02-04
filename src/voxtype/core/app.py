@@ -406,8 +406,6 @@ class VoxtypeApp(EngineEvents):
         if self.config.verbose and self._engine._hotkey:
             self._console.print(f"[dim]Toggle hotkey: {self._engine._hotkey.get_key_name()}[/]")
 
-        # Note: agent sockets are printed after watcher starts (see below)
-
         # Initialize input manager
         self._init_input_manager()
 
