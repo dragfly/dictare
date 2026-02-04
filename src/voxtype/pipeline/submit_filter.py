@@ -202,7 +202,7 @@ class SubmitFilter:
 
         if match and match.confidence >= self.confidence_threshold:
             # Get matched tokens for logging
-            matched_tokens = tokens[match.start_idx : match.end_idx]
+            matched_tokens = tokens[match.start_idx : match.end_idx + 1]
 
             # Log trigger detection (standard logging)
             logger.info(
