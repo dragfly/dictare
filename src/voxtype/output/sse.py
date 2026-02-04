@@ -1,6 +1,6 @@
 """Server-Sent Events (SSE) server for voxtype - stream events to clients.
 
-Implements OpenVIP (Open Voice Input Protocol) v1.0.
+Implements OpenVIP (Open Voice Interaction Protocol) v1.0.
 See: https://open-voice-input.org
 
 v1.0 Message Types:
@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any
 
 from voxtype import __version__
-from voxtype.adapters.openvip.messages import StatusValue, create_partial, create_status
+from voxtype.core.messages import StatusValue, create_partial, create_status
 
 if TYPE_CHECKING:
     from voxtype.core.state import AppState

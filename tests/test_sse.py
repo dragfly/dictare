@@ -6,7 +6,7 @@ import json
 import threading
 from unittest.mock import MagicMock, patch
 
-from voxtype.adapters.openvip.messages import (
+from voxtype.core.messages import (
     OPENVIP_VERSION,
     create_message,
     create_partial,
