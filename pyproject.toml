@@ -45,6 +45,10 @@ dependencies = [
     "Pillow>=10.0.0",
     # Filesystem watcher for agent auto-discovery
     "watchdog>=4.0.0",
+    # Structured JSON logging (standard Python approach)
+    "python-json-logger>=2.0.0",
+    # Phonetic matching for agent name recognition
+    "jellyfish>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -83,6 +87,7 @@ Issues = "https://github.com/dragfly/voxtype/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/voxtype"]
+artifacts = ["*.mp3"]
 
 [tool.hatch.version]
 path = "src/voxtype/__init__.py"

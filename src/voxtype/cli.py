@@ -56,6 +56,46 @@ app.add_typer(deps_app, name="dependencies")
 tray_app = typer.Typer(help="System tray integration", no_args_is_help=True)
 app.add_typer(tray_app, name="tray")
 
+# Engine subcommand (new architecture)
+engine_app = typer.Typer(help="Engine management (new architecture)", no_args_is_help=True)
+app.add_typer(engine_app, name="engine")
+
+
+def _register_plugins() -> None:
+    """Discover and register plugin commands."""
+    import logging
+
+    from voxtype.plugins import discover_plugins
+    from voxtype.services import ServiceRegistry
+
+    # Create service registry for plugins
+    registry = ServiceRegistry()
+
+    for plugin_cls in discover_plugins():
+        try:
+            plugin = plugin_cls()
+            plugin.on_load(registry)
+
+            if commands := plugin.get_commands():
+                app.add_typer(commands, name=plugin.name, help=plugin.description)
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                f"Failed to register plugin '{plugin_cls.__name__}': {e}"
+            )
+
+
+# Register plugins at import time (lazy loaded)
+_plugins_registered = False
+
+
+def _ensure_plugins_registered() -> None:
+    """Ensure plugins are registered (called once)."""
+    global _plugins_registered
+    if not _plugins_registered:
+        _register_plugins()
+        _plugins_registered = True
+
+
 console = Console(
     force_terminal=None,  # Auto-detect
     force_interactive=None,  # Auto-detect
@@ -239,12 +279,8 @@ def _apply_cli_overrides(
     auto_enter: bool,
     max_duration: int | None,
     verbose: bool | None,
-    no_commands: bool,
     typing_delay: int | None,
-    ollama_model: str | None,
     silence_ms: int | None,
-    wake_word: str | None,
-    initial_mode: str | None,
     log_file: str | None,
     no_audio_feedback: bool,
     no_hw_accel: bool,
@@ -266,18 +302,10 @@ def _apply_cli_overrides(
         config.audio.max_duration = max_duration
     if verbose is not None:
         config.verbose = verbose
-    if no_commands:
-        config.command.enabled = False
     if typing_delay is not None:
         config.output.typing_delay_ms = typing_delay
-    if ollama_model:
-        config.command.ollama_model = ollama_model
     if silence_ms is not None:
         config.audio.silence_ms = silence_ms
-    if wake_word is not None:
-        config.command.wake_word = wake_word
-    if initial_mode:
-        config.command.mode = initial_mode
     if log_file:
         config.logging.log_file = log_file
     if no_audio_feedback:
@@ -321,7 +349,6 @@ def _create_logger(config, agents: list[str] | None = None):
 
     log_params = {
         "input_mode": "vad",  # PTT mode removed in v2.2.0
-        "trigger_phrase": config.command.wake_word,
         "log_level": level.name,
         "silence_ms": config.audio.silence_ms,
         "stt_model": config.stt.model,
@@ -407,23 +434,6 @@ def listen(
         bool,
         typer.Option("--auto-enter", help="Press Enter after typing to submit"),
     ] = False,
-    # Command options
-    wake_word: Annotated[
-        str | None,
-        typer.Option("--wake-word", "-w", help="Wake word to activate (e.g., 'hey joshua')"),
-    ] = None,
-    initial_mode: Annotated[
-        str | None,
-        typer.Option("--initial-mode", "-M", help="Starting mode: transcription or command"),
-    ] = None,
-    no_commands: Annotated[
-        bool,
-        typer.Option("--no-commands", help="Disable voice commands"),
-    ] = False,
-    ollama_model: Annotated[
-        str | None,
-        typer.Option("--ollama-model", "-O", help="Ollama model for command processing"),
-    ] = None,
     # Debug/logging options
     verbose: Annotated[
         bool | None,
@@ -449,7 +459,7 @@ def listen(
     """Start listening for voice input (foreground).
 
     Uses Voice Activity Detection (VAD) to automatically detect when you speak.
-    Tap the hotkey to toggle listening on/off, double-tap to switch mode.
+    Tap the hotkey to toggle listening on/off.
 
     Requires --keyboard or --agents:
 
@@ -489,12 +499,8 @@ def listen(
         auto_enter=auto_enter,
         max_duration=max_duration,
         verbose=verbose,
-        no_commands=no_commands,
         typing_delay=typing_delay,
-        ollama_model=ollama_model,
         silence_ms=silence_ms,
-        wake_word=wake_word,
-        initial_mode=initial_mode,
         log_file=log_file,
         no_audio_feedback=no_audio_feedback,
         no_hw_accel=no_hw_accel,
@@ -518,6 +524,9 @@ def listen(
     # --agent foo --agent bar → manual with those names
     manual_agents: list[str] | None = agent if agent else None
     agent_mode = agents or manual_agents is not None  # Explicit from CLI, no config fallback
+
+    # Update config.output.mode to match CLI flag (overrides config file)
+    config.output.mode = "agents" if agent_mode else "keyboard"
 
     # Lazy import to speed up CLI
     from voxtype.core.app import VoxtypeApp
@@ -1014,10 +1023,13 @@ def daemon_status_cmd() -> None:
                 console.print(f"  Uptime: {uptime_str}")
                 console.print(f"  Requests served: {response.requests_served}")
                 console.print(f"  Output mode: {response.output_mode}")
-                if response.current_agent:
-                    console.print(f"  Current agent: {response.current_agent}")
-                if response.available_agents:
-                    console.print(f"  Available agents: {', '.join(response.available_agents)}")
+                # Always show agents info for debugging
+                agents_list = response.available_agents or []
+                console.print(f"  Agents: {len(agents_list)} available")
+                if agents_list:
+                    for agent in agents_list:
+                        marker = " *" if agent == response.current_agent else ""
+                        console.print(f"    - {agent}{marker}")
                 console.print(f"  STT loaded: {'yes' if response.stt_loaded else 'no'}")
                 console.print(f"  TTS loaded: {'yes' if response.tts_loaded else 'no'}")
                 if response.tts_engine:
@@ -1054,6 +1066,332 @@ def daemon_restart(
         else:
             console.print("[red]Daemon failed to start[/]")
             raise typer.Exit(1)
+
+
+# =============================================================================
+# Engine commands (new architecture)
+# =============================================================================
+
+
+@engine_app.command("start")
+def engine_start(
+    daemon: Annotated[
+        bool,
+        typer.Option("--daemon", "-d", help="Run as background daemon"),
+    ] = False,
+    config_file: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config file"),
+    ] = None,
+    # STT options
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Whisper model (tiny/base/small/medium/large-v3)"),
+    ] = None,
+    language: Annotated[
+        str | None,
+        typer.Option("--language", "-l", help="Language code or 'auto'"),
+    ] = None,
+    # Output mode
+    keyboard: Annotated[
+        bool,
+        typer.Option("--keyboard", "-K", help="Keyboard mode - types what you say"),
+    ] = False,
+    agents: Annotated[
+        bool,
+        typer.Option("--agents", "-A", help="Agent mode - sends to socket agents"),
+    ] = False,
+) -> None:
+    """Start the VoxType engine.
+
+    Foreground mode (default):
+        voxtype engine start --keyboard    # Types what you say, listening immediately
+        voxtype engine start --agents      # Agent mode, listening immediately
+
+    Daemon mode (background):
+        voxtype engine start -d --agents   # Background, models loaded, waiting for trigger
+
+    In daemon mode, the engine preloads models but stays IDLE until activated
+    via tray click, hotkey, or API call.
+    """
+    from voxtype.adapters.openvip.adapter import get_pid_path
+    from voxtype.app import AppController
+
+    # Validate: require --keyboard or --agents
+    if not keyboard and not agents:
+        console.print("[red]Error: Must specify --keyboard or --agents[/]")
+        console.print("[dim]Examples:[/]")
+        console.print("[dim]  voxtype engine start --keyboard    # Types what you say[/]")
+        console.print("[dim]  voxtype engine start --agents      # Sends to socket agents[/]")
+        raise typer.Exit(1)
+    if keyboard and agents:
+        console.print("[red]Error: Cannot use --keyboard with --agents[/]")
+        raise typer.Exit(1)
+
+    # Check if engine already running
+    pid_path = get_pid_path()
+    if pid_path.exists():
+        try:
+            pid = int(pid_path.read_text().strip())
+            os.kill(pid, 0)  # Doesn't kill, just checks
+            console.print(f"[yellow]Engine already running[/] (PID: {pid})")
+            raise typer.Exit(0)
+        except (ProcessLookupError, ValueError):
+            pid_path.unlink(missing_ok=True)
+
+    config = load_config(config_file)
+
+    # Apply CLI overrides
+    if model:
+        config.stt.model = model
+    if language:
+        config.stt.language = language
+    config.output.mode = "agents" if agents else "keyboard"
+
+    # Quick check: verify required models are cached
+    if not _check_required_models(config, for_command="engine"):
+        raise typer.Exit(1)
+
+    # Auto-detect hardware acceleration
+    _auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
+
+    # Auto-detect hotkey based on platform
+    if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
+        config.hotkey.key = "KEY_RIGHTMETA"
+
+    # Create AppController
+    controller = AppController(config)
+
+    if daemon:
+        # Daemon mode: headless, no UI, no bindings, start_listening=False
+        import signal
+
+        console.print(f"[dim]Starting engine in daemon mode (PID: {os.getpid()})...[/]")
+        console.print(f"[dim]HTTP: http://{config.server.host}:{config.server.port}[/]")
+
+        try:
+            controller.start(
+                start_listening=False,  # Privacy-aware: don't listen until triggered
+                mode="daemon",
+                with_bindings=False,  # No keyboard bindings in daemon mode
+            )
+        except Exception as e:
+            console.print(f"[red]Failed to start engine: {e}[/]")
+            raise typer.Exit(1)
+
+        console.print("[green]Engine ready[/] (IDLE - waiting for trigger)")
+
+        # Setup signal handlers
+        def signal_handler(signum: int, frame: Any) -> None:
+            console.print("\n[yellow]Shutting down...[/]")
+            controller.request_shutdown()
+
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+
+        # Run main loop (blocks until shutdown)
+        try:
+            controller.run()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            controller.stop()
+
+        console.print("[dim]Engine stopped[/]")
+    else:
+        # Foreground mode: AppController + StatusPanel UI
+        import signal
+        import threading
+
+        from voxtype.ui.panel import StatusPanel
+
+        base_url = f"http://{config.server.host}:{config.server.port}"
+        init_error: Exception | None = None
+        init_done = threading.Event()
+
+        def do_init() -> None:
+            """Initialize AppController."""
+            nonlocal init_error
+            try:
+                controller.start(
+                    start_listening=True,
+                    mode="foreground",
+                    with_bindings=True,
+                )
+            except Exception as e:
+                init_error = e
+            finally:
+                init_done.set()
+
+        def run_controller() -> None:
+            """Run controller main loop after init completes."""
+            init_done.wait()
+            if init_error:
+                return
+            controller.run()
+
+        # Start initialization
+        init_thread = threading.Thread(target=do_init, daemon=True)
+        init_thread.start()
+
+        # Start main loop
+        controller_thread = threading.Thread(target=run_controller, daemon=True)
+        controller_thread.start()
+
+        # Setup signal handlers in main thread
+        def signal_handler(signum: int, frame: Any) -> None:
+            controller.request_shutdown()
+
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+
+        # Run StatusPanel in main thread (polls /status, shows UI)
+        panel = StatusPanel(console, base_url)
+
+        try:
+            panel.run()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            panel.stop()
+            controller.stop()
+
+
+@engine_app.command("stop")
+def engine_stop() -> None:
+    """Stop the running engine."""
+    from voxtype.engine import get_pid_path
+
+    pid_path = get_pid_path()
+    if not pid_path.exists():
+        console.print("[yellow]Engine is not running[/]")
+        raise typer.Exit(0)
+
+    try:
+        pid = int(pid_path.read_text().strip())
+    except ValueError:
+        console.print("[red]Invalid PID file[/]")
+        pid_path.unlink(missing_ok=True)
+        raise typer.Exit(1)
+
+    import os
+    import signal
+
+    try:
+        os.kill(pid, 0)  # Check if running
+    except ProcessLookupError:
+        console.print("[yellow]Engine is not running (stale PID file)[/]")
+        pid_path.unlink(missing_ok=True)
+        raise typer.Exit(0)
+
+    console.print(f"[dim]Stopping engine (PID: {pid})...[/]")
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        # Wait for process to exit
+        import time
+        for _ in range(30):  # 3 seconds timeout
+            time.sleep(0.1)
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                console.print("[green]Engine stopped[/]")
+                return
+        # Still running, force kill
+        console.print("[yellow]Engine not responding, forcing...[/]")
+        os.kill(pid, signal.SIGKILL)
+        console.print("[green]Engine stopped (forced)[/]")
+    except Exception as e:
+        console.print(f"[red]Failed to stop engine: {e}[/]")
+        raise typer.Exit(1)
+
+
+@engine_app.command("status")
+def engine_status(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", "-j", help="Output as JSON"),
+    ] = False,
+) -> None:
+    """Show engine status."""
+    import json
+
+    from voxtype.engine import get_pid_path
+
+    pid_path = get_pid_path()
+    if not pid_path.exists():
+        if json_output:
+            console.print(json.dumps({"running": False}))
+        else:
+            console.print("[yellow]Engine is not running[/]")
+        raise typer.Exit(0)
+
+    try:
+        pid = int(pid_path.read_text().strip())
+        import os
+        os.kill(pid, 0)  # Check if running
+    except (ValueError, ProcessLookupError):
+        if json_output:
+            console.print(json.dumps({"running": False, "stale_pid": True}))
+        else:
+            console.print("[yellow]Engine is not running (stale PID file)[/]")
+        raise typer.Exit(0)
+
+    # Engine is running, try to get status via HTTP
+    import urllib.error
+    import urllib.request
+
+    try:
+        config = load_config()
+        url = f"http://{config.server.host}:{config.server.port}/status"
+        with urllib.request.urlopen(url, timeout=2) as response:
+            data = json.loads(response.read().decode())
+
+        if json_output:
+            data["running"] = True
+            data["pid"] = pid
+            console.print(json.dumps(data, indent=2))
+        else:
+            console.print(f"[green]Engine is running[/] (PID: {pid})")
+            engine_state = data.get("engine", {})
+            stt_state = data.get("stt", {})
+            output_state = data.get("output", {})
+
+            console.print(f"  Mode: {engine_state.get('mode', 'unknown')}")
+            console.print(f"  Version: {engine_state.get('version', 'unknown')}")
+
+            uptime = engine_state.get("uptime_seconds", 0)
+            if uptime < 60:
+                uptime_str = f"{uptime:.0f}s"
+            elif uptime < 3600:
+                uptime_str = f"{uptime / 60:.1f}m"
+            else:
+                uptime_str = f"{uptime / 3600:.1f}h"
+            console.print(f"  Uptime: {uptime_str}")
+
+            console.print(f"  STT state: {stt_state.get('state', 'unknown')}")
+            console.print(f"  STT model: {stt_state.get('model_name', 'not loaded')}")
+            console.print(f"  Output mode: {output_state.get('mode', 'unknown')}")
+
+            agents = output_state.get("available_agents", [])
+            if agents:
+                current = output_state.get("current_agent", "")
+                console.print(f"  Agents: {len(agents)} available")
+                for agent in agents:
+                    marker = " *" if agent == current else ""
+                    console.print(f"    - {agent}{marker}")
+    except urllib.error.URLError:
+        if json_output:
+            console.print(json.dumps({"running": True, "pid": pid, "http_unavailable": True}))
+        else:
+            console.print(f"[green]Engine is running[/] (PID: {pid})")
+            console.print("[dim]  HTTP endpoint not available[/]")
+    except Exception as e:
+        if json_output:
+            console.print(json.dumps({"running": True, "pid": pid, "error": str(e)}))
+        else:
+            console.print(f"[green]Engine is running[/] (PID: {pid})")
+            console.print(f"[dim]  Could not get status: {e}[/]")
 
 
 @app.command()
@@ -1798,6 +2136,10 @@ def agent(
         bool,
         typer.Option("--quiet", "-q", help="Suppress info messages"),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Log full text in session file (not truncated)"),
+    ] = False,
 ) -> None:
     """Run a command with voxtype voice input via OpenVIP.
 
@@ -1819,8 +2161,16 @@ def agent(
 
     from voxtype.agent import run_agent
 
-    # Get command after -- (filter out the -- itself if present)
-    command = [arg for arg in ctx.args if arg != "--"]
+    # With allow_interspersed_args=False, flags after positional args go to ctx.args
+    # Check if our flags are in ctx.args and apply them
+    if "--verbose" in ctx.args or "-v" in ctx.args:
+        verbose = True
+    if "--quiet" in ctx.args or "-q" in ctx.args:
+        quiet = True
+
+    # Get command after -- (filter out --, and our own flags)
+    own_flags = {"--", "--verbose", "-v", "--quiet", "-q"}
+    command = [arg for arg in ctx.args if arg not in own_flags]
     if not command:
         console.print("[red]Error: No command specified[/]")
         console.print()
@@ -1828,7 +2178,7 @@ def agent(
         console.print("[dim]Example: voxtype agent claude -- claude[/]")
         raise typer.Exit(1)
 
-    exit_code = run_agent(agent_id, command, quiet=quiet)
+    exit_code = run_agent(agent_id, command, quiet=quiet, verbose=verbose)
     raise typer.Exit(exit_code)
 
 
@@ -1859,7 +2209,8 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
         """Format a JSONL line for display."""
         try:
             entry = json.loads(line)
-            ts = entry.get("ts", "")
+            # Support both "ts" (msg events) and "timestamp" (session events)
+            ts = entry.get("ts") or entry.get("timestamp", "")
             level = entry.get("level", "INFO")
             event = entry.get("event", "")
 
@@ -1880,24 +2231,63 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
             # Format event-specific info
             extra = ""
             if event == "session_start":
-                version = entry.get("version", "?")
-                model = entry.get("stt_model", "?")
-                extra = f"v{version} model={model}"
+                # Support both listen logs and session logs
+                version = entry.get("version") or entry.get("voxtype_version", "?")
+                model = entry.get("stt_model")
+                agent_id = entry.get("agent_id")
+                if agent_id:
+                    extra = f"v{version} agent={agent_id}"
+                elif model:
+                    extra = f"v{version} model={model}"
+                else:
+                    extra = f"v{version}"
             elif event == "session_end":
-                extra = ""
+                keystrokes = entry.get("total_keystrokes", 0)
+                exit_code = entry.get("exit_code", "?")
+                extra = f"exit={exit_code} keystrokes={keystrokes}"
+            elif event in ("msg_read", "msg_sent"):
+                text = entry.get("text", "")
+                # Show up to 80 chars
+                display_text = text[:80]
+                if len(text) > 80:
+                    display_text += "..."
+                extra = display_text.replace("\n", "\\n")
             elif event == "transcription":
                 chars = entry.get("chars", 0)
                 words = entry.get("words", 0)
                 duration = entry.get("duration_ms", 0)
-                extra = f"{words}w {chars}c {duration:.0f}ms"
+                text = entry.get("text")  # May be None (privacy mode)
+                if text:
+                    # Verbose mode - show text
+                    display = text[:60].replace("\n", "\\n")
+                    if len(text) > 60:
+                        display += "..."
+                    extra = f'{duration:.0f}ms "{display}"'
+                else:
+                    # Privacy mode - show only metadata
+                    extra = f"{words}w {chars}c {duration:.0f}ms"
             elif event == "transcription_text":
+                # Legacy format (kept for old logs)
                 text = entry.get("text", "")[:60]
                 extra = f'"{text}"' + ("..." if len(entry.get("text", "")) > 60 else "")
             elif event == "injection":
                 chars = entry.get("chars", 0)
                 method = entry.get("method", "?")
-                success = "ok" if entry.get("success") else "fail"
-                extra = f"{chars}c via {method} [{success}]"
+                trigger = entry.get("submit_trigger")
+                text = entry.get("text")  # May be None (privacy mode)
+                if text:
+                    # Verbose mode - show text
+                    display = text[:60].replace("\n", "\\n")
+                    if len(text) > 60:
+                        display += "..."
+                    extra = f'via {method} "{display}"'
+                else:
+                    # Privacy mode - show only metadata
+                    extra = f"{chars}c via {method}"
+                # Always show trigger (even in privacy mode)
+                if trigger:
+                    conf = entry.get("submit_confidence", 0)
+                    extra += f' [SUBMIT: "{trigger}" {conf:.0%}]'
             elif event == "state_change":
                 old = entry.get("old_state", "?")
                 new = entry.get("new_state", "?")
@@ -1988,6 +2378,39 @@ def log_listen(
     from voxtype.logging.jsonl import get_default_log_path
 
     log_path = get_default_log_path("listen")
+    _tail_log(log_path, follow, json_output, lines)
+
+
+@log_app.command("engine")
+def log_engine(
+    follow: Annotated[
+        bool,
+        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", "-j", help="Output raw JSON lines"),
+    ] = False,
+    lines: Annotated[
+        int,
+        typer.Option("--lines", "-n", help="Number of lines to show"),
+    ] = 20,
+) -> None:
+    """View logs from voxtype engine sessions.
+
+    Shows recent log entries from ~/.local/share/voxtype/logs/engine.jsonl
+
+    Use --verbose flag when starting engine to see full text in logs.
+
+    Examples:
+        voxtype log engine              # Show last 20 entries
+        voxtype log engine -f           # Follow live
+        voxtype log engine -n 50        # Show last 50 entries
+        voxtype log engine --json       # Output raw JSON
+    """
+    from voxtype.logging.jsonl import get_default_log_path
+
+    log_path = get_default_log_path("engine")
     _tail_log(log_path, follow, json_output, lines)
 
 
@@ -2103,6 +2526,66 @@ def log_list() -> None:
     console.print(f"\n[dim]Log directory: {DEFAULT_LOG_DIR}[/]")
 
 
+@log_app.command("session")
+def log_session(
+    ctx: typer.Context,
+    agent_id: Annotated[
+        str | None,
+        typer.Argument(help="Agent ID to view session for"),
+    ] = None,
+    follow: Annotated[
+        bool,
+        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", "-j", help="Output raw JSON lines"),
+    ] = False,
+    lines: Annotated[
+        int,
+        typer.Option("--lines", "-n", help="Number of lines to show"),
+    ] = 20,
+) -> None:
+    """View session log for an agent.
+
+    Shows the most recent session file from ~/.local/share/voxtype/sessions/
+
+    Examples:
+        voxtype log session claude        # Show latest claude session
+        voxtype log session claude -f     # Follow live
+        voxtype log session claude -n 50  # Show last 50 lines
+    """
+    if agent_id is None:
+        import click
+        click.echo(ctx.get_help())
+        raise typer.Exit(0)
+
+    from pathlib import Path
+
+    sessions_dir = Path.home() / ".local" / "share" / "voxtype" / "sessions"
+
+    if not sessions_dir.exists():
+        console.print(f"[yellow]Sessions directory not found: {sessions_dir}[/]")
+        raise typer.Exit(1)
+
+    # Find session files for this agent (format: YYYY-MM-DD_HH-MM-SS_voxtype-X.Y.Z_AGENT.session.jsonl)
+    pattern = f"*_{agent_id}.session.jsonl"
+    session_files = list(sessions_dir.glob(pattern))
+
+    if not session_files:
+        console.print(f"[yellow]No sessions found for agent: {agent_id}[/]")
+        raise typer.Exit(1)
+
+    # Sort by name (contains timestamp) and get the latest
+    session_files.sort(reverse=True)
+    latest_session = session_files[0]
+
+    if not json_output:
+        console.print(f"[dim]Session: {latest_session}[/]")
+
+    _tail_log(latest_session, follow, json_output, lines)
+
+
 def _load_model_registry() -> dict:
     """Load model registry from JSON file."""
     import json
@@ -2177,31 +2660,6 @@ def _get_configured_models(config=None) -> dict[str, str]:
 
     return configured
 
-
-def _get_ollama_models() -> set[str]:
-    """Get list of locally available Ollama models."""
-    import subprocess
-
-    try:
-        result = subprocess.run(
-            ["ollama", "list"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode != 0:
-            return set()
-
-        models = set()
-        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
-            if line.strip():
-                # Format: "NAME    ID    SIZE    MODIFIED"
-                name = line.split()[0] if line.split() else ""
-                if name:
-                    models.add(name)
-        return models
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return set()
 
 
 def _check_required_models(config=None, for_command: str = "listen") -> bool:
@@ -2314,20 +2772,6 @@ def _show_models_list(config=None) -> None:
 
     console.print(table)
 
-    # Show LLM status
-    console.print()
-    ollama_model = config.command.ollama_model
-    ollama_cached = _get_ollama_models()
-    is_cached = ollama_model in ollama_cached or any(
-        m.startswith(ollama_model.split(":")[0]) for m in ollama_cached
-    )
-
-    if is_cached:
-        console.print(f"[green]LLM:[/] {ollama_model} [green](cached)[/]")
-    else:
-        console.print(f"[red]LLM:[/] {ollama_model} [red](not cached)[/]")
-        console.print(f"  [dim]Install: ollama pull {ollama_model}[/]")
-
 
 @models_app.command("list")
 def models_list() -> None:
@@ -2338,7 +2782,7 @@ def models_list() -> None:
     """
     _show_models_list()
     console.print()
-    console.print("[dim]Use:      voxtype models use <model> [--realtime|--tts|--llm][/]")
+    console.print("[dim]Use:      voxtype models use <model> [--realtime|--tts][/]")
     console.print("[dim]Resolve:  voxtype models resolve[/]")
     console.print("[dim]Download: voxtype models download <model>[/]")
 
@@ -2355,12 +2799,8 @@ def models_use(
         bool,
         typer.Option("--tts", "-t", help="Set as TTS model"),
     ] = False,
-    llm: Annotated[
-        bool,
-        typer.Option("--llm", "-l", help="Set as LLM model (Ollama)"),
-    ] = False,
 ) -> None:
-    """Set which model to use for STT, TTS, or LLM.
+    """Set which model to use for STT or TTS.
 
     By default sets the STT model. Use flags for other types.
 
@@ -2368,7 +2808,6 @@ def models_use(
         voxtype models use large-v3-turbo           # Set STT model
         voxtype models use tiny --realtime          # Set realtime STT model
         voxtype models use vyvotts-4bit --tts       # Set TTS model
-        voxtype models use qwen2.5:1.5b --llm       # Set Ollama LLM model
     """
     if model is None:
         import click
@@ -2376,13 +2815,6 @@ def models_use(
         raise typer.Exit(0)
 
     registry = _get_model_registry()
-
-    if llm:
-        # LLM: just set the config, Ollama handles downloads
-        set_config_value("command.ollama_model", model)
-        console.print(f"[green]✓[/] LLM set to [cyan]{model}[/]")
-        console.print(f"[dim]Download if needed: ollama pull {model}[/]")
-        return
 
     if tts:
         # TTS: find by model name or engine
@@ -2744,6 +3176,7 @@ def _check_python_environment() -> None:
 def main() -> None:
     """Entry point for the CLI."""
     _check_python_environment()
+    _ensure_plugins_registered()
     try:
         app()
     except ConfigError as e:

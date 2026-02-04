@@ -38,6 +38,22 @@ class AudioConfig(BaseModel):
         default=False,
         description="Set to true when using headphones (TTS won't pause listening)",
     )
+    pre_buffer_ms: int = Field(
+        default=640,
+        description="Audio pre-buffer in milliseconds (captures audio before VAD triggers)",
+    )
+    min_speech_ms: int = Field(
+        default=150,
+        description="Minimum speech duration in milliseconds before VAD triggers",
+    )
+    sound_start: str | None = Field(
+        default=None,
+        description="Custom sound file for listening start (default: bundled up-beep.mp3)",
+    )
+    sound_stop: str | None = Field(
+        default=None,
+        description="Custom sound file for listening stop (default: bundled down-beep.mp3)",
+    )
 
 
 class STTConfig(BaseModel):
@@ -133,31 +149,6 @@ class OutputConfig(BaseModel):
     )
 
 
-class CommandConfig(BaseModel):
-    """Voice command configuration."""
-
-    enabled: bool = Field(
-        default=True,
-        description="Enable voice command processing",
-    )
-    wake_word: str = Field(
-        default="",
-        description="Wake word to activate (e.g., 'Joshua')",
-    )
-    mode: Literal["transcription", "command"] = Field(
-        default="transcription",
-        description="Processing mode: transcription (fast) or command (LLM)",
-    )
-    ollama_model: str = Field(
-        default="qwen2.5:1.5b",
-        description="Ollama model for intent classification",
-    )
-    ollama_timeout: float = Field(
-        default=5.0,
-        description="Ollama request timeout in seconds",
-    )
-
-
 class KeyboardConfig(BaseModel):
     """Keyboard shortcuts configuration."""
 
@@ -199,6 +190,96 @@ class StatsConfig(BaseModel):
     typing_wpm: int = Field(
         default=40,
         description="Average typing speed in words per minute (for time saved calculation)",
+    )
+
+
+class SubmitFilterConfig(BaseModel):
+    """Submit filter configuration."""
+
+    enabled: bool = Field(default=True, description="Enable submit trigger detection")
+    triggers: dict[str, list[list[str]]] = Field(
+        default_factory=lambda: {
+            "it": [
+                ["ok", "invia"],
+                ["ok", "manda"],
+                ["ok", "fatto"],
+                ["va", "bene", "invia"],
+                ["invia"],
+                ["manda"],
+                ["fatto"],
+                ["adesso"],
+            ],
+            "en": [
+                ["ok", "send"],
+                ["ok", "submit"],
+                ["go", "ahead"],
+                ["submit"],
+                ["send"],
+                ["go"],
+            ],
+            "es": [
+                ["ok", "enviar"],
+                ["enviar"],
+                ["envía"],
+                ["listo"],
+            ],
+            "de": [
+                ["ok", "senden"],
+                ["senden"],
+                ["abschicken"],
+                ["fertig"],
+            ],
+            "fr": [
+                ["ok", "envoyer"],
+                ["envoyer"],
+                ["envoie"],
+                ["terminé"],
+            ],
+        },
+        description="Trigger patterns by language code (checked: message language + English)",
+    )
+    confidence_threshold: float = Field(
+        default=0.85,
+        description="Minimum confidence to trigger submit (0.0-1.0)",
+    )
+    max_scan_words: int = Field(
+        default=15,
+        description="Maximum words from end to scan for triggers",
+    )
+    decay_rate: float = Field(
+        default=0.95,
+        description="Confidence decay rate per word from end (0.95 = 5% per word)",
+    )
+
+
+class AgentFilterConfig(BaseModel):
+    """Agent switch filter configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable voice-controlled agent switching (say 'agent <name>')",
+    )
+    triggers: list[str] = Field(
+        default_factory=lambda: ["agent"],
+        description="Trigger words that precede agent name (add your language: 'agente', 'agent', etc.)",
+    )
+    match_threshold: float = Field(
+        default=0.5,
+        description="Minimum fuzzy match score for agent name (0.0-1.0)",
+    )
+
+
+class PipelineConfig(BaseModel):
+    """Pipeline filter configuration."""
+
+    enabled: bool = Field(default=True, description="Enable the message pipeline")
+    submit_filter: SubmitFilterConfig = Field(
+        default_factory=SubmitFilterConfig,
+        description="Submit trigger detection filter",
+    )
+    agent_filter: AgentFilterConfig = Field(
+        default_factory=AgentFilterConfig,
+        description="Voice-controlled agent switching filter",
     )
 
 
@@ -260,12 +341,12 @@ class Config(BaseModel):
     tts: TTSConfig = Field(default_factory=TTSConfig)
     hotkey: HotkeyConfig = Field(default_factory=HotkeyConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
-    command: CommandConfig = Field(default_factory=CommandConfig)
     keyboard: KeyboardConfig = Field(default_factory=KeyboardConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     stats: StatsConfig = Field(default_factory=StatsConfig)
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
+    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
 
     verbose: bool = Field(default=False, description="Enable verbose output")
 
@@ -482,6 +563,22 @@ def _format_toml_value(value: Any) -> str:
         return f'"{value}"'
     elif value is None:
         return '""'  # TOML doesn't have null, use empty string
+    elif isinstance(value, list):
+        if not value:
+            return "[]"
+        # Check if it's a list of dicts (inline tables)
+        if isinstance(value[0], dict):
+            items = []
+            for item in value:
+                pairs = ", ".join(f'{k} = {_format_toml_value(v)}' for k, v in item.items())
+                items.append(f"{{ {pairs} }}")
+            return "[\n    " + ",\n    ".join(items) + ",\n]"
+        else:
+            # Simple list
+            return "[" + ", ".join(_format_toml_value(v) for v in value) + "]"
+    elif isinstance(value, dict):
+        pairs = ", ".join(f'{k} = {_format_toml_value(v)}' for k, v in value.items())
+        return f"{{ {pairs} }}"
     else:
         return str(value)
 
@@ -497,7 +594,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "command", "keyboard", "server", "logging", "stats", "daemon"):
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "logging", "stats", "daemon", "pipeline"):
             # These are sections, handle below
             continue
         value = getattr(config, field_name)
@@ -517,12 +614,12 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("tts", TTSConfig),
         ("hotkey", HotkeyConfig),
         ("output", OutputConfig),
-        ("command", CommandConfig),
         ("keyboard", KeyboardConfig),
         ("server", ServerConfig),
         ("logging", LoggingConfig),
         ("stats", StatsConfig),
         ("daemon", DaemonConfig),
+        ("pipeline", PipelineConfig),
     ]
 
     for section_name, section_class in sections:
@@ -562,41 +659,46 @@ def create_default_config() -> Path:
 
     default_config = f"""\
 # voxtype configuration
+#
+# All values shown are defaults. Uncomment and change as needed.
 
 [audio]
 sample_rate = 16000
 channels = 1
-# device = "default"  # Uncomment to specify audio device
-audio_feedback = true  # Play beep on listening mode toggle
-silence_ms = 1200      # VAD silence threshold in ms
-headphones_mode = false  # Set to true when using headphones (TTS won't pause listening)
+# device = "default"            # Audio device name (None = system default)
+audio_feedback = true            # Play beep on listening mode toggle
+silence_ms = 1200                # VAD silence duration to end speech (ms)
+# headphones_mode = false        # Set to true when using headphones (TTS won't pause listening)
+# max_duration = 60              # Max recording duration in seconds
+
+# Custom sound files (absolute paths to mp3/wav, default: bundled beeps)
+# sound_start = "/path/to/my-start.mp3"
+# sound_stop = "/path/to/my-stop.mp3"
+
+# Advanced VAD tuning
+# pre_buffer_ms = 640            # Audio captured before VAD triggers (increase if speech start is clipped)
+# min_speech_ms = 150            # Min speech duration before VAD activates (lower = faster, may trigger on noise)
 
 [stt]
-model = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
-language = "auto"              # auto-detect, or "en", "de", "fr", etc.
-device = "auto"                # auto, cpu, cuda
+model = "large-v3-turbo"         # tiny, base, small, medium, large-v3, large-v3-turbo
+language = "auto"                # auto-detect, or "en", "de", "fr", etc.
+device = "auto"                  # auto, cpu, cuda
 compute_type = "int8"
 beam_size = 5
-hw_accel = true                # Enable hardware acceleration
-max_repetitions = 5            # Anti-hallucination: max consecutive word repeats
-# hotwords = "voxtype,joshua"  # Boost recognition of specific words
+hw_accel = true                  # Enable hardware acceleration
+max_repetitions = 5              # Anti-hallucination: max consecutive word repeats
+# hotwords = "voxtype,joshua"    # Boost recognition of specific words
+# translate = false              # Translate any language to English
 
 [hotkey]
 key = "{hotkey}"  # {hotkey_comment} (toggle listening)
 
 [output]
-mode = "keyboard"      # keyboard or agents
+mode = "keyboard"                # keyboard or agents
 typing_delay_ms = 5
-auto_enter = false     # Visual newline only
-# submit_keys = "enter"         # Keys for submit (when auto_enter=true)
+auto_enter = false               # Visual newline only
+# submit_keys = "enter"          # Keys for submit (when auto_enter=true)
 # newline_keys = "{newline_keys}"  # Keys for visual newline (when auto_enter=false)
-
-[command]
-enabled = true
-wake_word = ""         # e.g., "hey joshua"
-mode = "transcription" # transcription or command
-ollama_model = "qwen2.5:1.5b"
-ollama_timeout = 5.0
 
 # Keyboard shortcuts - configure interactively with: voxtype config shortcuts
 # Example:
@@ -608,7 +710,7 @@ ollama_timeout = 5.0
 log_file = ""
 
 [stats]
-typing_wpm = 40  # Your average typing speed (for time saved calculation)
+typing_wpm = 40                  # Your average typing speed (for time saved calculation)
 
 verbose = false
 """

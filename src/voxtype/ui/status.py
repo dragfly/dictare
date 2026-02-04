@@ -77,9 +77,8 @@ class LiveStatusPanel:
 
     def _compute_mode_str(self) -> str:
         """Compute the mode display string."""
-        if self._config.command.mode == "transcription":
-            return "[cyan]transcription[/] (fast)"
-        return "[yellow]command[/] (LLM)"
+        # ProcessingMode removed in v2.61.0 - always transcription mode now
+        return "[cyan]transcription[/]"
 
     def _compute_stt_str(self) -> str:
         """Compute the STT engine display string."""

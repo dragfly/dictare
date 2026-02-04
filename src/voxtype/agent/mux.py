@@ -157,14 +157,21 @@ def _read_from_socket(
     stop_event: threading.Event,
     session_path: Path | None = None,
     keystroke_counter: KeystrokeCounter | None = None,
+    verbose: bool = False,
 ) -> None:
     """Listen on Unix socket for OpenVIP messages.
+
+    Uses PERSISTENT connection:
+    - Accept ONE connection from engine
+    - Read messages in loop on same connection
+    - Connection closes only when engine disconnects
 
     Receives OpenVIP messages and converts to internal format:
     - {"type": "message", "text": "hello", "x_submit": true} -> {"text": "hello", "submit": true}
     - {"type": "message", "text": "\\n", "x_visual_newline": true} -> {"text": "\\n"}
     """
     msg_count = 0
+    line_buffer = b""
 
     # Remove stale socket file
     if socket_path.exists():
@@ -174,82 +181,218 @@ def _read_from_socket(
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(str(socket_path))
-    server.listen(5)
+    server.listen(1)  # Only one connection (engine)
     server.setblocking(False)
+
+    conn: socket.socket | None = None
 
     try:
         while not stop_event.is_set():
-            # Check for new connections with timeout
+            # If no connection, wait for one
+            if conn is None:
+                try:
+                    ready, _, _ = select.select([server], [], [], 0.1)
+                except (ValueError, OSError):
+                    break
+
+                if ready:
+                    try:
+                        conn, _ = server.accept()
+                        conn.setblocking(False)
+                        if session_path:
+                            _log_event(session_path, "engine_connected", {})
+                    except BlockingIOError:
+                        pass
+                continue
+
+            # We have a connection - read from it
             try:
-                ready, _, _ = select.select([server], [], [], 0.1)
+                ready, _, _ = select.select([conn], [], [], 0.1)
             except (ValueError, OSError):
-                break
+                # Connection broken
+                conn = None
+                line_buffer = b""
+                continue
 
             if not ready:
                 continue
 
             try:
-                conn, _ = server.accept()
-            except BlockingIOError:
-                continue
-
-            # Read data from connection
-            try:
-                data = b""
-                while True:
-                    chunk = conn.recv(4096)
-                    if not chunk:
-                        break
-                    data += chunk
-                conn.close()
-            except OSError:
-                continue
-
-            # Parse OpenVIP message(s) - one per line
-            for line in data.decode("utf-8").strip().split("\n"):
-                if not line:
-                    continue
-
-                try:
-                    openvip_msg = json.loads(line)
-                except json.JSONDecodeError:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    # Engine disconnected
                     if session_path:
-                        _log_event(session_path, "parse_error", {"line": line[:100]})
+                        _log_event(session_path, "engine_disconnected", {})
+                    conn.close()
+                    conn = None
+                    line_buffer = b""
                     continue
 
-                # Skip non-message types
-                if openvip_msg.get("type") != "message":
-                    continue
+                line_buffer += chunk
 
-                # Convert OpenVIP to internal format, preserving metadata for tracing
-                msg: dict[str, Any] = {
-                    "text": openvip_msg.get("text", ""),
-                    "openvip_id": openvip_msg.get("id"),
-                    "openvip_ts": openvip_msg.get("timestamp"),
-                }
-                if openvip_msg.get("x_submit"):
-                    msg["submit"] = True
-                if openvip_msg.get("x_visual_newline"):
-                    msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
+                # Process complete lines (messages are newline-delimited)
+                while b"\n" in line_buffer:
+                    line_bytes, line_buffer = line_buffer.split(b"\n", 1)
+                    line = line_bytes.decode("utf-8", errors="replace").strip()
 
-                msg_count += 1
-                if session_path:
-                    _log_event(session_path, "msg_read", {
-                        "seq": msg_count,
-                        "text": msg.get("text", "")[:50],
+                    if not line:
+                        continue
+
+                    try:
+                        openvip_msg = json.loads(line)
+                    except json.JSONDecodeError:
+                        if session_path:
+                            _log_event(session_path, "parse_error", {"line": line[:100]})
+                        continue
+
+                    # Skip non-message types
+                    if openvip_msg.get("type") != "message":
+                        continue
+
+                    # Convert OpenVIP to internal format
+                    msg: dict[str, Any] = {
+                        "text": openvip_msg.get("text", ""),
                         "openvip_id": openvip_msg.get("id"),
-                        "keystrokes": keystroke_counter.count if keystroke_counter else 0,
-                    })
+                        "openvip_ts": openvip_msg.get("timestamp"),
+                    }
+                    if openvip_msg.get("x_submit"):
+                        msg["submit"] = True
+                    if openvip_msg.get("x_visual_newline"):
+                        msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
 
-                write_queue.put(("msg", msg))
+                    msg_count += 1
+                    if session_path:
+                        text = msg.get("text", "")
+                        _log_event(session_path, "msg_read", {
+                            "seq": msg_count,
+                            "text": text if verbose else text[:50],
+                            "openvip_id": openvip_msg.get("id"),
+                            "keystrokes": keystroke_counter.count if keystroke_counter else 0,
+                        })
+
+                    write_queue.put(("msg", msg))
+
+            except (BlockingIOError, InterruptedError):
+                # No data available yet
+                continue
+            except OSError:
+                # Connection error
+                if conn:
+                    conn.close()
+                conn = None
+                line_buffer = b""
 
     except (BrokenPipeError, OSError) as e:
         if session_path:
             _log_event(session_path, "reader_error", {"error": str(e)})
     finally:
+        if conn:
+            conn.close()
         server.close()
         if socket_path.exists():
             socket_path.unlink()
+
+
+def _read_from_file(
+    file_path: Path,
+    write_queue: queue.Queue,
+    stop_event: threading.Event,
+    session_path: Path | None = None,
+    keystroke_counter: KeystrokeCounter | None = None,
+    verbose: bool = False,
+) -> None:
+    """Monitor file and put parsed messages in queue (tail -f style).
+
+    Reads OpenVIP messages appended to file by FileAgent.
+    More reliable than socket - no message loss.
+
+    File lifecycle:
+    - On start: if agent.jsonl.idle exists, rename to agent.jsonl
+    - On exit: rename agent.jsonl to agent.jsonl.idle (preserves history)
+    - Engine/monitor only sees .jsonl files (ignores .idle)
+
+    Uses unbuffered I/O to avoid Python file buffer caching issues.
+    """
+    msg_count = 0
+    line_buffer = b""
+    idle_path = Path(str(file_path) + ".idle")
+
+    # Activate file: rename .idle to .jsonl if exists
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    if idle_path.exists():
+        idle_path.rename(file_path)
+    elif not file_path.exists():
+        file_path.touch()
+
+    try:
+        # Use unbuffered I/O
+        fd = os.open(str(file_path), os.O_RDONLY)
+        try:
+            # Seek to end (tail -f style)
+            os.lseek(fd, 0, os.SEEK_END)
+
+            while not stop_event.is_set():
+                chunk = os.read(fd, 4096)
+                if chunk:
+                    line_buffer += chunk
+
+                    # Process all complete lines
+                    while b"\n" in line_buffer:
+                        line_bytes, line_buffer = line_buffer.split(b"\n", 1)
+                        line = line_bytes.decode("utf-8", errors="replace").strip()
+
+                        if not line:
+                            continue
+
+                        try:
+                            openvip_msg = json.loads(line)
+                        except json.JSONDecodeError:
+                            if session_path:
+                                _log_event(session_path, "parse_error", {"line": line[:100]})
+                            continue
+
+                        # Skip non-message types
+                        if openvip_msg.get("type") != "message":
+                            continue
+
+                        # Convert OpenVIP to internal format
+                        msg: dict[str, Any] = {
+                            "text": openvip_msg.get("text", ""),
+                            "openvip_id": openvip_msg.get("id"),
+                            "openvip_ts": openvip_msg.get("timestamp"),
+                        }
+                        if openvip_msg.get("x_submit"):
+                            msg["submit"] = True
+                        if openvip_msg.get("x_visual_newline"):
+                            msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
+
+                        msg_count += 1
+                        if session_path:
+                            text = msg.get("text", "")
+                            _log_event(session_path, "msg_read", {
+                                "seq": msg_count,
+                                "text": text if verbose else text[:50],
+                                "openvip_id": openvip_msg.get("id"),
+                                "keystrokes": keystroke_counter.count if keystroke_counter else 0,
+                            })
+
+                        write_queue.put(("msg", msg))
+                else:
+                    # No new data - wait before retry
+                    time.sleep(0.05)
+        finally:
+            os.close(fd)
+    except (BrokenPipeError, OSError) as e:
+        if session_path:
+            _log_event(session_path, "reader_error", {"error": str(e)})
+    finally:
+        # Mark file as idle (rename .jsonl → .jsonl.idle)
+        # Preserves session history, engine will see agent as gone
+        if file_path.exists():
+            try:
+                file_path.rename(idle_path)
+            except OSError:
+                pass
 
 
 def _write_all(fd: int, data: bytes) -> int:
@@ -275,6 +418,7 @@ def _write_to_pty(
     stop_event: threading.Event,
     session_path: Path | None = None,
     keystroke_counter: KeystrokeCounter | None = None,
+    verbose: bool = False,
 ) -> None:
     """Consume from queue and write to PTY.
 
@@ -331,9 +475,10 @@ def _write_to_pty(
 
                 # Log message AFTER successful write AND drain
                 if session_path:
+                    text = data.get("text", "")
                     _log_event(session_path, "msg_sent", {
                         "seq": msg_count,
-                        "text": data.get("text", "")[:50],
+                        "text": text if verbose else text[:50],
                         "bytes": bytes_written,
                         "openvip_id": data.get("openvip_id"),
                         "openvip_ts": data.get("openvip_ts"),
@@ -365,45 +510,108 @@ def _get_winsize() -> tuple[int, int]:
         return 24, 80
 
 
+def _is_socket_active(socket_path: Path) -> bool:
+    """Check if a socket has an active listener.
+
+    Args:
+        socket_path: Path to the Unix socket.
+
+    Returns:
+        True if there's an active listener, False if socket is stale or doesn't exist.
+    """
+    if not socket_path.exists():
+        return False
+
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.5)
+            sock.connect(str(socket_path))
+        # Connection succeeded - there's an active listener
+        return True
+    except (ConnectionRefusedError, TimeoutError, OSError):
+        # No listener or socket is stale
+        return False
+
+
+def get_file_path(agent_id: str) -> Path:
+    """Get file path for an agent.
+
+    Uses ~/.local/share/voxtype/agents/ for agent files.
+
+    Args:
+        agent_id: Agent identifier.
+
+    Returns:
+        Path to file (e.g., ~/.local/share/voxtype/agents/claude.jsonl).
+    """
+    file_dir = Path.home() / ".local" / "share" / "voxtype" / "agents"
+    file_dir.mkdir(parents=True, exist_ok=True)
+    return file_dir / f"{agent_id}.jsonl"
+
+
 def run_agent(
     agent_id: str,
     command: list[str],
     quiet: bool = False,
+    verbose: bool = False,
 ) -> int:
     """Run a command with multiplexed input from stdin and voxtype.
 
-    Listens on a Unix socket for OpenVIP messages from voxtype listen.
+    Reads OpenVIP messages from a file (more reliable than socket).
 
     Args:
         agent_id: Agent identifier (e.g., 'claude').
         command: Command and arguments to run.
         quiet: Suppress info messages.
+        verbose: Log full text in session file (not truncated to 50 chars).
 
     Returns:
         Exit code of the process.
     """
-    # Get socket path for this agent
+    # Get file path for this agent
+    file_path = get_file_path(agent_id)
+
+    # Also get socket path for backwards compatibility check
     socket_path = get_socket_path(agent_id)
 
-    # Register cleanup handler (safety net for abnormal exits)
+    # Check if another agent with the same ID is already running (socket check)
+    if _is_socket_active(socket_path):
+        print(
+            f"Error: Agent '{agent_id}' is already running (socket mode).",
+            file=sys.stderr,
+        )
+        return 1
+
+    # File lifecycle: .jsonl = active, .jsonl.idle = inactive
+    idle_path = Path(str(file_path) + ".idle")
+
+    # Check if another agent is already running (active .jsonl file)
+    if file_path.exists():
+        print(
+            f"Error: Agent '{agent_id}' is already running (file mode).",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Register cleanup handler (mark as idle on exit)
     import atexit
 
-    def cleanup_socket():
-        if socket_path.exists():
+    def cleanup_file():
+        if file_path.exists():
             try:
-                socket_path.unlink()
+                file_path.rename(idle_path)
             except OSError:
                 pass
 
-    atexit.register(cleanup_socket)
+    atexit.register(cleanup_file)
 
     # Create session log
     session_path = _get_session_log_path(agent_id)
-    _write_session_start(session_path, agent_id, command, socket_path)
+    _write_session_start(session_path, agent_id, command, file_path)
 
     if not quiet:
         print(f"[voxtype {__version__}] Agent: {agent_id}", file=sys.stderr)
-        print(f"[voxtype {__version__}] Socket: {socket_path}", file=sys.stderr)
+        print(f"[voxtype {__version__}] File: {file_path}", file=sys.stderr)
         print(f"[voxtype {__version__}] Session: {session_path}", file=sys.stderr)
         print(f"[voxtype {__version__}] Running: {' '.join(command)}", file=sys.stderr)
 
@@ -463,26 +671,33 @@ def run_agent(
         # Create keystroke counter for session statistics
         keystroke_counter = KeystrokeCounter()
 
-        # Start producer threads (read from stdin/socket, put in queue)
+        # Start producer threads (read from stdin/file, put in queue)
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
             args=(write_queue, stop_event, keystroke_counter),
             daemon=True,
         )
-        socket_thread = threading.Thread(
-            target=_read_from_socket,
-            args=(socket_path, write_queue, stop_event, session_path, keystroke_counter),
+        # Use file-based IPC (more reliable than socket)
+        file_thread = threading.Thread(
+            target=_read_from_file,
+            args=(file_path, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
+        # NOTE: Socket-based IPC kept for reference - had message loss issues
+        # socket_thread = threading.Thread(
+        #     target=_read_from_socket,
+        #     args=(socket_path, write_queue, stop_event, session_path, keystroke_counter, verbose),
+        #     daemon=True,
+        # )
         # Start consumer thread (read from queue, write to PTY)
         writer_thread = threading.Thread(
             target=_write_to_pty,
-            args=(master_fd, write_queue, stop_event, session_path, keystroke_counter),
+            args=(master_fd, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
 
         stdin_thread.start()
-        socket_thread.start()
+        file_thread.start()
         writer_thread.start()
 
         # Read from PTY and write to stdout

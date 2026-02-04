@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TypedDict
 
 
-class StatsData(TypedDict):
+class StatsData(TypedDict, total=False):
     """Structure for persistent stats."""
 
     first_use: str  # ISO format datetime
@@ -21,6 +21,7 @@ class StatsData(TypedDict):
     total_injection_seconds: float
     total_time_saved_seconds: float
     sessions: int
+    model_load_times: dict[str, float]  # Model ID -> load time in seconds
 
 
 def get_stats_path() -> Path:

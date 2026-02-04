@@ -12,14 +12,13 @@ from voxtype.core.controller import StateController
 from voxtype.core.events import (
     AgentSwitchEvent,
     DiscardCurrentEvent,
-    HotkeyDoubleTapEvent,
     HotkeyToggleEvent,
+    PlayCompleteEvent,
+    PlayStartEvent,
     SetListeningEvent,
     SpeechEndEvent,
     SpeechStartEvent,
     TranscriptionCompleteEvent,
-    TTSCompleteEvent,
-    TTSStartEvent,
 )
 from voxtype.core.state import AppState, StateManager
 
@@ -40,15 +39,11 @@ class MockEngine:
         self._audio_manager.reset_vad = MagicMock()
         self._audio_manager.clear_queue = MagicMock()
 
-        self._llm_processor = MagicMock()
-
         self.agents = ["claude", "cursor", "vscode"]
         self._current_agent_index = 0
-        self._processing_mode = "transcription"
 
         self.transcriptions: list[Any] = []
         self.injections: list[Any] = []
-        self.mode_switches = 0
         self.agent_switches: list[tuple[str, int]] = []
 
     def _transcribe_and_process(self, audio_data: Any, agent: Any = None) -> None:
@@ -59,13 +54,6 @@ class MockEngine:
 
     def _process_queued_audio(self) -> None:
         pass
-
-    def _switch_processing_mode_internal(self) -> None:
-        self.mode_switches += 1
-        if self._processing_mode == "transcription":
-            self._processing_mode = "command"
-        else:
-            self._processing_mode = "transcription"
 
     def _discard_current_internal(self) -> None:
         self._audio_manager.clear_queue()
@@ -240,11 +228,11 @@ class TestTranscriptionComplete:
             controller.stop()
 
 
-class TestTTSEvents:
-    """Test TTS-related events."""
+class TestPlayEvents:
+    """Test play-related events."""
 
-    def test_tts_start_transitions_to_playing(self) -> None:
-        """TTSStartEvent transitions LISTENING -> PLAYING."""
+    def test_play_start_transitions_to_playing(self) -> None:
+        """PlayStartEvent transitions LISTENING -> PLAYING."""
         sm = StateManager(initial_state=AppState.LISTENING)
         engine = MockEngine()
         controller = StateController(sm)
@@ -252,59 +240,59 @@ class TestTTSEvents:
         controller.start()
 
         try:
-            # Get TTS ID first (like app.py does)
-            tts_id = controller.get_next_tts_id()
-            controller.send(TTSStartEvent(text="Hello", source="tts"))
+            # Get play ID first (like app.py does)
+            play_id = controller.get_next_play_id()
+            controller.send(PlayStartEvent(text="Hello", source="tts"))
             _wait()
 
             assert sm.state == AppState.PLAYING
-            assert controller.tts_in_progress is True
-            assert controller._current_tts_id == tts_id
+            assert controller.play_in_progress is True
+            assert controller._current_play_id == play_id
             engine._audio_manager.reset_vad.assert_called()
         finally:
             controller.stop()
 
-    def test_tts_complete_returns_to_listening(self) -> None:
-        """TTSCompleteEvent transitions PLAYING -> LISTENING."""
+    def test_play_complete_returns_to_listening(self) -> None:
+        """PlayCompleteEvent transitions PLAYING -> LISTENING."""
         sm = StateManager(initial_state=AppState.PLAYING)
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        # Set TTS ID to simulate TTS in progress
-        controller._current_tts_id = 1
+        # Set play ID to simulate playback in progress
+        controller._current_play_id = 1
         controller.start()
 
         try:
             # Send complete with matching ID
-            controller.send(TTSCompleteEvent(tts_id=1, source="tts"))
+            controller.send(PlayCompleteEvent(play_id=1, source="tts"))
             _wait()
 
             assert sm.state == AppState.LISTENING
-            assert controller.tts_in_progress is False
+            assert controller.play_in_progress is False
         finally:
             controller.stop()
 
-    def test_hotkey_off_during_tts_deferred(self) -> None:
-        """Pressing OFF during TTS defers transition until TTS completes."""
+    def test_hotkey_off_during_play_deferred(self) -> None:
+        """Pressing OFF during playback defers transition until play completes."""
         sm = StateManager(initial_state=AppState.PLAYING)
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        # Set TTS ID to simulate TTS in progress
-        controller._current_tts_id = 1
+        # Set play ID to simulate playback in progress
+        controller._current_play_id = 1
         controller.start()
 
         try:
-            # User presses OFF during TTS
+            # User presses OFF during playback
             controller.send(HotkeyToggleEvent(source="hotkey"))
             _wait()
 
-            # Should still be PLAYING (TTS not finished)
+            # Should still be PLAYING (playback not finished)
             assert sm.state == AppState.PLAYING
-            assert controller._desired_state_after_tts == AppState.OFF
+            assert controller._desired_state_after_play == AppState.OFF
 
-            # TTS completes with matching ID
-            controller.send(TTSCompleteEvent(tts_id=1, source="tts"))
+            # Playback completes with matching ID
+            controller.send(PlayCompleteEvent(play_id=1, source="tts"))
             _wait()
 
             # Now should go to OFF (user intent preserved)
@@ -312,18 +300,18 @@ class TestTTSEvents:
         finally:
             controller.stop()
 
-    def test_transcription_during_tts_deferred(self) -> None:
-        """Transcription completing during TTS doesn't interfere."""
+    def test_transcription_during_play_deferred(self) -> None:
+        """Transcription completing during playback doesn't interfere."""
         sm = StateManager(initial_state=AppState.PLAYING)
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        # Set TTS ID to simulate TTS in progress
-        controller._current_tts_id = 1
+        # Set play ID to simulate playback in progress
+        controller._current_play_id = 1
         controller.start()
 
         try:
-            # Transcription completes while TTS is playing
+            # Transcription completes while audio is playing
             controller.send(
                 TranscriptionCompleteEvent(text="test", source="stt")
             )
@@ -336,8 +324,8 @@ class TestTTSEvents:
         finally:
             controller.stop()
 
-    def test_concurrent_tts_only_last_triggers_transition(self) -> None:
-        """Only the LAST TTS completion triggers state transition (rapid agent switching)."""
+    def test_concurrent_play_only_last_triggers_transition(self) -> None:
+        """Only the LAST play completion triggers state transition (rapid agent switching)."""
         sm = StateManager(initial_state=AppState.LISTENING)
         engine = MockEngine()
         controller = StateController(sm)
@@ -345,59 +333,59 @@ class TestTTSEvents:
         controller.start()
 
         try:
-            # Simulate rapid agent switching: TTS 1, 2, 3 start in quick succession
-            tts_id_1 = controller.get_next_tts_id()
-            controller.send(TTSStartEvent(text="Agent 1", source="tts"))
+            # Simulate rapid agent switching: play 1, 2, 3 start in quick succession
+            play_id_1 = controller.get_next_play_id()
+            controller.send(PlayStartEvent(text="Agent 1", source="tts"))
             _wait()
 
-            assert controller._current_tts_id == 1
+            assert controller._current_play_id == 1
             assert sm.state == AppState.PLAYING
 
-            # Second TTS starts (agent switch while TTS 1 still playing)
-            tts_id_2 = controller.get_next_tts_id()
-            controller.send(TTSStartEvent(text="Agent 2", source="tts"))
+            # Second play starts (agent switch while play 1 still playing)
+            play_id_2 = controller.get_next_play_id()
+            controller.send(PlayStartEvent(text="Agent 2", source="tts"))
             _wait()
 
-            assert controller._current_tts_id == 2  # Updated to latest
+            assert controller._current_play_id == 2  # Updated to latest
 
-            # Third TTS starts
-            tts_id_3 = controller.get_next_tts_id()
-            controller.send(TTSStartEvent(text="Agent 3", source="tts"))
+            # Third play starts
+            play_id_3 = controller.get_next_play_id()
+            controller.send(PlayStartEvent(text="Agent 3", source="tts"))
             _wait()
 
-            assert controller._current_tts_id == 3
+            assert controller._current_play_id == 3
 
-            # TTS 1 completes - should be IGNORED (not the last)
-            controller.send(TTSCompleteEvent(tts_id=tts_id_1, source="tts"))
-            _wait()
-
-            assert sm.state == AppState.PLAYING  # Still playing!
-            assert controller.tts_in_progress is True
-
-            # TTS 2 completes - should be IGNORED (not the last)
-            controller.send(TTSCompleteEvent(tts_id=tts_id_2, source="tts"))
+            # Play 1 completes - should be IGNORED (not the last)
+            controller.send(PlayCompleteEvent(play_id=play_id_1, source="tts"))
             _wait()
 
             assert sm.state == AppState.PLAYING  # Still playing!
-            assert controller.tts_in_progress is True
+            assert controller.play_in_progress is True
 
-            # TTS 3 completes - THIS is the last one, should transition
-            controller.send(TTSCompleteEvent(tts_id=tts_id_3, source="tts"))
+            # Play 2 completes - should be IGNORED (not the last)
+            controller.send(PlayCompleteEvent(play_id=play_id_2, source="tts"))
+            _wait()
+
+            assert sm.state == AppState.PLAYING  # Still playing!
+            assert controller.play_in_progress is True
+
+            # Play 3 completes - THIS is the last one, should transition
+            controller.send(PlayCompleteEvent(play_id=play_id_3, source="tts"))
             _wait()
 
             assert sm.state == AppState.LISTENING  # Now back to listening
-            assert controller.tts_in_progress is False
+            assert controller.play_in_progress is False
         finally:
             controller.stop()
 
-    def test_transcription_during_tts_while_transcribing(self) -> None:
-        """Fix for STUCK in TRANSCRIBING: TTS starts while transcribing, then both complete.
+    def test_transcription_during_play_while_transcribing(self) -> None:
+        """Fix for STUCK in TRANSCRIBING: play starts while transcribing, then both complete.
 
         Scenario:
         1. User speaks → TRANSCRIBING
-        2. User switches agent → TTS starts (but state stays TRANSCRIBING)
-        3. Transcription completes → deferred (tts_in_progress is True)
-        4. TTS completes → should transition TRANSCRIBING → LISTENING
+        2. User switches agent → play starts (but state stays TRANSCRIBING)
+        3. Transcription completes → deferred (play_in_progress is True)
+        4. Play completes → should transition TRANSCRIBING → LISTENING
         """
         sm = StateManager(initial_state=AppState.TRANSCRIBING)
         engine = MockEngine()
@@ -406,16 +394,16 @@ class TestTTSEvents:
         controller.start()
 
         try:
-            # TTS starts while in TRANSCRIBING (agent switch during transcription)
-            tts_id = controller.get_next_tts_id()
-            controller.send(TTSStartEvent(text="Agent 2", source="tts"))
+            # Play starts while in TRANSCRIBING (agent switch during transcription)
+            play_id = controller.get_next_play_id()
+            controller.send(PlayStartEvent(text="Agent 2", source="tts"))
             _wait()
 
-            # State stays TRANSCRIBING (TTS only transitions from LISTENING)
+            # State stays TRANSCRIBING (play only transitions from LISTENING)
             assert sm.state == AppState.TRANSCRIBING
-            assert controller.tts_in_progress is True
+            assert controller.play_in_progress is True
 
-            # Transcription completes while TTS playing → deferred
+            # Transcription completes while audio playing → deferred
             controller.send(TranscriptionCompleteEvent(text="test", source="stt"))
             _wait()
 
@@ -423,13 +411,13 @@ class TestTTSEvents:
             assert sm.state == AppState.TRANSCRIBING
             assert controller._pending_transcription is not None
 
-            # TTS completes → should transition to LISTENING
-            controller.send(TTSCompleteEvent(tts_id=tts_id, source="tts"))
+            # Play completes → should transition to LISTENING
+            controller.send(PlayCompleteEvent(play_id=play_id, source="tts"))
             _wait()
 
             # NOW should be LISTENING (not stuck in TRANSCRIBING)
             assert sm.state == AppState.LISTENING
-            assert controller.tts_in_progress is False
+            assert controller.play_in_progress is False
         finally:
             controller.stop()
 
@@ -469,27 +457,6 @@ class TestHotkeyEvents:
             _wait()
 
             assert sm.state == AppState.OFF
-        finally:
-            controller.stop()
-
-    def test_double_tap_switches_mode(self) -> None:
-        """HotkeyDoubleTapEvent switches processing mode."""
-        sm = StateManager(initial_state=AppState.LISTENING)
-        engine = MockEngine()
-        mode_changes = []
-        controller = StateController(
-            sm,
-            on_mode_change=lambda: mode_changes.append(True),
-        )
-        controller.set_engine(engine)
-        controller.start()
-
-        try:
-            controller.send(HotkeyDoubleTapEvent(source="hotkey"))
-            _wait()
-
-            assert engine.mode_switches == 1
-            assert len(mode_changes) == 1
         finally:
             controller.stop()
 

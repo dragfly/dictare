@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 import time
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
+from voxtype.adapters.openvip.messages import create_message
 from voxtype.agent.base import Agent
 from voxtype.core.audio_manager import AudioManager
 from voxtype.core.controller import StateController
@@ -15,7 +17,6 @@ from voxtype.core.events import (
     AgentSwitchEvent,
     DiscardCurrentEvent,
     EngineEvents,
-    HotkeyDoubleTapEvent,
     HotkeyToggleEvent,
     InjectionResult,
     SetListeningEvent,
@@ -24,15 +25,17 @@ from voxtype.core.events import (
     TranscriptionCompleteEvent,
     TranscriptionResult,
 )
-from voxtype.core.openvip import create_message
-from voxtype.core.state import AppState, ProcessingMode, StateManager
+from voxtype.core.state import AppState, StateManager
+from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
+from voxtype.pipeline import AgentFilter, Pipeline, SubmitFilter
 from voxtype.stt.base import STTEngine
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from voxtype.config import Config
-    from voxtype.llm import LLMProcessor, LLMResponse
     from voxtype.logging.jsonl import JSONLLogger
 
 
@@ -40,8 +43,7 @@ class VoxtypeEngine:
     """Core engine for voice-to-text processing.
 
     Coordinates audio capture, STT, hotkey detection, and text injection.
-    Uses LLM-first architecture: ALL transcribed text goes through the LLM
-    which decides what action to take.
+    Implements OpenVIP v1.0 protocol for voice input.
 
     This class contains NO UI code - use VoxtypeApp for the full application
     with console output, status panels, and audio feedback.
@@ -63,6 +65,7 @@ class VoxtypeEngine:
         logger: JSONLLogger | None = None,
         agent_mode: bool = False,
         realtime: bool = False,
+        hotkey_enabled: bool = True,
     ) -> None:
         """Initialize the engine.
 
@@ -72,7 +75,10 @@ class VoxtypeEngine:
             logger: Optional JSONL logger for structured logging.
             agent_mode: Enable agent mode with auto-discovery.
             realtime: Enable realtime transcription feedback while speaking.
+            hotkey_enabled: Enable hotkey listener. Set False for daemon mode
+                           (macOS requires main thread for hotkey events).
         """
+        self._hotkey_enabled = hotkey_enabled
         self.config = config
         self._events = events
         self._realtime = realtime
@@ -97,7 +103,6 @@ class VoxtypeEngine:
 
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
-        self.trigger_phrase = config.command.wake_word or None
 
         # Agent mode: whether we're outputting to agents (vs keyboard/clipboard)
         self.agent_mode = agent_mode
@@ -115,7 +120,6 @@ class VoxtypeEngine:
             on_state_change=lambda old, new, trigger: self._emit(
                 "on_state_change", old, new, trigger
             ),
-            on_mode_change=lambda: self._emit("on_mode_change", self._processing_mode),
             on_agent_change=lambda name, idx: self._emit("on_agent_change", name, idx),
         )
         self._controller.set_engine(self)
@@ -124,19 +128,22 @@ class VoxtypeEngine:
         self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
 
-        # Agent state
+        # Agent state (must be initialized before pipeline)
         self._current_agent_id: str | None = None  # ID of currently selected agent
         self._agent_order: list[str] = []  # Ordered list of agent IDs for cycling
-        self._input_manager: Any = None  # InputManager for keyboard/device inputs
 
-        # Processing mode: TRANSCRIPTION (fast, no LLM) or COMMAND (LLM)
-        self._processing_mode = ProcessingMode(config.command.mode)
+        # Pipeline for message processing
+        self._pipeline = self._create_pipeline()
+        self._input_manager: Any = None  # InputManager for keyboard/device inputs
+        self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
 
         # Tap detection (isolated state machine)
+        # Single tap: toggle listening on/off
+        # Double tap: switch to next agent
         self._tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
             on_single_tap=lambda: self._controller.send(HotkeyToggleEvent(source="hotkey")),
-            on_double_tap=lambda: self._controller.send(HotkeyDoubleTapEvent(source="hotkey")),
+            on_double_tap=lambda: self._controller.send(AgentSwitchEvent(direction=1, source="hotkey")),
         )
 
         # Initialize components
@@ -145,9 +152,6 @@ class VoxtypeEngine:
         self._realtime_stt: STTEngine | None = None  # Separate fast model for realtime
         self._hotkey: HotkeyListener | None = None
         # Note: No more _injector - each Agent handles its own transport
-
-        # LLM processor for command mode
-        self._llm_processor: LLMProcessor | None = None
 
     def _emit(self, event: str, *args: Any, **kwargs: Any) -> None:
         """Emit event to handler if registered.
@@ -163,7 +167,7 @@ class VoxtypeEngine:
                 try:
                     handler(*args, **kwargs)
                 except Exception:
-                    pass  # Don't let UI errors crash the engine
+                    logger.exception(f"Error in event handler {event}")
 
     # -------------------------------------------------------------------------
     # Properties
@@ -183,11 +187,6 @@ class VoxtypeEngine:
     def is_off(self) -> bool:
         """Check if in OFF state (mic disabled)."""
         return self._state_manager.is_off
-
-    @property
-    def mode(self) -> ProcessingMode:
-        """Get current processing mode."""
-        return self._processing_mode
 
     @property
     def agents(self) -> list[str]:
@@ -255,11 +254,14 @@ class VoxtypeEngine:
     # Factory Methods
     # -------------------------------------------------------------------------
 
-    def _create_stt_engine(self, model_size: str | None = None) -> STTEngine:
+    def _create_stt_engine(
+        self, model_size: str | None = None, *, headless: bool = False
+    ) -> STTEngine:
         """Create and load STT engine.
 
         Args:
             model_size: Model size to load. If None, uses config.stt.model.
+            headless: If True, skip all console output (for Engine/daemon mode).
         """
         from voxtype.utils.hardware import is_mlx_available
 
@@ -280,6 +282,7 @@ class VoxtypeEngine:
             compute_type=self.config.stt.compute_type,
             console=None,  # No console in engine
             verbose=self.config.verbose,
+            headless=headless,
         )
 
         return engine
@@ -347,28 +350,60 @@ class VoxtypeEngine:
         )
 
     def _get_hotwords(self) -> str | None:
-        """Build hotwords string from config + wake_word."""
-        parts = []
-
-        # Add config hotwords
+        """Build hotwords string from config."""
         if self.config.stt.hotwords:
-            parts.append(self.config.stt.hotwords)
+            return self.config.stt.hotwords
+        return None
 
-        # Add wake word (lowercased, normalized)
-        if self.trigger_phrase:
-            normalized = self.trigger_phrase.lower().replace(",", " ").strip()
-            if normalized and normalized not in parts:
-                parts.append(normalized)
+    def _create_pipeline(self) -> Pipeline | None:
+        """Create message pipeline from config.
 
-        return ",".join(parts) if parts else None
+        Returns:
+            Pipeline if enabled, None otherwise.
+        """
+        if not self.config.pipeline.enabled:
+            return None
+
+        pipeline = Pipeline()
+
+        # Add agent filter if enabled (runs first to set x_agent_switch)
+        agent_cfg = self.config.pipeline.agent_filter
+        if agent_cfg.enabled:
+            agent_filter = AgentFilter(
+                agent_ids=self.agents,  # Initial list, will update via events
+                triggers=agent_cfg.triggers,
+                match_threshold=agent_cfg.match_threshold,
+                subscribe_to_events=True,  # Auto-update when agents change
+            )
+            pipeline.add_filter(agent_filter)
+
+        # Add submit filter if enabled
+        submit_cfg = self.config.pipeline.submit_filter
+        if submit_cfg.enabled:
+            submit_filter = SubmitFilter(
+                triggers=submit_cfg.triggers,
+                confidence_threshold=submit_cfg.confidence_threshold,
+                max_scan_words=submit_cfg.max_scan_words,
+                decay_rate=submit_cfg.decay_rate,
+            )
+            pipeline.add_filter(submit_filter)
+
+        return pipeline if len(pipeline) > 0 else None
 
     # -------------------------------------------------------------------------
     # Initialization
     # -------------------------------------------------------------------------
 
-    def _init_vad_components(self) -> None:
-        """Initialize components for VAD mode."""
-        self._stt = self._create_stt_engine()
+    def init_components(self, *, headless: bool = False) -> None:
+        """Initialize engine components (STT, VAD, audio, hotkey).
+
+        Call this before start_runtime(). This loads models and creates
+        the audio manager, but does not start listening.
+
+        Args:
+            headless: If True, skip all console output (for Engine/daemon mode).
+        """
+        self._stt = self._create_stt_engine(headless=headless)
 
         # Load separate fast model for realtime partial transcriptions
         if self._realtime:
@@ -388,6 +423,7 @@ class VoxtypeEngine:
             on_max_speech=self._on_max_speech_duration,
             on_partial_audio=self._on_partial_audio if self._realtime else None,
             on_vad_loading=lambda: self._emit("on_vad_loading"),
+            headless=headless,
         )
         # Set reconnect callbacks
         self._audio_manager.set_reconnect_callbacks(
@@ -405,25 +441,15 @@ class VoxtypeEngine:
             )
             self._partial_worker.start()
 
-        # Create LLM processor for command mode
-        self._init_llm_processor()
-
-        # Create hotkey listener for toggle (if available)
-        try:
-            self._hotkey = self._create_hotkey_listener()
-        except RuntimeError:
+        # Create hotkey listener for toggle (if available and enabled)
+        # Note: hotkey disabled in daemon mode - macOS requires main thread
+        if self._hotkey_enabled:
+            try:
+                self._hotkey = self._create_hotkey_listener()
+            except RuntimeError:
+                self._hotkey = None
+        else:
             self._hotkey = None
-
-    def _init_llm_processor(self) -> None:
-        """Initialize the LLM-first processor."""
-        from voxtype.llm import LLMProcessor
-
-        self._llm_processor = LLMProcessor(
-            trigger_phrase=self.trigger_phrase,
-            ollama_model=self.config.command.ollama_model,
-            ollama_timeout=self.config.command.ollama_timeout,
-            console=None,  # No console in engine
-        )
 
     # -------------------------------------------------------------------------
     # VAD Callbacks
@@ -510,7 +536,7 @@ class VoxtypeEngine:
     # -------------------------------------------------------------------------
 
     def _transcribe_and_process(self, audio_data: Any, agent: Agent | None = None) -> None:
-        """Transcribe audio and process with LLM-first architecture.
+        """Transcribe audio and send to agent.
 
         Called by StateController when SpeechEndEvent is processed.
 
@@ -582,14 +608,6 @@ class VoxtypeEngine:
                     if self.is_off:
                         return
 
-                    # Process based on mode (command mode handles injection internally)
-                    if self._processing_mode == ProcessingMode.COMMAND and self._llm_processor:
-                        # Command mode: process through LLM
-                        response = self._llm_processor.process(text)
-                        self._execute_llm_response(response, text, agent=captured_agent)
-                        # Command mode handles its own injection, don't send to controller
-                        transcribed_text = ""
-
             except Exception as e:
                 if self._logger:
                     self._logger.log_error(str(e), context="transcribe_and_process")
@@ -638,66 +656,6 @@ class VoxtypeEngine:
             return
 
     # -------------------------------------------------------------------------
-    # LLM Response Execution
-    # -------------------------------------------------------------------------
-
-    def _execute_llm_response(
-        self, response: LLMResponse, original_text: str, *, agent: Agent | None = None
-    ) -> None:
-        """Execute the action decided by the LLM.
-
-        Args:
-            response: LLM response with action to execute
-            original_text: Original transcribed text
-            agent: Optional agent to use for injection
-        """
-        from voxtype.llm.models import Action
-
-        # Log the LLM decision
-        if self._logger:
-            current_llm_state = self._llm_processor.state.value if self._llm_processor else "unknown"
-            self._logger.log(
-                "llm_decision",
-                current_state=current_llm_state,
-                text=original_text,
-                action=response.action.value,
-                new_state=response.new_state.value if response.new_state else None,
-                command=response.command.value if response.command else None,
-                confidence=response.confidence,
-                backend=response.backend,
-                override_reason=response.override_reason,
-                raw_llm_response=response.raw_llm_response,
-                text_to_inject=response.text_to_inject,
-            )
-
-        if response.action == Action.IGNORE:
-            return
-
-        if response.action == Action.CHANGE_STATE:
-            if response.new_state == AppState.LISTENING:
-                self._enter_listening_mode()
-            elif response.new_state == AppState.OFF:
-                self._exit_listening_mode()
-            return
-
-        if response.action == Action.EXECUTE:
-            self._execute_command(response.command, response.command_args)
-            return
-
-        if response.action == Action.INJECT:
-            if response.text_to_inject:
-                self._state_manager.transition(AppState.INJECTING)
-                self._inject_text(response.text_to_inject, agent=agent)
-
-    def _execute_command(self, command: Any, args: dict[str, Any] | None) -> None:
-        """Execute a voice command."""
-        from voxtype.llm.models import Command
-
-        if command == Command.REPEAT:
-            if self._llm_processor and self._llm_processor.last_injection:
-                self._inject_text(self._llm_processor.last_injection)
-
-    # -------------------------------------------------------------------------
     # Text Injection
     # -------------------------------------------------------------------------
 
@@ -710,9 +668,10 @@ class VoxtypeEngine:
         - SSEAgent: sends via Server-Sent Events
         - WebhookAgent: sends via HTTP POST
 
-        Message termination based on auto_enter:
-        - auto_enter=true: text + submit flag
-        - auto_enter=false: text + visual newline flag
+        Message processing:
+        1. Build initial message with auto_enter setting
+        2. Apply pipeline filters (may set x_submit, modify text, etc.)
+        3. Send processed message(s) to agent
 
         Args:
             text: Text to inject
@@ -726,12 +685,31 @@ class VoxtypeEngine:
         # Use provided agent or fall back to current
         target_agent = agent if agent is not None else self._get_current_agent()
 
+        # Get language for pipeline filters
+        # TODO: Use detected language from Whisper once we propagate it
+        stt_language = self.config.stt.language
+        message_language = stt_language if stt_language != "auto" else "it"
+
         # Build OpenVIP message with unique ID
         message = create_message(
             text,
             submit=auto_enter,
             visual_newline=not auto_enter,
+            language=message_language,
         )
+
+        # Apply pipeline filters (may modify message, set x_submit, etc.)
+        messages_to_send = [message]
+        if self._pipeline:
+            messages_to_send = self._pipeline.process(message)
+
+        # Handle x_agent_switch from pipeline (voice-controlled agent switch)
+        if messages_to_send:
+            switch_target = messages_to_send[0].get("x_agent_switch")
+            if switch_target:
+                # Switch to the requested agent
+                self._switch_to_agent_by_name_internal(switch_target)
+                target_agent = self._get_current_agent()
 
         # Lock to prevent concurrent injections
         error_msg: str | None = None
@@ -741,7 +719,18 @@ class VoxtypeEngine:
             if target_agent:
                 # Send to agent - agent handles its own transport
                 method = f"agent:{target_agent.id}"
-                success = target_agent.send(message)
+
+                # Send all processed messages
+                for msg in messages_to_send:
+                    msg_text = msg.get("text", "")
+                    has_submit = msg.get("x_submit", False)
+                    if not msg_text.strip() and not has_submit:
+                        # Skip empty messages without submit flag
+                        success = True  # Consider it successful, nothing to send
+                        continue
+                    msg_success = target_agent.send(msg)
+                    if msg_success:
+                        success = True
 
                 # Set helpful error message for failures
                 if not success:
@@ -753,20 +742,29 @@ class VoxtypeEngine:
 
             self._stats_injection_seconds += time.time() - inject_start
 
+        # Determine final text and submit info (after pipeline processing)
+        first_msg = messages_to_send[0] if messages_to_send else {}
+        final_text = first_msg.get("text", text)
+        pipeline_submit = first_msg.get("x_submit", False)
+        submit_trigger = first_msg.get("x_submit_trigger")  # e.g., "submit", "invia"
+        submit_confidence = first_msg.get("x_submit_confidence")  # e.g., 0.95
+
         # Emit injection event
         self._emit(
             "on_injection",
-            InjectionResult(text=text, success=success, method=method, error=error_msg),
+            InjectionResult(text=final_text, success=success, method=method, error=error_msg),
         )
 
         # Log injection
         if self._logger:
             self._logger.log_injection(
-                text=text,
+                text=final_text,
                 method=method,
                 success=success,
-                auto_enter=auto_enter,
+                auto_enter=auto_enter or pipeline_submit,
                 enter_sent=None,  # Agents handle their own submission
+                submit_trigger=submit_trigger,
+                submit_confidence=submit_confidence,
             )
 
     # -------------------------------------------------------------------------
@@ -803,21 +801,6 @@ class VoxtypeEngine:
         """Toggle listening on/off - sends event to controller."""
         self._controller.send(HotkeyToggleEvent(source="api"))
 
-    def _switch_processing_mode(self) -> None:
-        """Switch between transcription and command mode - sends event."""
-        self._controller.send(HotkeyDoubleTapEvent(source="api"))
-
-    def _switch_processing_mode_internal(self) -> None:
-        """Internal: Actually switch processing mode. Called by controller."""
-        if self._processing_mode == ProcessingMode.TRANSCRIPTION:
-            self._processing_mode = ProcessingMode.COMMAND
-        else:
-            self._processing_mode = ProcessingMode.TRANSCRIPTION
-
-        # Sync LLM processor state
-        if self._llm_processor:
-            self._llm_processor.set_listening(self.is_listening)
-
     def _set_listening(self, on: bool) -> None:
         """Set listening state on/off - sends event to controller."""
         self._controller.send(SetListeningEvent(on=on, source="api"))
@@ -849,6 +832,7 @@ class VoxtypeEngine:
             self._current_agent_id = agent.id
 
         self._emit("on_agents_changed", self.agents)
+        bus.publish("agent.registered", agent_id=agent.id)
         return True
 
     def unregister_agent(self, agent_id: str) -> bool:
@@ -881,6 +865,7 @@ class VoxtypeEngine:
             self._current_agent_id = None
 
         self._emit("on_agents_changed", self.agents)
+        bus.publish("agent.unregistered", agent_id=agent_id)
         return True
 
     def _switch_agent(self, direction: int) -> None:
@@ -890,8 +875,9 @@ class VoxtypeEngine:
     def _switch_agent_internal(self, direction: int) -> None:
         """Internal: Actually switch agent. Called by controller.
 
-        Verifies the target agent is alive before switching.
-        If dead, unregisters it and tries the next one.
+        Switches to the next agent in the specified direction.
+        Agent liveness is verified lazily on send() - if an agent is dead,
+        repeated send failures will trigger auto-deregistration.
         """
         if not self._agent_order:
             return
@@ -901,32 +887,13 @@ class VoxtypeEngine:
         if self._current_agent_id and self._current_agent_id in self._agent_order:
             current_idx = self._agent_order.index(self._current_agent_id)
 
-        # Try to find a live agent (circular search, max one full loop)
-        tried = 0
-        while tried < len(self._agent_order):
-            new_idx = (current_idx + direction * (tried + 1)) % len(self._agent_order)
-            new_agent_id = self._agent_order[new_idx]
-            agent = self._agents.get(new_agent_id)
+        # Switch to next agent (simple circular)
+        new_idx = (current_idx + direction) % len(self._agent_order)
+        new_agent_id = self._agent_order[new_idx]
 
-            if agent:
-                # Check if agent is alive (if it has the method)
-                if hasattr(agent, "is_alive") and not agent.is_alive():
-                    # Agent is dead - unregister and try next
-                    self.unregister_agent(new_agent_id)
-                    tried += 1
-                    continue
-
-                # Agent is alive - switch to it
-                self._current_agent_id = new_agent_id
-                # Recalculate index after potential unregistrations
-                actual_idx = self._agent_order.index(new_agent_id) if new_agent_id in self._agent_order else 0
-                self._emit("on_agent_change", self._current_agent_id, actual_idx)
-                return
-
-            tried += 1
-
-        # No live agents found
-        self._current_agent_id = None
+        if new_agent_id in self._agents:
+            self._current_agent_id = new_agent_id
+            self._emit("on_agent_change", self._current_agent_id, new_idx)
 
     def _switch_to_agent_by_name(self, name: str) -> bool:
         """Switch to a specific agent by name - sends event to controller."""
@@ -936,8 +903,7 @@ class VoxtypeEngine:
     def _switch_to_agent_by_name_internal(self, name: str) -> bool:
         """Internal: Actually switch by name. Called by controller.
 
-        Verifies the target agent is alive before switching.
-        If dead, unregisters it and returns False.
+        Agent liveness is verified lazily on send().
         """
         if not self._agent_order:
             return False
@@ -945,18 +911,11 @@ class VoxtypeEngine:
         name_lower = name.lower()
 
         def try_switch(agent_id: str, idx: int) -> bool:
-            """Try to switch to an agent, verify it's alive."""
-            agent = self._agents.get(agent_id)
-            if not agent:
-                return False
-            # Check if agent is alive (if it has the method)
-            if hasattr(agent, "is_alive") and not agent.is_alive():
-                self.unregister_agent(agent_id)
+            """Try to switch to an agent."""
+            if agent_id not in self._agents:
                 return False
             self._current_agent_id = agent_id
-            # Recalculate index after potential unregistrations
-            actual_idx = self._agent_order.index(agent_id) if agent_id in self._agent_order else idx
-            self._emit("on_agent_change", agent_id, actual_idx)
+            self._emit("on_agent_change", agent_id, idx)
             return True
 
         # Try exact match first
@@ -979,8 +938,7 @@ class VoxtypeEngine:
     def _switch_to_agent_by_index_internal(self, index: int) -> bool:
         """Internal: Actually switch by index. Called by controller.
 
-        Verifies the target agent is alive before switching.
-        If dead, unregisters it and returns False.
+        Agent liveness is verified lazily on send().
         """
         if not self._agent_order:
             return False
@@ -990,25 +948,12 @@ class VoxtypeEngine:
             return False
 
         agent_id = self._agent_order[idx]
-        agent = self._agents.get(agent_id)
-        if not agent:
-            return False
-
-        # Check if agent is alive (if it has the method)
-        if hasattr(agent, "is_alive") and not agent.is_alive():
-            self.unregister_agent(agent_id)
+        if agent_id not in self._agents:
             return False
 
         self._current_agent_id = agent_id
-        # Recalculate index after potential unregistrations
-        actual_idx = self._agent_order.index(agent_id) if agent_id in self._agent_order else idx
-        self._emit("on_agent_change", self._current_agent_id, actual_idx)
+        self._emit("on_agent_change", self._current_agent_id, idx)
         return True
-
-    def _repeat_last_injection(self) -> None:
-        """Repeat the last injected text."""
-        if self._llm_processor and self._llm_processor.last_injection:
-            self._inject_text(self._llm_processor.last_injection)
 
     def _send_submit(self) -> None:
         """Send submit (Enter key) to the target."""
@@ -1027,59 +972,147 @@ class VoxtypeEngine:
             self._audio_manager.clear_queue()
             self._audio_manager.reset_vad()  # Use reset, not flush
 
+    # -------------------------------------------------------------------------
+    # TTS / Audio Feedback
+    # -------------------------------------------------------------------------
+
+    def _load_tts_phrases(self) -> dict:
+        """Load TTS phrases from config file or use defaults."""
+        import json
+        from pathlib import Path
+
+        default_phrases = {
+            "transcription_mode": "transcription mode",
+            "command_mode": "command mode",
+            "agent": "agent",
+            "voice": "Samantha",
+        }
+
+        phrases_path = Path.home() / ".config" / "voxtype" / "tts_phrases.json"
+        if phrases_path.exists():
+            try:
+                with open(phrases_path) as f:
+                    custom = json.load(f)
+                return {**default_phrases, **custom}
+            except Exception:
+                pass
+
+        return default_phrases
+
+    def speak_text(self, text: str) -> None:
+        """Speak text using OS TTS, optionally pausing the mic.
+
+        Uses play_audio() with a blocking callable that invokes say (macOS)
+        or espeak/espeak-ng (Linux). pause_mic is determined by headphones_mode.
+
+        This is a temporary OS-based TTS — will be replaced by a proper
+        TTS service in a future version.
+
+        Args:
+            text: Text to speak.
+        """
+        if not self.config.audio.audio_feedback:
+            return
+
+        import subprocess
+        import sys
+
+        from voxtype.audio.beep import play_audio
+
+        phrases = self._load_tts_phrases()
+        voice = phrases.get("voice", "Samantha")
+
+        def _do_tts() -> None:
+            try:
+                if sys.platform == "darwin":
+                    subprocess.run(
+                        ["say", "-v", voice, text], capture_output=True, timeout=10
+                    )
+                else:
+                    for cmd in [
+                        ["espeak-ng", text],
+                        ["espeak", text],
+                        ["spd-say", "-w", text],
+                    ]:
+                        try:
+                            subprocess.run(cmd, capture_output=True, timeout=5)
+                            break
+                        except FileNotFoundError:
+                            continue
+            except Exception:
+                pass
+
+        pause = not self.config.audio.headphones_mode
+        play_audio(_do_tts, pause_mic=pause, controller=self._controller)
+
+    def speak_agent(self, agent_name: str) -> None:
+        """Speak agent name using OS TTS.
+
+        Announces "{agent_prefix} {agent_name}" (e.g., "agent claude").
+        The prefix is configurable via ~/.config/voxtype/tts_phrases.json.
+
+        Args:
+            agent_name: Name of the agent to announce.
+        """
+        phrases = self._load_tts_phrases()
+        agent_prefix = phrases.get("agent", "agent")
+        self.speak_text(f"{agent_prefix} {agent_name}")
 
     # -------------------------------------------------------------------------
     # Lifecycle
     # -------------------------------------------------------------------------
 
-    def start(self, *, start_listening: bool = True) -> None:
-        """Start the engine main loop.
+    def start_runtime(self, *, start_listening: bool = False) -> None:
+        """Start engine runtime components.
+
+        Call this after init_components(). Starts the controller, audio streaming,
+        and optionally transitions to LISTENING state.
 
         Args:
-            start_listening: If True, immediately transition to LISTENING state.
-                           If False, stay in OFF state (daemon mode - wait for hotkey/API).
+            start_listening: If True, transition to LISTENING state.
+                           If False (default), stay in OFF state (privacy-aware).
         """
-        self._init_vad_components()
-
         self._running = True
         self._stats_start_time = time.time()
 
-        # Note: Agent registration is handled externally by AgentRegistrar
-        # before run() is called. The registrar calls register_agent().
+        # Start keyboard agent if in keyboard mode (special built-in agent)
+        if self._keyboard_agent:
+            self._keyboard_agent.start()
 
         # Start the state controller (event queue processor)
         self._controller.start()
 
+        # Start hotkey listener (tap detector handles single/double tap)
+        if self._hotkey:
+            self._hotkey.start(
+                on_press=self._tap_detector.on_key_down,
+                on_release=self._tap_detector.on_key_up,
+                on_other_key=self._tap_detector.on_other_key,
+            )
+
+        # Start audio streaming (always needed for VAD to work)
+        if self._audio_manager:
+            self._audio_manager.start_streaming(
+                should_process=lambda: self._state_manager.should_process_audio,
+                is_running=lambda: self._running,
+            )
+
+        # Engine is now ready (STT, VAD, hotkey all initialized)
+        self._emit("on_engine_ready")
+
+        # Transition to initial state
+        if start_listening:
+            old_state = self.state
+            self._state_manager.transition(AppState.LISTENING)
+            self._emit("on_state_change", old_state, AppState.LISTENING, "start")
+
+    def run(self) -> None:
+        """Run the engine main loop (blocking).
+
+        Call start_runtime() first. This keeps the main thread alive and
+        handles audio device reconnection.
+        """
         try:
-            # Start hotkey listener (tap detector handles single/double tap)
-            if self._hotkey:
-                self._hotkey.start(
-                    on_press=self._tap_detector.on_key_down,
-                    on_release=self._tap_detector.on_key_up,
-                    on_other_key=self._tap_detector.on_other_key,
-                )
-
-            # Start audio streaming (always needed for VAD to work)
-            if self._audio_manager:
-                self._audio_manager.start_streaming(
-                    should_process=lambda: self._state_manager.should_process_audio,
-                    is_running=lambda: self._running,
-                )
-
-            # Engine is now ready (STT, VAD, hotkey all initialized)
-            self._emit("on_engine_ready")
-
-            # Transition to initial state
-            if start_listening:
-                old_state = self.state
-                self._state_manager.transition(AppState.LISTENING)
-                self._emit("on_state_change", old_state, AppState.LISTENING, "start")
-
-                # Sync LLM processor state
-                if self._llm_processor:
-                    self._llm_processor.set_listening(True)
-
-            # Keep main thread alive
             while self._running:
                 time.sleep(0.1)
                 if self._audio_manager and self._audio_manager.needs_reconnect():
@@ -1087,6 +1120,21 @@ class VoxtypeEngine:
                         break
         except KeyboardInterrupt:
             pass
+
+    def start(self, *, start_listening: bool = True) -> None:
+        """Initialize and start the engine (convenience method).
+
+        This is equivalent to:
+            engine.init_components()
+            engine.start_runtime(start_listening=start_listening)
+            engine.run()
+
+        Args:
+            start_listening: If True, immediately transition to LISTENING state.
+        """
+        self.init_components()
+        self.start_runtime(start_listening=start_listening)
+        self.run()
 
     def stop(self) -> None:
         """Stop the engine."""
@@ -1119,7 +1167,81 @@ class VoxtypeEngine:
         if self._input_manager:
             self._input_manager.stop()
 
+        # Stop keyboard agent if in keyboard mode
+        if self._keyboard_agent:
+            self._keyboard_agent.stop()
+            self._keyboard_agent = None
+
         # Note: AgentRegistrar.stop() is called by the app, not here
 
         if self._hotkey:
             self._hotkey.stop()
+
+
+def create_engine(
+    config: Config,
+    events: EngineEvents,
+    *,
+    logger: JSONLLogger | None = None,
+    agent_mode: bool | None = None,
+    realtime: bool | None = None,
+    hotkey_enabled: bool = True,
+    manual_agents: list[str] | None = None,
+    discovery_method: str = "polling",
+) -> tuple[VoxtypeEngine, Any]:
+    """Create a VoxtypeEngine with appropriate agent registration.
+
+    This is the shared initialization logic used by both CLI (voxtype listen)
+    and daemon. Ensures consistent behavior.
+
+    Args:
+        config: Application configuration.
+        events: Event handler callbacks.
+        logger: Optional JSONL logger.
+        agent_mode: Override config.output.mode. If None, uses config.
+        realtime: Enable realtime transcription. Defaults to False.
+        hotkey_enabled: Enable hotkey listener. Set False for daemon mode
+                       (macOS requires main thread for hotkey events).
+        manual_agents: List of agent IDs for manual registration.
+                      If None and agent mode, uses auto-discovery.
+        discovery_method: Agent discovery method - "polling" or "watchdog".
+
+    Returns:
+        Tuple of (engine, registrar).
+        - registrar: AgentRegistrar if agent mode, None if keyboard mode.
+        Caller must call registrar.start() after engine.start() if not None.
+        KeyboardAgent lifecycle is managed internally by the engine.
+    """
+    from voxtype.agent.registrar import AutoDiscoveryRegistrar, ManualAgentRegistrar
+
+    # Use overrides or fall back to config/defaults
+    effective_agent_mode = agent_mode if agent_mode is not None else (config.output.mode == "agents")
+    effective_realtime = realtime if realtime is not None else False  # realtime is CLI-only, default off
+
+    engine = VoxtypeEngine(
+        config=config,
+        events=events,
+        logger=logger,
+        agent_mode=effective_agent_mode,
+        realtime=effective_realtime,
+        hotkey_enabled=hotkey_enabled,
+    )
+
+    registrar: ManualAgentRegistrar | AutoDiscoveryRegistrar | None = None
+    if effective_agent_mode:
+        if manual_agents:
+            registrar = ManualAgentRegistrar(engine, manual_agents)
+        else:
+            registrar = AutoDiscoveryRegistrar(
+                engine,
+                monitor_type=discovery_method,
+            )
+    else:
+        # Keyboard mode: create KeyboardAgent (engine manages its lifecycle)
+        from voxtype.agent.keyboard import KeyboardAgent
+
+        keyboard_agent = KeyboardAgent(config)
+        engine._keyboard_agent = keyboard_agent  # Engine owns it
+        engine.register_agent(keyboard_agent)
+
+    return engine, registrar

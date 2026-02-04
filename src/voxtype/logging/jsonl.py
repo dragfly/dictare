@@ -69,6 +69,7 @@ class JSONLLogger:
         self.log_path = Path(log_path)
         self.version = version
         self.level = level
+        self._params = params or {}
         self._file = None
 
         # Ensure parent directory exists
@@ -142,29 +143,23 @@ class JSONLLogger:
     ) -> None:
         """Log a transcription event.
 
-        At INFO level: logs only metadata (chars, word count, duration)
-        At DEBUG level: also logs the actual text
+        Text is included only if verbose=True in logger params.
+        Otherwise only metadata (chars, words, duration) is logged.
         """
         chars = len(text)
         words = len(text.split())
 
-        # INFO level: metadata only (privacy)
-        self._log_internal(
-            "transcription",
-            LogLevel.INFO,
-            chars=chars,
-            words=words,
-            duration_ms=duration_ms,
-            language=language,
-        )
+        extra: dict = {
+            "chars": chars,
+            "words": words,
+            "duration_ms": duration_ms,
+            "language": language,
+        }
+        # Include text only in verbose mode
+        if self._params.get("verbose"):
+            extra["text"] = text
 
-        # DEBUG level: include text content
-        if self.level >= LogLevel.DEBUG:
-            self._log_internal(
-                "transcription_text",
-                LogLevel.DEBUG,
-                text=text,
-            )
+        self._log_internal("transcription", LogLevel.INFO, **extra)
 
     def log_wake_word_check(
         self,
@@ -232,26 +227,30 @@ class JSONLLogger:
         success: bool,
         auto_enter: bool = False,
         enter_sent: bool | None = None,
+        submit_trigger: str | None = None,
+        submit_confidence: float | None = None,
     ) -> None:
-        """Log a text injection."""
+        """Log a text injection.
+
+        Text is included only if verbose=True in logger params.
+        Submit trigger info is always included (useful for debugging).
+        """
         chars = len(text)
-        # INFO: metadata only
-        self._log_internal(
-            "injection",
-            LogLevel.INFO,
-            chars=chars,
-            method=method,
-            success=success,
-            auto_enter=auto_enter,
-            enter_sent=enter_sent,
-        )
-        # DEBUG: include text
-        if self.level >= LogLevel.DEBUG:
-            self._log_internal(
-                "injection_text",
-                LogLevel.DEBUG,
-                text=text,
-            )
+        extra: dict = {
+            "chars": chars,
+            "method": method,
+            "success": success,
+            "auto_enter": auto_enter,
+            "enter_sent": enter_sent,
+        }
+        # Include text only in verbose mode
+        if self._params.get("verbose"):
+            extra["text"] = text
+        # Always include trigger info (useful for debugging false positives)
+        if submit_trigger:
+            extra["submit_trigger"] = submit_trigger
+            extra["submit_confidence"] = submit_confidence
+        self._log_internal("injection", LogLevel.INFO, **extra)
 
     def log_vad_event(
         self,

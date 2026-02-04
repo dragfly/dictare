@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from voxtype.core.state import AppState, ProcessingMode
+    from voxtype.core.state import AppState
 
 
 # =============================================================================
@@ -55,10 +55,10 @@ class TranscriptionCompleteEvent(StateEvent):
 
 
 @dataclass(frozen=True)
-class TTSStartEvent(StateEvent):
+class PlayStartEvent(StateEvent):
     """TTS playback starting.
 
-    Each TTS start increments a counter. The tts_id is assigned by the controller
+    Each TTS start increments a counter. The play_id is assigned by the controller
     when the event is processed, not when it's created.
     """
 
@@ -66,15 +66,15 @@ class TTSStartEvent(StateEvent):
 
 
 @dataclass(frozen=True)
-class TTSCompleteEvent(StateEvent):
+class PlayCompleteEvent(StateEvent):
     """TTS playback finished.
 
-    The tts_id must match the ID assigned when TTSStartEvent was processed.
+    The play_id must match the ID assigned when PlayStartEvent was processed.
     If multiple TTS are playing concurrently, only the completion of the
     LAST started TTS will trigger state transition back to LISTENING.
     """
 
-    tts_id: int = 0  # Must match the ID from TTSStartEvent
+    play_id: int = 0  # Must match the ID from PlayStartEvent
 
 
 @dataclass(frozen=True)
@@ -138,12 +138,11 @@ class InjectionResult:
     error: str | None = None  # Error message if success=False
 
 
-@runtime_checkable
-class EngineEvents(Protocol):
-    """Protocol for engine event callbacks.
+class EngineEvents:
+    """Base class for engine event callbacks.
 
-    Implement this protocol to receive events from VoxtypeEngine.
-    All methods are optional - only implement what you need.
+    Subclass and override only the methods you need.
+    All methods have default no-op implementations.
     """
 
     def on_state_change(
@@ -156,7 +155,7 @@ class EngineEvents(Protocol):
             new: New state.
             trigger: What triggered the change (e.g., "hotkey_toggle", "voice_command").
         """
-        ...
+        pass
 
     def on_transcription(self, result: TranscriptionResult) -> None:
         """Called when transcription completes.
@@ -164,7 +163,7 @@ class EngineEvents(Protocol):
         Args:
             result: Transcription result with text and timing info.
         """
-        ...
+        pass
 
     def on_injection(self, result: InjectionResult) -> None:
         """Called when text injection completes.
@@ -172,15 +171,7 @@ class EngineEvents(Protocol):
         Args:
             result: Injection result with success status.
         """
-        ...
-
-    def on_mode_change(self, mode: ProcessingMode) -> None:
-        """Called when processing mode changes.
-
-        Args:
-            mode: New processing mode (TRANSCRIPTION or COMMAND).
-        """
-        ...
+        pass
 
     def on_agent_change(self, agent_name: str, index: int) -> None:
         """Called when the active agent changes.
@@ -189,7 +180,7 @@ class EngineEvents(Protocol):
             agent_name: Name of the new active agent.
             index: Index of the new active agent (0-based).
         """
-        ...
+        pass
 
     def on_agents_changed(self, agents: list[str]) -> None:
         """Called when the agents list changes (auto-discovery).
@@ -197,7 +188,7 @@ class EngineEvents(Protocol):
         Args:
             agents: Updated list of agent IDs.
         """
-        ...
+        pass
 
     def on_error(self, message: str, context: str) -> None:
         """Called when an error occurs.
@@ -206,11 +197,11 @@ class EngineEvents(Protocol):
             message: Error message.
             context: Context where the error occurred.
         """
-        ...
+        pass
 
     def on_engine_ready(self) -> None:
         """Called when engine initialization is complete (STT, VAD loaded)."""
-        ...
+        pass
 
     def on_partial_transcription(self, text: str) -> None:
         """Called during realtime transcription with partial text.
@@ -218,11 +209,11 @@ class EngineEvents(Protocol):
         Args:
             text: Partial transcription text so far.
         """
-        ...
+        pass
 
     def on_recording_start(self) -> None:
         """Called when recording starts (VAD detected speech)."""
-        ...
+        pass
 
     def on_recording_end(self, duration_ms: float) -> None:
         """Called when recording ends.
@@ -230,15 +221,15 @@ class EngineEvents(Protocol):
         Args:
             duration_ms: Recording duration in milliseconds.
         """
-        ...
+        pass
 
     def on_max_duration_reached(self) -> None:
         """Called when max speech duration is reached and audio is being sent."""
-        ...
+        pass
 
     def on_vad_loading(self) -> None:
         """Called when VAD model starts loading."""
-        ...
+        pass
 
     def on_device_reconnect_attempt(self, attempt: int) -> None:
         """Called when audio device reconnection is attempted.
@@ -246,7 +237,7 @@ class EngineEvents(Protocol):
         Args:
             attempt: Attempt number (1-5).
         """
-        ...
+        pass
 
     def on_device_reconnect_success(self, device_name: str | None) -> None:
         """Called when audio device reconnection succeeds.
@@ -254,4 +245,4 @@ class EngineEvents(Protocol):
         Args:
             device_name: Name of the reconnected device, or None if unknown.
         """
-        ...
+        pass
