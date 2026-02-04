@@ -6,6 +6,7 @@ import logging
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
@@ -37,6 +38,18 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from voxtype.config import Config
     from voxtype.logging.jsonl import JSONLLogger
+
+@dataclass(frozen=True)
+class SessionStats:
+    """Immutable snapshot of session statistics."""
+
+    chars: int = 0
+    words: int = 0
+    count: int = 0
+    audio_seconds: float = 0.0
+    transcription_seconds: float = 0.0
+    injection_seconds: float = 0.0
+    start_time: float | None = None
 
 class VoxtypeEngine:
     """Core engine for voice-to-text processing.
@@ -211,43 +224,21 @@ class VoxtypeEngine:
         return None
 
     # -------------------------------------------------------------------------
-    # Session Stats (read-only access for UI)
+    # Session Stats
     # -------------------------------------------------------------------------
 
     @property
-    def stats_chars(self) -> int:
-        """Total characters transcribed this session."""
-        return self._stats_chars
-
-    @property
-    def stats_words(self) -> int:
-        """Total words transcribed this session."""
-        return self._stats_words
-
-    @property
-    def stats_audio_seconds(self) -> float:
-        """Total audio duration processed this session."""
-        return self._stats_audio_seconds
-
-    @property
-    def stats_transcription_seconds(self) -> float:
-        """Total transcription time this session."""
-        return self._stats_transcription_seconds
-
-    @property
-    def stats_injection_seconds(self) -> float:
-        """Total injection time this session."""
-        return self._stats_injection_seconds
-
-    @property
-    def stats_count(self) -> int:
-        """Total number of transcriptions this session."""
-        return self._stats_count
-
-    @property
-    def stats_start_time(self) -> float | None:
-        """Session start time (Unix timestamp)."""
-        return self._stats_start_time
+    def stats(self) -> SessionStats:
+        """Immutable snapshot of current session statistics."""
+        return SessionStats(
+            chars=self._stats_chars,
+            words=self._stats_words,
+            count=self._stats_count,
+            audio_seconds=self._stats_audio_seconds,
+            transcription_seconds=self._stats_transcription_seconds,
+            injection_seconds=self._stats_injection_seconds,
+            start_time=self._stats_start_time,
+        )
 
     # -------------------------------------------------------------------------
     # Factory Methods

@@ -320,42 +320,35 @@ class VoxtypeApp(EngineEvents):
         from voxtype.utils.stats import update_stats
 
         # Skip if no transcriptions were made
-        if self._engine.stats_count == 0:
+        s = self._engine.stats
+        if s.count == 0:
             return
-
-        # Get stats from engine
-        stats_count = self._engine.stats_count
-        stats_chars = self._engine.stats_chars
-        stats_words = self._engine.stats_words
-        stats_audio_seconds = self._engine.stats_audio_seconds
-        stats_transcription_seconds = self._engine.stats_transcription_seconds
-        stats_injection_seconds = self._engine.stats_injection_seconds
 
         # Average typing speed from config
         typing_wpm = self.config.stats.typing_wpm
         chars_per_minute = typing_wpm * 5
 
-        typing_time_minutes = stats_chars / chars_per_minute
+        typing_time_minutes = s.chars / chars_per_minute
         total_voxtype_seconds = (
-            stats_audio_seconds
-            + stats_transcription_seconds
-            + stats_injection_seconds
+            s.audio_seconds
+            + s.transcription_seconds
+            + s.injection_seconds
         )
         total_voxtype_minutes = total_voxtype_seconds / 60
 
-        effective_wpm = stats_words / total_voxtype_minutes if total_voxtype_minutes > 0 else 0
+        effective_wpm = s.words / total_voxtype_minutes if total_voxtype_minutes > 0 else 0
 
         time_saved_minutes = typing_time_minutes - total_voxtype_minutes
         time_saved_seconds = time_saved_minutes * 60
 
         # Update persistent stats
         lifetime = update_stats(
-            transcriptions=stats_count,
-            words=stats_words,
-            chars=stats_chars,
-            audio_seconds=stats_audio_seconds,
-            transcription_seconds=stats_transcription_seconds,
-            injection_seconds=stats_injection_seconds,
+            transcriptions=s.count,
+            words=s.words,
+            chars=s.chars,
+            audio_seconds=s.audio_seconds,
+            transcription_seconds=s.transcription_seconds,
+            injection_seconds=s.injection_seconds,
             time_saved_seconds=max(0, time_saved_seconds),
         )
 
@@ -363,17 +356,17 @@ class VoxtypeApp(EngineEvents):
         left_table = Table(title="Output", expand=False, show_header=False, box=None)
         left_table.add_column("Metric", style="dim")
         left_table.add_column("Value", style="cyan")
-        left_table.add_row("Transcriptions", str(stats_count))
-        left_table.add_row("Words", str(stats_words))
-        left_table.add_row("Characters", str(stats_chars))
+        left_table.add_row("Transcriptions", str(s.count))
+        left_table.add_row("Words", str(s.words))
+        left_table.add_row("Characters", str(s.chars))
         left_table.add_row("Effective WPM", f"{effective_wpm:.0f}")
 
         right_table = Table(title="Timing", expand=False, show_header=False, box=None)
         right_table.add_column("Metric", style="dim")
         right_table.add_column("Value", style="cyan")
-        right_table.add_row("Audio", f"{stats_audio_seconds:.1f}s")
-        right_table.add_row("STT", f"{stats_transcription_seconds:.1f}s")
-        right_table.add_row("Injection", f"{stats_injection_seconds:.1f}s")
+        right_table.add_row("Audio", f"{s.audio_seconds:.1f}s")
+        right_table.add_row("STT", f"{s.transcription_seconds:.1f}s")
+        right_table.add_row("Injection", f"{s.injection_seconds:.1f}s")
         right_table.add_row("Processing", f"{total_voxtype_seconds:.1f}s")
 
         self._console.print()
