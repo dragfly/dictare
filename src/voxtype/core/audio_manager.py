@@ -91,6 +91,8 @@ class AudioManager:
         on_max_speech: Callable[[], None],
         on_partial_audio: Callable[[object], None] | None = None,
         on_vad_loading: Callable[[], None] | None = None,
+        *,
+        headless: bool = False,
     ) -> None:
         """Initialize audio capture and VAD components.
 
@@ -100,6 +102,7 @@ class AudioManager:
             on_max_speech: Callback when max speech duration reached
             on_partial_audio: Callback for partial audio during speech (realtime feedback)
             on_vad_loading: Callback when VAD model starts loading
+            headless: If True, skip all console output (for Engine/daemon mode)
         """
         self._on_speech_start = on_speech_start
         self._on_speech_end = on_speech_end
@@ -124,10 +127,10 @@ class AudioManager:
         self._vad = SileroVAD(
             threshold=0.5,
             min_silence_ms=self._config.silence_ms,
-            min_speech_ms=250,
+            min_speech_ms=self._config.min_speech_ms,
         )
-        # Pre-load the model now with progress indicator
-        self._vad._load_model(with_indicator=True)
+        # Pre-load the model now (headless mode skips progress indicator)
+        self._vad._load_model(with_indicator=not headless, headless=headless)
 
         # Create streaming VAD processor
         self._streaming_vad = StreamingVAD(
@@ -137,6 +140,7 @@ class AudioManager:
             max_speech_seconds=self._config.max_duration,
             on_max_speech=on_max_speech,
             on_partial_audio=on_partial_audio,
+            pre_buffer_ms=self._config.pre_buffer_ms,
         )
 
     def set_reconnect_callbacks(

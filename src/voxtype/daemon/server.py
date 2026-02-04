@@ -26,6 +26,8 @@ from voxtype.daemon.protocol import (
     ShutdownRequest,
     StatusRequest,
     StatusResponse,
+    STTRequest,
+    STTResponse,
     TTSRequest,
     TTSResponse,
     parse_request,
@@ -33,6 +35,7 @@ from voxtype.daemon.protocol import (
 
 if TYPE_CHECKING:
     from voxtype.core.engine import VoxtypeEngine
+    from voxtype.stt.base import STTEngine
     from voxtype.tts.base import TTSEngine
 
 class DaemonServer:
@@ -54,6 +57,9 @@ class DaemonServer:
         # Cached engines
         self._tts_cache: dict[str, TTSEngine] = {}
         self._tts_lock = threading.Lock()
+        self._stt_engine: STTEngine | None = None
+        self._stt_model_size: str | None = None
+        self._stt_lock = threading.Lock()
 
         # Current default config (loaded lazily)
         self._config = None
@@ -69,8 +75,13 @@ class DaemonServer:
         self._engine_thread: threading.Thread | None = None
         self._engine_lock = threading.Lock()
 
-        # Output mode tracking
-        self._output_mode: str = "keyboard"  # "keyboard" | "agents"
+        # Agent registrar for discovering agents
+        self._registrar = None
+
+        # Output mode from config (load eagerly for status display)
+        from voxtype.config import load_config
+        config = load_config()
+        self._output_mode: str = config.output.mode
 
     def set_state(
         self,
@@ -169,6 +180,86 @@ class DaemonServer:
         except Exception as e:
             return ErrorResponse(error=str(e), code="INTERNAL_ERROR")
 
+    def _get_stt_engine(self, model_size: str | None = None) -> STTEngine:
+        """Get or create cached STT engine.
+
+        Args:
+            model_size: Model size to load. If None, uses config default.
+
+        Returns:
+            Cached or newly created STTEngine.
+        """
+        from voxtype.utils.hardware import is_mlx_available
+
+        config = self._load_config()
+        target_size = model_size or config.stt.model
+
+        with self._stt_lock:
+            # Reload if model size changed
+            if self._stt_engine is not None and self._stt_model_size != target_size:
+                self._stt_engine = None
+
+            if self._stt_engine is None:
+                use_mlx = config.stt.hw_accel and is_mlx_available()
+
+                if use_mlx:
+                    from voxtype.stt.mlx_whisper import MLXWhisperEngine
+
+                    self._stt_engine = MLXWhisperEngine()
+                else:
+                    from voxtype.stt.faster_whisper import FasterWhisperEngine
+
+                    self._stt_engine = FasterWhisperEngine()
+
+                self._stt_engine.load_model(
+                    target_size,
+                    device=config.stt.device,
+                    compute_type=config.stt.compute_type,
+                    verbose=config.verbose,
+                )
+                self._stt_model_size = target_size
+
+            return self._stt_engine
+
+    def _handle_stt_request(self, request: STTRequest) -> STTResponse | ErrorResponse:
+        """Handle STT request.
+
+        Args:
+            request: STT request with base64-encoded audio.
+
+        Returns:
+            Response with transcribed text or error.
+        """
+        import base64
+
+        import numpy as np
+
+        try:
+            # Decode audio from base64
+            audio_bytes = base64.b64decode(request.audio_b64)
+            audio = np.frombuffer(audio_bytes, dtype=np.float32)
+
+            # Get or create STT engine
+            engine = self._get_stt_engine(model_size=request.model_size)
+
+            start_time = time.time()
+            text = engine.transcribe(
+                audio,
+                language=request.language,
+                hotwords=request.hotwords,
+                beam_size=request.beam_size,
+                max_repetitions=request.max_repetitions,
+                task=request.task,
+            )
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            return STTResponse(status="ok", text=text, duration_ms=duration_ms)
+
+        except ValueError as e:
+            return ErrorResponse(error=str(e), code="STT_ERROR")
+        except Exception as e:
+            return ErrorResponse(error=str(e), code="INTERNAL_ERROR")
+
     def _create_engine(self, start_listening: bool = False) -> None:
         """Create and start the voice engine in a background thread.
 
@@ -177,29 +268,36 @@ class DaemonServer:
                            If False, stay in OFF state.
         """
         from voxtype.config import load_config
-        from voxtype.core.engine import VoxtypeEngine
+        from voxtype.core.engine import create_engine
 
         config = load_config()
         self._output_mode = config.output.mode
 
-        # Determine if agent mode based on output mode
-        agent_mode = self._output_mode == "agents"
-
         # Event to signal when engine is ready
         engine_ready = threading.Event()
 
-        # Event handler to capture on_engine_ready
+        # Event handler to sync daemon state with engine
+        server = self  # Capture reference for inner class
+
         class DaemonEvents:
             def on_engine_ready(self) -> None:
                 engine_ready.set()
 
             def on_state_change(self, old, new, trigger) -> None:
-                pass  # We sync state after ready
+                # Sync daemon state with engine state
+                from voxtype.core.state import AppState
+                if new == AppState.LISTENING:
+                    server.set_state("listening")
+                elif new == AppState.OFF:
+                    server.set_state("off")
+                # RECORDING state stays "listening" for daemon purposes
 
-        self._engine = VoxtypeEngine(
+        # Use shared initialization logic (same as CLI voxtype listen)
+        # Note: hotkey disabled in daemon mode - macOS requires main thread for events
+        self._engine, self._registrar = create_engine(
             config=config,
-            agent_mode=agent_mode,
-            events=DaemonEvents(),
+            events=DaemonEvents(),  # type: ignore[arg-type]
+            hotkey_enabled=False,
         )
 
         # Start engine in background thread
@@ -214,6 +312,10 @@ class DaemonServer:
         # Wait for engine ready signal (with timeout)
         if not engine_ready.wait(timeout=60.0):
             raise TimeoutError("Engine failed to initialize within 60 seconds")
+
+        # Start agent discovery after engine is ready
+        if self._registrar:
+            self._registrar.start()
 
         # Update state based on engine state
         if self._engine:
@@ -300,19 +402,12 @@ class DaemonServer:
     def _handle_processing_mode_toggle(
         self, request: ProcessingModeToggleRequest
     ) -> ProcessingModeResponse | ErrorResponse:
-        """Handle processing_mode.toggle request."""
-        try:
-            with self._engine_lock:
-                if self._engine is None:
-                    return ErrorResponse(error="Engine not running", code="ENGINE_NOT_RUNNING")
+        """Handle processing_mode.toggle request.
 
-                # Toggle processing mode (transcription <-> command)
-                self._engine._switch_processing_mode()
-                new_mode = self._engine.mode.value  # "transcription" or "command"
-
-            return ProcessingModeResponse(status="ok", processing_mode=new_mode)
-        except Exception as e:
-            return ErrorResponse(error=str(e), code="ENGINE_ERROR")
+        Note: ProcessingMode was removed in v2.61.0. This endpoint is deprecated.
+        """
+        # ProcessingMode removed - always transcription mode now
+        return ProcessingModeResponse(status="ok", processing_mode="transcription")
 
     def _handle_status_request(self, request: StatusRequest) -> StatusResponse:
         """Handle status request.
@@ -345,7 +440,12 @@ class DaemonServer:
                 current_agent = self._engine.current_agent
                 available_agents = list(self._engine.agents)
                 stt_loaded = self._engine._stt is not None
-                processing_mode = self._engine.mode.value
+                # ProcessingMode removed in v2.61.0 - always transcription
+
+        # Also check standalone STT engine (for service layer usage)
+        with self._stt_lock:
+            if self._stt_engine is not None:
+                stt_loaded = True
 
         return StatusResponse(
             status="ok",
@@ -386,11 +486,13 @@ class DaemonServer:
             # Parse and handle request
             request = parse_request(data)
 
-            response: ErrorResponse | TTSResponse | StatusResponse | ListenResponse | ProcessingModeResponse | OkResponse
+            response: ErrorResponse | TTSResponse | STTResponse | StatusResponse | ListenResponse | ProcessingModeResponse | OkResponse
             if request is None:
                 response = ErrorResponse(error="Invalid request", code="INVALID_REQUEST")
             elif isinstance(request, TTSRequest):
                 response = self._handle_tts_request(request)
+            elif isinstance(request, STTRequest):
+                response = self._handle_stt_request(request)
             elif isinstance(request, StatusRequest):
                 response = self._handle_status_request(request)
             elif isinstance(request, ShutdownRequest):

@@ -5,6 +5,1037 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.108.0] - 2026-02-04
+
+### Added - TTS speak methods in VoxtypeEngine
+
+- Added `speak_text(text)` and `speak_agent(agent_name)` to VoxtypeEngine
+- Uses `play_audio(callable)` with OS TTS (`say` on macOS, `espeak`/`espeak-ng` on Linux)
+- `pause_mic` determined by `headphones_mode` config (speaker mode mutes mic during TTS)
+- TTS phrases configurable via `~/.config/voxtype/tts_phrases.json`
+- `VoxtypeApp._speak_text()` and `_speak_agent()` now delegate to engine
+- `AppController` now announces agent switches via `engine.speak_agent()` (was a TODO stub)
+- Temporary OS-based TTS — will be replaced by TTS service in future version
+
+## [2.107.1] - 2026-02-04
+
+### Fixed - Sound files not included in installed package
+
+- Added `artifacts = ["*.mp3"]` to `pyproject.toml` wheel config
+- Bundled MP3 sound files (up-beep.mp3, down-beep.mp3) are now included in the wheel
+- Previously `sounds/` directory was missing from `uv tool install` installations
+
+## [2.107.0] - 2026-02-04
+
+### Changed - Shared `play_audio()` with `pause_mic` parameter
+
+- Added `play_audio(source, pause_mic, controller)` as the single entry point for all audio playback
+- `pause_mic=True`: registers play_id, transitions to PLAYING (mic muted), resumes after playback
+- `pause_mic=False`: fire-and-forget on background thread
+- Caller decides `pause_mic` based on `headphones_mode` (high-level semantic)
+- Replaced 40-line inline playback code in `app/controller.py` with single `play_audio()` call
+- Replaced `_play_audio()` method in `core/app.py` — both `_speak_text` and `_play_feedback` now use shared function
+- Removed unused imports (`PlayStartEvent`, `PlayCompleteEvent`, `Callable`, `threading`) from `core/app.py`
+
+## [2.106.0] - 2026-02-04
+
+### Changed - Submit filter: remove single-word triggers, add last-word-only notation
+
+- Removed all single-word submit triggers from defaults (too many false positives)
+- Kept only multi-word triggers with "ok" prefix (e.g., `["ok", "invia"]`, `["ok", "send"]`)
+- Added last-word-only notation: `["vai."]` — trailing "." means trigger fires only if it's the very last word of the transcription
+- Binary matching for last-word patterns: confidence 1.0 if last word matches, no match otherwise
+- Added `["vai."]` as Italian last-word-only trigger
+
+## [2.105.0] - 2026-02-04
+
+### Changed - Rename TTS ID system to Play ID
+
+- Renamed `TTSStartEvent` → `PlayStartEvent`, `TTSCompleteEvent` → `PlayCompleteEvent`
+- Renamed `tts_id` → `play_id`, `get_next_tts_id()` → `get_next_play_id()`
+- Renamed `tts_in_progress` → `play_in_progress`, `_desired_state_after_tts` → `_desired_state_after_play`
+- The play ID counter now correctly reflects its purpose: managing ALL audio playback (beeps, TTS, custom sounds)
+- Engine `_emit` now logs exceptions instead of silently swallowing them
+
+## [2.104.0] - 2026-02-04
+
+### Changed - Audio feedback with mic muting and configurable sounds
+
+- Audio feedback now pauses listening (PLAYING state) during playback
+- Uses the same play ID counter system: mic resumes only when ALL sounds finish
+- Custom sound files configurable via `sound_start` / `sound_stop` in `[audio]` config
+- Shared `_play_audio()` method used by both beep feedback and TTS speech
+- Removed `sounds/` root directory from tracking (local staging only)
+
+## [2.103.0] - 2026-02-04
+
+### Changed - Clean audio feedback with bundled sound files
+
+- Replaced generated sine wave beeps with bundled MP3 sound files
+- Playback via `afplay` (macOS) / `paplay`/`aplay` (Linux) instead of sounddevice
+- Eliminates crackling caused by sounddevice input/output conflict
+
+## [2.102.1] - 2026-02-04
+
+### Fixed - STT model name shown as "None" during loading
+
+- Set `model_name` and `language` in state before model loading starts
+- Panel now shows "large-v3-turbo on MLX" immediately instead of "None on MLX"
+- Fixed in both Engine and OpenVIPAdapter code paths
+
+## [2.102.0] - 2026-02-04
+
+### Changed - VAD tuning and config template (nginx-style)
+
+- `min_speech_ms` default lowered from 250ms to 150ms (faster trigger, Whisper filters noise)
+- `pre_buffer_ms` default 640ms (was 320ms hardcoded)
+- Default config template now shows ALL available options as comments (nginx-style)
+- Users can see and uncomment advanced settings like `pre_buffer_ms`, `min_speech_ms`,
+  `max_duration`, `translate`, `headphones_mode`
+
+## [2.101.0] - 2026-02-04
+
+### Added - Configurable VAD pre-buffer and min speech duration
+
+New advanced audio settings to reduce speech onset clipping:
+- `pre_buffer_ms` (default 640ms, was 320ms hardcoded) - audio captured before VAD triggers
+- `min_speech_ms` (default 150ms) - minimum speech duration before VAD activates
+
+## [2.100.10] - 2026-02-04
+
+### Fixed - Submit trigger token slice off-by-one
+
+`x_submit_trigger` was missing the last token due to `tokens[start:end]`
+instead of `tokens[start:end+1]`. Now correctly shows full trigger
+(e.g., `"ok invia"` instead of just `"ok"`).
+
+## [2.100.9] - 2026-02-04
+
+### Changed - Agent switch produces two messages
+
+When saying "manda questo agent voxtype", the filter now produces TWO messages:
+1. `{"text": "manda questo"}` - sent to CURRENT agent
+2. `{"text": "", "x_agent_switch": "voxtype"}` - triggers switch, nothing written
+
+This allows combining text + switch in one phrase. The switch-only message
+(empty text) is not written to the agent file, consistent with submit behavior.
+
+## [2.100.8] - 2026-02-04
+
+### Fixed - Agent switch text not removed
+
+When saying "agent voxtype", the trigger text was not being removed from the
+message. This happened because Whisper sometimes splits words (e.g., "voxtype"
+→ "Fox type"), and the old regex only handled single-word agent names.
+
+Now removes everything from the trigger word to the end, consistent with
+submit_filter behavior.
+
+## [2.100.7] - 2026-02-04
+
+### Fixed - Beep after every transcription
+
+Audio feedback beep was playing on every TRANSCRIBING → LISTENING transition.
+Now only plays on OFF → LISTENING (when user activates listening mode).
+
+## [2.100.6] - 2026-02-04
+
+### Added - Tests for message sending logic
+
+Added 10 tests covering the empty text + submit handling logic:
+- Empty/whitespace text without submit → not sent
+- Empty/whitespace text WITH submit → sent (submit-only)
+- Text with/without submit → sent
+- Edge cases: missing keys, None values
+
+## [2.100.5] - 2026-02-03
+
+### Fixed - Submit-only messages not sent to agent
+
+Empty text messages with `x_submit=true` were being skipped by the engine.
+Now they are correctly sent to the agent, which handles them as submit-only
+(just sends Enter without typing anything).
+
+## [2.100.4] - 2026-02-03
+
+### Fixed - JSONLLogger missing `_params` attribute
+
+Fixed `AttributeError: 'JSONLLogger' object has no attribute '_params'` when
+logging injections with verbose mode check.
+
+## [2.100.3] - 2026-02-03
+
+### Fixed - FileAgent reliability
+
+FileAgent.send() now uses low-level I/O for reliability:
+- `os.open()` with `O_APPEND | O_CREAT` (atomic append)
+- `os.fsync()` to force data to disk
+- Retry up to 3 times on failure with 100ms delay
+- Better logging for debugging (warnings on failure)
+
+### Changed - Verbose logging configurable
+
+Logging now respects `--verbose` flag:
+- With `--verbose`: shows actual text in logs
+- Without: shows only metadata (chars, words, duration)
+- Submit trigger is ALWAYS shown (useful for debugging)
+
+## [2.100.2] - 2026-02-03
+
+### Changed - Verbose logging by default
+
+Logs now show actual text for debugging:
+
+```
+23:30:32 INFO  transcription        6240ms "ciao come stai oggi"
+23:30:32 INFO  injection            via agent:voxtype "ciao come stai" [SUBMIT: "submit" 95%]
+```
+
+- `voxtype log engine -f` now shows transcription text
+- Shows submit trigger word and confidence when detected
+- Privacy mode can be re-added later if needed
+
+## [2.100.1] - 2026-02-03
+
+### Changed - File-based agent lifecycle
+
+Agent files now use `.idle` extension when inactive (preserves history):
+
+- **Agent starts**: renames `agent.jsonl.idle` → `agent.jsonl`
+- **Agent exits**: renames `agent.jsonl` → `agent.jsonl.idle`
+- **Engine/monitor**: only sees `.jsonl` files (ignores `.idle`)
+
+Benefits:
+- Session history preserved across restarts
+- No file deletion needed
+- Clean state management via extension
+
+## [2.100.0] - 2026-02-03
+
+### Fixed
+
+**Socket persistent connection:**
+- Bug: socket opened/closed for EVERY message → backlog overflow when speaking fast
+- Fix: now uses persistent connection (connect once, send many messages)
+
+**Submit trigger cleanup:**
+- Bug: only trigger word was removed, leaving trailing text
+- Fix: removes trigger word AND everything after it
+- Example: "blabla submit della frase" → "blabla" (not "blabla della frase")
+
+### Added
+
+- Submit trigger logging: `x_submit_trigger` and `x_submit_confidence` in injection logs
+- `voxtype log engine -f | grep submit_trigger` to debug false triggers
+- `SocketAgent.connect()` and `SocketAgent.disconnect()` for persistent connections
+
+## [2.99.0] - 2026-02-03
+
+### Changed - File-based IPC (replacing sockets)
+
+Switched from Unix socket to file-based IPC for engine→agent communication.
+This fixes message loss issues that were occurring with socket-based transport.
+
+- **FileAgent**: New agent that writes OpenVIP messages to JSONL files
+- **Agent files**: Now stored in `~/.local/share/voxtype/agents/{agent_id}.jsonl`
+- **Mux reader**: Uses unbuffered file I/O with tail-f style polling
+- **Socket code**: Kept but fixed with persistent connection
+
+### Added
+
+- `_read_from_file()` function in mux.py for reliable file-based message reading
+- `FileAgent` class in `agent/file.py`
+- `get_agent_dir()` function in monitor.py
+
+## [2.98.3] - 2026-02-03
+
+### Added
+
+- `voxtype log engine` command to view engine logs
+- Engine now logs to `~/.local/share/voxtype/logs/engine.jsonl`
+- Use `--verbose` with `engine start` to see full text in logs
+
+### Fixed
+
+- Engine was missing JSONLLogger, injections were not being logged
+
+## [2.98.1] - 2026-02-03
+
+### Added
+
+- Session stats display in AppController (`_display_session_stats`)
+
+### Note
+
+- `core/app.py` (VoxtypeApp) kept as reference only - use `engine start` instead
+
+## [2.98.0] - 2026-02-03
+
+### Added - AppController architecture
+
+New clean separation between Engine (atomic operations) and App (stateful logic):
+
+- **`AppController`**: Central coordinator for foreground mode
+  - Creates and manages Engine, Adapter, KeyboardBindingManager
+  - Exposes app commands: `toggle_listening()`, `next_agent()`, `prev_agent()`
+  - Used by both CLI and Tray (same code)
+
+- **`KeyboardBindingManager`**: Handles all input bindings
+  - Hotkeys (ScrollLock → toggle)
+  - Keyboard shortcuts (Ctrl+Alt+→ → next_agent)
+  - Device profiles (presenter buttons)
+
+- **Architecture documentation**: `docs/specs/app-controller-architecture.md`
+
+### Changed
+
+- `engine start` now uses `AppController` instead of inline code
+- `InputManager` accepts generic `CommandExecutor` protocol (not just `AppCommands`)
+- Removed `_init_engine_and_adapter()` helper (logic moved to AppController)
+
+## [2.97.1] - 2026-02-03
+
+### Fixed - SubmitFilter false positives (#35)
+
+- Remove single-word triggers that are too common:
+  - Italian: "fatto", "adesso"
+  - English: "go"
+- Keep only explicit submit commands like "invia", "manda", "send", "submit"
+- Multi-word triggers like "ok invia", "go ahead" still work
+
+## [2.97.0] - 2026-02-03
+
+### Added - COMMON init and daemon mode
+
+- **`_init_engine_and_adapter()`**: Extracted shared initialization logic
+  - Used by both foreground and daemon modes
+  - Parameters: `mode` ("foreground"/"daemon"), `start_listening` (True/False)
+- **Daemon mode implemented**: `voxtype engine start -d`
+  - Headless operation, no UI
+  - `start_listening=False` (privacy-aware default)
+  - Waits for trigger via HTTP/socket API
+  - Shows HTTP endpoint URL on startup
+
+### Changed
+
+- Foreground mode now uses shared `_init_engine_and_adapter()` function
+- Cleaner separation between COMMON and mode-specific code
+
+## [2.96.2] - 2026-02-03
+
+### Fixed - Mypy type errors
+
+- Fix `LoadingState | None` type error in `engine/engine.py` (null check before access)
+- Convert `EngineEvents` from Protocol to base class with no-op implementations
+- Removes the need for subclasses to implement all methods
+
+## [2.96.1] - 2026-02-03
+
+### Fixed - Skip empty messages after agent switch
+
+- Don't send empty messages (e.g., when "Agent VoxType" is the entire phrase)
+- Prevents unwanted newline when agent switch command is the only content
+
+## [2.96.0] - 2026-02-03
+
+### Added - Adapter event handling
+
+- **last_text**: Panel now shows last transcribed text
+- **hotkey.bound**: Auto-binds when engine starts with hotkey enabled
+- **Audio feedback**: Beep on state change (LISTENING on/off), respects config
+- `AdapterEvents` handles: `on_transcription`, `on_state_change`, `on_vad_loading`
+- `hotkey_enabled=True` in engine creation (was False)
+
+## [2.95.0] - 2026-02-03
+
+### Changed - VoxtypeEngine lifecycle refactoring
+
+- **`init_components(headless=False)`**: Load models (STT, VAD, audio, hotkey)
+- **`start_runtime(start_listening=False)`**: Start controller, audio streaming
+  - Default `start_listening=False` (privacy-aware, conservative)
+- **`run()`**: Blocking loop for standalone use
+- **`start()`**: Convenience method (init_components + start_runtime + run)
+- Renamed `_init_vad_components` → `init_components` (public API)
+- Adapter no longer accesses engine internals
+
+## [2.94.0] - 2026-02-03
+
+### Changed - Unified StatusPanel design
+
+- Models (STT, VAD, TTS) always visible at top of panel
+- Progress bars show loading progress with magenta color
+- After loading: model lines show ✓ and load time
+- Status info appears below models when ready
+- Proper VAD loading tracking via `on_vad_loading` event
+- Cleaner visual hierarchy
+
+## [2.93.3] - 2026-02-03
+
+### Fixed - Clean exit on Ctrl+C
+
+- StatusPanel exits immediately when engine shuts down (no "Connecting..." message)
+
+## [2.93.2] - 2026-02-03
+
+### Fixed - StatusPanel improvements
+
+- **Loading progress**: Progress bars now animate properly (track `elapsed` time)
+- **IDLE → LISTENING**: Fix race condition, state set in `initialize_engine()`
+- **Server URL**: Panel now shows HTTP server URL for easy reference
+
+## [2.93.1] - 2026-02-03
+
+### Removed - core/openvip.py backwards compatibility
+
+- **Deleted** `core/openvip.py` - no need for backwards compatibility in development
+- Updated all imports to use `voxtype.adapters.openvip.messages` directly
+
+## [2.93.0] - 2026-02-03
+
+### Changed - OpenVIP adapter architecture
+
+- **adapters/openvip/**: New adapter package
+  - `adapter.py`: `OpenVIPAdapter` wraps VoxtypeEngine and exposes OpenVIP protocol (HTTP + Unix socket)
+  - `messages.py`: OpenVIP message creation functions (moved from core/openvip.py)
+- **cli.py**: `engine start` uses OpenVIPAdapter instead of direct engine wrapper
+- **Architecture**: VoxtypeEngine (pure Python) + OpenVIPAdapter (protocol translation)
+
+## [2.92.2] - 2026-02-03
+
+### Fixed - Agent discovery in Engine
+
+- **engine/engine.py**: Call `registrar.start()` after models loaded
+  - Agent discovery now works in `voxtype engine start --agents`
+  - Agents will appear in panel once discovered
+
+## [2.92.1] - 2026-02-03
+
+### Fixed - Graceful shutdown on Ctrl+C
+
+- **ui/panel.py**: Handle connection errors gracefully
+  - Catch `ConnectionResetError` and `OSError` in `_fetch_status()`
+  - Track connection state to detect engine shutdown
+  - Exit cleanly after 3 consecutive failures (engine stopped)
+  - Show "Connecting..." instead of error during startup
+
+## [2.92.0] - 2026-02-03
+
+### Added - StatusPanel with HTTP polling (Phase 5)
+
+- **ui/panel.py**: New `StatusPanel` class that polls `/status`
+  - During loading: shows progress bars for each model (stt, vad)
+  - After loading: shows normal status panel (state, last text, agents)
+  - Same visual style as `LiveStatusPanel`
+  - Poll interval: 300ms
+- **cli.py**: `engine start` now uses `StatusPanel`
+  - Engine init runs in background thread
+  - Engine main loop runs in background thread
+  - StatusPanel runs in main thread (handles Ctrl+C)
+  - Clean shutdown on interrupt
+
+## [2.91.6] - 2026-02-03
+
+### Changed - Remove progress bars from engine start (defer to Panel)
+
+- **cli.py**: Simplified `engine start` foreground mode
+  - Removed Rich Progress bars (will be in Panel, Phase 5)
+  - Simple spinner "Loading models..." during initialization
+  - Progress data still available via `/status` for polling
+- **Architecture alignment**: Engine is headless, Panel handles all UI
+
+## [2.91.5] - 2026-02-03
+
+### Fixed - Progress bar reaches 100% for all models
+
+- **cli.py**: Final poll after init loop to catch last model completion
+  - Refactored to `update_progress_from_status()` helper
+  - Removed `loading.active` check - process models regardless
+  - Final poll ensures all models show ✓ at 100%
+
+## [2.91.4] - 2026-02-03
+
+### Fixed - CLI progress bar updates in-place
+
+- **cli.py**: Use Rich Progress instead of printing lines
+  - Progress bars now update on the same line (proper UX)
+  - Shows spinner + bar + percentage + ETA for each model
+  - Completed models show green checkmark with load time
+  - Poll interval reduced to 200ms for smoother updates
+
+## [2.91.3] - 2026-02-03
+
+### Changed - Headless Engine (no internal progress bars)
+
+- **Engine is now headless**: No Rich progress bars during model loading
+  - All console output suppressed when running via `voxtype engine start`
+  - Progress visualization is responsibility of CLI/UI polling `/status`
+  - Stats (load times) are still tracked for historical estimates
+- **headless parameter** propagated through loading chain:
+  - `load_with_indicator(headless=True)` skips Rich console output
+  - `SileroVAD._load_model(headless=True)` skips VAD progress bar
+  - `MLXWhisperEngine.load_model(headless=True)` skips STT progress bar
+  - `AudioManager.initialize(headless=True)` passed to VAD
+  - `VoxtypeEngine._init_vad_components(headless=True)` passed from Engine
+- **Architecture**: Clean separation between Engine (data/state) and UI (rendering)
+
+## [2.91.2] - 2026-02-03
+
+### Fixed - Actually load models in engine init
+
+- **engine.py**: Call `_init_vad_components()` after `create_engine()`
+  - `create_engine()` only creates the engine, doesn't load models
+  - Models are loaded in `_init_vad_components()` which triggers events
+  - Now STT→done and VAD→done states are correctly updated
+
+## [2.91.1] - 2026-02-03
+
+### Fixed - Signal handlers in main thread
+
+- **cli.py**: Register signal handlers in main thread, not init thread
+- **engine.py**: Add `setup_signals` parameter to `_do_initialize()`
+
+## [2.91.0] - 2026-02-03
+
+### Added - Polling-based loading progress in CLI
+
+- **cli.py**: `engine start` now polls `/status` during model loading
+  - Shows real-time progress: `Loading stt... 63% (17.0s / ~27s, ETA: 10s)`
+  - Shows completion: `✓ stt loaded in 21.1s`
+  - Runs initialization in thread, polls HTTP endpoint
+- **Testing**: Can verify `/status` returns correct loading progress
+
+## [2.90.0] - 2026-02-03
+
+### Changed - Engine Architecture: Separate initialize/run
+
+- **engine/engine.py**: Split lifecycle into `initialize()` and `run()`
+  - `initialize()` - starts HTTP server, loads models (non-blocking after server starts)
+  - `run(start_listening)` - main loop, optionally starts listening
+  - `start()` - convenience method (calls both, backward compatible)
+- **engine/state.py**: Enhanced `LoadingState` for on-the-fly progress
+  - `ModelLoadingProgress` - tracks each model's loading status
+  - Progress calculated as `elapsed / historical_time` when `/status` polled
+  - HTTP server responds during model loading (ThreadingHTTPServer)
+- **Purpose**: Enable UI panel to poll `/status` during loading and show progress
+
+## [2.89.0] - 2026-02-03
+
+### Added - Engine CLI Commands
+
+- **cli.py**: New `voxtype engine` command group for new architecture
+  - `voxtype engine start --keyboard` - foreground mode, listening immediately
+  - `voxtype engine start --agents` - agent mode, listening immediately
+  - `voxtype engine start -d --agents` - daemon mode, models preloaded but IDLE
+  - `voxtype engine stop` - stop running engine via PID
+  - `voxtype engine status` - show engine status (supports `--json`)
+- **engine/__init__.py**: Export `get_pid_path`, `get_socket_path` utilities
+- **Strategy**: Incremental migration from `core/` to `engine/`
+  - `voxtype listen` continues to work (uses `core/`)
+  - `voxtype engine start` uses new `engine/` architecture
+  - Both can be tested in parallel before final migration
+
+## [2.88.0] - 2026-02-03
+
+### Simplified - Exact Match for Trigger Words
+
+- **agent_filter.py**: Removed fuzzy matching for trigger words
+  - Trigger "agent" now uses exact match only
+  - Fuzzy/phonetic matching only for agent IDs (where it's needed)
+  - Removed language-aware matching strategy (unnecessary complexity)
+  - Code is simpler and easier to understand
+- **Rationale**: "agent" is a common word Whisper recognizes reliably
+  - Fuzzy matching on triggers added complexity without real benefit
+  - Agent IDs can be arbitrary names → fuzzy matching valuable there
+
+## [2.87.1] - 2026-02-03
+
+### Changed - Default AgentFilter Triggers
+
+- **config.py**: Default triggers now English-only: `["agent"]`
+  - Removed "agente" from defaults (users add their language triggers)
+  - Consistent with open-source approach: English defaults, users customize
+  - If we include Italian, we'd need French, German, Spanish, etc.
+- **tests**: Updated to pass triggers explicitly when testing non-English
+
+## [2.87.0] - 2026-02-03
+
+### Changed - Language-Aware Trigger Matching
+
+- **agent_filter.py**: Use message language to select matching strategy
+  - **English**: phonetic + edit distance (metaphone works well)
+  - **Other languages**: edit distance only (metaphone unreliable)
+  - Uses `language` field from Whisper transcription
+- **tests**: Added language-specific trigger tests
+
+## [2.86.0] - 2026-02-03
+
+### Added - Fuzzy Matching for Trigger Words
+
+- **agent_filter.py**: Apply fuzzy matching to trigger words
+  - Handles STT errors like "adziente" → "agente", "aziente" → "agente"
+  - Uses edit distance only (metaphone doesn't work well for non-English)
+  - 60% character similarity threshold for triggers
+- **tests**: Added fuzzy trigger tests
+
+## [2.85.1] - 2026-02-03
+
+### Fixed - Pipeline Initialization Order
+
+- **engine.py**: Move `_agent_order` initialization before `_create_pipeline()`
+  - Fixed `AttributeError: 'VoxtypeEngine' object has no attribute '_agent_order'`
+  - AgentFilter now correctly gets empty list on startup (updates via events)
+
+## [2.85.0] - 2026-02-03
+
+### Changed - Event Sourcing Semantics
+
+Changed event bus semantics from snapshot-based to proper event sourcing:
+
+- **Before**: `agents.changed` with full list `["a", "b", "c"]`
+- **After**: `agent.registered` / `agent.unregistered` with single `agent_id`
+
+This is the correct event-driven architecture:
+- Each event is atomic and immutable
+- Events shouldn't be lost; if they are, it's an architectural problem
+- Subscribers maintain their own state from event stream
+
+**Engine** now publishes:
+- `agent.registered` with `agent_id` on register
+- `agent.unregistered` with `agent_id` on unregister
+
+**AgentFilter** now subscribes to both events and maintains its agent list.
+
+## [2.84.0] - 2026-02-03
+
+### Added - AgentFilter Pipeline Integration
+
+- **engine.py**: Integrates AgentFilter with engine and event bus
+  - Publishes `agents.changed` event on register/unregister
+  - Creates AgentFilter from config if `pipeline.agent_filter.enabled`
+  - Handles `x_agent_switch` field: switches to target agent
+- **config.py**: Added `AgentFilterConfig`
+  - `enabled`: false by default (opt-in)
+  - `triggers`: ["agent", "agente"]
+  - `match_threshold`: 0.5
+- Added to `PipelineConfig.agent_filter`
+
+### Usage
+
+Enable in `~/.config/voxtype/config.toml`:
+
+```toml
+[pipeline.agent_filter]
+enabled = true
+```
+
+Then say "agent voxtype" or "agente claude" to switch agents.
+
+## [2.83.0] - 2026-02-03
+
+### Added - Internal Event Bus
+
+- **events/bus.py**: NEW - Thread-safe internal event bus
+  - Publish/subscribe pattern for decoupled component communication
+  - Global singleton `bus` instance for app-wide usage
+  - Thread-safe with `threading.Lock`
+  - `bus.subscribe(event, callback)` / `bus.publish(event, **data)`
+  - `bus.reset()` for test isolation
+  - Custom implementation (~40 lines) - no external dependencies
+- **events/__init__.py**: NEW - Exports `EventBus`, `bus`
+- **pipeline/agent_filter.py**: Now subscribes to "agents.changed" event
+  - Dynamic agent list updates without manual refresh
+  - `subscribe_to_events=True` by default
+- **tests/test_event_bus.py**: NEW - 14 tests for EventBus
+  - Basic subscribe/publish/unsubscribe
+  - Thread safety (concurrent publish/subscribe)
+  - Error handling (callback exceptions don't stop others)
+- **tests/test_pipeline.py**: Added 5 EventBus integration tests for AgentFilter
+
+## [2.82.0] - 2026-02-03
+
+### Added - Agent Filter with Phonetic Matching
+- **pipeline/agent_filter.py**: NEW - Voice-controlled agent switching
+  - Detects "agent <name>" or "agente <name>" at end of text
+  - Uses **jellyfish** library for phonetic matching (Metaphone)
+  - Combined scoring: 60% phonetic + 40% edit distance (Levenshtein)
+  - Handles misheard names: "coder"/"quant" matches "koder"
+  - Sets `x_agent_switch` field with matched agent ID
+- **pyproject.toml**: Added `jellyfish>=1.0.0` dependency
+  - Lightweight (~100KB), C-based, zero dependencies
+- **pipeline/__init__.py**: Exports `AgentFilter`
+- **tests/test_pipeline.py**: 22 new tests for AgentFilter
+  - Phonetic matching functions
+  - Detection and fuzzy matching
+  - Pipeline integration
+
+## [2.81.0] - 2026-02-03
+
+### Added - Italian "in via" Trigger
+- **submit_filter.py**: Added "in via" as submit trigger for Italian
+  - Whisper often transcribes "invia" as "in via"
+  - Added both `["in", "via"]` and `["ok", "in", "via"]` patterns
+- **test_pipeline.py**: Added test for "in via" trigger
+
+### Fixed - CI Pipeline
+- **ci.yml**: Fixed Linux runners by using `uv venv` + `uv pip install`
+  - Previous `uv sync` approach had issues with dev dependencies
+  - macOS still uses `uv sync` (was working)
+
+## [2.80.0] - 2026-02-03
+
+### Fixed - CI Pipeline Mypy Errors
+- **tray/app.py**: Fixed hotkey listener creation
+  - Use `PynputHotkeyListener` directly instead of non-existent `create_listener`
+  - Fix config access: `config.hotkey.key` instead of `config.keyboard.hotkey`
+- **engine/server.py**: Fixed Queue type annotation for SSE events
+  - `Queue[dict[Any, Any] | None]` to allow None sentinel
+- **engine/control.py**: Fixed response dict type annotation
+  - `dict[str, Any]` to allow nested error dict
+- **engine/engine.py**: Fixed STTEventHandler abstract class
+  - Added all missing method stubs (on_engine_ready, on_recording_start, etc.)
+
+## [2.79.0] - 2026-02-03
+
+### Added - Idiomatic Python Logging
+- **logging/setup.py**: NEW - Idiomatic Python structured logging
+  - Uses standard `logging.getLogger(__name__)` pattern (thread-safe, global)
+  - `python-json-logger` for JSON formatting
+  - `VoxtypeJsonFormatter`: Adds ts, level, event, logger fields
+  - `setup_logging()`: Configure once at app startup
+  - `shutdown_logging()`: Clean shutdown with session_end event
+- **logging/__init__.py**: Exports new idiomatic API alongside legacy
+  - New: `setup_logging`, `shutdown_logging`, `DEFAULT_LOG_DIR`, `get_default_log_path`
+  - Legacy (deprecated): `JSONLLogger`, `LogLevel`
+- **submit_filter.py**: Migrated to idiomatic logging
+  - Uses `logger = logging.getLogger(__name__)`
+  - Logs `submit_trigger` event with pattern, matched_tokens, confidence
+- **tests/test_logging.py**: NEW - Tests for logging setup
+  - Tests for `VoxtypeJsonFormatter`, `setup_logging`, `shutdown_logging`
+  - Tests module-level logger pattern
+
+## [2.78.1] - 2026-02-03
+
+### Added - Submit Filter Logging
+- **submit_filter.py**: Logs INFO when trigger is detected
+  - Shows: pattern matched, tokens, confidence, text snippet
+  - Helps debug false positive triggers
+
+## [2.78.0] - 2026-02-03
+
+### Fixed - Pipeline Now Receives Language
+- **openvip.py**: Added `language` parameter to `create_message()`
+- **engine.py**: Passes configured STT language to messages
+  - If `stt.language` is set (e.g., "it"), uses that
+  - If "auto", defaults to "it" (temporary workaround)
+- This enables language-based trigger detection in the pipeline
+
+## [2.77.0] - 2026-02-03
+
+### Added - Language-Based Trigger Words
+- **submit_filter.py**: Trigger words now organized by language code
+  - Triggers for detected message language + English (always)
+  - Supports it, en, es, de, fr out of the box
+  - Easy to add new languages without touching existing ones
+- **config.py**: Updated trigger config structure
+  - `triggers` is now a dict keyed by language code (e.g., `triggers.it`, `triggers.en`)
+  - Each language has its own list of trigger patterns
+- **Language detection**: Uses `language` field from Whisper transcription
+  - Falls back to English if language unknown
+  - Normalizes codes like "en-US" to "en"
+
+## [2.76.0] - 2026-02-03
+
+### Added - Pipeline Filter System
+- **pipeline/**: New message processing pipeline with filter architecture
+  - `pipeline/base.py`: Filter protocol, FilterAction, FilterResult, Pipeline classes
+  - `pipeline/submit_filter.py`: Submit trigger detection filter
+  - Messages flow through configurable filters before delivery to agents
+- **SubmitFilter**: Detects trigger words at end of text for automatic submit
+  - Trigger words: "ok invia", "submit", "send", "fatto", "manda", etc.
+  - Position-weighted confidence: words closer to end have higher weight
+  - Configurable threshold, decay rate, and max scan distance
+  - Removes trigger words and sets `x_submit=true` on message
+- **config.py**: New `[pipeline]` configuration section
+  - `pipeline.enabled`: Enable/disable the pipeline (default: true)
+  - `pipeline.submit_filter.*`: Configure submit filter behavior
+- **engine.py**: Pipeline integration in `_inject_text()` method
+
+## [2.75.1] - 2026-02-02
+
+### Fixed - Session Log Formatting
+- **cli.py**: Fixed `voxtype log session` output formatting
+  - `session_start` now shows version and agent_id correctly
+  - `session_end` shows exit code and keystroke count
+  - `msg_read` and `msg_sent` now show message text (up to 80 chars)
+  - Fixed timestamp parsing for session files (`timestamp` vs `ts` field)
+
+## [2.75.0] - 2026-02-02
+
+### Added - Session Log Tail Command
+- **cli.py**: Added `voxtype log session <agent_id>` command
+  - Shows the most recent session log for an agent
+  - `-f` / `--follow` for live tail (like tail -f)
+  - `-n` / `--lines` to specify number of lines
+  - Automatically finds latest session file by agent ID
+
+## [2.74.1] - 2026-02-02
+
+### Fixed - Agent Verbose Flag Parsing
+- **cli.py**: Fixed `--verbose` flag not working when placed after agent_id
+  - `voxtype agent claude --verbose -- cmd` now works correctly
+  - Flags after positional args were going to ctx.args due to allow_interspersed_args=False
+
+## [2.74.0] - 2026-02-02
+
+### Added - Verbose Mode for Agent
+- **cli.py**: Added `--verbose` / `-v` flag to `voxtype agent` command
+- **agent/mux.py**: When verbose, session log contains full text (not truncated to 50 chars)
+  - Useful for debugging message loss between listen and agent
+  - Compare `voxtype listen --verbose` output with `voxtype agent --verbose` session log
+
+## [2.73.3] - 2026-02-02
+
+### Fixed - Duplicate Agent Names Allowed
+- **agent/mux.py**: Added `_is_socket_active()` check before starting agent
+  - Verifies if socket has active listener before allowing registration
+  - Returns error if agent with same ID is already running
+  - Prevents multiple agents binding to same socket path
+
+## [2.73.2] - 2026-02-02
+
+### Fixed - Agent Messages Being Dropped (Race Conditions)
+- **agent/socket.py**: SocketAgent now has retry logic and failure threshold
+  - Retries up to 3 times with increasing timeouts (1s, 2s, 3s)
+  - Only triggers deregistration after 3 consecutive failures
+  - Single transient failure no longer removes agent permanently
+- **core/engine.py**: Removed aggressive `is_alive()` checks during agent switching
+  - Previously, switching agents would connect to socket to verify liveness
+  - If receiver was busy, agent got unregistered even if alive
+  - Now agent liveness is verified lazily on send()
+
+## [2.73.1] - 2026-02-01
+
+### Fixed - KeyboardAgent Not Starting with --keyboard Flag
+- **core/app.py**: KeyboardAgent.start() was never called in VoxtypeApp
+  - Now explicitly starts KeyboardAgent when not in agent mode
+- **cli.py**: config.output.mode not updated from CLI flags
+  - --keyboard now correctly sets config.output.mode = "keyboard"
+  - Status panel now shows correct output mode
+
+## [2.73.0] - 2026-01-31
+
+### Added - New Engine Architecture (Phase 1)
+- **engine/**: New unified engine package for v3.0.0 architecture
+  - `engine/state.py`: EngineState dataclass with full status schema
+  - `engine/control.py`: OpenVIP control command handlers
+  - `engine/server.py`: HTTP + Unix socket transport layer
+  - `engine/engine.py`: Main Engine class with foreground/daemon modes
+- **State Schema**: Complete state exposed via `/status` endpoint
+  - STT, TTS, Translation service states
+  - Loading progress, output mode, hotkey binding
+  - Engine metadata (version, pid, uptime)
+- **OpenVIP Control**: All commands idempotent
+  - `stt.start`, `stt.stop`, `tts.speak`, `tts.stop`
+  - `output.set_mode`, `output.set_agent`
+  - `hotkey.bind`, `hotkey.unbind`
+  - `engine.shutdown`, `ping`
+- **Dual Transport**: Same API on both transports
+  - Unix socket: `~/.voxtype/engine.sock`
+  - HTTP: port 9876 with SSE events
+- **Metrics**: Session and lifetime metrics tracking
+
+## [2.72.0] - 2026-01-30
+
+### Added - Hotkey Support in Tray
+- **tray/app.py**: Tray now registers global hotkey listener
+  - Works on macOS (tray runs on main thread)
+  - Pressing hotkey (e.g., CMD) toggles listening via daemon
+  - Same tap detection as CLI (single tap = toggle)
+
+## [2.71.0] - 2026-01-30
+
+### Changed - Engine Manages KeyboardAgent Lifecycle
+- **core/engine.py**: Engine now owns and manages KeyboardAgent lifecycle
+  - KeyboardAgent is started/stopped automatically in engine.start()/stop()
+  - No longer needs to be returned from create_engine or managed by app
+  - Added `hotkey_enabled` parameter (default True)
+- **daemon/server.py**: Disabled hotkey in daemon mode
+  - macOS requires main thread for hotkey events, but daemon runs engine in background
+  - Users toggle via tray menu instead
+
+## [2.70.2] - 2026-01-30
+
+### Fixed - Mypy Type Errors
+- **core/engine.py**: Fixed type annotation for registrar variable
+- **core/engine.py**: `create_engine()` now returns 3-tuple: (engine, registrar, keyboard_agent)
+- **core/app.py**: Updated to unpack keyboard_agent from create_engine
+- **daemon/server.py**: Updated to handle 3-tuple return
+
+## [2.70.1] - 2026-01-30
+
+### Fixed - Tray UI Blocking
+- **tray/app.py**: Menu actions now run in background threads
+  - "Start/Stop Listening" no longer freezes UI for seconds
+  - Output mode changes also async
+  - UI stays responsive, polling updates state
+
+## [2.70.0] - 2026-01-30
+
+### Fixed - Daemon State Synchronization
+- **daemon/server.py**: Daemon now properly syncs state with engine
+  - `on_state_change` callback now updates daemon state (was doing nothing!)
+  - Hotkey toggles now correctly update daemon state
+  - State changes from any source (hotkey, API, tray) now reflected correctly
+- **tray/app.py**: Don't stop polling when stopping listening
+  - Tray always polls to stay in sync with daemon
+
+## [2.69.2] - 2026-01-30
+
+### Fixed - Daemon Crash on Start Listening
+- **core/engine.py**: Fixed `create_engine()` accessing non-existent `config.realtime`
+  - `realtime` is a CLI parameter, not a config attribute
+  - Now defaults to `False` when not specified
+
+## [2.69.1] - 2026-01-30
+
+### Fixed - Daemon Config Loading
+- **daemon/server.py**: Load output mode from config at startup
+  - Was showing "keyboard" instead of actual config value
+  - Config is now loaded eagerly for correct status display
+
+## [2.69.0] - 2026-01-30
+
+### Refactored - Unified Engine Initialization
+- **core/engine.py**: Added `create_engine()` factory function
+  - Shared initialization logic for both daemon and CLI
+  - Supports override parameters (agent_mode, realtime, manual_agents)
+  - Ensures identical behavior between `voxtype listen` and daemon
+- **core/app.py**: Now uses `create_engine()` instead of duplicated code
+- **daemon/server.py**: Now uses `create_engine()` instead of duplicated code
+
+## [2.68.0] - 2026-01-30
+
+### Fixed - Daemon Agent Discovery
+- **daemon/server.py**: Daemon was not discovering agents at all
+  - Added `AutoDiscoveryRegistrar` to discover and register socket agents
+  - Agents are now properly discovered when daemon starts in agent mode
+- **tray/app.py**: Removed useless loading percentage (always 0%)
+- **cli.py**: Enhanced `daemon status` to always show agent count for debugging
+
+## [2.67.0] - 2026-01-30
+
+### Fixed - Tray Sync and Command Mode Cleanup
+- **tray/app.py**: Fixed tray not syncing with daemon state
+  - Removed `processing_mode` parameter from `set_state()` (was causing silent errors)
+  - Removed "Switch to Command Mode" menu item (command mode no longer exists)
+  - Removed "(Transcription)" from status display
+  - Added version display in tray menu (`voxtype vX.Y.Z`)
+  - Added error logging for poll failures instead of silent ignore
+
+## [2.66.0] - 2026-01-30
+
+### Fixed - Config Set TOML Serialization
+- **config.py**: Fixed `_format_toml_value()` to properly serialize lists and dicts to TOML
+  - Lists of inline tables (like `keyboard.shortcuts`) now use correct TOML syntax
+  - Was using Python `str()` which produced invalid syntax like `[{'key': 'value'}]`
+  - Now outputs valid TOML: `[{ key = "value" }]`
+
+## [2.65.0] - 2026-01-30
+
+### Fixed - CLI Command Options Cleanup
+- **cli.py**: Removed remaining `config.command` references that caused crash on startup
+  - Removed CLI options: `--wake-word`, `--initial-mode`, `--no-commands`, `--ollama-model`
+  - Removed LLM status display from `voxtype models list`
+  - Removed `--llm` option from `voxtype models use`
+  - Removed unused `_get_ollama_models()` function
+  - Cleaned up logger parameters (removed `trigger_phrase`)
+
+## [2.64.0] - 2026-01-30
+
+### Fixed - Mypy Type Errors
+- **stats.py**: Added `model_load_times` to `StatsData` TypedDict
+- **watcher.py**: Fixed `Observer` type annotation, handle `bytes | str` paths
+- **monitor.py**: Handle `bytes | str` paths from watchdog events
+- **status.py**: Removed reference to deleted `config.command.mode`
+- **keyboard.py**: Fixed `typing_delay` → `typing_delay_ms`
+- **daemon/server.py**: Removed references to deleted `mode` property
+- **app_commands.py**: Removed commands for deleted methods (`toggle-mode`, `repeat`)
+- **app.py**: Added `on_engine_ready()` implementation, use `create_message()`
+- **plugins/__init__.py**: Added type ignore for Protocol `issubclass()` checks
+
+### Changed
+- **CI workflow**: Now runs on all branches (not just main)
+
+## [2.63.0] - 2026-01-30
+
+### Changed - OpenVIP v1.0 Protocol Simplification
+- **Message types simplified to 3**: `message`, `partial`, `status`
+- **openvip.py**: New specific factories `create_message()`, `create_partial()`, `create_status()`
+- **SSE server**: Updated to emit v1.0 compliant messages
+  - `send_state_change()` now emits `status` type (was `state`)
+  - `send_error()` now emits `status` with `status: "error"` (was separate `error` type)
+  - State mapping: RECORDING→`recording`, TRANSCRIBING→`transcribing` (was both `listening`/`processing`)
+
+### Removed
+- **SSE methods**: `send_transcription()`, `send_transcription_result()`, `send_mode_change()`, `send_start()`, `send_end()`
+- **Message types**: `state`, `error`, `start`, `end` (consolidated into `status`)
+
+### Added
+- **Vision document**: Updated `docs/notes/mental-model.md` with OpenVIP Platform vision
+  - Three core services: STT, TTS, Translation
+  - Service modes: enabled, on-demand, disabled
+  - Services as protocol roles (Source, Sink, Pipeline Element)
+
+## [2.62.0] - 2026-01-30
+
+### Changed
+- **Archive obsolete docs**: Moved LLM-related documentation to `docs/notes/archive/`
+  - `llm-architecture.private.md` - LLM Processor design (not in v1.0)
+
+## [2.61.0] - 2026-01-30
+
+### Removed - OpenVIP v1.0 Cleanup
+- **LLM Processor**: Removed `src/voxtype/llm/` directory entirely
+  - LLM-based command processing is out of scope for OpenVIP v1.0 core
+  - Will be available as optional plugin in future
+- **CommandConfig**: Removed `[command]` section from config
+  - `command.mode` - no longer needed (no LLM vs transcription mode)
+  - `command.wake_word` - removed
+  - `command.ollama_model` - removed
+  - `command.ollama_timeout` - removed
+- **ProcessingMode**: Removed `ProcessingMode` enum from state machine
+  - No more TRANSCRIPTION/COMMAND mode switching
+  - Double-tap hotkey now switches agents instead of modes
+- **Engine simplification**:
+  - Removed `trigger_phrase`, `_llm_processor`, `_processing_mode`
+  - Removed `_switch_processing_mode()`, `_repeat_last_injection()`
+  - Removed `on_mode_change` callback
+  - Hotwords now only from `stt.hotwords` config
+
+### Changed
+- **Engine docstring**: Now describes OpenVIP v1.0 protocol instead of "LLM-first architecture"
+- **Double-tap hotkey**: Now cycles to next agent (was: switch transcription/command mode)
+
+## [2.60.0-alpha] - 2026-01-29
+
+### Changed
+- **OpenVIP spec**: Removed duplicate internal spec, now points to official https://github.com/open-voice-input/spec
+- **spec/README.md**: Documents voxtype-specific extensions (`x_submit`, `x_visual_newline`)
+
+### Added
+- **Service Layer**: New `voxtype.services` module with high-level APIs
+  - `STTService`: Speech-to-text with daemon integration and local fallback
+  - `TTSService`: Text-to-speech with daemon integration and local fallback
+  - `ServiceRegistry`: Lazy-loaded registry for all services
+- **Plugin System**: New `voxtype.plugins` module for extensibility
+  - `Plugin` protocol and `BasePlugin` base class
+  - Plugin discovery: built-in, entry points (`voxtype.plugins`), user plugins (`~/.config/voxtype/plugins/`)
+  - CLI integration: plugins can add subcommands
+- **Daemon STT Support**: New `stt.transcribe` action in daemon protocol
+  - `STTRequest`/`STTResponse` message types
+  - Daemon caches STT engine for fast repeated transcriptions
+  - Client `send_stt_request()` method with base64 audio encoding
+
 ## [2.58.0] - 2026-01-29
 
 ### Changed

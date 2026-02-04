@@ -2,6 +2,9 @@
 
 This agent sends OpenVIP messages to a local process listening
 on a Unix domain socket (e.g., Claude Code, Vim plugin).
+
+Uses a PERSISTENT connection - connects once, sends many messages.
+Connection only closes when agent dies or engine stops.
 """
 
 from __future__ import annotations
@@ -9,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import socket
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -31,10 +35,12 @@ def get_socket_path(agent_id: str) -> Path:
 class SocketAgent(BaseAgent):
     """Agent that sends messages via Unix domain socket.
 
-    Messages are sent synchronously - each send() call opens a connection,
-    sends the message, and closes. This is simple and reliable.
+    Uses a PERSISTENT connection:
+    - connect() called once when engine discovers the agent
+    - send() reuses the same connection for all messages
+    - disconnect() called when agent dies or engine stops
 
-    Supports failure callback for auto-deregistration when socket is dead.
+    This avoids the backlog problem of opening/closing per message.
     """
 
     def __init__(
@@ -46,43 +52,64 @@ class SocketAgent(BaseAgent):
 
         Args:
             agent_id: Agent identifier (socket filename without .sock).
-            on_failure: Optional callback called with agent_id when send fails.
-                       Use this to auto-deregister dead agents.
+            on_failure: Optional callback called with agent_id when connection fails.
         """
         super().__init__(agent_id)
         self.socket_path = get_socket_path(agent_id)
         self._on_failure = on_failure
+        self._socket: socket.socket | None = None
+        self._lock = threading.Lock()  # Thread-safe send
 
     def is_available(self) -> bool:
         """Check if the agent socket file exists."""
         return self.socket_path.exists()
 
     def is_alive(self) -> bool:
-        """Check if the agent socket has an active listener.
+        """Check if connected to the agent."""
+        return self._socket is not None
 
-        Attempts to connect to the socket. If connection succeeds,
-        there's a listener. If ECONNREFUSED, the socket is stale.
+    def connect(self) -> bool:
+        """Establish persistent connection to agent.
+
+        Called once when engine discovers/registers the agent.
 
         Returns:
-            True if socket has active listener, False otherwise.
+            True if connected successfully, False otherwise.
         """
+        if self._socket is not None:
+            return True  # Already connected
+
         try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-                sock.settimeout(0.5)
-                sock.connect(str(self.socket_path))
+            self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self._socket.settimeout(5.0)  # 5s timeout for connect
+            self._socket.connect(str(self.socket_path))
+            # Once connected, no timeout for sends (blocking is fine)
+            self._socket.settimeout(None)
+            logger.debug(f"Connected to agent {self._id}")
             return True
-        except ConnectionRefusedError:
-            # Socket exists but no listener (stale)
+        except (OSError, ConnectionRefusedError) as e:
+            logger.warning(f"Failed to connect to agent {self._id}: {e}")
+            self._socket = None
             return False
-        except (FileNotFoundError, OSError):
-            # Socket doesn't exist or other error
-            return False
+
+    def disconnect(self) -> None:
+        """Close the persistent connection.
+
+        Called when agent dies or engine stops.
+        """
+        with self._lock:
+            if self._socket is not None:
+                try:
+                    self._socket.close()
+                except OSError:
+                    pass
+                self._socket = None
+                logger.debug(f"Disconnected from agent {self._id}")
 
     def send(self, message: OpenVIPMessage) -> bool:
-        """Send an OpenVIP message via socket.
+        """Send an OpenVIP message via the persistent connection.
 
-        If send fails and on_failure callback is set, it will be called
-        with this agent's ID for auto-deregistration.
+        Thread-safe - multiple threads can call send() concurrently.
 
         Args:
             message: OpenVIP message dict to send.
@@ -90,19 +117,37 @@ class SocketAgent(BaseAgent):
         Returns:
             True if sent successfully, False otherwise.
         """
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-                sock.settimeout(1.0)
-                sock.connect(str(self.socket_path))
-                data = json.dumps(message, ensure_ascii=False) + "\n"
-                sock.sendall(data.encode("utf-8"))
-            return True
-        except (OSError, ConnectionRefusedError) as e:
-            logger.debug(f"Failed to send to {self._id}: {e}")
-            # Notify failure for auto-deregistration
-            if self._on_failure:
-                self._on_failure(self._id)
-            return False
+        data = json.dumps(message, ensure_ascii=False) + "\n"
+        data_bytes = data.encode("utf-8")
+
+        with self._lock:
+            # Auto-connect if not connected
+            if self._socket is None:
+                if not self.connect():
+                    if self._on_failure:
+                        self._on_failure(self._id)
+                    return False
+
+            sock = self._socket
+            if sock is None:
+                return False
+
+            try:
+                sock.sendall(data_bytes)
+                return True
+            except (BrokenPipeError, OSError) as e:
+                # Connection lost - cleanup and notify
+                logger.warning(f"Connection to {self._id} lost: {e}")
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+                self._socket = None
+
+                if self._on_failure:
+                    self._on_failure(self._id)
+                return False
 
     def __repr__(self) -> str:
-        return f"SocketAgent(id={self._id!r}, socket={self.socket_path})"
+        connected = "connected" if self._socket else "disconnected"
+        return f"SocketAgent(id={self._id!r}, {connected})"

@@ -2,25 +2,13 @@
 
 from __future__ import annotations
 
-import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from voxtype.agent.registrar import (
-    AgentRegistrar,
-    AutoDiscoveryRegistrar,
-    ManualAgentRegistrar,
-)
-from voxtype.core.engine import VoxtypeEngine
-from voxtype.core.events import (
-    EngineEvents,
-    InjectionResult,
-    TranscriptionResult,
-    TTSCompleteEvent,
-    TTSStartEvent,
-)
-from voxtype.core.state import AppState, ProcessingMode
+from voxtype.adapters.openvip.messages import create_message
+from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
+from voxtype.core.state import AppState
 
 if TYPE_CHECKING:
     from voxtype.config import Config
@@ -78,34 +66,18 @@ class VoxtypeApp(EngineEvents):
         # HTTP/SSE server (set in run() if configured)
         self._sse: SSEServer | None = None
 
-        # Create engine with self as event handler
-        self._engine = VoxtypeEngine(
+        # Use shared initialization logic (same as daemon)
+        from voxtype.core.engine import create_engine
+
+        self._engine, self._registrar = create_engine(
             config=config,
             events=self,
             logger=logger,
             agent_mode=agent_mode,
             realtime=realtime,
+            manual_agents=manual_agents,
+            discovery_method=discovery_method,
         )
-
-        # Create agent registrar based on configuration
-        # - manual_agents provided → ManualAgentRegistrar
-        # - agent_mode but no manual_agents → AutoDiscoveryRegistrar
-        # - no agent_mode → register KeyboardAgent for local typing
-        self._registrar: AgentRegistrar | None = None
-        self._keyboard_agent: Any = None  # KeyboardAgent when not in agent mode
-        if agent_mode:
-            if manual_agents:
-                self._registrar = ManualAgentRegistrar(self._engine, manual_agents)
-            else:
-                self._registrar = AutoDiscoveryRegistrar(
-                    self._engine,
-                    monitor_type=discovery_method,
-                )
-        else:
-            # Local mode: create KeyboardAgent for direct typing
-            from voxtype.agent.keyboard import KeyboardAgent
-            self._keyboard_agent = KeyboardAgent(config)
-            self._engine.register_agent(self._keyboard_agent)
 
     # -------------------------------------------------------------------------
     # Delegate Properties to Engine
@@ -127,11 +99,6 @@ class VoxtypeApp(EngineEvents):
         return self._engine.is_off
 
     @property
-    def mode(self) -> ProcessingMode:
-        """Get current processing mode."""
-        return self._engine.mode
-
-    @property
     def current_agent(self) -> str | None:
         """Get the name of the current agent."""
         return self._engine.current_agent
@@ -139,6 +106,11 @@ class VoxtypeApp(EngineEvents):
     # -------------------------------------------------------------------------
     # EngineEvents Implementation (UI callbacks)
     # -------------------------------------------------------------------------
+
+    def on_engine_ready(self) -> None:
+        """Handle engine ready event."""
+        # Engine is ready - could show notification or update status
+        return None
 
     def on_state_change(
         self, old: AppState, new: AppState, trigger: str
@@ -165,7 +137,8 @@ class VoxtypeApp(EngineEvents):
 
         # Send to SSE if running
         if self._sse:
-            self._sse.send_transcription_result(result, language=self.config.stt.language)
+            msg = create_message(result.text)
+            self._sse.send_message(msg)
 
     def on_injection(self, result: InjectionResult) -> None:
         """Handle text injection completion."""
@@ -186,17 +159,6 @@ class VoxtypeApp(EngineEvents):
         if result.success and result.method.startswith("file:"):
             from voxtype.audio.beep import play_beep_sent
             play_beep_sent()
-
-    def on_mode_change(self, mode: ProcessingMode) -> None:
-        """Handle processing mode change."""
-        if self._status_panel:
-            self._status_panel.update_mode(mode.value)
-
-        # Send to SSE if running
-        if self._sse:
-            self._sse.send_mode_change(mode)
-
-        self._speak_mode_with_mute()
 
     def on_agent_change(self, agent_name: str, index: int) -> None:
         """Handle agent change."""
@@ -285,10 +247,6 @@ class VoxtypeApp(EngineEvents):
         """Toggle listening on/off."""
         self._engine._toggle_listening()
 
-    def _switch_processing_mode(self) -> None:
-        """Switch between transcription and command mode."""
-        self._engine._switch_processing_mode()
-
     def _set_listening(self, on: bool) -> None:
         """Set listening state on/off."""
         self._engine._set_listening(on)
@@ -304,10 +262,6 @@ class VoxtypeApp(EngineEvents):
     def _switch_to_agent_by_index(self, index: int) -> bool:
         """Switch to a specific agent by index (1-based)."""
         return self._engine._switch_to_agent_by_index(index)
-
-    def _repeat_last_injection(self) -> None:
-        """Repeat the last injected text."""
-        self._engine._repeat_last_injection()
 
     def _send_submit(self) -> None:
         """Send submit (Enter key) to the target."""
@@ -326,117 +280,30 @@ class VoxtypeApp(EngineEvents):
     # UI-Only Methods
     # -------------------------------------------------------------------------
 
-    def _load_tts_phrases(self) -> dict:
-        """Load TTS phrases from config file or use defaults."""
-        import json
-        from pathlib import Path
-
-        default_phrases = {
-            "transcription_mode": "transcription mode",
-            "command_mode": "command mode",
-            "agent": "agent",
-            "voice": "Samantha",
-        }
-
-        phrases_path = Path.home() / ".config" / "voxtype" / "tts_phrases.json"
-        if phrases_path.exists():
-            try:
-                with open(phrases_path) as f:
-                    custom = json.load(f)
-                return {**default_phrases, **custom}
-            except Exception:
-                pass
-
-        return default_phrases
-
     def _speak_text(self, text: str) -> None:
-        """Speak text using TTS with mic muting in speaker mode.
-
-        Uses event queue for state management:
-        - Get TTS ID (monotonic counter) BEFORE starting
-        - TTSStartEvent: Sent before TTS starts, controller transitions to PLAYING
-        - TTSCompleteEvent: Sent with TTS ID after TTS finishes
-
-        Multiple TTS can play concurrently (rapid agent switching).
-        Only the completion of the LAST TTS triggers state transition.
-        """
-        if not self.config.audio.audio_feedback:
-            return
-
-        import subprocess
-        import sys
-
-        phrases = self._load_tts_phrases()
-        voice = phrases.get("voice", "Samantha")
-
-        def _do_tts() -> None:
-            try:
-                if sys.platform == "darwin":
-                    subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
-                else:
-                    for cmd in [["espeak-ng", text], ["espeak", text], ["spd-say", "-w", text]]:
-                        try:
-                            subprocess.run(cmd, capture_output=True, timeout=5)
-                            break
-                        except FileNotFoundError:
-                            continue
-            except Exception:
-                pass
-
-        def _do_tts_with_events(tts_id: int) -> None:
-            """Do TTS with event-based state management."""
-            try:
-                _do_tts()
-            finally:
-                # Send completion event with TTS ID
-                # Controller only transitions to LISTENING if this is the LAST TTS
-                self._engine._controller.send(TTSCompleteEvent(tts_id=tts_id, source="tts"))
-
-        # Headphones mode: fire and forget (continue listening while playing)
-        if self.config.audio.headphones_mode:
-            threading.Thread(target=_do_tts, daemon=True).start()
-        else:
-            # Speakers mode:
-            # 1. Get TTS ID FIRST (increments counter - this ID identifies this TTS)
-            # 2. Send TTSStart event (controller transitions to PLAYING)
-            # 3. Start thread with the ID (will send TTSComplete with same ID)
-            tts_id = self._engine._controller.get_next_tts_id()
-            self._engine._controller.send(TTSStartEvent(text=text, source="tts"))
-            threading.Thread(
-                target=_do_tts_with_events,
-                args=(tts_id,),
-                daemon=True,
-            ).start()
-
-    def _speak_mode_with_mute(self) -> None:
-        """Speak the current mode using TTS."""
-        phrases = self._load_tts_phrases()
-        if self._engine.mode == ProcessingMode.TRANSCRIPTION:
-            text = phrases.get("transcription_mode", "transcription mode")
-        else:
-            text = phrases.get("command_mode", "command mode")
-        self._speak_text(text)
+        """Speak text using TTS - delegates to engine."""
+        self._engine.speak_text(text)
 
     def _speak_agent(self, agent_name: str) -> None:
-        """Speak the agent name using TTS."""
-        phrases = self._load_tts_phrases()
-        agent_prefix = phrases.get("agent", "agent")
-        self._speak_text(f"{agent_prefix} {agent_name}")
+        """Speak agent name using TTS - delegates to engine."""
+        self._engine.speak_agent(agent_name)
 
     def _play_feedback(self, event: str) -> None:
         """Play audio feedback for state changes."""
         if not self.config.audio.audio_feedback:
             return
 
-        try:
-            from voxtype.audio.beep import play_beep_start, play_beep_stop
+        from voxtype.audio.beep import DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, play_audio
 
-            if event == "listening_on":
-                play_beep_start()
-            elif event == "listening_off":
-                play_beep_stop()
-        except Exception:
-            pass
+        pause = not self.config.audio.headphones_mode
+        ctrl = self._engine._controller
+
+        if event == "listening_on":
+            path = self.config.audio.sound_start or str(DEFAULT_SOUND_START)
+            play_audio(path, pause_mic=pause, controller=ctrl)
+        elif event == "listening_off":
+            path = self.config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
+            play_audio(path, pause_mic=False)
 
     def _display_session_stats(self) -> None:
         """Display session statistics on exit."""
@@ -575,7 +442,7 @@ class VoxtypeApp(EngineEvents):
     def _run_vad_mode(self) -> None:
         """Run in VAD (voice activity detection) mode."""
         # Initialize engine components (STT and VAD loading happens here with progress indicators)
-        self._engine._init_vad_components()
+        self._engine.init_components()
 
         # Show hotkey info
         if self.config.verbose and self._engine._hotkey:
@@ -619,8 +486,10 @@ class VoxtypeApp(EngineEvents):
             # Update status panel with agents
             if self._status_panel:
                 self._status_panel.update_agents(self._engine.agents)
-        elif self._keyboard_agent:
-            self._keyboard_agent.start()
+        else:
+            # Keyboard mode - start the KeyboardAgent
+            if self._engine._keyboard_agent:
+                self._engine._keyboard_agent.start()
             if self.config.verbose:
                 self._console.print("[dim]Output: keyboard (local)[/]")
 
@@ -644,10 +513,6 @@ class VoxtypeApp(EngineEvents):
             self._engine._state_manager.transition(AppState.LISTENING)
             if self._status_panel:
                 self._status_panel.update_state("LISTENING")
-
-            # Sync LLM processor state
-            if self._engine._llm_processor:
-                self._engine._llm_processor.set_listening(True)
 
             if self._engine._audio_manager:
                 self._engine._audio_manager.start_streaming(
@@ -701,9 +566,7 @@ class VoxtypeApp(EngineEvents):
         if self._registrar:
             self._registrar.stop()
             self._registrar = None
-        elif self._keyboard_agent:
-            self._keyboard_agent.stop()
-            self._keyboard_agent = None
+        # Note: KeyboardAgent lifecycle is managed by engine.stop()
 
         # Stop engine
         self._engine.stop()

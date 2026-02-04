@@ -72,6 +72,77 @@ class TTSResponse:
         )
 
 @dataclass
+class STTRequest:
+    """Request to transcribe audio via STT."""
+
+    action: Literal["stt.transcribe"] = "stt.transcribe"
+    audio_b64: str = ""  # Base64-encoded float32 audio
+    language: str = "auto"
+    model_size: str | None = None
+    hotwords: str | None = None
+    beam_size: int = 5
+    max_repetitions: int = 5
+    task: str = "transcribe"  # "transcribe" or "translate"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "action": self.action,
+            "audio_b64": self.audio_b64,
+            "language": self.language,
+            "model_size": self.model_size,
+            "hotwords": self.hotwords,
+            "beam_size": self.beam_size,
+            "max_repetitions": self.max_repetitions,
+            "task": self.task,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> STTRequest:
+        return cls(
+            action=data.get("action", "stt.transcribe"),
+            audio_b64=data.get("audio_b64", ""),
+            language=data.get("language", "auto"),
+            model_size=data.get("model_size"),
+            hotwords=data.get("hotwords"),
+            beam_size=data.get("beam_size", 5),
+            max_repetitions=data.get("max_repetitions", 5),
+            task=data.get("task", "transcribe"),
+        )
+
+@dataclass
+class STTResponse:
+    """Response from STT request."""
+
+    status: Literal["ok", "error"] = "ok"
+    text: str = ""
+    duration_ms: int = 0
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"status": self.status}
+        if self.status == "ok":
+            result["text"] = self.text
+            result["duration_ms"] = self.duration_ms
+        else:
+            result["error"] = self.error
+        return result
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> STTResponse:
+        return cls(
+            status=data.get("status", "ok"),
+            text=data.get("text", ""),
+            duration_ms=data.get("duration_ms", 0),
+            error=data.get("error"),
+        )
+
+@dataclass
 class StatusRequest:
     """Request daemon status."""
 
@@ -304,6 +375,7 @@ class ErrorResponse:
 # Type alias for all request types
 RequestType = (
     TTSRequest
+    | STTRequest
     | StatusRequest
     | ShutdownRequest
     | ListenStartRequest
@@ -321,6 +393,8 @@ def parse_request(data: bytes) -> RequestType | None:
 
         if action == "tts.speak":
             return TTSRequest.from_dict(obj)
+        elif action == "stt.transcribe":
+            return STTRequest.from_dict(obj)
         elif action == "status":
             return StatusRequest()
         elif action == "shutdown":
@@ -343,6 +417,7 @@ def parse_request(data: bytes) -> RequestType | None:
 # Type alias for all response types
 ResponseType = (
     TTSResponse
+    | STTResponse
     | StatusResponse
     | ListenResponse
     | ProcessingModeResponse
@@ -358,7 +433,11 @@ def parse_response(data: bytes) -> ResponseType | None:
 
         if status == "error":
             return ErrorResponse(error=obj.get("error", ""), code=obj.get("code", "UNKNOWN"))
-        elif "duration_ms" in obj:
+        elif "text" in obj and "duration_ms" in obj:
+            # STTResponse has both text and duration_ms
+            return STTResponse.from_dict(obj)
+        elif "duration_ms" in obj and "text" not in obj:
+            # TTSResponse only has duration_ms
             return TTSResponse.from_dict(obj)
         elif "uptime_seconds" in obj:
             return StatusResponse.from_dict(obj)

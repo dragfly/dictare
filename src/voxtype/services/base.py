@@ -1,0 +1,96 @@
+"""Base service class and service registry."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from voxtype.config import Config
+
+class BaseService(ABC):
+    """Abstract base class for voxtype services.
+
+    Services provide high-level APIs for STT, TTS, and other features.
+    They handle daemon integration and fallback to local engines.
+    """
+
+    def __init__(self, config: Config | None = None) -> None:
+        """Initialize service.
+
+        Args:
+            config: Configuration object. If None, loads default config.
+        """
+        self._config = config
+
+    @property
+    def config(self) -> Config:
+        """Get configuration, loading lazily if needed."""
+        if self._config is None:
+            from voxtype.config import load_config
+
+            self._config = load_config()
+        return self._config
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Check if service is available.
+
+        Returns:
+            True if service can be used.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Get service name."""
+        pass
+
+class ServiceRegistry:
+    """Registry for voxtype services.
+
+    Provides lazy-loaded access to services with daemon integration.
+    """
+
+    def __init__(self, config: Config | None = None) -> None:
+        """Initialize registry.
+
+        Args:
+            config: Configuration object. If None, loads default config.
+        """
+        self._config = config
+        self._stt: STTService | None = None
+        self._tts: TTSService | None = None
+
+    @property
+    def config(self) -> Config:
+        """Get configuration, loading lazily if needed."""
+        if self._config is None:
+            from voxtype.config import load_config
+
+            self._config = load_config()
+        return self._config
+
+    @property
+    def stt(self) -> STTService:
+        """Get STT service (lazy loaded)."""
+        if self._stt is None:
+            from voxtype.services.stt_service import STTService
+
+            self._stt = STTService(self._config)
+        return self._stt
+
+    @property
+    def tts(self) -> TTSService:
+        """Get TTS service (lazy loaded)."""
+        if self._tts is None:
+            from voxtype.services.tts_service import TTSService
+
+            self._tts = TTSService(self._config)
+        return self._tts
+
+# Type hints for lazy imports
+if TYPE_CHECKING:
+    from voxtype.services.stt_service import STTService
+    from voxtype.services.tts_service import TTSService
