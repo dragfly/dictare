@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.8] - 2026-02-04
+
+### Added - Tests for new HTTP/SSE architecture
+
+- Created `tests/test_http_server.py` — 17 tests for FastAPI OpenVIP server endpoints:
+  - GET /status, POST /control, POST /tts endpoint tests
+  - POST /agents/{id}/messages with connected/unconnected agents
+  - `put_message()` thread-safe delivery tests
+  - `connected_agents` property tests
+  - Server lifecycle (start/stop/double-start) tests
+- Created `tests/test_sse_agent.py` — 8 tests for SSEAgent:
+  - Initialization, BaseAgent inheritance, repr
+  - `send()` delegation to server, return values, message ordering
+  - Thread safety: 5 concurrent threads × 50 messages
+- Test count: 291 → 316 (+25 new tests)
+
 ## [3.0.0-alpha.7] - 2026-02-04
 
 ### Removed - Obsolete adapter, file/socket agents, registrars, watchers
