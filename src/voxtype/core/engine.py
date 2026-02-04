@@ -717,11 +717,12 @@ class VoxtypeEngine:
                 # Send to agent - agent handles its own transport
                 method = f"agent:{target_agent.id}"
 
-                # Send all processed messages (skip empty text)
+                # Send all processed messages
                 for msg in messages_to_send:
                     msg_text = msg.get("text", "")
-                    if not msg_text.strip():
-                        # Skip empty messages (e.g., agent switch command only)
+                    has_submit = msg.get("x_submit", False)
+                    if not msg_text.strip() and not has_submit:
+                        # Skip empty messages without submit flag
                         success = True  # Consider it successful, nothing to send
                         continue
                     msg_success = target_agent.send(msg)
