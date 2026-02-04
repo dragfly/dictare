@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.102.1] - 2026-02-04
+
+### Fixed - STT model name shown as "None" during loading
+
+- Set `model_name` and `language` in state before model loading starts
+- Panel now shows "large-v3-turbo on MLX" immediately instead of "None on MLX"
+- Fixed in both Engine and OpenVIPAdapter code paths
+
 ## [2.102.0] - 2026-02-04
 
 ### Changed - VAD tuning and config template (nginx-style)
