@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.108.0] - 2026-02-04
+
+### Added - TTS speak methods in VoxtypeEngine
+
+- Added `speak_text(text)` and `speak_agent(agent_name)` to VoxtypeEngine
+- Uses `play_audio(callable)` with OS TTS (`say` on macOS, `espeak`/`espeak-ng` on Linux)
+- `pause_mic` determined by `headphones_mode` config (speaker mode mutes mic during TTS)
+- TTS phrases configurable via `~/.config/voxtype/tts_phrases.json`
+- `VoxtypeApp._speak_text()` and `_speak_agent()` now delegate to engine
+- `AppController` now announces agent switches via `engine.speak_agent()` (was a TODO stub)
+- Temporary OS-based TTS — will be replaced by TTS service in future version
+
 ## [2.107.1] - 2026-02-04
 
 ### Fixed - Sound files not included in installed package

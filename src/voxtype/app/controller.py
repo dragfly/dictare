@@ -136,6 +136,11 @@ class AppController:
                         path = config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
                         play_audio(path, pause_mic=False)
 
+            def on_agent_change(self, agent_name: str, index: int) -> None:
+                eng = engine_ref[0]
+                if eng:
+                    eng.speak_agent(agent_name)
+
         # 1. Create logger for engine
         from voxtype import __version__
         from voxtype.logging.jsonl import JSONLLogger, LogLevel, get_default_log_path
@@ -320,12 +325,6 @@ class AppController:
 
         # Engine uses 0-based, users use 1-based
         self._engine._switch_to_agent_by_index(index - 1)
-
-    def _announce_agent(self, agent_name: str) -> None:
-        """Announce agent change via TTS."""
-        # TODO: Implement TTS announcement
-        # This should use engine TTS when implemented
-        pass
 
     # =========================================================================
     # Properties

@@ -972,6 +972,91 @@ class VoxtypeEngine:
             self._audio_manager.clear_queue()
             self._audio_manager.reset_vad()  # Use reset, not flush
 
+    # -------------------------------------------------------------------------
+    # TTS / Audio Feedback
+    # -------------------------------------------------------------------------
+
+    def _load_tts_phrases(self) -> dict:
+        """Load TTS phrases from config file or use defaults."""
+        import json
+        from pathlib import Path
+
+        default_phrases = {
+            "transcription_mode": "transcription mode",
+            "command_mode": "command mode",
+            "agent": "agent",
+            "voice": "Samantha",
+        }
+
+        phrases_path = Path.home() / ".config" / "voxtype" / "tts_phrases.json"
+        if phrases_path.exists():
+            try:
+                with open(phrases_path) as f:
+                    custom = json.load(f)
+                return {**default_phrases, **custom}
+            except Exception:
+                pass
+
+        return default_phrases
+
+    def speak_text(self, text: str) -> None:
+        """Speak text using OS TTS, optionally pausing the mic.
+
+        Uses play_audio() with a blocking callable that invokes say (macOS)
+        or espeak/espeak-ng (Linux). pause_mic is determined by headphones_mode.
+
+        This is a temporary OS-based TTS — will be replaced by a proper
+        TTS service in a future version.
+
+        Args:
+            text: Text to speak.
+        """
+        if not self.config.audio.audio_feedback:
+            return
+
+        import subprocess
+        import sys
+
+        from voxtype.audio.beep import play_audio
+
+        phrases = self._load_tts_phrases()
+        voice = phrases.get("voice", "Samantha")
+
+        def _do_tts() -> None:
+            try:
+                if sys.platform == "darwin":
+                    subprocess.run(
+                        ["say", "-v", voice, text], capture_output=True, timeout=10
+                    )
+                else:
+                    for cmd in [
+                        ["espeak-ng", text],
+                        ["espeak", text],
+                        ["spd-say", "-w", text],
+                    ]:
+                        try:
+                            subprocess.run(cmd, capture_output=True, timeout=5)
+                            break
+                        except FileNotFoundError:
+                            continue
+            except Exception:
+                pass
+
+        pause = not self.config.audio.headphones_mode
+        play_audio(_do_tts, pause_mic=pause, controller=self._controller)
+
+    def speak_agent(self, agent_name: str) -> None:
+        """Speak agent name using OS TTS.
+
+        Announces "{agent_prefix} {agent_name}" (e.g., "agent claude").
+        The prefix is configurable via ~/.config/voxtype/tts_phrases.json.
+
+        Args:
+            agent_name: Name of the agent to announce.
+        """
+        phrases = self._load_tts_phrases()
+        agent_prefix = phrases.get("agent", "agent")
+        self.speak_text(f"{agent_prefix} {agent_name}")
 
     # -------------------------------------------------------------------------
     # Lifecycle
