@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.103.0] - 2026-02-04
+
+### Changed - Clean audio feedback with bundled sound files
+
+- Replaced generated sine wave beeps with bundled MP3 sound files
+- Playback via `afplay` (macOS) / `paplay`/`aplay` (Linux) instead of sounddevice
+- Eliminates crackling caused by sounddevice input/output conflict
+
 ## [2.102.1] - 2026-02-04
 
 ### Fixed - STT model name shown as "None" during loading
