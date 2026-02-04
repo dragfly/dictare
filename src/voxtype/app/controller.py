@@ -215,6 +215,9 @@ class AppController:
         self._running = False
         self._shutdown_event.set()
 
+        # Capture stats BEFORE engine shutdown
+        stats = self._engine.stats if self._engine else None
+
         # Stop bindings
         if self._bindings:
             self._bindings.stop()
@@ -237,8 +240,8 @@ class AppController:
             self._logger.close()
             self._logger = None
 
-        # Display session stats
-        self._display_session_stats()
+        # Display session stats (using captured stats)
+        self._display_session_stats(stats)
 
         logger.info("AppController stopped")
 
@@ -373,8 +376,13 @@ class AppController:
     # Internal
     # =========================================================================
 
-    def _display_session_stats(self) -> None:
-        """Display session statistics on exit."""
+    def _display_session_stats(self, stats: Any = None) -> None:
+        """Display session statistics on exit.
+
+        Args:
+            stats: SessionStats snapshot captured before engine shutdown.
+                   If None, tries to read from engine (legacy fallback).
+        """
         import random
         from datetime import datetime
 
@@ -384,11 +392,13 @@ class AppController:
 
         from voxtype.utils.stats import update_stats
 
-        if not self._engine:
-            return
+        s = stats
+        if s is None:
+            if not self._engine:
+                return
+            s = self._engine.stats
 
         # Skip if no transcriptions were made
-        s = self._engine.stats
         if s.count == 0:
             return
 
