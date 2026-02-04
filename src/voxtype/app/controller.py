@@ -2,10 +2,8 @@
 
 The AppController is the central coordinator for foreground mode (CLI and Tray).
 It creates and manages:
-- Engine (STT, VAD, audio)
-- Adapter (HTTP server for OpenVIP)
+- Engine (STT, VAD, audio, HTTP server)
 - KeyboardBindingManager (hotkeys, shortcuts, device profiles)
-- Agent Registrar (agent discovery)
 
 CLI and Tray both:
 1. Create AppController(config)
@@ -20,7 +18,6 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from voxtype.adapters.openvip import OpenVIPAdapter
     from voxtype.app.bindings import KeyboardBindingManager
     from voxtype.config import Config
     from voxtype.core.engine import VoxtypeEngine
@@ -31,7 +28,7 @@ logger = logging.getLogger(__name__)
 class AppController:
     """Application controller for foreground mode.
 
-    Manages the lifecycle of engine, adapter, and input bindings.
+    Manages the lifecycle of engine and input bindings.
     Exposes app-level commands (toggle_listening, next_agent, etc.)
     that are stateful and non-atomic.
 
@@ -50,7 +47,6 @@ class AppController:
         """
         self._config = config
         self._engine: VoxtypeEngine | None = None
-        self._adapter: OpenVIPAdapter | None = None
         self._bindings: KeyboardBindingManager | None = None
         self._logger: Any = None  # JSONLLogger
         self._running = False
@@ -70,53 +66,28 @@ class AppController:
         """Start the application.
 
         Creates and starts:
-        1. Engine (loads models)
-        2. Adapter (HTTP server)
-        3. KeyboardBindingManager (hotkeys, shortcuts) - if with_bindings=True
-        4. Agent Registrar (if agent mode)
+        1. Engine (loads models, starts HTTP server in agent mode)
+        2. KeyboardBindingManager (hotkeys, shortcuts) - if with_bindings=True
 
         Args:
             start_listening: If True, start listening immediately.
             mode: "foreground" or "daemon".
             with_bindings: If True, start keyboard bindings (foreground only).
         """
-        from voxtype.adapters.openvip import OpenVIPAdapter
         from voxtype.app.bindings import KeyboardBindingManager
         from voxtype.core.engine import create_engine
         from voxtype.core.events import EngineEvents
 
-        # Create event handler that updates adapter state
-        adapter_ref: list[OpenVIPAdapter | None] = [None]
         engine_ref: list[VoxtypeEngine | None] = [None]
         config = self._config  # Capture for closure
 
         class ControllerEvents(EngineEvents):
-            """Event handler that forwards events to adapter."""
-
-            def on_vad_loading(self) -> None:
-                if adapter_ref[0]:
-                    adapter_ref[0]._update_loading("stt", "done")
-                    adapter_ref[0]._update_loading("vad", "loading")
-
-            def on_transcription(self, result: Any) -> None:
-                if adapter_ref[0] and hasattr(result, "text"):
-                    adapter_ref[0].state.stt.last_text = result.text
+            """Event handler for audio feedback and logging."""
 
             def on_state_change(self, old: Any, new: Any, trigger: str) -> None:
                 from voxtype.core.state import AppState
 
-                if adapter_ref[0]:
-                    if new == AppState.LISTENING:
-                        adapter_ref[0].state.stt.state = "listening"
-                    elif new == AppState.OFF:
-                        adapter_ref[0].state.stt.state = "idle"
-                    elif new == AppState.RECORDING:
-                        adapter_ref[0].state.stt.state = "recording"
-                    elif new == AppState.TRANSCRIBING:
-                        adapter_ref[0].state.stt.state = "transcribing"
-
                 # Play beep if audio feedback enabled
-                # Only beep on OFF → LISTENING, not TRANSCRIBING → LISTENING
                 if config.audio.audio_feedback:
                     from voxtype.audio.beep import (
                         DEFAULT_SOUND_START,
@@ -167,31 +138,13 @@ class AppController:
         )
         engine_ref[0] = self._engine
 
-        # 2. Create adapter
-        self._adapter = OpenVIPAdapter(self._engine, self._config)
-        adapter_ref[0] = self._adapter
-
-        # 3. Start adapter (HTTP server)
-        self._adapter.state.mode = mode
-        self._adapter.start()
-
-        # 4. Setup loading state for progress tracking
-        self._adapter.setup_loading_state()
-
-        # 5. Initialize engine (load models)
+        # 3. Initialize engine (load models)
         self._engine.init_components(headless=True)
 
-        # 6. Start engine runtime
+        # 4. Start engine runtime (includes HTTP server if agent mode)
         self._engine.start_runtime(start_listening=start_listening)
 
-        # 7. Mark loading complete
-        self._adapter.mark_loading_complete()
-        self._adapter.update_engine_state(
-            listening=start_listening,
-            hotkey_bound=self._engine._hotkey is not None,
-        )
-
-        # 8. Create and start keyboard bindings (foreground only)
+        # 5. Create and start keyboard bindings (foreground only)
         if with_bindings:
             self._bindings = KeyboardBindingManager(self, self._config)
             self._bindings.start()
@@ -218,12 +171,10 @@ class AppController:
             self._bindings.stop()
             self._bindings = None
 
-        # Stop adapter (stops engine too)
-        if self._adapter:
-            self._adapter.stop()
-            self._adapter = None
-
-        self._engine = None
+        # Stop engine (includes HTTP server shutdown)
+        if self._engine:
+            self._engine.stop()
+            self._engine = None
 
         # Close logger
         if self._logger:
@@ -236,17 +187,17 @@ class AppController:
         logger.info("AppController stopped")
 
     def run(self) -> None:
-        """Run the adapter main loop (blocking).
+        """Run the engine main loop (blocking).
 
         Call this after start() to keep the process alive.
         """
-        if self._adapter:
-            self._adapter.run(start_listening=False)
+        if self._engine:
+            self._engine.run()
 
     def request_shutdown(self) -> None:
         """Request graceful shutdown."""
-        if self._adapter:
-            self._adapter.request_shutdown()
+        if self._engine:
+            self._engine._running = False
         self._shutdown_event.set()
 
     def wait_for_shutdown(self, timeout: float | None = None) -> bool:
@@ -327,11 +278,6 @@ class AppController:
     def engine(self) -> VoxtypeEngine | None:
         """Get the engine instance."""
         return self._engine
-
-    @property
-    def adapter(self) -> OpenVIPAdapter | None:
-        """Get the adapter instance."""
-        return self._adapter
 
     @property
     def config(self) -> Config:
