@@ -55,10 +55,10 @@ class TranscriptionCompleteEvent(StateEvent):
 
 
 @dataclass(frozen=True)
-class TTSStartEvent(StateEvent):
+class PlayStartEvent(StateEvent):
     """TTS playback starting.
 
-    Each TTS start increments a counter. The tts_id is assigned by the controller
+    Each TTS start increments a counter. The play_id is assigned by the controller
     when the event is processed, not when it's created.
     """
 
@@ -66,15 +66,15 @@ class TTSStartEvent(StateEvent):
 
 
 @dataclass(frozen=True)
-class TTSCompleteEvent(StateEvent):
+class PlayCompleteEvent(StateEvent):
     """TTS playback finished.
 
-    The tts_id must match the ID assigned when TTSStartEvent was processed.
+    The play_id must match the ID assigned when PlayStartEvent was processed.
     If multiple TTS are playing concurrently, only the completion of the
     LAST started TTS will trigger state transition back to LISTENING.
     """
 
-    tts_id: int = 0  # Must match the ID from TTSStartEvent
+    play_id: int = 0  # Must match the ID from PlayStartEvent
 
 
 @dataclass(frozen=True)

@@ -12,9 +12,9 @@ from voxtype.adapters.openvip.messages import create_message
 from voxtype.core.events import (
     EngineEvents,
     InjectionResult,
+    PlayCompleteEvent,
+    PlayStartEvent,
     TranscriptionResult,
-    TTSCompleteEvent,
-    TTSStartEvent,
 )
 from voxtype.core.state import AppState
 
@@ -332,15 +332,15 @@ class VoxtypeApp(EngineEvents):
             threading.Thread(target=fn, daemon=True).start()
             return
 
-        tts_id = self._engine._controller.get_next_tts_id()
-        self._engine._controller.send(TTSStartEvent(text="", source="audio"))
+        play_id = self._engine._controller.get_next_play_id()
+        self._engine._controller.send(PlayStartEvent(text="", source="audio"))
 
         def _with_events() -> None:
             try:
                 fn()
             finally:
                 self._engine._controller.send(
-                    TTSCompleteEvent(tts_id=tts_id, source="audio")
+                    PlayCompleteEvent(play_id=play_id, source="audio")
                 )
 
         threading.Thread(target=_with_events, daemon=True).start()
