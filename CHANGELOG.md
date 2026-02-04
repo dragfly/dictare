@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.109.0] - 2026-02-04
+
+### Changed - SessionStats dataclass replaces individual stats properties
+
+- Added `SessionStats` frozen dataclass with: `chars`, `words`, `count`, `audio_seconds`, `transcription_seconds`, `injection_seconds`, `start_time`
+- Replaced 7 individual `stats_*` properties on VoxtypeEngine with single `engine.stats` property returning an immutable snapshot
+- Updated `VoxtypeApp` and `AppController` to use `engine.stats` object
+
 ## [2.108.0] - 2026-02-04
 
 ### Added - TTS speak methods in VoxtypeEngine

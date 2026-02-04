@@ -167,17 +167,18 @@ class TestVoxtypeEngineProperties:
         engine = VoxtypeEngine(config=config)
         assert engine.state == AppState.OFF
 
-    def test_stats_properties_initially_zero(self) -> None:
+    def test_stats_initially_zero(self) -> None:
         """Stats are zero initially."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
-        assert engine.stats_chars == 0
-        assert engine.stats_words == 0
-        assert engine.stats_count == 0
-        assert engine.stats_audio_seconds == 0.0
-        assert engine.stats_transcription_seconds == 0.0
-        assert engine.stats_injection_seconds == 0.0
-        assert engine.stats_start_time is None
+        s = engine.stats
+        assert s.chars == 0
+        assert s.words == 0
+        assert s.count == 0
+        assert s.audio_seconds == 0.0
+        assert s.transcription_seconds == 0.0
+        assert s.injection_seconds == 0.0
+        assert s.start_time is None
 
 
 class TestEventEmission:
