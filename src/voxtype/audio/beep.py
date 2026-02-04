@@ -3,16 +3,24 @@
 Provides bundled sound file paths and OS-level audio playback.
 Playback via afplay (macOS) / paplay/aplay (Linux) to avoid sounddevice conflicts.
 
-State management (PLAYING transition, mic muting) is handled by the caller
-(core/app.py or app/controller.py) using the shared TTS ID counter system.
+Key function:
+    play_audio(source, pause_mic, controller) - shared entry point for all playback.
+    - pause_mic=False: fire-and-forget on background thread.
+    - pause_mic=True: registers play_id, transitions to PLAYING state (mic muted),
+      plays audio, then sends PlayCompleteEvent to resume listening.
 """
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _SOUNDS_DIR = Path(__file__).parent / "sounds"
 
@@ -67,6 +75,71 @@ def play_sound_file_async(path: str | Path) -> None:
         path: Path to sound file (mp3, wav, etc.)
     """
     threading.Thread(target=play_sound_file, args=(path,), daemon=True).start()
+
+
+def play_audio(
+    source: str | Path | Callable[[], None],
+    *,
+    pause_mic: bool = True,
+    controller: Any = None,
+) -> None:
+    """Play audio, optionally pausing the microphone during playback.
+
+    This is the shared entry point for all audio playback in voxtype.
+    Handles both file paths and arbitrary blocking callables (e.g., TTS).
+
+    Args:
+        source: Path to audio file, or blocking callable that produces audio.
+        pause_mic: If True and controller available, mute mic during playback
+            via the PLAYING state transition. If False, fire-and-forget.
+        controller: StateController instance. Required for pause_mic=True.
+    """
+    # Determine the blocking play function
+    fn: Callable[[], None]
+    if callable(source):
+        fn = source
+    else:
+        _path = source
+
+        def fn() -> None:  # type: ignore[misc]
+            play_sound_file(_path)
+
+
+    # Fire-and-forget if no mic pausing needed
+    if not pause_mic or controller is None:
+        threading.Thread(target=fn, daemon=True).start()
+        return
+
+    # Check if mic is already off (no need to pause)
+    from voxtype.core.state import AppState
+
+    if controller.state == AppState.OFF:
+        threading.Thread(target=fn, daemon=True).start()
+        return
+
+    # Pause mic: register play_id, transition to PLAYING, play, then complete
+    from voxtype.core.events import PlayCompleteEvent, PlayStartEvent
+
+    try:
+        play_id = controller.get_next_play_id()
+        controller.send(PlayStartEvent(text="", source="audio"))
+    except Exception:
+        logger.debug("Failed to register play_id, playing without mic pause")
+        threading.Thread(target=fn, daemon=True).start()
+        return
+
+    def _play_with_events() -> None:
+        try:
+            fn()
+        finally:
+            try:
+                controller.send(
+                    PlayCompleteEvent(play_id=play_id, source="audio")
+                )
+            except Exception:
+                pass
+
+    threading.Thread(target=_play_with_events, daemon=True).start()
 
 
 def warmup_audio() -> None:

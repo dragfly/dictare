@@ -122,49 +122,19 @@ class AppController:
                     from voxtype.audio.beep import (
                         DEFAULT_SOUND_START,
                         DEFAULT_SOUND_STOP,
-                        play_sound_file,
-                        play_sound_file_async,
+                        play_audio,
                     )
+
+                    eng = engine_ref[0]
+                    ctrl = eng._controller if eng else None
+                    pause = not config.audio.headphones_mode
 
                     if new == AppState.LISTENING and old == AppState.OFF:
                         path = config.audio.sound_start or str(DEFAULT_SOUND_START)
-                        eng = engine_ref[0]
-                        if eng and not config.audio.headphones_mode:
-                            # Play beep with mic muting (PLAYING transition)
-                            from voxtype.core.events import PlayCompleteEvent, PlayStartEvent
-
-                            try:
-                                play_id = eng._controller.get_next_play_id()
-                                eng._controller.send(
-                                    PlayStartEvent(text="", source="audio")
-                                )
-                            except Exception:
-                                play_id = None
-
-                            def _play_start(
-                                tid: int | None = play_id, p: str = path
-                            ) -> None:
-                                try:
-                                    play_sound_file(p)
-                                finally:
-                                    if tid is not None and eng:
-                                        try:
-                                            eng._controller.send(
-                                                PlayCompleteEvent(
-                                                    play_id=tid, source="audio"
-                                                )
-                                            )
-                                        except Exception:
-                                            pass
-
-                            threading.Thread(
-                                target=_play_start, daemon=True
-                            ).start()
-                        else:
-                            play_sound_file_async(path)
+                        play_audio(path, pause_mic=pause, controller=ctrl)
                     elif new == AppState.OFF:
                         path = config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
-                        play_sound_file_async(path)
+                        play_audio(path, pause_mic=False)
 
         # 1. Create logger for engine
         from voxtype import __version__
