@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-import threading
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from rich.console import Console
 
 from voxtype.adapters.openvip.messages import create_message
-from voxtype.core.events import (
-    EngineEvents,
-    InjectionResult,
-    PlayCompleteEvent,
-    PlayStartEvent,
-    TranscriptionResult,
-)
+from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
 from voxtype.core.state import AppState
 
 if TYPE_CHECKING:
@@ -311,39 +303,6 @@ class VoxtypeApp(EngineEvents):
 
         return default_phrases
 
-    def _play_audio(self, fn: Callable[[], None], *, pause_listening: bool = True) -> None:
-        """Play audio in background thread, optionally pausing listening.
-
-        Uses the TTS ID counter system: multiple concurrent plays only resume
-        listening when ALL finish. This prevents the mic from picking up our
-        own audio output.
-
-        Args:
-            fn: Blocking callable that plays audio (e.g., play_sound_file, subprocess TTS).
-            pause_listening: If True, transition to PLAYING state (mic muted).
-                Skipped in headphones_mode or when already OFF.
-        """
-        from voxtype.core.state import AppState
-
-        already_off = self._engine._controller.state == AppState.OFF
-
-        if not pause_listening or self.config.audio.headphones_mode or already_off:
-            threading.Thread(target=fn, daemon=True).start()
-            return
-
-        play_id = self._engine._controller.get_next_play_id()
-        self._engine._controller.send(PlayStartEvent(text="", source="audio"))
-
-        def _with_events() -> None:
-            try:
-                fn()
-            finally:
-                self._engine._controller.send(
-                    PlayCompleteEvent(play_id=play_id, source="audio")
-                )
-
-        threading.Thread(target=_with_events, daemon=True).start()
-
     def _speak_text(self, text: str) -> None:
         """Speak text using TTS with mic muting in speaker mode."""
         if not self.config.audio.audio_feedback:
@@ -351,6 +310,8 @@ class VoxtypeApp(EngineEvents):
 
         import subprocess
         import sys
+
+        from voxtype.audio.beep import play_audio
 
         phrases = self._load_tts_phrases()
         voice = phrases.get("voice", "Samantha")
@@ -369,7 +330,8 @@ class VoxtypeApp(EngineEvents):
             except Exception:
                 pass
 
-        self._play_audio(_do_tts, pause_listening=True)
+        pause = not self.config.audio.headphones_mode
+        play_audio(_do_tts, pause_mic=pause, controller=self._engine._controller)
 
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS."""
@@ -382,15 +344,17 @@ class VoxtypeApp(EngineEvents):
         if not self.config.audio.audio_feedback:
             return
 
-        from voxtype.audio.beep import DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, play_sound_file
+        from voxtype.audio.beep import DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, play_audio
+
+        pause = not self.config.audio.headphones_mode
+        ctrl = self._engine._controller
 
         if event == "listening_on":
             path = self.config.audio.sound_start or str(DEFAULT_SOUND_START)
-            self._play_audio(lambda: play_sound_file(path), pause_listening=True)
+            play_audio(path, pause_mic=pause, controller=ctrl)
         elif event == "listening_off":
             path = self.config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
-            # Already transitioning to OFF - no need to pause listening
-            self._play_audio(lambda: play_sound_file(path), pause_listening=False)
+            play_audio(path, pause_mic=False)
 
     def _display_session_stats(self) -> None:
         """Display session statistics on exit."""
