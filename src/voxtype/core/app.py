@@ -35,9 +35,7 @@ class VoxtypeApp(EngineEvents):
         config: Config,
         logger: JSONLLogger | None = None,
         agent_mode: bool = False,
-        manual_agents: list[str] | None = None,
         realtime: bool = False,
-        discovery_method: str = "polling",
     ) -> None:
         """Initialize the application.
 
@@ -45,15 +43,10 @@ class VoxtypeApp(EngineEvents):
             config: Application configuration.
             logger: Optional JSONL logger for structured logging.
             agent_mode: Enable agent mode (output to agents instead of keyboard).
-            manual_agents: List of agent IDs for manual registration.
-                          If None and agent_mode=True, uses auto-discovery.
             realtime: Enable realtime transcription feedback while speaking.
-            discovery_method: Agent discovery method - "polling" (reliable) or
-                            "watchdog" (fast but may miss events).
         """
         self.config = config
         self._realtime = realtime
-        self._manual_agents = manual_agents
         self._console = Console(
             force_terminal=None,
             force_interactive=None,
@@ -70,14 +63,12 @@ class VoxtypeApp(EngineEvents):
         # Use shared initialization logic (same as daemon)
         from voxtype.core.engine import create_engine
 
-        self._engine, self._registrar = create_engine(
+        self._engine = create_engine(
             config=config,
             events=self,
             logger=logger,
             agent_mode=agent_mode,
             realtime=realtime,
-            manual_agents=manual_agents,
-            discovery_method=discovery_method,
         )
 
     # -------------------------------------------------------------------------
@@ -467,17 +458,8 @@ class VoxtypeApp(EngineEvents):
         self._engine._running = True
         self._engine._stats_start_time = __import__("time").time()
 
-        # Start agent registrar if in agent mode, or keyboard agent if local mode
-        if self._registrar:
-            self._registrar.start()
-            # Print registered agent sockets
-            if self.config.verbose and self._engine.agents:
-                from voxtype.utils.platform import get_socket_dir
-                socket_dir = get_socket_dir()
-                for agent_id in self._engine.agents:
-                    socket_path = socket_dir / f"{agent_id}.sock"
-                    self._console.print(f"[dim]Socket: {socket_path}[/]")
-            # Update status panel with agents
+        # Update status panel with agents (if any connected via SSE)
+        if self._engine.agents:
             if self._status_panel:
                 self._status_panel.update_agents(self._engine.agents)
         else:
@@ -556,10 +538,6 @@ class VoxtypeApp(EngineEvents):
             self._sse.stop()
             self._sse = None
 
-        # Stop agent registrar or keyboard agent
-        if self._registrar:
-            self._registrar.stop()
-            self._registrar = None
         # Note: KeyboardAgent lifecycle is managed by engine.stop()
 
         # Stop engine

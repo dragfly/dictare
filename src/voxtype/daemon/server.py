@@ -76,9 +76,6 @@ class DaemonServer:
         self._engine_thread: threading.Thread | None = None
         self._engine_lock = threading.Lock()
 
-        # Agent registrar for discovering agents
-        self._registrar = None
-
         # Output mode from config (load eagerly for status display)
         from voxtype.config import load_config
         config = load_config()
@@ -295,7 +292,7 @@ class DaemonServer:
 
         # Use shared initialization logic (same as CLI voxtype listen)
         # Note: hotkey disabled in daemon mode - macOS requires main thread for events
-        self._engine, self._registrar = create_engine(
+        self._engine = create_engine(
             config=config,
             events=DaemonEvents(),  # type: ignore[arg-type]
             hotkey_enabled=False,
@@ -313,10 +310,6 @@ class DaemonServer:
         # Wait for engine ready signal (with timeout)
         if not engine_ready.wait(timeout=60.0):
             raise TimeoutError("Engine failed to initialize within 60 seconds")
-
-        # Start agent discovery after engine is ready
-        if self._registrar:
-            self._registrar.start()
 
         # Update state based on engine state
         if self._engine:

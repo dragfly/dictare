@@ -103,7 +103,6 @@ class Engine:
 
         # Services (initialized on demand)
         self._stt_service: STTService | None = None
-        self._registrar: Any = None  # Agent registrar
 
         # Transport
         self._http_server: HTTPServer | None = None
@@ -530,7 +529,7 @@ class Engine:
 
         # Create STT service (reuses existing VoxtypeEngine)
         events = STTEventHandler(self)
-        self._stt_service, self._registrar = create_engine(
+        self._stt_service = create_engine(
             config=self._config,
             events=events,
             agent_mode=(self._config.output.mode == "agents"),
@@ -550,9 +549,7 @@ class Engine:
             self.state.loading.active = False
         self.state.stt.model_loaded = True
 
-        # Start agent discovery (if in agent mode)
-        if self._registrar is not None:
-            self._registrar.start()
+        # In agent mode, agents self-register via SSE connection
 
     def _update_model_loading(
         self, model_name: str, status: str

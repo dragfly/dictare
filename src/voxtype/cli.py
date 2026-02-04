@@ -539,9 +539,7 @@ def listen(
         config,
         logger=logger,
         agent_mode=agent_mode,
-        manual_agents=manual_agents,  # None = auto-discovery, list = manual
         realtime=realtime,
-        discovery_method=discovery_method,
     )
 
     # Create live status panel (will be started after loading)

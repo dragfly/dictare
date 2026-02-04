@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.4] - 2026-02-04
+
+### Changed - Simplify create_engine(), remove registrar
+
+- `create_engine()` now returns `VoxtypeEngine` directly (was tuple `(engine, registrar)`)
+- Removed `manual_agents` and `discovery_method` parameters — agents self-register via SSE
+- Updated all callers: `app/controller.py`, `core/app.py`, `daemon/server.py`, `engine/engine.py`
+- Removed `_registrar` field from `AppController`, `DaemonServer`, `Engine`
+- Simplified `VoxtypeApp.__init__()` — removed unused `manual_agents`, `discovery_method` params
+
 ## [3.0.0-alpha.3] - 2026-02-04
 
 ### Added - SSEAgent and HTTP server integration in engine
