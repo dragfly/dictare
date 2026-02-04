@@ -87,6 +87,7 @@ Issues = "https://github.com/dragfly/voxtype/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/voxtype"]
+artifacts = ["*.mp3"]
 
 [tool.hatch.version]
 path = "src/voxtype/__init__.py"
