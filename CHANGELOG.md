@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.106.0] - 2026-02-04
+
+### Changed - Submit filter: remove single-word triggers, add last-word-only notation
+
+- Removed all single-word submit triggers from defaults (too many false positives)
+- Kept only multi-word triggers with "ok" prefix (e.g., `["ok", "invia"]`, `["ok", "send"]`)
+- Added last-word-only notation: `["vai."]` — trailing "." means trigger fires only if it's the very last word of the transcription
+- Binary matching for last-word patterns: confidence 1.0 if last word matches, no match otherwise
+- Added `["vai."]` as Italian last-word-only trigger
+
 ## [2.105.0] - 2026-02-04
 
 ### Changed - Rename TTS ID system to Play ID
