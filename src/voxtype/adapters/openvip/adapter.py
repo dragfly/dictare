@@ -572,6 +572,11 @@ class OpenVIPAdapter:
         from voxtype.utils.stats import get_model_load_time
 
         stt_model_id = self._get_stt_model_id()
+
+        # Set model info early so UI shows it during loading
+        self.state.stt.model_name = self._config.stt.model
+        self.state.stt.language = self._config.stt.language
+
         self.state.loading = LoadingState(
             active=True,
             models=[
@@ -599,8 +604,6 @@ class OpenVIPAdapter:
         self._update_loading("vad", "done")
         self.state.loading.active = False
         self.state.stt.model_loaded = True
-        self.state.stt.model_name = self._config.stt.model
-        self.state.stt.language = self._config.stt.language
 
     def update_engine_state(self, *, listening: bool = False, hotkey_bound: bool = False) -> None:
         """Update adapter state based on engine state.

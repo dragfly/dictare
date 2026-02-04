@@ -415,6 +415,10 @@ class Engine:
         stt_model_id = self._get_stt_model_id()
         vad_model_id = "silero-vad"
 
+        # Set model info early so UI shows it during loading
+        self.state.stt.model_name = self._config.stt.model
+        self.state.stt.language = self._config.stt.language
+
         # Create loading state with estimated times
         self.state.loading = LoadingState(
             active=True,
@@ -545,8 +549,6 @@ class Engine:
         if self.state.loading:
             self.state.loading.active = False
         self.state.stt.model_loaded = True
-        self.state.stt.model_name = self._config.stt.model
-        self.state.stt.language = self._config.stt.language
 
         # Start agent discovery (if in agent mode)
         if self._registrar is not None:
