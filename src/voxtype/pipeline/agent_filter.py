@@ -218,15 +218,28 @@ class AgentFilter:
                 },
             )
 
-            # Remove trigger and agent name from text
-            cleaned_text = self._remove_pattern_from_text(text, match, tokens)
+            # Get text before the trigger
+            text_before = self._remove_pattern_from_text(text, match, tokens)
 
-            # Create new message with agent switch flag
-            new_message = message.copy()
-            new_message["text"] = cleaned_text
-            new_message["x_agent_switch"] = match.agent_id
+            # Build output messages
+            output_messages = []
 
-            return FilterResult.augmented(new_message)
+            # Message 1: text before trigger (if any) - sent to CURRENT agent
+            if text_before.strip():
+                msg_before = message.copy()
+                msg_before["text"] = text_before
+                # No x_agent_switch - goes to current agent
+                output_messages.append(msg_before)
+
+            # Message 2: empty text with switch flag - triggers switch, nothing sent
+            switch_msg = message.copy()
+            switch_msg["text"] = ""
+            switch_msg["x_agent_switch"] = match.agent_id
+            # Remove visual_newline - switch-only message shouldn't newline
+            switch_msg.pop("x_visual_newline", None)
+            output_messages.append(switch_msg)
+
+            return FilterResult.consumed(output_messages)
 
         return FilterResult.passed(message)
 

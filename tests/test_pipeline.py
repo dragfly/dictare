@@ -506,30 +506,38 @@ class TestAgentFilterDetection:
     """Test AgentFilter agent switch detection."""
 
     def test_exact_match(self) -> None:
-        """Exact agent name match is detected."""
+        """Exact agent name match produces two messages."""
         f = AgentFilter(agent_ids=["voxtype", "koder"], subscribe_to_events=False)
         msg = {"text": "fammi vedere il codice agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        assert result.messages[0]["x_agent_switch"] == "voxtype"
+        assert result.action == FilterAction.CONSUME
+        # Two messages: text before trigger, then switch command
+        assert len(result.messages) == 2
+        # First message: text without trigger (no switch flag)
+        assert "x_agent_switch" not in result.messages[0]
         assert "agent" not in result.messages[0]["text"].lower()
         assert "voxtype" not in result.messages[0]["text"].lower()
+        # Second message: empty text with switch flag
+        assert result.messages[1]["x_agent_switch"] == "voxtype"
+        assert result.messages[1]["text"] == ""
 
     def test_phonetic_match_koder_coder(self) -> None:
         """Phonetic match: 'coder' matches 'koder'."""
         f = AgentFilter(agent_ids=["koder", "voxtype"], subscribe_to_events=False)
         msg = {"text": "questo bug agent coder"}  # Heard as "coder"
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        assert result.messages[0]["x_agent_switch"] == "koder"
+        assert result.action == FilterAction.CONSUME
+        assert len(result.messages) == 2
+        assert result.messages[1]["x_agent_switch"] == "koder"
 
     def test_phonetic_match_koder_quant(self) -> None:
         """Phonetic match: 'quant' matches 'koder'."""
         f = AgentFilter(agent_ids=["koder", "voxtype"], subscribe_to_events=False)
         msg = {"text": "questo bug agent quant"}  # Heard as "quant"
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        assert result.messages[0]["x_agent_switch"] == "koder"
+        assert result.action == FilterAction.CONSUME
+        assert len(result.messages) == 2
+        assert result.messages[1]["x_agent_switch"] == "koder"
 
     def test_italian_agente_trigger(self) -> None:
         """Italian 'agente' trigger is detected when configured."""
@@ -540,15 +548,18 @@ class TestAgentFilterDetection:
         )
         msg = {"text": "fammi vedere agente voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        assert result.messages[0]["x_agent_switch"] == "voxtype"
+        assert result.action == FilterAction.CONSUME
+        assert len(result.messages) == 2
+        assert result.messages[1]["x_agent_switch"] == "voxtype"
 
     def test_case_insensitive(self) -> None:
         """Agent matching is case insensitive."""
         f = AgentFilter(agent_ids=["VoxType"], subscribe_to_events=False)
         msg = {"text": "agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == FilterAction.CONSUME
+        # Only switch message when trigger is at start (no text before)
+        assert len(result.messages) == 1
         assert result.messages[0]["x_agent_switch"] == "VoxType"
 
     def test_no_match_below_threshold(self) -> None:
@@ -565,8 +576,10 @@ class TestAgentFilterDetection:
         f = AgentFilter(agent_ids=["koder", "quant-analysis"], subscribe_to_events=False)
         msg = {"text": "agent coder"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == FilterAction.CONSUME
         # koder should match better than quant-analysis
+        # Only switch message (no text before trigger)
+        assert len(result.messages) == 1
         assert result.messages[0]["x_agent_switch"] == "koder"
 
     def test_trigger_in_middle_not_detected(self) -> None:
@@ -578,14 +591,18 @@ class TestAgentFilterDetection:
         assert result.action == FilterAction.PASS
 
     def test_text_cleaned_after_match(self) -> None:
-        """Text is cleaned up after agent switch match."""
+        """Text before trigger becomes first message, switch is second."""
         f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         msg = {"text": "questo è il codice agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
-        # Should remove "agent voxtype" from end
-        cleaned = result.messages[0]["text"]
-        assert cleaned == "questo è il codice"
+        assert result.action == FilterAction.CONSUME
+        assert len(result.messages) == 2
+        # First message: text before trigger
+        assert result.messages[0]["text"] == "questo è il codice"
+        assert "x_agent_switch" not in result.messages[0]
+        # Second message: switch command
+        assert result.messages[1]["text"] == ""
+        assert result.messages[1]["x_agent_switch"] == "voxtype"
 
     def test_box_type_matches_voxtype(self) -> None:
         """'box type' (two words) matches 'voxtype' - handles Whisper space insertion."""
@@ -597,8 +614,9 @@ class TestAgentFilterDetection:
         # "box" vs "voxtype": phonetic B vs V (different), edit distance 4/7
         # This is a tough case - may not match well
         # Let's see if it passes with 0.5 threshold
-        if result.action == FilterAction.AUGMENT:
-            assert result.messages[0]["x_agent_switch"] == "voxtype"
+        if result.action == FilterAction.CONSUME:
+            # Should only have switch message (no text before)
+            assert result.messages[-1]["x_agent_switch"] == "voxtype"
 
 class TestAgentFilterWithPipeline:
     """Test AgentFilter integration with Pipeline."""
@@ -658,7 +676,7 @@ class TestAgentFilterEventBus:
 
         # Now should match
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == FilterAction.CONSUME
         assert result.messages[0]["x_agent_switch"] == "voxtype"
 
     def test_agent_removed_via_event(self) -> None:
@@ -672,7 +690,7 @@ class TestAgentFilterEventBus:
         # Should match voxtype
         msg = {"text": "agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == FilterAction.CONSUME
 
         # Remove voxtype
         bus.publish("agent.unregistered", agent_id="voxtype")
@@ -684,7 +702,7 @@ class TestAgentFilterEventBus:
         # koder should still work
         msg = {"text": "agent koder"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == FilterAction.CONSUME
 
     def test_no_subscription_when_disabled(self) -> None:
         """Filter doesn't subscribe when subscribe_to_events=False."""
