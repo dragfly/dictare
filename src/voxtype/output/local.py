@@ -20,9 +20,7 @@ logger = logging.getLogger(__name__)
 class LocalReceiver:
     """Receives OpenVIP messages from in-memory queue and injects via keyboard.
 
-    This provides the same architecture as socket-based agents but for local mode:
-    - Engine produces OpenVIP messages
-    - LocalReceiver consumes them and injects via keyboard
+    Receives OpenVIP messages from the engine and injects via keyboard.
 
     This allows a uniform message-based architecture regardless of transport.
 

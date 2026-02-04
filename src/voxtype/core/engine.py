@@ -660,9 +660,7 @@ class VoxtypeEngine:
 
         Uses OpenVIP message format - each agent handles its own transport:
         - KeyboardAgent: simulates keystrokes
-        - SocketAgent: sends via Unix socket
-        - SSEAgent: sends via Server-Sent Events
-        - WebhookAgent: sends via HTTP POST
+        - SSEAgent: sends via Server-Sent Events (OpenVIP HTTP server)
 
         Message processing:
         1. Build initial message with auto_enter setting

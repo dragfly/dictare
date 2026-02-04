@@ -3,10 +3,7 @@
 An Agent is a destination for OpenVIP messages. Different agent types
 handle different transports:
 - KeyboardAgent: simulates keystrokes locally
-- SocketAgent: sends via Unix socket to local process
-- SSEAgent: sends via Server-Sent Events to remote client
-- WebhookAgent: sends via HTTP POST to webhook URL
-- WebSocketAgent: sends via WebSocket to remote client
+- SSEAgent: sends via Server-Sent Events (OpenVIP HTTP server)
 
 The engine doesn't know about transports - it just calls agent.send().
 """
