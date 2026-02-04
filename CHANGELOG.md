@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.6] - 2026-02-04
+
+### Changed - Update CLI and agent mux to use SSE
+
+- Rewrote agent mux IPC: replaced file/socket-based communication with SSE client
+- Added `_read_from_sse()` — connects to engine HTTP server to receive OpenVIP messages
+- Removed `_read_from_file()`, `_read_from_socket()`, and related helper functions
+- Added `--server` option to `voxtype agent` command for specifying engine HTTP URL
+- SSE connection automatically registers the agent with the engine (no file/socket setup)
+- Exponential backoff retry on connection failure
+- Removed `--agent` (manual agent list) and `--discovery` options from `voxtype listen`
+- `--agents` now means "start HTTP server, agents connect via SSE"
+- Updated help text and docstrings for SSE-based architecture
+
 ## [3.0.0-alpha.5] - 2026-02-04
 
 ### Changed - Simplify AppController, remove adapter dependency

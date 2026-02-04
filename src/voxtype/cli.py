@@ -412,20 +412,8 @@ def listen(
     ] = False,
     agents: Annotated[
         bool,
-        typer.Option("--agents", "-A", help="Agent mode - sends to socket agents (auto-discovery)"),
+        typer.Option("--agents", "-A", help="Agent mode - starts HTTP server, agents connect via SSE"),
     ] = False,
-    agent: Annotated[
-        list[str] | None,
-        typer.Option("--agent", help="Register specific agent(s) manually (can be repeated)"),
-    ] = None,
-    discovery_method: Annotated[
-        str,
-        typer.Option(
-            "--discovery",
-            "-D",
-            help="Agent discovery method: polling (reliable, 1s delay) or watchdog (fast, may miss events)",
-        ),
-    ] = "polling",
     typing_delay: Annotated[
         int | None,
         typer.Option("--typing-delay", help="Delay between keystrokes in ms"),
@@ -464,27 +452,26 @@ def listen(
     Requires --keyboard or --agents:
 
         voxtype listen --keyboard    # Types what you say
-        voxtype listen --agents      # Sends to socket agents
+        voxtype listen --agents      # Starts HTTP server, agents connect via SSE
 
     Example with agent:
 
-        # Terminal 1: Start the agent
-        voxtype agent claude -- claude
-
-        # Terminal 2: Listen in agent mode
+        # Terminal 1: Listen in agent mode
         voxtype listen --agents
+
+        # Terminal 2: Start the agent (connects via SSE)
+        voxtype agent claude -- claude
 
     For background mode, use: voxtype daemon start
     """
     # Validate: require --keyboard or --agents (mutually exclusive)
-    has_agents = agents or agent is not None
-    if not keyboard and not has_agents:
+    if not keyboard and not agents:
         console.print("[red]Error: Must specify --keyboard or --agents[/]")
         console.print("[dim]Examples:[/]")
         console.print("[dim]  voxtype listen --keyboard    # Types what you say[/]")
-        console.print("[dim]  voxtype listen --agents      # Sends to socket agents[/]")
+        console.print("[dim]  voxtype listen --agents      # Starts HTTP server for agents[/]")
         raise typer.Exit(1)
-    if keyboard and has_agents:
+    if keyboard and agents:
         console.print("[red]Error: Cannot use --keyboard with --agents[/]")
         raise typer.Exit(1)
 
@@ -519,13 +506,8 @@ def listen(
         # macOS doesn't have ScrollLock, use Right Command instead
         config.hotkey.key = "KEY_RIGHTMETA"
 
-    # Determine agent mode and parse agent names
-    # --agents → auto-discovery
-    # --agent foo --agent bar → manual with those names
-    manual_agents: list[str] | None = agent if agent else None
-    agent_mode = agents or manual_agents is not None  # Explicit from CLI, no config fallback
-
     # Update config.output.mode to match CLI flag (overrides config file)
+    agent_mode = agents
     config.output.mode = "agents" if agent_mode else "keyboard"
 
     # Lazy import to speed up CLI
@@ -1097,7 +1079,7 @@ def engine_start(
     ] = False,
     agents: Annotated[
         bool,
-        typer.Option("--agents", "-A", help="Agent mode - sends to socket agents"),
+        typer.Option("--agents", "-A", help="Agent mode - starts HTTP server for SSE agents"),
     ] = False,
 ) -> None:
     """Start the VoxType engine.
@@ -1120,7 +1102,7 @@ def engine_start(
         console.print("[red]Error: Must specify --keyboard or --agents[/]")
         console.print("[dim]Examples:[/]")
         console.print("[dim]  voxtype engine start --keyboard    # Types what you say[/]")
-        console.print("[dim]  voxtype engine start --agents      # Sends to socket agents[/]")
+        console.print("[dim]  voxtype engine start --agents      # Starts HTTP server for agents[/]")
         raise typer.Exit(1)
     if keyboard and agents:
         console.print("[red]Error: Cannot use --keyboard with --agents[/]")
@@ -2138,18 +2120,23 @@ def agent(
         bool,
         typer.Option("--verbose", "-v", help="Log full text in session file (not truncated)"),
     ] = False,
+    server: Annotated[
+        str,
+        typer.Option("--server", "-s", help="Engine HTTP server URL"),
+    ] = "http://127.0.0.1:8765",
 ) -> None:
-    """Run a command with voxtype voice input via OpenVIP.
+    """Run a command with voxtype voice input via OpenVIP SSE.
 
-    Listens on a Unix socket for OpenVIP messages from 'voxtype listen --agents'.
+    Connects to the engine HTTP server via SSE to receive voice transcriptions.
+    The SSE connection automatically registers the agent with the engine.
 
     Example:
 
-        # Terminal 1: Start the agent wrapper
-        voxtype agent claude -- claude
+        # Terminal 1: Start listening with agent mode
+        voxtype listen --agents
 
-        # Terminal 2: Send voice input via OpenVIP
-        voxtype listen --agents claude
+        # Terminal 2: Start the agent wrapper
+        voxtype agent claude -- claude
     """
     # Show help if no agent_id
     if agent_id is None:
@@ -2176,7 +2163,7 @@ def agent(
         console.print("[dim]Example: voxtype agent claude -- claude[/]")
         raise typer.Exit(1)
 
-    exit_code = run_agent(agent_id, command, quiet=quiet, verbose=verbose)
+    exit_code = run_agent(agent_id, command, quiet=quiet, verbose=verbose, base_url=server)
     raise typer.Exit(exit_code)
 
 
