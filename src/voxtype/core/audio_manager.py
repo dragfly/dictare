@@ -127,7 +127,7 @@ class AudioManager:
         self._vad = SileroVAD(
             threshold=0.5,
             min_silence_ms=self._config.silence_ms,
-            min_speech_ms=250,
+            min_speech_ms=self._config.min_speech_ms,
         )
         # Pre-load the model now (headless mode skips progress indicator)
         self._vad._load_model(with_indicator=not headless, headless=headless)
@@ -140,6 +140,7 @@ class AudioManager:
             max_speech_seconds=self._config.max_duration,
             on_max_speech=on_max_speech,
             on_partial_audio=on_partial_audio,
+            pre_buffer_ms=self._config.pre_buffer_ms,
         )
 
     def set_reconnect_callbacks(
