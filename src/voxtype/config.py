@@ -44,6 +44,14 @@ class AudioConfig(BaseModel):
         default=150,
         description="Minimum speech duration in milliseconds before VAD triggers",
     )
+    sound_start: str | None = Field(
+        default=None,
+        description="Custom sound file for listening start (default: bundled up-beep.mp3)",
+    )
+    sound_stop: str | None = Field(
+        default=None,
+        description="Custom sound file for listening stop (default: bundled down-beep.mp3)",
+    )
 
 class STTConfig(BaseModel):
     """Speech-to-text configuration."""
@@ -633,6 +641,10 @@ audio_feedback = true            # Play beep on listening mode toggle
 silence_ms = 1200                # VAD silence duration to end speech (ms)
 # headphones_mode = false        # Set to true when using headphones (TTS won't pause listening)
 # max_duration = 60              # Max recording duration in seconds
+
+# Custom sound files (absolute paths to mp3/wav, default: bundled beeps)
+# sound_start = "/path/to/my-start.mp3"
+# sound_stop = "/path/to/my-stop.mp3"
 
 # Advanced VAD tuning
 # pre_buffer_ms = 640            # Audio captured before VAD triggers (increase if speech start is clipped)

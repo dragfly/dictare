@@ -87,6 +87,7 @@ class AppController:
 
         # Create event handler that updates adapter state
         adapter_ref: list[OpenVIPAdapter | None] = [None]
+        engine_ref: list[VoxtypeEngine | None] = [None]
         config = self._config  # Capture for closure
 
         class ControllerEvents(EngineEvents):
@@ -117,12 +118,37 @@ class AppController:
                 # Play beep if audio feedback enabled
                 # Only beep on OFF → LISTENING, not TRANSCRIBING → LISTENING
                 if config.audio.audio_feedback:
-                    from voxtype.audio.beep import play_beep_start, play_beep_stop
+                    from voxtype.audio.beep import (
+                        DEFAULT_SOUND_START,
+                        DEFAULT_SOUND_STOP,
+                        play_sound_file,
+                        play_sound_file_async,
+                    )
+                    from voxtype.core.events import TTSCompleteEvent, TTSStartEvent
 
                     if new == AppState.LISTENING and old == AppState.OFF:
-                        play_beep_start()
+                        path = config.audio.sound_start or str(DEFAULT_SOUND_START)
+                        eng = engine_ref[0]
+                        if eng and not config.audio.headphones_mode:
+                            tts_id = eng._controller.get_next_tts_id()
+                            eng._controller.send(TTSStartEvent(text="", source="audio"))
+
+                            def _play_start(tid: int = tts_id, p: str = path) -> None:
+                                try:
+                                    play_sound_file(p)
+                                finally:
+                                    eng._controller.send(
+                                        TTSCompleteEvent(tts_id=tid, source="audio")
+                                    )
+
+                            threading.Thread(
+                                target=_play_start, daemon=True
+                            ).start()
+                        else:
+                            play_sound_file_async(path)
                     elif new == AppState.OFF:
-                        play_beep_stop()
+                        path = config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
+                        play_sound_file_async(path)
 
         # 1. Create logger for engine
         from voxtype import __version__
@@ -149,6 +175,7 @@ class AppController:
             hotkey_enabled=True,
             logger=self._logger,
         )
+        engine_ref[0] = self._engine
 
         # 2. Create adapter
         self._adapter = OpenVIPAdapter(self._engine, self._config)

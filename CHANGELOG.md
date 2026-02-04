@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.104.0] - 2026-02-04
+
+### Changed - Audio feedback with mic muting and configurable sounds
+
+- Audio feedback now pauses listening (PLAYING state) during playback
+- Uses the same TTS ID counter system: mic resumes only when ALL sounds finish
+- Custom sound files configurable via `sound_start` / `sound_stop` in `[audio]` config
+- Shared `_play_audio()` method used by both beep feedback and TTS speech
+- Removed `sounds/` root directory from tracking (local staging only)
+
 ## [2.103.0] - 2026-02-04
 
 ### Changed - Clean audio feedback with bundled sound files
