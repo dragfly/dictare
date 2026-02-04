@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 import time
@@ -30,6 +31,8 @@ from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
 from voxtype.pipeline import AgentFilter, Pipeline, SubmitFilter
 from voxtype.stt.base import STTEngine
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from voxtype.config import Config
@@ -163,7 +166,7 @@ class VoxtypeEngine:
                 try:
                     handler(*args, **kwargs)
                 except Exception:
-                    pass  # Don't let UI errors crash the engine
+                    logger.exception(f"Error in event handler {event}")
 
     # -------------------------------------------------------------------------
     # Properties
