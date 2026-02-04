@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.100.7] - 2026-02-04
+
+### Fixed - Beep after every transcription
+
+Audio feedback beep was playing on every TRANSCRIBING → LISTENING transition.
+Now only plays on OFF → LISTENING (when user activates listening mode).
+
 ## [2.100.6] - 2026-02-04
 
 ### Added - Tests for message sending logic
