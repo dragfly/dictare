@@ -1,11 +1,11 @@
 """OpenVIP adapter - exposes VoxtypeEngine via OpenVIP protocol.
 
-OpenVIP (Open Voice Input Protocol) v1.0
+OpenVIP (Open Voice Interaction Protocol) v1.0
 See: https://open-voice-input.org
 
 This package contains:
 - adapter.py: OpenVIPAdapter class (HTTP + Unix socket server)
-- messages.py: OpenVIP message creation functions
+- messages.py: OpenVIP message creation functions (re-exports from core.messages)
 """
 
 from voxtype.adapters.openvip.adapter import OpenVIPAdapter
