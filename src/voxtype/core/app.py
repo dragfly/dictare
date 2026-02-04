@@ -280,64 +280,13 @@ class VoxtypeApp(EngineEvents):
     # UI-Only Methods
     # -------------------------------------------------------------------------
 
-    def _load_tts_phrases(self) -> dict:
-        """Load TTS phrases from config file or use defaults."""
-        import json
-        from pathlib import Path
-
-        default_phrases = {
-            "transcription_mode": "transcription mode",
-            "command_mode": "command mode",
-            "agent": "agent",
-            "voice": "Samantha",
-        }
-
-        phrases_path = Path.home() / ".config" / "voxtype" / "tts_phrases.json"
-        if phrases_path.exists():
-            try:
-                with open(phrases_path) as f:
-                    custom = json.load(f)
-                return {**default_phrases, **custom}
-            except Exception:
-                pass
-
-        return default_phrases
-
     def _speak_text(self, text: str) -> None:
-        """Speak text using TTS with mic muting in speaker mode."""
-        if not self.config.audio.audio_feedback:
-            return
-
-        import subprocess
-        import sys
-
-        from voxtype.audio.beep import play_audio
-
-        phrases = self._load_tts_phrases()
-        voice = phrases.get("voice", "Samantha")
-
-        def _do_tts() -> None:
-            try:
-                if sys.platform == "darwin":
-                    subprocess.run(["say", "-v", voice, text], capture_output=True, timeout=10)
-                else:
-                    for cmd in [["espeak-ng", text], ["espeak", text], ["spd-say", "-w", text]]:
-                        try:
-                            subprocess.run(cmd, capture_output=True, timeout=5)
-                            break
-                        except FileNotFoundError:
-                            continue
-            except Exception:
-                pass
-
-        pause = not self.config.audio.headphones_mode
-        play_audio(_do_tts, pause_mic=pause, controller=self._engine._controller)
+        """Speak text using TTS - delegates to engine."""
+        self._engine.speak_text(text)
 
     def _speak_agent(self, agent_name: str) -> None:
-        """Speak the agent name using TTS."""
-        phrases = self._load_tts_phrases()
-        agent_prefix = phrases.get("agent", "agent")
-        self._speak_text(f"{agent_prefix} {agent_name}")
+        """Speak agent name using TTS - delegates to engine."""
+        self._engine.speak_agent(agent_name)
 
     def _play_feedback(self, event: str) -> None:
         """Play audio feedback for state changes."""
