@@ -50,7 +50,6 @@ class AppController:
         self._config = config
         self._engine: VoxtypeEngine | None = None
         self._adapter: OpenVIPAdapter | None = None
-        self._registrar: Any = None  # AgentRegistrar
         self._bindings: KeyboardBindingManager | None = None
         self._logger: Any = None  # JSONLLogger
         self._running = False
@@ -158,7 +157,7 @@ class AppController:
         )
 
         # 2. Create engine with logger
-        self._engine, self._registrar = create_engine(
+        self._engine = create_engine(
             config=self._config,
             events=ControllerEvents(),
             agent_mode=(self._config.output.mode == "agents"),
@@ -191,11 +190,7 @@ class AppController:
             hotkey_bound=self._engine._hotkey is not None,
         )
 
-        # 8. Start agent registrar
-        if self._registrar:
-            self._registrar.start()
-
-        # 9. Create and start keyboard bindings (foreground only)
+        # 8. Create and start keyboard bindings (foreground only)
         if with_bindings:
             self._bindings = KeyboardBindingManager(self, self._config)
             self._bindings.start()
@@ -221,11 +216,6 @@ class AppController:
         if self._bindings:
             self._bindings.stop()
             self._bindings = None
-
-        # Stop registrar
-        if self._registrar:
-            self._registrar.stop()
-            self._registrar = None
 
         # Stop adapter (stops engine too)
         if self._adapter:
