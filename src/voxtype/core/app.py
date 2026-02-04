@@ -7,13 +7,11 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
-from voxtype.core.messages import create_message
 from voxtype.core.state import AppState
 
 if TYPE_CHECKING:
     from voxtype.config import Config
     from voxtype.logging.jsonl import JSONLLogger
-    from voxtype.output.sse import SSEServer
     from voxtype.ui.status import LiveStatusPanel
 
 
@@ -56,9 +54,6 @@ class VoxtypeApp(EngineEvents):
 
         # Live status panel (set in run())
         self._status_panel: LiveStatusPanel | None = None
-
-        # HTTP/SSE server (set in run() if configured)
-        self._sse: SSEServer | None = None
 
         # Use shared initialization logic (same as daemon)
         from voxtype.core.engine import create_engine
@@ -112,10 +107,6 @@ class VoxtypeApp(EngineEvents):
         if self._status_panel:
             self._status_panel.update_state(new.name)
 
-        # Send to SSE if running
-        if self._sse:
-            self._sse.send_state_change(old, new, trigger)
-
         # Play audio feedback
         if new == AppState.LISTENING and old == AppState.OFF:
             self._play_feedback("listening_on")
@@ -126,11 +117,6 @@ class VoxtypeApp(EngineEvents):
         """Handle transcription completion."""
         # Note: verbose debug and realtime text go to status panel
         # Don't print here - it corrupts the Live panel
-
-        # Send to SSE if running
-        if self._sse:
-            msg = create_message(result.text)
-            self._sse.send_message(msg)
 
     def on_injection(self, result: InjectionResult) -> None:
         """Handle text injection completion."""
@@ -158,10 +144,6 @@ class VoxtypeApp(EngineEvents):
         if self._status_panel:
             self._status_panel.update_current_agent(agent_name, index)
 
-        # Send to SSE if running
-        if self._sse:
-            self._sse.send_agent_change(agent_name, index)
-
         self._speak_agent(agent_name)
 
     def on_agents_changed(self, agents: list[str]) -> None:
@@ -178,19 +160,11 @@ class VoxtypeApp(EngineEvents):
             else:
                 self._console.print(f"[red]Error in {context}: {message}[/]")
 
-        # Send to SSE if running
-        if self._sse:
-            self._sse.send_error(message, context)
-
     def on_partial_transcription(self, text: str) -> None:
         """Handle partial transcription (realtime mode)."""
         # Update panel instead of printing (prevents breaking Rich Live)
         if self._status_panel:
             self._status_panel.update_partial(text)
-
-        # Send to SSE if running
-        if self._sse:
-            self._sse.send_partial_transcription(text)
 
     def on_recording_start(self) -> None:
         """Handle recording start."""
@@ -435,18 +409,6 @@ class VoxtypeApp(EngineEvents):
 
         # Note: agent sockets are printed after watcher starts (see below)
 
-        # Initialize HTTP/SSE server if enabled
-        if self.config.server.enabled:
-            from voxtype.output.sse import SSEServer
-
-            self._sse = SSEServer(
-                host=self.config.server.host,
-                port=self.config.server.port,
-                agent=self._engine.current_agent,
-            )
-            self._sse.start()
-            self._console.print(f"[dim]Server: {self._sse.url}[/]")
-
         # Initialize input manager
         self._init_input_manager()
 
@@ -532,11 +494,6 @@ class VoxtypeApp(EngineEvents):
         if self._status_panel:
             self._status_panel.stop()
             self._status_panel = None
-
-        # Stop SSE server
-        if self._sse:
-            self._sse.stop()
-            self._sse = None
 
         # Note: KeyboardAgent lifecycle is managed by engine.stop()
 

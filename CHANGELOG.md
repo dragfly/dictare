@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.7] - 2026-02-04
+
+### Removed - Obsolete adapter, file/socket agents, registrars, watchers
+
+- Deleted `adapters/openvip/adapter.py` (771 lines — old HTTP/SSE adapter)
+- Deleted `adapters/openvip/__init__.py`, `adapters/openvip/messages.py` (re-export shim)
+- Deleted `adapters/__init__.py` (empty package)
+- Deleted `agent/file.py` (FileAgent — replaced by SSEAgent)
+- Deleted `agent/socket.py` (SocketAgent — replaced by SSEAgent)
+- Deleted `agent/registrar.py` (ManualAgent/AutoDiscovery registrars — agents self-register via SSE)
+- Deleted `agent/watcher.py` (socket file discovery)
+- Deleted `agent/monitor.py` (folder monitoring with watchdog/polling)
+- Deleted `output/sse.py` (old stdlib HTTP SSE server — replaced by FastAPI)
+- Deleted `tests/test_sse.py` (tests for old SSE server)
+- Removed `watchdog` dependency from pyproject.toml
+- Removed old SSE server usage from `core/app.py`
+- Removed `discover_agents()` from `utils/platform.py`
+- Updated `output/__init__.py` to remove SSEServer export
+- Moved `get_pid_path` import in CLI from deleted adapter to `engine/engine.py`
+
 ## [3.0.0-alpha.6] - 2026-02-04
 
 ### Changed - Update CLI and agent mux to use SSE

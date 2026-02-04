@@ -1094,8 +1094,8 @@ def engine_start(
     In daemon mode, the engine preloads models but stays IDLE until activated
     via tray click, hotkey, or API call.
     """
-    from voxtype.adapters.openvip.adapter import get_pid_path
     from voxtype.app import AppController
+    from voxtype.engine.engine import get_pid_path
 
     # Validate: require --keyboard or --agents
     if not keyboard and not agents:
