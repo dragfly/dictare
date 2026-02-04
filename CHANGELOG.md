@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.9] - 2026-02-04
+
+### Changed - Config cleanup and dead code removal
+
+- Updated `ServerConfig` docstring: clarifies server is always on in agent mode, `enabled` only for keyboard mode
+- Updated `ServerConfig.enabled` description to reflect new semantics
+- Updated `ServerConfig.port` description to mention OpenVIP
+- Cleaned up stale socket/file agent references in docstrings:
+  - `agent/base.py`: removed SocketAgent, WebhookAgent, WebSocketAgent from transport list
+  - `core/engine.py`: removed SocketAgent, WebhookAgent from `_inject_text()` docstring
+  - `output/local.py`: removed socket-based agent reference
+  - `core/app.py`: removed stale "agent sockets" comment
+- Deleted dead code:
+  - `injection/socket.py` (SocketInjector — unused after socket agents removed)
+  - `injection/file.py` (FileInjector — unused after file agents removed)
+- Removed `TestFileInjectorRaceConditions` and `TestIntegrationRaceConditions` from test_race_conditions.py (referenced deleted FileInjector)
+
 ## [3.0.0-alpha.8] - 2026-02-04
 
 ### Added - Tests for new HTTP/SSE architecture
