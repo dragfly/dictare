@@ -89,7 +89,6 @@ class TrayApp:
     def __init__(self) -> None:
         self._icon: pystray.Icon | None = None
         self._state = "off"  # off, listening, loading
-        self._processing_mode = "transcription"  # transcription, command
         self._progress: int = 0  # 0-100, for loading state
         self._loading_stage: str = ""  # "STT" | "VAD" | ""
         self._targets: list[str] = []
@@ -97,7 +96,6 @@ class TrayApp:
 
         # Callbacks
         self._on_toggle_listening_cb: Callable[[], None] | None = None
-        self._on_toggle_processing_mode_cb: Callable[[], None] | None = None
         self._on_target_change: Callable[[str], None] | None = None
         self._on_output_mode_change: Callable[[str], None] | None = None
 
@@ -123,14 +121,13 @@ class TrayApp:
         """Create the tray menu."""
         import pystray
 
-        # Status line: state + processing mode
+        # Status line
         if self._state == "loading":
-            stage_text = f" {self._loading_stage}" if self._loading_stage else ""
-            status_text = f"Loading...{stage_text} ({self._progress}%)"
+            stage_text = f" {self._loading_stage}..." if self._loading_stage else ""
+            status_text = f"Loading{stage_text}"
         else:
             state_display = self._state.upper()  # OFF or LISTENING
-            mode_display = self._processing_mode.capitalize()  # Transcription or Command
-            status_text = f"{state_display} ({mode_display})"
+            status_text = state_display
 
         items = [
             pystray.MenuItem(f"Status: {status_text}", None, enabled=False),
@@ -145,16 +142,6 @@ class TrayApp:
         else:
             items.append(
                 pystray.MenuItem("Start Listening", self._on_toggle_listening)
-            )
-
-        # Processing mode toggle
-        if self._processing_mode == "transcription":
-            items.append(
-                pystray.MenuItem("Switch to Command Mode", self._on_toggle_processing_mode)
-            )
-        else:
-            items.append(
-                pystray.MenuItem("Switch to Transcription Mode", self._on_toggle_processing_mode)
             )
 
         items.append(pystray.Menu.SEPARATOR)
@@ -194,6 +181,10 @@ class TrayApp:
             )
 
         items.append(pystray.Menu.SEPARATOR)
+
+        # About (shows version)
+        from voxtype import __version__
+        items.append(pystray.MenuItem(f"voxtype v{__version__}", None, enabled=False))
 
         # Quit
         items.append(pystray.MenuItem("Quit", self._on_quit))
@@ -236,13 +227,6 @@ class TrayApp:
         if self._on_toggle_listening_cb:
             self._on_toggle_listening_cb()
 
-    def _on_toggle_processing_mode(
-        self, icon: pystray.Icon, item: pystray.MenuItem
-    ) -> None:
-        """Toggle processing mode (transcription <-> command)."""
-        if self._on_toggle_processing_mode_cb:
-            self._on_toggle_processing_mode_cb()
-
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Quit the application."""
         if self._icon:
@@ -269,7 +253,6 @@ class TrayApp:
     def set_state(
         self,
         state: str,
-        processing_mode: str = "transcription",
         progress: int = 0,
         loading_stage: str = "",
     ) -> None:
@@ -277,13 +260,11 @@ class TrayApp:
 
         Args:
             state: Current state ("off", "listening", "loading")
-            processing_mode: Current processing mode ("transcription", "command")
             progress: Loading progress 0-100 (only for loading state)
             loading_stage: What's loading ("STT", "VAD", "")
         """
         if state in ("off", "listening", "loading"):
             self._state = state
-            self._processing_mode = processing_mode
             self._progress = progress
             self._loading_stage = loading_stage
             self._update_icon()
@@ -306,10 +287,6 @@ class TrayApp:
     def on_toggle_listening(self, callback: Callable[[], None]) -> None:
         """Register callback for listening toggle."""
         self._on_toggle_listening_cb = callback
-
-    def on_toggle_processing_mode(self, callback: Callable[[], None]) -> None:
-        """Register callback for processing mode toggle."""
-        self._on_toggle_processing_mode_cb = callback
 
     def on_target_change(self, callback: Callable[[str], None]) -> None:
         """Register callback for target change."""
@@ -343,7 +320,6 @@ class TrayApp:
                         # Update all state from daemon
                         self.set_state(
                             state=response.state,
-                            processing_mode=response.processing_mode,
                             progress=response.progress,
                             loading_stage=response.loading_stage,
                         )
@@ -353,8 +329,9 @@ class TrayApp:
                                 response.available_agents,
                                 response.current_agent or "",
                             )
-                except Exception:
-                    pass  # Daemon not available yet
+                except Exception as e:
+                    import sys
+                    print(f"Tray poll error: {e}", file=sys.stderr)
 
                 time.sleep(0.5)
 
@@ -415,35 +392,59 @@ def main() -> None:
     if not is_daemon_running():
         print("Warning: Daemon is not running. Start it with 'voxtype daemon start'", file=sys.stderr)
 
-    # Connect tray callbacks to daemon client
+    # Connect tray callbacks to daemon client (all async to not block UI)
     def on_toggle_listening() -> None:
-        try:
-            response = client.toggle_listening()
-            if hasattr(response, "listening"):
-                if response.listening:
-                    app.start_status_polling()
-                else:
-                    app.stop_status_polling()
-        except Exception as e:
-            print(f"Error toggling listening: {e}", file=sys.stderr)
+        def do_toggle() -> None:
+            try:
+                client.toggle_listening()
+                # Polling will update the tray state
+            except Exception as e:
+                print(f"Error toggling listening: {e}", file=sys.stderr)
 
-    def on_toggle_processing_mode() -> None:
-        try:
-            response = client.toggle_processing_mode()
-            if hasattr(response, "processing_mode"):
-                app.set_state(app._state, processing_mode=response.processing_mode)
-        except Exception as e:
-            print(f"Error toggling processing mode: {e}", file=sys.stderr)
+        # Run in background thread to not block UI
+        threading.Thread(target=do_toggle, daemon=True).start()
 
     def on_output_mode_change(mode: str) -> None:
-        try:
-            client.set_mode(mode)
-        except Exception as e:
-            print(f"Error setting output mode: {e}", file=sys.stderr)
+        def do_change() -> None:
+            try:
+                client.set_mode(mode)
+            except Exception as e:
+                print(f"Error setting output mode: {e}", file=sys.stderr)
+
+        threading.Thread(target=do_change, daemon=True).start()
 
     app.on_toggle_listening(on_toggle_listening)
-    app.on_toggle_processing_mode(on_toggle_processing_mode)
     app.on_output_mode_change(on_output_mode_change)
+
+    # Start global hotkey listener (runs on main thread - works on macOS!)
+    # Hotkey press toggles listening via daemon
+    def start_hotkey_listener() -> None:
+        try:
+            from voxtype.config import load_config
+            from voxtype.hotkey.pynput_listener import PynputHotkeyListener
+            from voxtype.hotkey.tap_detector import TapDetector
+
+            config = load_config()
+            hotkey = PynputHotkeyListener(config.hotkey.key)
+
+            # Tap detector: single tap = toggle, double tap = switch agent
+            tap_detector = TapDetector(
+                threshold=0.3,
+                on_single_tap=on_toggle_listening,
+                on_double_tap=lambda: None,  # TODO: switch agent
+            )
+
+            hotkey.start(
+                on_press=tap_detector.on_key_down,
+                on_release=tap_detector.on_key_up,
+                on_other_key=tap_detector.on_other_key,
+            )
+            print(f"Hotkey registered: {config.hotkey.key}", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Could not register hotkey: {e}", file=sys.stderr)
+
+    # Start hotkey in background thread (pynput creates its own listener thread)
+    threading.Thread(target=start_hotkey_listener, daemon=True).start()
 
     # Start polling to sync state with daemon
     app.start_status_polling()

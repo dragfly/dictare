@@ -33,12 +33,15 @@ class MLXWhisperEngine(STTEngine):
     def load_model(
         self,
         model_size: str = "base",
+        *,
+        headless: bool = False,
         **kwargs,
     ) -> None:
         """Load the Whisper model.
 
         Args:
             model_size: Model size (tiny/base/small/medium/large-v3).
+            headless: If True, skip all console output (for Engine/daemon mode).
             **kwargs: Additional options (ignored for MLX).
         """
         self._model_path = MLX_MODELS.get(model_size, f"mlx-community/whisper-{model_size}")
@@ -55,16 +58,18 @@ class MLXWhisperEngine(STTEngine):
 
         # Check if model is already cached
         if self._is_model_cached(self._model_path):
-            # Model cached - load with progress indicator
+            # Model cached - load with progress indicator (headless skips UI)
             from voxtype.utils.loading import load_with_indicator
 
             load_with_indicator(
                 self._model_path,
                 "STT model",
                 load_model_fn,
+                headless=headless,
             )
         else:
             # Model not cached - download with nice Rich progress bar
+            # Note: download cannot be headless (user needs to see download progress)
             from voxtype.utils.hf_download import download_with_progress
 
             download_with_progress(

@@ -68,11 +68,12 @@ class SileroVAD(VADEngine):
         self._c: Any = None
         self._context: Any = None
 
-    def _load_model(self, with_indicator: bool = False) -> None:
+    def _load_model(self, with_indicator: bool = False, *, headless: bool = False) -> None:
         """Load the Silero VAD model.
 
         Args:
-            with_indicator: If True, show loading progress indicator.
+            with_indicator: If True, show loading progress indicator (ignored if headless).
+            headless: If True, skip all console output (for Engine/daemon mode).
         """
         if self._model is not None:
             return
@@ -82,13 +83,15 @@ class SileroVAD(VADEngine):
 
             return get_vad_model()
 
-        if with_indicator:
+        if with_indicator or headless:
+            # Use load_with_indicator for stats tracking, but headless mode suppresses UI
             from voxtype.utils.loading import load_with_indicator
 
             self._model = load_with_indicator(
                 "silero-vad",
                 "VAD model",
                 load_vad_fn,
+                headless=headless,
             )
         else:
             from faster_whisper.vad import get_vad_model
@@ -169,6 +172,7 @@ class StreamingVAD:
         on_max_speech: Callable[[], None] | None = None,
         on_partial_audio: Callable[[NDArray[np.float32]], None] | None = None,
         partial_interval_ms: int = 1000,
+        pre_buffer_ms: int = 640,
     ) -> None:
         """Initialize streaming VAD.
 
@@ -180,6 +184,7 @@ class StreamingVAD:
             on_max_speech: Called when max speech duration reached (for beep).
             on_partial_audio: Called periodically with accumulated audio (for realtime feedback).
             partial_interval_ms: Interval between partial audio callbacks (default 1000ms).
+            pre_buffer_ms: Pre-buffer duration in ms to capture audio before speech (default 640ms).
         """
         self.vad = vad
         self.on_speech_start = on_speech_start
@@ -199,7 +204,8 @@ class StreamingVAD:
 
         # Pre-buffer for capturing audio just before speech starts
         self._pre_buffer: list[NDArray[np.float32]] = []
-        self._pre_buffer_chunks = 10  # ~320ms at 512 samples/chunk
+        chunk_ms = SileroVAD.CHUNK_SIZE * 1000 // vad.sample_rate  # ~32ms
+        self._pre_buffer_chunks = max(1, pre_buffer_ms // chunk_ms)
 
     def process_chunk(self, chunk: NDArray[np.float32]) -> None:
         """Process an audio chunk (512 samples).

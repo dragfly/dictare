@@ -12,7 +12,14 @@ from voxtype.input.device import DeviceInputSource, DeviceProfile, HIDDeviceInpu
 from voxtype.input.keyboard import KeyBinding, KeyboardShortcutSource
 
 if TYPE_CHECKING:
-    from voxtype.commands.app_commands import AppCommands
+    from typing import Protocol
+
+    class CommandExecutor(Protocol):
+        """Protocol for command execution."""
+
+        def execute(self, name: str, args: dict | None = None) -> bool:
+            """Execute a command by name."""
+            ...
 
 class InputManager:
     """Manages all input sources and routes commands.
@@ -23,7 +30,7 @@ class InputManager:
 
     def __init__(
         self,
-        app_commands: AppCommands,
+        app_commands: CommandExecutor,
         verbose: bool = False,
     ) -> None:
         self._app_commands = app_commands

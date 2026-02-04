@@ -6,7 +6,12 @@ import json
 import threading
 from unittest.mock import MagicMock, patch
 
-from voxtype.core.openvip import OPENVIP_VERSION, create_event
+from voxtype.adapters.openvip.messages import (
+    OPENVIP_VERSION,
+    create_message,
+    create_partial,
+    create_status,
+)
 from voxtype.output.sse import SSEHandler, SSEServer
 
 class TestSSEServerInit:
@@ -158,12 +163,12 @@ class TestSSEServerClientManagement:
 
         assert len(errors) == 0
 
-class TestOpenVIPMessage:
-    """Test OpenVIP message creation via create_event factory."""
+class TestOpenVIPMessageFactories:
+    """Test OpenVIP message creation factories."""
 
-    def test_message_has_required_fields(self) -> None:
-        """OpenVIP messages have required fields."""
-        msg = create_event("message", text="hello")
+    def test_create_message_has_required_fields(self) -> None:
+        """create_message produces valid OpenVIP message."""
+        msg = create_message("hello")
 
         assert msg["openvip"] == OPENVIP_VERSION
         assert msg["type"] == "message"
@@ -172,11 +177,58 @@ class TestOpenVIPMessage:
         assert "source" in msg
         assert msg["text"] == "hello"
 
+    def test_create_message_with_submit(self) -> None:
+        """create_message includes x_submit when True."""
+        msg = create_message("hello", submit=True)
+        assert msg["x_submit"] is True
+
+        msg_no_submit = create_message("hello", submit=False)
+        assert "x_submit" not in msg_no_submit
+
+    def test_create_message_with_visual_newline(self) -> None:
+        """create_message includes x_visual_newline when True."""
+        msg = create_message("hello", visual_newline=True)
+        assert msg["x_visual_newline"] is True
+
+    def test_create_partial_has_required_fields(self) -> None:
+        """create_partial produces valid OpenVIP partial message."""
+        msg = create_partial("hel")
+
+        assert msg["openvip"] == OPENVIP_VERSION
+        assert msg["type"] == "partial"
+        assert "id" in msg
+        assert "timestamp" in msg
+        assert msg["text"] == "hel"
+
+    def test_create_status_has_required_fields(self) -> None:
+        """create_status produces valid OpenVIP status message."""
+        msg = create_status("listening")
+
+        assert msg["openvip"] == OPENVIP_VERSION
+        assert msg["type"] == "status"
+        assert "id" in msg
+        assert "timestamp" in msg
+        assert msg["status"] == "listening"
+
+    def test_create_status_with_error(self) -> None:
+        """create_status includes error details when status=error."""
+        msg = create_status("error", error_message="Mic not found", error_code="MIC_NOT_FOUND")
+
+        assert msg["status"] == "error"
+        assert msg["error"]["message"] == "Mic not found"
+        assert msg["error"]["code"] == "MIC_NOT_FOUND"
+
+    def test_create_status_error_without_details(self) -> None:
+        """create_status with error but no details omits error object."""
+        msg = create_status("error")
+        assert msg["status"] == "error"
+        assert "error" not in msg
+
     def test_message_id_is_uuid(self) -> None:
         """Message ID is a valid UUID string."""
         import uuid
 
-        msg = create_event("message")
+        msg = create_message("hello")
 
         # Should not raise
         uuid.UUID(msg["id"])
@@ -185,7 +237,7 @@ class TestOpenVIPMessage:
         """Timestamp is ISO 8601 format."""
         from datetime import datetime
 
-        msg = create_event("message")
+        msg = create_message("hello")
 
         # Should parse without error
         datetime.fromisoformat(msg["timestamp"].replace("Z", "+00:00"))
@@ -194,22 +246,9 @@ class TestOpenVIPMessage:
         """Source includes voxtype version."""
         from voxtype import __version__
 
-        msg = create_event("message")
+        msg = create_message("hello")
 
         assert msg["source"] == f"voxtype/{__version__}"
-
-    def test_extra_kwargs_added(self) -> None:
-        """Extra kwargs are added to message."""
-        msg = create_event(
-            "message",
-            text="hello",
-            language="en",
-            custom_field="custom_value",
-        )
-
-        assert msg["text"] == "hello"
-        assert msg["language"] == "en"
-        assert msg["custom_field"] == "custom_value"
 
 class TestSSEServerBroadcast:
     """Test event broadcasting."""
@@ -250,71 +289,23 @@ class TestSSEServerBroadcast:
 class TestSSEServerEvents:
     """Test event sending methods."""
 
-    def test_send_transcription(self) -> None:
-        """send_transcription broadcasts message event."""
+    def test_send_message(self) -> None:
+        """send_message broadcasts pre-built OpenVIP message."""
         server = SSEServer()
         client = MagicMock(spec=SSEHandler)
         client._send_event.return_value = True
         server._add_client(client)
 
-        server.send_transcription(
-            text="hello world",
-            language="en",
-            audio_duration_ms=1500.5,
-            transcription_ms=250.3,
-        )
+        msg = create_message("hello world")
+        server.send_message(msg)
 
         client._send_event.assert_called_once()
         args = client._send_event.call_args
-        assert args[0][0] == "message"  # Event type
-
-        data = args[0][1]
-        assert data["type"] == "message"
-        assert data["text"] == "hello world"
-        assert data["language"] == "en"
-        assert data["audio_duration_ms"] == 1500
-        assert data["transcription_ms"] == 250
-
-    def test_send_transcription_optional_fields(self) -> None:
-        """send_transcription works with only text."""
-        server = SSEServer()
-        client = MagicMock(spec=SSEHandler)
-        client._send_event.return_value = True
-        server._add_client(client)
-
-        server.send_transcription(text="hello")
-
-        args = client._send_event.call_args
-        data = args[0][1]
-        assert "language" not in data
-        assert "audio_duration_ms" not in data
-        assert "transcription_ms" not in data
-
-    def test_send_transcription_result(self) -> None:
-        """send_transcription_result handles TranscriptionResult."""
-        from voxtype.core.events import TranscriptionResult
-
-        server = SSEServer()
-        client = MagicMock(spec=SSEHandler)
-        client._send_event.return_value = True
-        server._add_client(client)
-
-        result = TranscriptionResult(
-            text="hello",
-            audio_duration_seconds=1.5,
-            transcription_seconds=0.25,
-        )
-        server.send_transcription_result(result, language="en")
-
-        args = client._send_event.call_args
-        data = args[0][1]
-        assert data["text"] == "hello"
-        assert data["language"] == "en"
-        assert data["audio_duration_ms"] == 1500
-        assert data["transcription_ms"] == 250
+        assert args[0][0] == "message"
+        assert args[0][1]["text"] == "hello world"
 
     def test_send_state_change(self) -> None:
-        """send_state_change broadcasts state event."""
+        """send_state_change broadcasts status event."""
         from voxtype.core.state import AppState
 
         server = SSEServer()
@@ -329,13 +320,13 @@ class TestSSEServerEvents:
         )
 
         args = client._send_event.call_args
-        assert args[0][0] == "state"
+        assert args[0][0] == "status"
         data = args[0][1]
-        assert data["type"] == "state"
-        assert data["state"] == "listening"
+        assert data["type"] == "status"
+        assert data["status"] == "listening"
 
     def test_send_state_change_maps_states(self) -> None:
-        """send_state_change maps voxtype states to OpenVIP states."""
+        """send_state_change maps voxtype states to OpenVIP status values."""
         from voxtype.core.state import AppState
 
         server = SSEServer()
@@ -347,36 +338,20 @@ class TestSSEServerEvents:
         test_cases = [
             (AppState.OFF, "idle"),
             (AppState.LISTENING, "listening"),
-            (AppState.RECORDING, "listening"),
-            (AppState.TRANSCRIBING, "processing"),
+            (AppState.RECORDING, "recording"),
+            (AppState.TRANSCRIBING, "transcribing"),
         ]
 
-        for app_state, expected_openvip in test_cases:
+        for app_state, expected_status in test_cases:
             client.reset_mock()
             server.send_state_change(old=AppState.OFF, new=app_state, trigger="test")
 
             args = client._send_event.call_args
             data = args[0][1]
-            assert data["state"] == expected_openvip, f"Failed for {app_state}"
-
-    def test_send_mode_change(self) -> None:
-        """send_mode_change broadcasts state event with x_mode."""
-        from voxtype.core.state import ProcessingMode
-
-        server = SSEServer()
-        client = MagicMock(spec=SSEHandler)
-        client._send_event.return_value = True
-        server._add_client(client)
-
-        server.send_mode_change(ProcessingMode.COMMAND)
-
-        args = client._send_event.call_args
-        assert args[0][0] == "state"
-        data = args[0][1]
-        assert data["x_mode"] == "command"
+            assert data["status"] == expected_status, f"Failed for {app_state}"
 
     def test_send_agent_change(self) -> None:
-        """send_agent_change broadcasts state event with x_agent."""
+        """send_agent_change broadcasts status event with x_agent."""
         server = SSEServer()
         client = MagicMock(spec=SSEHandler)
         client._send_event.return_value = True
@@ -385,8 +360,10 @@ class TestSSEServerEvents:
         server.send_agent_change("cursor", 1)
 
         args = client._send_event.call_args
-        assert args[0][0] == "state"
+        assert args[0][0] == "status"
         data = args[0][1]
+        assert data["type"] == "status"
+        assert data["status"] == "listening"
         assert data["x_agent"] == "cursor"
         assert data["x_agent_index"] == 1
 
@@ -406,48 +383,21 @@ class TestSSEServerEvents:
         assert data["text"] == "hello wor"
 
     def test_send_error(self) -> None:
-        """send_error broadcasts error event."""
+        """send_error broadcasts status event with error details."""
         server = SSEServer()
         client = MagicMock(spec=SSEHandler)
         client._send_event.return_value = True
         server._add_client(client)
 
-        server.send_error("Connection failed", "socket")
+        server.send_error("Connection failed", "SOCKET_ERROR")
 
         args = client._send_event.call_args
-        assert args[0][0] == "error"
+        assert args[0][0] == "status"
         data = args[0][1]
-        assert data["type"] == "error"
-        assert data["error"] == "Connection failed"
-        assert data["code"] == "socket"
-
-    def test_send_start(self) -> None:
-        """send_start broadcasts start event."""
-        server = SSEServer()
-        client = MagicMock(spec=SSEHandler)
-        client._send_event.return_value = True
-        server._add_client(client)
-
-        server.send_start()
-
-        args = client._send_event.call_args
-        assert args[0][0] == "start"
-        data = args[0][1]
-        assert data["type"] == "start"
-
-    def test_send_end(self) -> None:
-        """send_end broadcasts end event."""
-        server = SSEServer()
-        client = MagicMock(spec=SSEHandler)
-        client._send_event.return_value = True
-        server._add_client(client)
-
-        server.send_end()
-
-        args = client._send_event.call_args
-        assert args[0][0] == "end"
-        data = args[0][1]
-        assert data["type"] == "end"
+        assert data["type"] == "status"
+        assert data["status"] == "error"
+        assert data["error"]["message"] == "Connection failed"
+        assert data["error"]["code"] == "SOCKET_ERROR"
 
 class TestSSEHandler:
     """Test SSEHandler request handling."""
