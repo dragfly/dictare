@@ -306,7 +306,11 @@ class AgentFilter:
     def _remove_pattern_from_text(
         self, text: str, match: AgentMatch, tokens: list[str]
     ) -> str:
-        """Remove the trigger and agent name from original text.
+        """Remove the trigger and everything after from original text.
+
+        When user says "agent voxtype", we remove "agent voxtype" and
+        anything after it. This handles cases where Whisper splits
+        the agent name (e.g., "voxtype" -> "Fox type").
 
         Args:
             text: Original text.
@@ -314,11 +318,11 @@ class AgentFilter:
             tokens: Normalized tokens.
 
         Returns:
-            Text with trigger pattern removed.
+            Text with trigger pattern and everything after removed.
         """
-        # Find the trigger and following word in original text
-        # Use regex to find "agent(e)? <word>" at the end
-        pattern = rf"\b({match.trigger_word})\s+\S+\s*$"
+        # Find trigger word and remove everything from it to the end
+        # This handles multi-word transcriptions like "Fox type" for "voxtype"
+        pattern = rf"\b{match.trigger_word}\b.*$"
         cleaned = re.sub(pattern, "", text, flags=re.IGNORECASE).rstrip()
 
         return cleaned
