@@ -1,102 +1,64 @@
-"""Simple audio feedback (beeps) for user notifications."""
+"""Audio feedback sounds for voxtype.
+
+Start/stop beeps use bundled WAV files played via OS audio player
+(afplay on macOS, aplay/paplay on Linux) to avoid sounddevice conflicts.
+"""
 
 from __future__ import annotations
 
-import numpy as np
+import subprocess
+import sys
+import threading
+from pathlib import Path
 
-# Pre-generate beep at module load for instant playback
-_BEEP_DURATION = 0.15  # seconds
-_BEEP_FREQ = 800  # Hz
-_SAMPLE_RATE = 16000
-
-
-def _generate_beep(
-    frequency: float = _BEEP_FREQ,
-    duration: float = _BEEP_DURATION,
-    sample_rate: int = _SAMPLE_RATE,
-) -> np.ndarray:
-    """Generate a simple sine wave beep."""
-    t = np.linspace(0, duration, int(sample_rate * duration), dtype=np.float32)
-    # Apply envelope to avoid clicks
-    envelope = np.ones_like(t)
-    fade_samples = int(sample_rate * 0.01)  # 10ms fade
-    envelope[:fade_samples] = np.linspace(0, 1, fade_samples)
-    envelope[-fade_samples:] = np.linspace(1, 0, fade_samples)
-    return np.sin(2 * np.pi * frequency * t) * envelope * 0.3
+_SOUNDS_DIR = Path(__file__).parent / "sounds"
 
 
-# Pre-generated beeps
-_BEEP_START = _generate_beep(800, 0.15)  # Higher pitch for start
-_BEEP_STOP = _generate_beep(400, 0.15)  # Lower pitch for stop
+def _play_wav(filename: str) -> None:
+    """Play a WAV file from the sounds directory (non-blocking)."""
+    path = _SOUNDS_DIR / filename
+    if not path.exists():
+        return
 
-# Sent beep: two quick ascending tones (positive feedback)
-_BEEP_SENT = np.concatenate([
-    _generate_beep(600, 0.08),
-    np.zeros(int(_SAMPLE_RATE * 0.03), dtype=np.float32),
-    _generate_beep(900, 0.08),
-])
+    def _play() -> None:
+        try:
+            if sys.platform == "darwin":
+                subprocess.run(["afplay", str(path)], capture_output=True, timeout=5)
+            else:
+                for cmd in [["paplay", str(path)], ["aplay", "-q", str(path)]]:
+                    try:
+                        subprocess.run(cmd, capture_output=True, timeout=5)
+                        break
+                    except FileNotFoundError:
+                        continue
+        except Exception:
+            pass
 
-# Error/busy beep: five loud high beeps (very noticeable, annoying)
-_BEEP_BUSY = np.concatenate([
-    _generate_beep(900, 0.12),  # Beep 1
-    np.zeros(int(_SAMPLE_RATE * 0.06), dtype=np.float32),
-    _generate_beep(900, 0.12),  # Beep 2
-    np.zeros(int(_SAMPLE_RATE * 0.06), dtype=np.float32),
-    _generate_beep(900, 0.12),  # Beep 3
-    np.zeros(int(_SAMPLE_RATE * 0.06), dtype=np.float32),
-    _generate_beep(900, 0.12),  # Beep 4
-    np.zeros(int(_SAMPLE_RATE * 0.06), dtype=np.float32),
-    _generate_beep(900, 0.12),  # Beep 5
-])
+    threading.Thread(target=_play, daemon=True).start()
 
 
 def warmup_audio() -> None:
-    """Pre-initialize audio output to avoid delay on first beep."""
-    try:
-        import sounddevice as sd
-        sd.play(np.zeros(100, dtype=np.float32), _SAMPLE_RATE, blocking=True)
-    except Exception:
-        pass
+    """No-op, kept for API compatibility."""
 
 
 def play_beep_start() -> None:
-    """Play a beep indicating listening mode started."""
-    try:
-        import sounddevice as sd
-
-        sd.play(_BEEP_START, _SAMPLE_RATE, blocking=False)
-    except Exception:
-        pass  # Don't fail on audio errors
+    """Play beep indicating listening mode started."""
+    _play_wav("up-beep.mp3")
 
 
 def play_beep_stop() -> None:
-    """Play a beep indicating listening mode stopped."""
-    try:
-        import sounddevice as sd
-
-        sd.play(_BEEP_STOP, _SAMPLE_RATE, blocking=False)
-    except Exception:
-        pass  # Don't fail on audio errors
+    """Play beep indicating listening mode stopped."""
+    _play_wav("down-beep.mp3")
 
 
 def play_beep_sent() -> None:
-    """Play a beep indicating transcription was sent/written."""
-    try:
-        import sounddevice as sd
-
-        sd.play(_BEEP_SENT, _SAMPLE_RATE, blocking=False)
-    except Exception:
-        pass  # Don't fail on audio errors
+    """Play beep indicating transcription was sent/written."""
+    _play_wav("up-beep.mp3")  # Reuse start beep until dedicated sound is added
 
 
 def play_beep_busy() -> None:
-    """Play a beep indicating system is busy (speech ignored)."""
-    try:
-        import sounddevice as sd
-
-        sd.play(_BEEP_BUSY, _SAMPLE_RATE, blocking=False)
-    except Exception:
-        pass  # Don't fail on audio errors
+    """Play beep indicating system is busy (speech ignored)."""
+    _play_wav("down-beep.mp3")  # Reuse stop beep until dedicated sound is added
 
 
 # TTS mode announcements per language (fallback to English for unsupported languages)
@@ -119,15 +81,11 @@ def speak_mode(mode: str, language: str = "en") -> None:
         mode: Either "transcription" or "command"
         language: Language code (it, en, es, fr, de, pt)
     """
-    import subprocess
-    import sys
-    import threading
-
     # Get phrase for language, fallback to English
     phrases = _MODE_PHRASES.get(language, _MODE_PHRASES["en"])
     text = phrases.get(mode, mode)
 
-    def _speak():
+    def _speak() -> None:
         try:
             if sys.platform == "darwin":
                 # macOS: use 'say' command
