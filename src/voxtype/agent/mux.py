@@ -9,7 +9,6 @@ import pty
 import queue
 import select
 import signal
-import socket
 import struct
 import sys
 import termios
@@ -27,18 +26,8 @@ from voxtype.utils.stats import update_keystrokes
 # Session logs directory
 SESSIONS_DIR = Path.home() / ".local" / "share" / "voxtype" / "sessions"
 
-def get_socket_path(agent_id: str) -> Path:
-    """Get Unix socket path for an agent.
-
-    Args:
-        agent_id: Agent identifier.
-
-    Returns:
-        Path to socket file in the platform-appropriate runtime directory.
-    """
-    from voxtype.utils.platform import get_socket_dir
-
-    return get_socket_dir() / f"{agent_id}.sock"
+# Default engine HTTP server URL
+DEFAULT_BASE_URL = "http://127.0.0.1:8765"
 
 def _get_session_log_path(agent_id: str) -> Path:
     """Get path for session log file.
@@ -54,7 +43,7 @@ def _write_session_start(
     session_path: Path,
     agent_id: str,
     command: list[str],
-    socket_path: Path,
+    base_url: str,
 ) -> None:
     """Write session start metadata to log file."""
     metadata = {
@@ -63,7 +52,7 @@ def _write_session_start(
         "voxtype_version": __version__,
         "agent_id": agent_id,
         "command": command,
-        "socket_path": str(socket_path),
+        "base_url": base_url,
         "cwd": os.getcwd(),
         "python_version": platform.python_version(),
         "platform": platform.system(),
@@ -141,98 +130,64 @@ def _read_from_stdin(
     except (BrokenPipeError, OSError):
         pass
 
-def _read_from_socket(
-    socket_path: Path,
+def _read_from_sse(
+    agent_id: str,
+    base_url: str,
     write_queue: queue.Queue,
     stop_event: threading.Event,
     session_path: Path | None = None,
     keystroke_counter: KeystrokeCounter | None = None,
     verbose: bool = False,
 ) -> None:
-    """Listen on Unix socket for OpenVIP messages.
+    """Connect to engine SSE and receive OpenVIP messages.
 
-    Uses PERSISTENT connection:
-    - Accept ONE connection from engine
-    - Read messages in loop on same connection
-    - Connection closes only when engine disconnects
+    Opens an HTTP connection to GET /agents/{agent_id}/messages which
+    registers the agent and streams messages via Server-Sent Events.
 
-    Receives OpenVIP messages and converts to internal format:
-    - {"type": "message", "text": "hello", "x_submit": true} -> {"text": "hello", "submit": true}
-    - {"type": "message", "text": "\\n", "x_visual_newline": true} -> {"text": "\\n"}
+    Args:
+        agent_id: Agent identifier.
+        base_url: Engine HTTP server base URL (e.g. "http://127.0.0.1:8765").
+        write_queue: Queue for writing messages to PTY.
+        stop_event: Event to signal thread to stop.
+        session_path: Optional session log file path.
+        keystroke_counter: Optional keystroke counter for session stats.
+        verbose: Log full text in session file.
     """
+    import urllib.request
+
     msg_count = 0
-    line_buffer = b""
+    url = f"{base_url}/agents/{agent_id}/messages"
 
-    # Remove stale socket file
-    if socket_path.exists():
-        socket_path.unlink()
+    # Retry connection with backoff
+    retry_delay = 0.5
+    max_retry_delay = 5.0
 
-    # Create Unix socket server
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(str(socket_path))
-    server.listen(1)  # Only one connection (engine)
-    server.setblocking(False)
+    while not stop_event.is_set():
+        try:
+            req = urllib.request.Request(
+                url, headers={"Accept": "text/event-stream"}
+            )
+            with urllib.request.urlopen(req, timeout=60) as response:
+                if session_path:
+                    _log_event(session_path, "sse_connected", {"url": url})
+                retry_delay = 0.5  # Reset backoff on successful connection
 
-    conn: socket.socket | None = None
+                for line_bytes in response:
+                    if stop_event.is_set():
+                        break
 
-    try:
-        while not stop_event.is_set():
-            # If no connection, wait for one
-            if conn is None:
-                try:
-                    ready, _, _ = select.select([server], [], [], 0.1)
-                except (ValueError, OSError):
-                    break
+                    line = line_bytes.decode("utf-8").strip()
 
-                if ready:
-                    try:
-                        conn, _ = server.accept()
-                        conn.setblocking(False)
-                        if session_path:
-                            _log_event(session_path, "engine_connected", {})
-                    except BlockingIOError:
-                        pass
-                continue
-
-            # We have a connection - read from it
-            try:
-                ready, _, _ = select.select([conn], [], [], 0.1)
-            except (ValueError, OSError):
-                # Connection broken
-                conn = None
-                line_buffer = b""
-                continue
-
-            if not ready:
-                continue
-
-            try:
-                chunk = conn.recv(4096)
-                if not chunk:
-                    # Engine disconnected
-                    if session_path:
-                        _log_event(session_path, "engine_disconnected", {})
-                    conn.close()
-                    conn = None
-                    line_buffer = b""
-                    continue
-
-                line_buffer += chunk
-
-                # Process complete lines (messages are newline-delimited)
-                while b"\n" in line_buffer:
-                    line_bytes, line_buffer = line_buffer.split(b"\n", 1)
-                    line = line_bytes.decode("utf-8", errors="replace").strip()
-
-                    if not line:
+                    # SSE format: "data: {...json...}"
+                    if not line.startswith("data: "):
                         continue
 
+                    data = line[6:]
                     try:
-                        openvip_msg = json.loads(line)
+                        openvip_msg = json.loads(data)
                     except json.JSONDecodeError:
                         if session_path:
-                            _log_event(session_path, "parse_error", {"line": line[:100]})
+                            _log_event(session_path, "parse_error", {"line": data[:100]})
                         continue
 
                     # Skip non-message types
@@ -262,126 +217,26 @@ def _read_from_socket(
 
                     write_queue.put(("msg", msg))
 
-            except (BlockingIOError, InterruptedError):
-                # No data available yet
-                continue
-            except OSError:
-                # Connection error
-                if conn:
-                    conn.close()
-                conn = None
-                line_buffer = b""
+        except (ConnectionRefusedError, urllib.error.URLError, OSError) as e:
+            if stop_event.is_set():
+                break
+            if session_path:
+                _log_event(session_path, "sse_connect_error", {
+                    "error": str(e), "retry_delay": retry_delay,
+                })
+            # Wait before retry with exponential backoff
+            stop_event.wait(retry_delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
+        except Exception as e:
+            if session_path:
+                _log_event(session_path, "sse_error", {"error": str(e)})
+            if stop_event.is_set():
+                break
+            stop_event.wait(retry_delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
 
-    except (BrokenPipeError, OSError) as e:
-        if session_path:
-            _log_event(session_path, "reader_error", {"error": str(e)})
-    finally:
-        if conn:
-            conn.close()
-        server.close()
-        if socket_path.exists():
-            socket_path.unlink()
-
-def _read_from_file(
-    file_path: Path,
-    write_queue: queue.Queue,
-    stop_event: threading.Event,
-    session_path: Path | None = None,
-    keystroke_counter: KeystrokeCounter | None = None,
-    verbose: bool = False,
-) -> None:
-    """Monitor file and put parsed messages in queue (tail -f style).
-
-    Reads OpenVIP messages appended to file by FileAgent.
-    More reliable than socket - no message loss.
-
-    File lifecycle:
-    - On start: if agent.jsonl.idle exists, rename to agent.jsonl
-    - On exit: rename agent.jsonl to agent.jsonl.idle (preserves history)
-    - Engine/monitor only sees .jsonl files (ignores .idle)
-
-    Uses unbuffered I/O to avoid Python file buffer caching issues.
-    """
-    msg_count = 0
-    line_buffer = b""
-    idle_path = Path(str(file_path) + ".idle")
-
-    # Activate file: rename .idle to .jsonl if exists
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    if idle_path.exists():
-        idle_path.rename(file_path)
-    elif not file_path.exists():
-        file_path.touch()
-
-    try:
-        # Use unbuffered I/O
-        fd = os.open(str(file_path), os.O_RDONLY)
-        try:
-            # Seek to end (tail -f style)
-            os.lseek(fd, 0, os.SEEK_END)
-
-            while not stop_event.is_set():
-                chunk = os.read(fd, 4096)
-                if chunk:
-                    line_buffer += chunk
-
-                    # Process all complete lines
-                    while b"\n" in line_buffer:
-                        line_bytes, line_buffer = line_buffer.split(b"\n", 1)
-                        line = line_bytes.decode("utf-8", errors="replace").strip()
-
-                        if not line:
-                            continue
-
-                        try:
-                            openvip_msg = json.loads(line)
-                        except json.JSONDecodeError:
-                            if session_path:
-                                _log_event(session_path, "parse_error", {"line": line[:100]})
-                            continue
-
-                        # Skip non-message types
-                        if openvip_msg.get("type") != "message":
-                            continue
-
-                        # Convert OpenVIP to internal format
-                        msg: dict[str, Any] = {
-                            "text": openvip_msg.get("text", ""),
-                            "openvip_id": openvip_msg.get("id"),
-                            "openvip_ts": openvip_msg.get("timestamp"),
-                        }
-                        if openvip_msg.get("x_submit"):
-                            msg["submit"] = True
-                        if openvip_msg.get("x_visual_newline"):
-                            msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
-
-                        msg_count += 1
-                        if session_path:
-                            text = msg.get("text", "")
-                            _log_event(session_path, "msg_read", {
-                                "seq": msg_count,
-                                "text": text if verbose else text[:50],
-                                "openvip_id": openvip_msg.get("id"),
-                                "keystrokes": keystroke_counter.count if keystroke_counter else 0,
-                            })
-
-                        write_queue.put(("msg", msg))
-                else:
-                    # No new data - wait before retry
-                    time.sleep(0.05)
-        finally:
-            os.close(fd)
-    except (BrokenPipeError, OSError) as e:
-        if session_path:
-            _log_event(session_path, "reader_error", {"error": str(e)})
-    finally:
-        # Mark file as idle (rename .jsonl → .jsonl.idle)
-        # Preserves session history, engine will see agent as gone
-        if file_path.exists():
-            try:
-                file_path.rename(idle_path)
-            except OSError:
-                pass
+    if session_path:
+        _log_event(session_path, "sse_disconnected", {"total_messages": msg_count})
 
 def _write_all(fd: int, data: bytes) -> int:
     """Write all bytes to fd, handling short writes.
@@ -494,106 +349,35 @@ def _get_winsize() -> tuple[int, int]:
     except OSError:
         return 24, 80
 
-def _is_socket_active(socket_path: Path) -> bool:
-    """Check if a socket has an active listener.
-
-    Args:
-        socket_path: Path to the Unix socket.
-
-    Returns:
-        True if there's an active listener, False if socket is stale or doesn't exist.
-    """
-    if not socket_path.exists():
-        return False
-
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.5)
-            sock.connect(str(socket_path))
-        # Connection succeeded - there's an active listener
-        return True
-    except (ConnectionRefusedError, TimeoutError, OSError):
-        # No listener or socket is stale
-        return False
-
-def get_file_path(agent_id: str) -> Path:
-    """Get file path for an agent.
-
-    Uses ~/.local/share/voxtype/agents/ for agent files.
-
-    Args:
-        agent_id: Agent identifier.
-
-    Returns:
-        Path to file (e.g., ~/.local/share/voxtype/agents/claude.jsonl).
-    """
-    file_dir = Path.home() / ".local" / "share" / "voxtype" / "agents"
-    file_dir.mkdir(parents=True, exist_ok=True)
-    return file_dir / f"{agent_id}.jsonl"
-
 def run_agent(
     agent_id: str,
     command: list[str],
     quiet: bool = False,
     verbose: bool = False,
+    base_url: str = DEFAULT_BASE_URL,
 ) -> int:
-    """Run a command with multiplexed input from stdin and voxtype.
+    """Run a command with multiplexed input from stdin and voxtype SSE.
 
-    Reads OpenVIP messages from a file (more reliable than socket).
+    Connects to the engine's HTTP server via SSE to receive OpenVIP messages.
+    The SSE connection itself registers the agent with the engine.
 
     Args:
         agent_id: Agent identifier (e.g., 'claude').
         command: Command and arguments to run.
         quiet: Suppress info messages.
         verbose: Log full text in session file (not truncated to 50 chars).
+        base_url: Engine HTTP server base URL.
 
     Returns:
         Exit code of the process.
     """
-    # Get file path for this agent
-    file_path = get_file_path(agent_id)
-
-    # Also get socket path for backwards compatibility check
-    socket_path = get_socket_path(agent_id)
-
-    # Check if another agent with the same ID is already running (socket check)
-    if _is_socket_active(socket_path):
-        print(
-            f"Error: Agent '{agent_id}' is already running (socket mode).",
-            file=sys.stderr,
-        )
-        return 1
-
-    # File lifecycle: .jsonl = active, .jsonl.idle = inactive
-    idle_path = Path(str(file_path) + ".idle")
-
-    # Check if another agent is already running (active .jsonl file)
-    if file_path.exists():
-        print(
-            f"Error: Agent '{agent_id}' is already running (file mode).",
-            file=sys.stderr,
-        )
-        return 1
-
-    # Register cleanup handler (mark as idle on exit)
-    import atexit
-
-    def cleanup_file():
-        if file_path.exists():
-            try:
-                file_path.rename(idle_path)
-            except OSError:
-                pass
-
-    atexit.register(cleanup_file)
-
     # Create session log
     session_path = _get_session_log_path(agent_id)
-    _write_session_start(session_path, agent_id, command, file_path)
+    _write_session_start(session_path, agent_id, command, base_url)
 
     if not quiet:
         print(f"[voxtype {__version__}] Agent: {agent_id}", file=sys.stderr)
-        print(f"[voxtype {__version__}] File: {file_path}", file=sys.stderr)
+        print(f"[voxtype {__version__}] Server: {base_url}", file=sys.stderr)
         print(f"[voxtype {__version__}] Session: {session_path}", file=sys.stderr)
         print(f"[voxtype {__version__}] Running: {' '.join(command)}", file=sys.stderr)
 
@@ -647,30 +431,23 @@ def run_agent(
             tty.setraw(sys.stdin.fileno())
 
         # Create thread-safe queue for serialized writes to PTY
-        # This prevents race conditions between stdin and socket input
         write_queue: queue.Queue = queue.Queue()
 
         # Create keystroke counter for session statistics
         keystroke_counter = KeystrokeCounter()
 
-        # Start producer threads (read from stdin/file, put in queue)
+        # Start producer threads (read from stdin/SSE, put in queue)
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
             args=(write_queue, stop_event, keystroke_counter),
             daemon=True,
         )
-        # Use file-based IPC (more reliable than socket)
-        file_thread = threading.Thread(
-            target=_read_from_file,
-            args=(file_path, write_queue, stop_event, session_path, keystroke_counter, verbose),
+        # SSE-based IPC: connect to engine HTTP server
+        sse_thread = threading.Thread(
+            target=_read_from_sse,
+            args=(agent_id, base_url, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
-        # NOTE: Socket-based IPC kept for reference - had message loss issues
-        # socket_thread = threading.Thread(
-        #     target=_read_from_socket,
-        #     args=(socket_path, write_queue, stop_event, session_path, keystroke_counter, verbose),
-        #     daemon=True,
-        # )
         # Start consumer thread (read from queue, write to PTY)
         writer_thread = threading.Thread(
             target=_write_to_pty,
@@ -679,7 +456,7 @@ def run_agent(
         )
 
         stdin_thread.start()
-        file_thread.start()
+        sse_thread.start()
         writer_thread.start()
 
         # Read from PTY and write to stdout
@@ -720,13 +497,6 @@ def run_agent(
         return exit_code
 
     finally:
-        # Clean up socket file (daemon threads don't run finally blocks on exit)
-        if socket_path.exists():
-            try:
-                socket_path.unlink()
-            except OSError:
-                pass
-
         # Restore terminal settings
         if old_settings:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
