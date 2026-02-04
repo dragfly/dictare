@@ -93,7 +93,7 @@ class TestSubmitFilterBasics:
         assert "it" in f.triggers
         assert "en" in f.triggers
         assert ["ok", "invia"] in f.triggers["it"]
-        assert ["submit"] in f.triggers["en"]
+        assert ["ok", "send"] in f.triggers["en"]
 
     def test_custom_triggers(self) -> None:
         """SubmitFilter accepts custom triggers dict."""
@@ -125,28 +125,28 @@ class TestSubmitFilterBasics:
 class TestSubmitFilterTriggerDetection:
     """Test SubmitFilter trigger detection."""
 
-    def test_single_word_trigger_at_end(self) -> None:
-        """Single word trigger at end is detected."""
+    def test_multi_word_trigger_at_end(self) -> None:
+        """Multi-word trigger at end is detected."""
         f = SubmitFilter()
-        msg = {"text": "hello world submit"}
+        msg = {"text": "hello world ok send"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert result.messages[0]["text"] == "hello world"
 
-    def test_italian_invia_trigger(self) -> None:
-        """Italian 'invia' trigger is detected."""
+    def test_italian_ok_invia_trigger(self) -> None:
+        """Italian 'ok invia' trigger is detected."""
         f = SubmitFilter()
-        msg = {"text": "ho un bug nel parser invia", "language": "it"}
+        msg = {"text": "ho un bug nel parser ok invia", "language": "it"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert result.messages[0]["text"] == "ho un bug nel parser"
 
-    def test_italian_in_via_trigger(self) -> None:
-        """Italian 'in via' (misheard 'invia') trigger is detected."""
+    def test_italian_ok_in_via_trigger(self) -> None:
+        """Italian 'ok in via' (misheard 'ok invia') trigger is detected."""
         f = SubmitFilter()
-        msg = {"text": "ho un bug nel parser in via", "language": "it"}
+        msg = {"text": "ho un bug nel parser ok in via", "language": "it"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
@@ -164,7 +164,7 @@ class TestSubmitFilterTriggerDetection:
 
     def test_trigger_in_middle_not_detected(self) -> None:
         """Trigger in middle of text (far from end) is not detected."""
-        f = SubmitFilter()
+        f = SubmitFilter(triggers={"en": [["submit"]]})
         # Many words after the trigger, beyond max_scan_words
         words = ["submit"] + ["word"] * 20 + ["end"]
         msg = {"text": " ".join(words)}
@@ -175,26 +175,80 @@ class TestSubmitFilterTriggerDetection:
     def test_case_insensitive(self) -> None:
         """Trigger detection is case insensitive."""
         f = SubmitFilter()
-        msg = {"text": "hello SUBMIT"}
+        msg = {"text": "hello OK SEND"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
 
     def test_accent_insensitive(self) -> None:
         """Trigger detection ignores accents."""
-        f = SubmitFilter(triggers={"it": [["invìa"]]})  # With accent
-        msg = {"text": "test invia", "language": "it"}  # Without accent
+        f = SubmitFilter(triggers={"it": [["ok", "invìa"]]})  # With accent
+        msg = {"text": "test ok invia", "language": "it"}  # Without accent
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
 
     def test_visual_newline_removed_on_submit(self) -> None:
         """x_visual_newline is removed when x_submit is set."""
         f = SubmitFilter()
-        msg = {"text": "hello submit", "x_visual_newline": True}
+        msg = {"text": "hello ok submit", "x_visual_newline": True}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert "x_visual_newline" not in result.messages[0]
+
+    def test_last_word_only_trigger_at_end(self) -> None:
+        """Last-word-only trigger ('vai.') matches when last word."""
+        f = SubmitFilter()
+        msg = {"text": "correggi il bug vai", "language": "it"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_submit"] is True
+        assert result.messages[0]["text"] == "correggi il bug"
+
+    def test_last_word_only_trigger_not_at_end(self) -> None:
+        """Last-word-only trigger ('vai.') does NOT match when not last word."""
+        f = SubmitFilter()
+        msg = {"text": "vai a vedere il codice", "language": "it"}
+        result = f.process(msg)
+        assert result.action == FilterAction.PASS
+
+    def test_last_word_only_with_punctuation(self) -> None:
+        """Last-word-only trigger works even if transcription has punctuation."""
+        f = SubmitFilter()
+        msg = {"text": "correggi il bug, vai!", "language": "it"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_submit"] is True
+
+    def test_last_word_only_case_insensitive(self) -> None:
+        """Last-word-only trigger is case insensitive."""
+        f = SubmitFilter()
+        msg = {"text": "correggi il bug VAI", "language": "it"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+
+    def test_last_word_only_confidence_is_1(self) -> None:
+        """Last-word-only trigger has confidence 1.0."""
+        f = SubmitFilter()
+        msg = {"text": "test vai", "language": "it"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["x_submit_confidence"] == 1.0
+
+    def test_last_word_only_custom_trigger(self) -> None:
+        """Custom last-word-only trigger works."""
+        f = SubmitFilter(triggers={"en": [["done."]]})
+        msg = {"text": "I finished the task done"}
+        result = f.process(msg)
+        assert result.action == FilterAction.AUGMENT
+        assert result.messages[0]["text"] == "I finished the task"
+
+    def test_single_word_not_last_does_not_trigger(self) -> None:
+        """Single word that appears in the middle doesn't trigger."""
+        f = SubmitFilter(triggers={"en": [["done."]]})
+        msg = {"text": "done with the first part"}
+        result = f.process(msg)
+        assert result.action == FilterAction.PASS
 
 class TestSubmitFilterConfidence:
     """Test SubmitFilter confidence-based detection."""
@@ -202,33 +256,34 @@ class TestSubmitFilterConfidence:
     def test_high_confidence_at_end(self) -> None:
         """Trigger at very end has high confidence."""
         f = SubmitFilter(confidence_threshold=0.85)
-        msg = {"text": "test invia", "language": "it"}  # invia is last word
+        msg = {"text": "test ok invia", "language": "it"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
 
     def test_low_confidence_far_from_end(self) -> None:
-        """Trigger far from end has low confidence."""
-        f = SubmitFilter(confidence_threshold=0.85, max_scan_words=15)
-        # invia is 7 words from end
-        # Single word patterns get 1.1x boost for "consecutive"
-        # So we need: 0.95^n * 1.1 < 0.85, meaning n >= 4 → 0.95^4 * 1.1 = 0.895
-        # Need n >= 5 → 0.95^5 * 1.1 = 0.851 (still >= 0.85)
-        # Need n >= 6 → 0.95^6 * 1.1 = 0.808 < 0.85
-        msg = {"text": "invia one two three four five six seven", "language": "it"}
+        """Multi-word trigger far from end has low confidence."""
+        f = SubmitFilter(
+            triggers={"en": [["submit"]]},
+            confidence_threshold=0.85,
+            max_scan_words=15,
+        )
+        # submit is 7 words from end → 0.95^7 * 1.1 = 0.768 < 0.85
+        msg = {"text": "submit one two three four five six seven"}
         result = f.process(msg)
         assert result.action == FilterAction.PASS
 
     def test_adjustable_confidence_threshold(self) -> None:
         """Confidence threshold can be adjusted."""
-        msg = {"text": "invia one two three", "language": "it"}  # invia is 3 words from end
+        triggers = {"en": [["submit"]]}
+        msg = {"text": "submit one two three"}  # submit is 3 words from end
 
         # With high threshold, should not trigger
-        f_strict = SubmitFilter(confidence_threshold=0.95)
+        f_strict = SubmitFilter(triggers=triggers, confidence_threshold=0.95)
         result = f_strict.process(msg)
         assert result.action == FilterAction.PASS
 
         # With low threshold, should trigger
-        f_lenient = SubmitFilter(confidence_threshold=0.5)
+        f_lenient = SubmitFilter(triggers=triggers, confidence_threshold=0.5)
         result = f_lenient.process(msg)
         assert result.action == FilterAction.AUGMENT
 
@@ -261,7 +316,7 @@ class TestPipelineWithFilters:
     def test_single_filter_augments(self) -> None:
         """Single filter can augment message."""
         p = Pipeline([SubmitFilter()])
-        msg = {"text": "hello submit"}
+        msg = {"text": "hello ok send"}
         result = p.process(msg)
         assert len(result) == 1
         assert result[0]["x_submit"] is True
@@ -314,7 +369,7 @@ class TestLanguageBasedTriggers:
     def test_italian_message_uses_italian_triggers(self) -> None:
         """Italian message uses Italian triggers."""
         f = SubmitFilter()
-        msg = {"text": "test invia", "language": "it"}
+        msg = {"text": "test ok invia", "language": "it"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
@@ -322,7 +377,7 @@ class TestLanguageBasedTriggers:
     def test_english_message_uses_english_triggers(self) -> None:
         """English message uses English triggers."""
         f = SubmitFilter()
-        msg = {"text": "test submit", "language": "en"}
+        msg = {"text": "test ok send", "language": "en"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
@@ -330,29 +385,29 @@ class TestLanguageBasedTriggers:
     def test_italian_message_also_checks_english(self) -> None:
         """Italian message also checks English triggers."""
         f = SubmitFilter()
-        # English trigger "submit" should work even with Italian language
-        msg = {"text": "test submit", "language": "it"}
+        # English trigger "ok submit" should work even with Italian language
+        msg = {"text": "test ok submit", "language": "it"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
 
     def test_unknown_language_falls_back_to_english(self) -> None:
         """Unknown language uses only English triggers."""
         f = SubmitFilter()
-        msg = {"text": "test submit", "language": "xyz"}
+        msg = {"text": "test ok send", "language": "xyz"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
 
     def test_no_language_defaults_to_english(self) -> None:
         """Message without language defaults to English."""
         f = SubmitFilter()
-        msg = {"text": "test submit"}  # No language field
+        msg = {"text": "test ok send"}  # No language field
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
 
     def test_language_code_normalized(self) -> None:
         """Language codes like 'en-US' are normalized to 'en'."""
         f = SubmitFilter()
-        msg = {"text": "test submit", "language": "en-US"}
+        msg = {"text": "test ok send", "language": "en-US"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
 
@@ -384,7 +439,7 @@ class TestEdgeCases:
 
     def test_only_trigger_word(self) -> None:
         """Message with only trigger word results in empty text."""
-        f = SubmitFilter()
+        f = SubmitFilter(triggers={"en": [["submit"]]})
         msg = {"text": "submit"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
@@ -394,7 +449,7 @@ class TestEdgeCases:
     def test_punctuation_around_trigger(self) -> None:
         """Trigger with punctuation is detected."""
         f = SubmitFilter()
-        msg = {"text": "hello, submit!"}
+        msg = {"text": "hello, ok send!"}
         result = f.process(msg)
         assert result.action == FilterAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
@@ -419,7 +474,7 @@ class TestEdgeCases:
     def test_message_preserves_other_fields(self) -> None:
         """Message preserves other fields when augmented."""
         f = SubmitFilter()
-        msg = {"text": "hello submit", "id": "123", "custom": "value"}
+        msg = {"text": "hello ok send", "id": "123", "custom": "value"}
         result = f.process(msg)
         assert result.messages[0]["id"] == "123"
         assert result.messages[0]["custom"] == "value"
@@ -643,7 +698,7 @@ class TestAgentFilterWithPipeline:
 
         # Note: This would require agent at end AND submit
         # In practice, these would be separate messages
-        msg = {"text": "hello submit"}
+        msg = {"text": "hello ok send"}
         result = p.process(msg)
         assert result[0].get("x_submit") is True
 
