@@ -38,6 +38,14 @@ class AudioConfig(BaseModel):
         default=False,
         description="Set to true when using headphones (TTS won't pause listening)",
     )
+    pre_buffer_ms: int = Field(
+        default=640,
+        description="Audio pre-buffer in milliseconds (captures audio before VAD triggers)",
+    )
+    min_speech_ms: int = Field(
+        default=250,
+        description="Minimum speech duration in milliseconds before VAD triggers",
+    )
 
 
 class STTConfig(BaseModel):
