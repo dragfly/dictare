@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
+from voxtype import __version__
 from voxtype.agent.base import Agent
 from voxtype.core.audio_manager import AudioManager
 from voxtype.core.controller import StateController
@@ -163,6 +164,9 @@ class VoxtypeEngine:
         self._stt: STTEngine | None = None
         self._realtime_stt: STTEngine | None = None  # Separate fast model for realtime
         self._hotkey: HotkeyListener | None = None
+        # HTTP server for OpenVIP SSE protocol
+        self._http_server: Any = None  # OpenVIPServer
+
         # Note: No more _injector - each Agent handles its own transport
 
     def _emit(self, event: str, *args: Any, **kwargs: Any) -> None:
@@ -1049,6 +1053,144 @@ class VoxtypeEngine:
         self.speak_text(f"{agent_prefix} {agent_name}")
 
     # -------------------------------------------------------------------------
+    # SSE Agent Registration (called by HTTP server)
+    # -------------------------------------------------------------------------
+
+    def _register_sse_agent(self, agent_id: str) -> None:
+        """Register an SSE agent (called when SSE client connects).
+
+        Creates an SSEAgent instance and registers it with the engine.
+
+        Args:
+            agent_id: Agent identifier from the SSE connection URL.
+        """
+        from voxtype.agent.sse import SSEAgent
+
+        if self._http_server is None:
+            return
+
+        agent = SSEAgent(agent_id, self._http_server)
+        self.register_agent(agent)
+
+    def _unregister_sse_agent(self, agent_id: str) -> None:
+        """Unregister an SSE agent (called when SSE client disconnects).
+
+        Args:
+            agent_id: Agent identifier to remove.
+        """
+        self.unregister_agent(agent_id)
+
+    # -------------------------------------------------------------------------
+    # HTTP Status / Control / TTS (called by HTTP server endpoints)
+    # -------------------------------------------------------------------------
+
+    def _get_http_status(self) -> dict:
+        """Build status dict for the /status HTTP endpoint.
+
+        Returns a JSON-serializable dict compatible with the StatusPanel
+        and the old AdapterState.to_dict() format.
+        """
+        from voxtype.core.state import AppState
+
+        # Map engine state to OpenVIP status
+        state_map = {
+            AppState.OFF: "idle",
+            AppState.LISTENING: "listening",
+            AppState.RECORDING: "recording",
+            AppState.TRANSCRIBING: "transcribing",
+            AppState.INJECTING: "transcribing",
+            AppState.PLAYING: "playing",
+        }
+        stt_state = state_map.get(self.state, "idle")
+
+        return {
+            "engine": {
+                "version": __version__,
+                "mode": "agents" if self.agent_mode else "keyboard",
+                "uptime_seconds": time.time() - self._stats_start_time
+                if self._stats_start_time
+                else 0,
+            },
+            "stt": {
+                "state": stt_state,
+                "model_name": self.config.stt.model,
+                "last_text": "",
+            },
+            "output": {
+                "mode": "agents" if self.agent_mode else "keyboard",
+                "current_agent": self.current_agent,
+                "available_agents": self.agents,
+            },
+            "hotkey": {
+                "key": self.config.hotkey.key,
+                "bound": self._hotkey is not None,
+            },
+            "loading": {
+                "active": False,
+                "models": [],
+            },
+        }
+
+    def _handle_tts_request(self, body: dict) -> dict:
+        """Handle a TTS request from the HTTP /tts endpoint.
+
+        Args:
+            body: Request body with text and optional language.
+
+        Returns:
+            Response dict with status and duration.
+        """
+        text = body.get("text", "")
+        if not text:
+            return {"status": "error", "error": "No text provided"}
+
+        start = time.time()
+        self.speak_text(text)
+        duration_ms = int((time.time() - start) * 1000)
+
+        return {"status": "ok", "duration_ms": duration_ms}
+
+    def _handle_control(self, body: dict) -> dict:
+        """Handle a control command from the HTTP /control endpoint.
+
+        Supported commands:
+        - stt.start: Start listening
+        - stt.stop: Stop listening
+        - stt.toggle: Toggle listening
+        - output.set_agent: Switch to agent by name
+        - engine.shutdown: Request shutdown
+        - ping: Health check
+
+        Args:
+            body: Request body with "command" field.
+
+        Returns:
+            Response dict.
+        """
+        command = body.get("command", "")
+
+        if command == "stt.start":
+            self._set_listening(True)
+            return {"status": "ok", "listening": True}
+        elif command == "stt.stop":
+            self._set_listening(False)
+            return {"status": "ok", "listening": False}
+        elif command == "stt.toggle":
+            self._toggle_listening()
+            return {"status": "ok"}
+        elif command == "output.set_agent":
+            agent_name = body.get("agent", "")
+            self._switch_to_agent_by_name(agent_name)
+            return {"status": "ok"}
+        elif command == "engine.shutdown":
+            self._running = False
+            return {"status": "ok"}
+        elif command == "ping":
+            return {"status": "ok", "pong": True}
+        else:
+            return {"status": "error", "error": f"Unknown command: {command}"}
+
+    # -------------------------------------------------------------------------
     # Lifecycle
     # -------------------------------------------------------------------------
 
@@ -1079,6 +1221,15 @@ class VoxtypeEngine:
                 on_release=self._tap_detector.on_key_up,
                 on_other_key=self._tap_detector.on_other_key,
             )
+
+        # Start HTTP server for SSE agent communication
+        if self.agent_mode or self.config.server.enabled:
+            from voxtype.core.http_server import OpenVIPServer
+
+            self._http_server = OpenVIPServer(
+                self, self.config.server.host, self.config.server.port
+            )
+            self._http_server.start()
 
         # Start audio streaming (always needed for VAD to work)
         if self._audio_manager:
@@ -1163,6 +1314,11 @@ class VoxtypeEngine:
             self._keyboard_agent = None
 
         # Note: AgentRegistrar.stop() is called by the app, not here
+
+        # Stop HTTP server
+        if self._http_server:
+            self._http_server.stop()
+            self._http_server = None
 
         if self._hotkey:
             self._hotkey.stop()

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.3] - 2026-02-04
+
+### Added - SSEAgent and HTTP server integration in engine
+
+- Created `agent/sse.py` with `SSEAgent(BaseAgent)` for SSE message delivery
+- Added HTTP server lifecycle to engine: starts in `start_runtime()`, stops in `stop()`
+- Added `_register_sse_agent()` / `_unregister_sse_agent()` for SSE connection-based registration
+- Added `_get_http_status()` for `/status` endpoint
+- Added `_handle_tts_request()` for `/tts` endpoint
+- Added `_handle_control()` for `/control` endpoint (stt.start/stop/toggle, output.set_agent, engine.shutdown, ping)
+- HTTP server auto-starts when `agent_mode=True` or `config.server.enabled=True`
+
 ## [3.0.0-alpha.2] - 2026-02-04
 
 ### Changed - Move OpenVIP messages to core, rename to Interaction Protocol
