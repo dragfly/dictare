@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from voxtype.adapters.openvip.messages import create_message
 from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
+from voxtype.core.messages import create_message
 from voxtype.core.state import AppState
 
 if TYPE_CHECKING:

@@ -7,7 +7,7 @@ import socket
 from pathlib import Path
 from typing import Any
 
-from voxtype.adapters.openvip.messages import create_message
+from voxtype.core.messages import create_message
 from voxtype.injection.base import TextInjector
 
 def get_socket_path(agent_id: str) -> Path:
