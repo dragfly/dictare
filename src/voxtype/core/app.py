@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from rich.console import Console
@@ -310,17 +311,41 @@ class VoxtypeApp(EngineEvents):
 
         return default_phrases
 
-    def _speak_text(self, text: str) -> None:
-        """Speak text using TTS with mic muting in speaker mode.
+    def _play_audio(self, fn: Callable[[], None], *, pause_listening: bool = True) -> None:
+        """Play audio in background thread, optionally pausing listening.
 
-        Uses event queue for state management:
-        - Get TTS ID (monotonic counter) BEFORE starting
-        - TTSStartEvent: Sent before TTS starts, controller transitions to PLAYING
-        - TTSCompleteEvent: Sent with TTS ID after TTS finishes
+        Uses the TTS ID counter system: multiple concurrent plays only resume
+        listening when ALL finish. This prevents the mic from picking up our
+        own audio output.
 
-        Multiple TTS can play concurrently (rapid agent switching).
-        Only the completion of the LAST TTS triggers state transition.
+        Args:
+            fn: Blocking callable that plays audio (e.g., play_sound_file, subprocess TTS).
+            pause_listening: If True, transition to PLAYING state (mic muted).
+                Skipped in headphones_mode or when already OFF.
         """
+        from voxtype.core.state import AppState
+
+        already_off = self._engine._controller.state == AppState.OFF
+
+        if not pause_listening or self.config.audio.headphones_mode or already_off:
+            threading.Thread(target=fn, daemon=True).start()
+            return
+
+        tts_id = self._engine._controller.get_next_tts_id()
+        self._engine._controller.send(TTSStartEvent(text="", source="audio"))
+
+        def _with_events() -> None:
+            try:
+                fn()
+            finally:
+                self._engine._controller.send(
+                    TTSCompleteEvent(tts_id=tts_id, source="audio")
+                )
+
+        threading.Thread(target=_with_events, daemon=True).start()
+
+    def _speak_text(self, text: str) -> None:
+        """Speak text using TTS with mic muting in speaker mode."""
         if not self.config.audio.audio_feedback:
             return
 
@@ -344,30 +369,7 @@ class VoxtypeApp(EngineEvents):
             except Exception:
                 pass
 
-        def _do_tts_with_events(tts_id: int) -> None:
-            """Do TTS with event-based state management."""
-            try:
-                _do_tts()
-            finally:
-                # Send completion event with TTS ID
-                # Controller only transitions to LISTENING if this is the LAST TTS
-                self._engine._controller.send(TTSCompleteEvent(tts_id=tts_id, source="tts"))
-
-        # Headphones mode: fire and forget (continue listening while playing)
-        if self.config.audio.headphones_mode:
-            threading.Thread(target=_do_tts, daemon=True).start()
-        else:
-            # Speakers mode:
-            # 1. Get TTS ID FIRST (increments counter - this ID identifies this TTS)
-            # 2. Send TTSStart event (controller transitions to PLAYING)
-            # 3. Start thread with the ID (will send TTSComplete with same ID)
-            tts_id = self._engine._controller.get_next_tts_id()
-            self._engine._controller.send(TTSStartEvent(text=text, source="tts"))
-            threading.Thread(
-                target=_do_tts_with_events,
-                args=(tts_id,),
-                daemon=True,
-            ).start()
+        self._play_audio(_do_tts, pause_listening=True)
 
     def _speak_agent(self, agent_name: str) -> None:
         """Speak the agent name using TTS."""
@@ -380,15 +382,15 @@ class VoxtypeApp(EngineEvents):
         if not self.config.audio.audio_feedback:
             return
 
-        try:
-            from voxtype.audio.beep import play_beep_start, play_beep_stop
+        from voxtype.audio.beep import DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, play_sound_file
 
-            if event == "listening_on":
-                play_beep_start()
-            elif event == "listening_off":
-                play_beep_stop()
-        except Exception:
-            pass
+        if event == "listening_on":
+            path = self.config.audio.sound_start or str(DEFAULT_SOUND_START)
+            self._play_audio(lambda: play_sound_file(path), pause_listening=True)
+        elif event == "listening_off":
+            path = self.config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
+            # Already transitioning to OFF - no need to pause listening
+            self._play_audio(lambda: play_sound_file(path), pause_listening=False)
 
     def _display_session_stats(self) -> None:
         """Display session statistics on exit."""
