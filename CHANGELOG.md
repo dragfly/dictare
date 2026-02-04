@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.107.0] - 2026-02-04
+
+### Changed - Shared `play_audio()` with `pause_mic` parameter
+
+- Added `play_audio(source, pause_mic, controller)` as the single entry point for all audio playback
+- `pause_mic=True`: registers play_id, transitions to PLAYING (mic muted), resumes after playback
+- `pause_mic=False`: fire-and-forget on background thread
+- Caller decides `pause_mic` based on `headphones_mode` (high-level semantic)
+- Replaced 40-line inline playback code in `app/controller.py` with single `play_audio()` call
+- Replaced `_play_audio()` method in `core/app.py` — both `_speak_text` and `_play_feedback` now use shared function
+- Removed unused imports (`PlayStartEvent`, `PlayCompleteEvent`, `Callable`, `threading`) from `core/app.py`
+
 ## [2.106.0] - 2026-02-04
 
 ### Changed - Submit filter: remove single-word triggers, add last-word-only notation
