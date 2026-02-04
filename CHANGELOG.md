@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.100.8] - 2026-02-04
+
+### Fixed - Agent switch text not removed
+
+When saying "agent voxtype", the trigger text was not being removed from the
+message. This happened because Whisper sometimes splits words (e.g., "voxtype"
+→ "Fox type"), and the old regex only handled single-word agent names.
+
+Now removes everything from the trigger word to the end, consistent with
+submit_filter behavior.
+
 ## [2.100.7] - 2026-02-04
 
 ### Fixed - Beep after every transcription
