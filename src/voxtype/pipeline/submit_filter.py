@@ -8,9 +8,14 @@ Trigger words are organized by language. The filter checks triggers for:
 1. The detected language of the message (from Whisper)
 2. English (always, as a lingua franca)
 
+Pattern types:
+- Multi-word: ["ok", "invia"] - position-weighted confidence (closer to end = higher)
+- Last-word-only: ["vai."] - word ending with "." triggers ONLY if it's the last word
+
 Examples:
     "ho un bug nel parser ok invia" -> "ho un bug nel parser" + x_submit=true
-    "fammi vedere il codice submit" -> "fammi vedere il codice" + x_submit=true
+    "correggi il bug vai" -> "correggi il bug" + x_submit=true (vai. = last word only)
+    "vai a vedere il codice" -> unchanged (vai is NOT the last word)
 """
 
 from __future__ import annotations
@@ -29,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Order matters: longer/more specific patterns should come first
 DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {
     "it": [
-        # Multi-word (higher priority) - these are explicit submit commands
+        # Multi-word - "ok" prefix prevents false positives
         ["ok", "invia"],
         ["ok", "in", "via"],  # "invia" often heard as "in via"
         ["ok", "manda"],
@@ -38,39 +43,23 @@ DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {
         ["va", "bene", "in", "via"],
         ["invia", "adesso"],
         ["manda", "adesso"],
-        # Single word - only explicit submit words
-        ["invia"],
-        ["in", "via"],  # "invia" often heard as "in via"
-        ["manda"],
-        # NOTE: "fatto" and "adesso" removed - too common, caused false positives
+        # Last-word-only (trailing "." = must be last word of transcription)
+        ["vai."],
     ],
     "en": [
-        # Multi-word (higher priority)
+        # Multi-word - "ok" prefix prevents false positives
         ["ok", "send"],
         ["ok", "submit"],
         ["go", "ahead"],
-        # Single word - only explicit submit words
-        ["submit"],
-        ["send"],
-        # NOTE: "go" removed - too common, caused false positives
     ],
     "es": [
         ["ok", "enviar"],
-        ["enviar"],
-        ["envía"],
-        ["listo"],
     ],
     "de": [
         ["ok", "senden"],
-        ["senden"],
-        ["abschicken"],
-        ["fertig"],
     ],
     "fr": [
         ["ok", "envoyer"],
-        ["envoyer"],
-        ["envoie"],
-        ["terminé"],
     ],
 }
 
@@ -253,7 +242,11 @@ class SubmitFilter:
         best_match: TriggerMatch | None = None
 
         for pattern in triggers:
-            match = self._match_pattern(scan_tokens, pattern, offset)
+            # Check if any word in pattern has "." suffix (last-word-only marker)
+            if any(w.endswith(".") for w in pattern):
+                match = self._match_last_word_pattern(tokens, pattern)
+            else:
+                match = self._match_pattern(scan_tokens, pattern, offset)
             if match:
                 if best_match is None or match.confidence > best_match.confidence:
                     best_match = match
@@ -331,6 +324,68 @@ class SubmitFilter:
             start_idx=positions[0] + offset,
             end_idx=positions[-1] + offset + 1,
             confidence=confidence,
+        )
+
+    def _match_last_word_pattern(
+        self, tokens: list[str], pattern: list[str]
+    ) -> TriggerMatch | None:
+        """Match a last-word-only pattern.
+
+        Words ending with "." in the pattern must match the last token
+        of the transcription. This is a binary check: matches or doesn't.
+
+        For multi-word patterns, the "." word must be last in the text,
+        and the other words must appear before it (like normal matching).
+
+        Args:
+            tokens: Full normalized token list from text.
+            pattern: Pattern with at least one word ending in ".".
+
+        Returns:
+            TriggerMatch with confidence 1.0 if matched, None otherwise.
+        """
+        if not tokens or not pattern:
+            return None
+
+        # Strip "." marker and normalize pattern words
+        clean_pattern = [_normalize(w.rstrip(".")) for w in pattern]
+
+        # The last word of the pattern (which has ".") must be the last token
+        last_token = tokens[-1]
+        if last_token != clean_pattern[-1]:
+            return None
+
+        # Single-word pattern: just the last word check
+        if len(clean_pattern) == 1:
+            return TriggerMatch(
+                pattern=pattern,
+                start_idx=len(tokens) - 1,
+                end_idx=len(tokens),
+                confidence=1.0,
+            )
+
+        # Multi-word: other words must appear before the last token
+        positions = [len(tokens) - 1]  # Last word already matched
+        search_end = len(tokens) - 1
+
+        for word in reversed(clean_pattern[:-1]):
+            found = False
+            for i in range(search_end - 1, -1, -1):
+                if tokens[i] == word:
+                    positions.append(i)
+                    search_end = i
+                    found = True
+                    break
+            if not found:
+                return None
+
+        positions.reverse()
+
+        return TriggerMatch(
+            pattern=pattern,
+            start_idx=positions[0],
+            end_idx=positions[-1] + 1,
+            confidence=1.0,
         )
 
     def _remove_trigger_from_text(
