@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.100.5] - 2026-02-03
+
+### Fixed - Submit-only messages not sent to agent
+
+Empty text messages with `x_submit=true` were being skipped by the engine.
+Now they are correctly sent to the agent, which handles them as submit-only
+(just sends Enter without typing anything).
+
 ## [2.100.4] - 2026-02-03
 
 ### Fixed - JSONLLogger missing `_params` attribute
