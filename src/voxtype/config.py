@@ -43,7 +43,7 @@ class AudioConfig(BaseModel):
         description="Audio pre-buffer in milliseconds (captures audio before VAD triggers)",
     )
     min_speech_ms: int = Field(
-        default=250,
+        default=150,
         description="Minimum speech duration in milliseconds before VAD triggers",
     )
 
@@ -651,33 +651,41 @@ def create_default_config() -> Path:
 
     default_config = f"""\
 # voxtype configuration
+#
+# All values shown are defaults. Uncomment and change as needed.
 
 [audio]
 sample_rate = 16000
 channels = 1
-# device = "default"  # Uncomment to specify audio device
-audio_feedback = true  # Play beep on listening mode toggle
-silence_ms = 1200      # VAD silence threshold in ms
-headphones_mode = false  # Set to true when using headphones (TTS won't pause listening)
+# device = "default"            # Audio device name (None = system default)
+audio_feedback = true            # Play beep on listening mode toggle
+silence_ms = 1200                # VAD silence duration to end speech (ms)
+# headphones_mode = false        # Set to true when using headphones (TTS won't pause listening)
+# max_duration = 60              # Max recording duration in seconds
+
+# Advanced VAD tuning
+# pre_buffer_ms = 640            # Audio captured before VAD triggers (increase if speech start is clipped)
+# min_speech_ms = 150            # Min speech duration before VAD activates (lower = faster, may trigger on noise)
 
 [stt]
-model = "large-v3-turbo"  # tiny, base, small, medium, large-v3, large-v3-turbo
-language = "auto"              # auto-detect, or "en", "de", "fr", etc.
-device = "auto"                # auto, cpu, cuda
+model = "large-v3-turbo"         # tiny, base, small, medium, large-v3, large-v3-turbo
+language = "auto"                # auto-detect, or "en", "de", "fr", etc.
+device = "auto"                  # auto, cpu, cuda
 compute_type = "int8"
 beam_size = 5
-hw_accel = true                # Enable hardware acceleration
-max_repetitions = 5            # Anti-hallucination: max consecutive word repeats
-# hotwords = "voxtype,joshua"  # Boost recognition of specific words
+hw_accel = true                  # Enable hardware acceleration
+max_repetitions = 5              # Anti-hallucination: max consecutive word repeats
+# hotwords = "voxtype,joshua"    # Boost recognition of specific words
+# translate = false              # Translate any language to English
 
 [hotkey]
 key = "{hotkey}"  # {hotkey_comment} (toggle listening)
 
 [output]
-mode = "keyboard"      # keyboard or agents
+mode = "keyboard"                # keyboard or agents
 typing_delay_ms = 5
-auto_enter = false     # Visual newline only
-# submit_keys = "enter"         # Keys for submit (when auto_enter=true)
+auto_enter = false               # Visual newline only
+# submit_keys = "enter"          # Keys for submit (when auto_enter=true)
 # newline_keys = "{newline_keys}"  # Keys for visual newline (when auto_enter=false)
 
 # Keyboard shortcuts - configure interactively with: voxtype config shortcuts
@@ -690,7 +698,7 @@ auto_enter = false     # Visual newline only
 log_file = ""
 
 [stats]
-typing_wpm = 40  # Your average typing speed (for time saved calculation)
+typing_wpm = 40                  # Your average typing speed (for time saved calculation)
 
 verbose = false
 """

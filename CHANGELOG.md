@@ -5,19 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.102.0] - 2026-02-04
+
+### Changed - VAD tuning and config template (nginx-style)
+
+- `min_speech_ms` default lowered from 250ms to 150ms (faster trigger, Whisper filters noise)
+- `pre_buffer_ms` default 640ms (was 320ms hardcoded)
+- Default config template now shows ALL available options as comments (nginx-style)
+- Users can see and uncomment advanced settings like `pre_buffer_ms`, `min_speech_ms`,
+  `max_duration`, `translate`, `headphones_mode`
+
 ## [2.101.0] - 2026-02-04
 
 ### Added - Configurable VAD pre-buffer and min speech duration
 
 New advanced audio settings to reduce speech onset clipping:
 - `pre_buffer_ms` (default 640ms, was 320ms hardcoded) - audio captured before VAD triggers
-- `min_speech_ms` (default 250ms) - minimum speech duration before VAD activates
-
-```toml
-[audio]
-pre_buffer_ms = 640    # increase if beginning of speech is clipped
-min_speech_ms = 250    # decrease for faster trigger (may cause false positives)
-```
+- `min_speech_ms` (default 150ms) - minimum speech duration before VAD activates
 
 ## [2.100.10] - 2026-02-04
 
