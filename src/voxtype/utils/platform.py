@@ -43,19 +43,6 @@ def get_socket_dir() -> Path:
     socket_dir.mkdir(parents=True, exist_ok=True)
     return socket_dir
 
-def discover_agents() -> list[str]:
-    """Discover running agents by scanning for socket files.
-
-    Scans the socket directory for .sock files and returns agent IDs.
-    Excludes internal sockets and stale sockets.
-
-    Returns:
-        List of agent IDs sorted by socket creation time.
-    """
-    from voxtype.agent.watcher import discover_agents as _discover
-
-    return _discover()
-
 @dataclass
 class CheckResult:
     """Result of a dependency check."""
