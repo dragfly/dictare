@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.100.6] - 2026-02-04
+
+### Added - Tests for message sending logic
+
+Added 10 tests covering the empty text + submit handling logic:
+- Empty/whitespace text without submit → not sent
+- Empty/whitespace text WITH submit → sent (submit-only)
+- Text with/without submit → sent
+- Edge cases: missing keys, None values
+
 ## [2.100.5] - 2026-02-03
 
 ### Fixed - Submit-only messages not sent to agent
