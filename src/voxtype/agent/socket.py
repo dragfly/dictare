@@ -128,14 +128,18 @@ class SocketAgent(BaseAgent):
                         self._on_failure(self._id)
                     return False
 
+            sock = self._socket
+            if sock is None:
+                return False
+
             try:
-                self._socket.sendall(data_bytes)
+                sock.sendall(data_bytes)
                 return True
             except (BrokenPipeError, OSError) as e:
                 # Connection lost - cleanup and notify
                 logger.warning(f"Connection to {self._id} lost: {e}")
                 try:
-                    self._socket.close()
+                    sock.close()
                 except OSError:
                     pass
                 self._socket = None
