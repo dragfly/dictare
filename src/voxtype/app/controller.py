@@ -115,10 +115,11 @@ class AppController:
                         adapter_ref[0].state.stt.state = "transcribing"
 
                 # Play beep if audio feedback enabled
+                # Only beep on OFF → LISTENING, not TRANSCRIBING → LISTENING
                 if config.audio.audio_feedback:
                     from voxtype.audio.beep import play_beep_start, play_beep_stop
 
-                    if new == AppState.LISTENING:
+                    if new == AppState.LISTENING and old == AppState.OFF:
                         play_beep_start()
                     elif new == AppState.OFF:
                         play_beep_stop()
