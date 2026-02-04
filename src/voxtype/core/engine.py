@@ -1331,13 +1331,14 @@ def create_engine(
     agent_mode: bool | None = None,
     realtime: bool | None = None,
     hotkey_enabled: bool = True,
-    manual_agents: list[str] | None = None,
-    discovery_method: str = "polling",
-) -> tuple[VoxtypeEngine, Any]:
-    """Create a VoxtypeEngine with appropriate agent registration.
+) -> VoxtypeEngine:
+    """Create a VoxtypeEngine.
 
     This is the shared initialization logic used by both CLI (voxtype listen)
     and daemon. Ensures consistent behavior.
+
+    In agent mode, agents self-register via SSE connection to the HTTP server.
+    In keyboard mode, a KeyboardAgent is created and managed internally.
 
     Args:
         config: Application configuration.
@@ -1347,18 +1348,10 @@ def create_engine(
         realtime: Enable realtime transcription. Defaults to False.
         hotkey_enabled: Enable hotkey listener. Set False for daemon mode
                        (macOS requires main thread for hotkey events).
-        manual_agents: List of agent IDs for manual registration.
-                      If None and agent mode, uses auto-discovery.
-        discovery_method: Agent discovery method - "polling" or "watchdog".
 
     Returns:
-        Tuple of (engine, registrar).
-        - registrar: AgentRegistrar if agent mode, None if keyboard mode.
-        Caller must call registrar.start() after engine.start() if not None.
-        KeyboardAgent lifecycle is managed internally by the engine.
+        Configured VoxtypeEngine instance.
     """
-    from voxtype.agent.registrar import AutoDiscoveryRegistrar, ManualAgentRegistrar
-
     # Use overrides or fall back to config/defaults
     effective_agent_mode = agent_mode if agent_mode is not None else (config.output.mode == "agents")
     effective_realtime = realtime if realtime is not None else False  # realtime is CLI-only, default off
@@ -1372,16 +1365,7 @@ def create_engine(
         hotkey_enabled=hotkey_enabled,
     )
 
-    registrar: ManualAgentRegistrar | AutoDiscoveryRegistrar | None = None
-    if effective_agent_mode:
-        if manual_agents:
-            registrar = ManualAgentRegistrar(engine, manual_agents)
-        else:
-            registrar = AutoDiscoveryRegistrar(
-                engine,
-                monitor_type=discovery_method,
-            )
-    else:
+    if not effective_agent_mode:
         # Keyboard mode: create KeyboardAgent (engine manages its lifecycle)
         from voxtype.agent.keyboard import KeyboardAgent
 
@@ -1389,4 +1373,4 @@ def create_engine(
         engine._keyboard_agent = keyboard_agent  # Engine owns it
         engine.register_agent(keyboard_agent)
 
-    return engine, registrar
+    return engine
