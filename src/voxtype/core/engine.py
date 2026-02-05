@@ -420,17 +420,16 @@ class VoxtypeEngine:
         """
         self._loading_active = True
         self._loading_models = [
-            {"name": "stt", "status": "pending", "elapsed": 0, "estimated": 20},
-            {"name": "vad", "status": "pending", "elapsed": 0, "estimated": 3},
+            {"name": "stt", "status": "pending", "start_time": 0, "elapsed": 0, "estimated": 20},
+            {"name": "vad", "status": "pending", "start_time": 0, "elapsed": 0, "estimated": 3},
         ]
 
         # Load STT model
-        stt_start = time.time()
         self._loading_models[0]["status"] = "loading"
+        self._loading_models[0]["start_time"] = time.time()
         self._stt = self._create_stt_engine(headless=headless)
-        stt_elapsed = time.time() - stt_start
+        self._loading_models[0]["elapsed"] = round(time.time() - self._loading_models[0]["start_time"], 1)
         self._loading_models[0]["status"] = "done"
-        self._loading_models[0]["elapsed"] = round(stt_elapsed, 1)
 
         # Load separate fast model for realtime partial transcriptions
         if self._realtime:
@@ -440,8 +439,8 @@ class VoxtypeEngine:
         # The registrar calls register_agent() to add agents before run().
 
         # Create audio manager with VAD
-        vad_start = time.time()
         self._loading_models[1]["status"] = "loading"
+        self._loading_models[1]["start_time"] = time.time()
         self._audio_manager = AudioManager(
             config=self.config.audio,
             verbose=self.config.verbose,
@@ -454,9 +453,8 @@ class VoxtypeEngine:
             on_vad_loading=lambda: self._emit("on_vad_loading"),
             headless=headless,
         )
-        vad_elapsed = time.time() - vad_start
+        self._loading_models[1]["elapsed"] = round(time.time() - self._loading_models[1]["start_time"], 1)
         self._loading_models[1]["status"] = "done"
-        self._loading_models[1]["elapsed"] = round(vad_elapsed, 1)
         # Set reconnect callbacks
         self._audio_manager.set_reconnect_callbacks(
             on_attempt=lambda n: self._emit("on_device_reconnect_attempt", n),
@@ -1166,7 +1164,15 @@ class VoxtypeEngine:
             },
             "loading": {
                 "active": self._loading_active,
-                "models": self._loading_models,
+                "models": [
+                    {
+                        "name": m["name"],
+                        "status": m["status"],
+                        "elapsed": round(time.time() - m["start_time"], 1) if m["status"] == "loading" else m["elapsed"],
+                        "estimated": m["estimated"],
+                    }
+                    for m in self._loading_models
+                ],
             },
         }
 
