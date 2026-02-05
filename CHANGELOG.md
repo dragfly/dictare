@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.15] - 2026-02-05
+
+### Fixed - VAD loading progress stuck at "ETA 0s"
+
+- Fix race condition: set `start_time` before `status = "loading"` to prevent
+  `elapsed = time.time() - 0` when panel polls between the two assignments
+- Increase VAD estimated time from 3s to 25s (first load can take 25s+)
+- Increase STT estimated time from 20s to 25s for consistency
+
 ## [3.0.0-alpha.14] - 2026-02-05
 
 ### Fixed - Clean shutdown with resource_tracker kill
