@@ -420,13 +420,13 @@ class VoxtypeEngine:
         """
         self._loading_active = True
         self._loading_models = [
-            {"name": "stt", "status": "pending", "start_time": 0, "elapsed": 0, "estimated": 20},
-            {"name": "vad", "status": "pending", "start_time": 0, "elapsed": 0, "estimated": 3},
+            {"name": "stt", "status": "pending", "start_time": 0, "elapsed": 0, "estimated": 25},
+            {"name": "vad", "status": "pending", "start_time": 0, "elapsed": 0, "estimated": 25},
         ]
 
         # Load STT model
-        self._loading_models[0]["status"] = "loading"
         self._loading_models[0]["start_time"] = time.time()
+        self._loading_models[0]["status"] = "loading"
         self._stt = self._create_stt_engine(headless=headless)
         self._loading_models[0]["elapsed"] = round(time.time() - self._loading_models[0]["start_time"], 1)
         self._loading_models[0]["status"] = "done"
@@ -439,8 +439,8 @@ class VoxtypeEngine:
         # The registrar calls register_agent() to add agents before run().
 
         # Create audio manager with VAD
-        self._loading_models[1]["status"] = "loading"
         self._loading_models[1]["start_time"] = time.time()
+        self._loading_models[1]["status"] = "loading"
         self._audio_manager = AudioManager(
             config=self.config.audio,
             verbose=self.config.verbose,
