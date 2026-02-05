@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.17] - 2026-02-05
+
+### Changed - Lite install mode (default)
+
+- `./install.sh` now defaults to lite mode: only reinstalls voxtype package,
+  leaves all dependencies untouched (MLX, ONNX, etc.)
+- `./install.sh full` for full install (previous behavior)
+- Dev mode lite: `uv pip install --no-deps --reinstall -e .`
+- Non-dev mode lite: `uv tool install --reinstall-package voxtype`
+- Falls back to full install if .venv doesn't exist yet
+
 ## [3.0.0-alpha.16] - 2026-02-05
 
 ### Fixed - Use historical load times for progress estimation
