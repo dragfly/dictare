@@ -420,18 +420,33 @@ class VoxtypeEngine:
         Args:
             headless: If True, skip all console output (for Engine/daemon mode).
         """
+        from voxtype.utils.hardware import is_mlx_available
+        from voxtype.utils.stats import get_model_load_time, save_model_load_time
+
+        # Build model IDs for historical load time lookup
+        model = self.config.stt.model
+        if self.config.stt.hw_accel and is_mlx_available():
+            stt_model_id = f"mlx-community/whisper-{model}"
+        else:
+            stt_model_id = f"faster-whisper-{model}"
+        vad_model_id = "silero-vad"
+
         self._loading_active = True
         self._loading_models = [
-            {"name": "stt", "status": "pending", "start_time": 0, "elapsed": 0, "estimated": 25},
-            {"name": "vad", "status": "pending", "start_time": 0, "elapsed": 0, "estimated": 25},
+            {"name": "stt", "status": "pending", "start_time": 0, "elapsed": 0,
+             "estimated": get_model_load_time(stt_model_id) or 25},
+            {"name": "vad", "status": "pending", "start_time": 0, "elapsed": 0,
+             "estimated": get_model_load_time(vad_model_id) or 25},
         ]
 
         # Load STT model
         self._loading_models[0]["start_time"] = time.time()
         self._loading_models[0]["status"] = "loading"
         self._stt = self._create_stt_engine(headless=headless)
-        self._loading_models[0]["elapsed"] = round(time.time() - self._loading_models[0]["start_time"], 1)
+        stt_elapsed = round(time.time() - self._loading_models[0]["start_time"], 1)
+        self._loading_models[0]["elapsed"] = stt_elapsed
         self._loading_models[0]["status"] = "done"
+        save_model_load_time(stt_model_id, stt_elapsed)
 
         # Load separate fast model for realtime partial transcriptions
         if self._realtime:
@@ -455,8 +470,10 @@ class VoxtypeEngine:
             on_vad_loading=lambda: self._emit("on_vad_loading"),
             headless=headless,
         )
-        self._loading_models[1]["elapsed"] = round(time.time() - self._loading_models[1]["start_time"], 1)
+        vad_elapsed = round(time.time() - self._loading_models[1]["start_time"], 1)
+        self._loading_models[1]["elapsed"] = vad_elapsed
         self._loading_models[1]["status"] = "done"
+        save_model_load_time(vad_model_id, vad_elapsed)
         # Set reconnect callbacks
         self._audio_manager.set_reconnect_callbacks(
             on_attempt=lambda n: self._emit("on_device_reconnect_attempt", n),

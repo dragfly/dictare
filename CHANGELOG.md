@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.16] - 2026-02-05
+
+### Fixed - Use historical load times for progress estimation
+
+- Use `get_model_load_time()` / `save_model_load_time()` from stats system
+  to persist cold load times and use them as progress bar estimates
+- Only cold loads (≥50% of previous) are saved; warm loads are ignored
+- First run uses 25s fallback, subsequent runs use actual historical time
+- Fix race condition: set `start_time` before `status = "loading"`
+
 ## [3.0.0-alpha.15] - 2026-02-05
 
 ### Fixed - VAD loading progress stuck at "ETA 0s"
