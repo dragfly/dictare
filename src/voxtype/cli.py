@@ -1178,7 +1178,8 @@ def engine_start(
             pass
         finally:
             controller.stop()
-            # Kill resource_tracker to prevent "leaked semaphore" warnings
+            console.print("[dim]Engine stopped[/]")
+            # Kill resource_tracker + os._exit to prevent leaked semaphore warnings
             import signal as sig
 
             try:
@@ -1188,8 +1189,7 @@ def engine_start(
                     os.kill(_resource_tracker._pid, sig.SIGKILL)
             except Exception:
                 pass
-
-        console.print("[dim]Engine stopped[/]")
+            os._exit(0)
     else:
         # Foreground mode: AppController + StatusPanel UI
         import signal
@@ -1236,23 +1236,38 @@ def engine_start(
         # Setup signal handlers in main thread
         shutdown_attempted = False
 
+        def _kill_resource_tracker() -> None:
+            """Kill resource_tracker subprocess to prevent leaked semaphore warnings."""
+            import signal as sig
+
+            try:
+                from multiprocessing.resource_tracker import _resource_tracker
+
+                if _resource_tracker._pid:
+                    os.kill(_resource_tracker._pid, sig.SIGKILL)
+            except Exception:
+                pass
+
         def signal_handler(signum: int, frame: Any) -> None:
             nonlocal shutdown_attempted
             if shutdown_attempted:
                 # Second signal - force exit
-                import os
-                import signal as sig
-
-                try:
-                    from multiprocessing.resource_tracker import _resource_tracker
-
-                    if _resource_tracker._pid:
-                        os.kill(_resource_tracker._pid, sig.SIGKILL)
-                except Exception:
-                    pass
+                _kill_resource_tracker()
                 os._exit(1)
+
             shutdown_attempted = True
             panel.stop()
+
+            # Timeout: force exit after 3 seconds if graceful shutdown stalls
+            def force_exit() -> None:
+                import time
+
+                time.sleep(3)
+                _kill_resource_tracker()
+                os._exit(1)
+
+            threading.Thread(target=force_exit, daemon=True).start()
+
             controller.request_shutdown()
 
         signal.signal(signal.SIGTERM, signal_handler)
@@ -1265,18 +1280,8 @@ def engine_start(
         finally:
             panel.stop()
             controller.stop()
-            # Kill resource_tracker to prevent "leaked semaphore" warnings
-            # from ONNX/MLX model processes
-            import os
-            import signal as sig
-
-            try:
-                from multiprocessing.resource_tracker import _resource_tracker
-
-                if _resource_tracker._pid:
-                    os.kill(_resource_tracker._pid, sig.SIGKILL)
-            except Exception:
-                pass
+            _kill_resource_tracker()
+            os._exit(0)
 
 
 @engine_app.command("stop")

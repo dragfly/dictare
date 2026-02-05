@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.14] - 2026-02-05
+
+### Fixed - Clean shutdown with resource_tracker kill
+
+- Use `os._exit(0)` after killing resource_tracker to prevent Python from
+  relaunching it during cleanup (was causing "process died unexpectedly" warning)
+- Add 3-second force-exit timeout thread (same pattern as `listen` command)
+  so Ctrl+C always exits promptly even if graceful shutdown stalls
+- Extract `_kill_resource_tracker()` helper for reuse across signal/finally paths
+
 ## [3.0.0-alpha.13] - 2026-02-05
 
 ### Fixed - Semaphore leak warning in `engine start`
