@@ -1218,15 +1218,16 @@ def engine_start(
         controller_thread = threading.Thread(target=run_controller, daemon=True)
         controller_thread.start()
 
+        # Run StatusPanel in main thread (polls /status, shows UI)
+        panel = StatusPanel(console, base_url)
+
         # Setup signal handlers in main thread
         def signal_handler(signum: int, frame: Any) -> None:
+            panel.stop()
             controller.request_shutdown()
 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
-
-        # Run StatusPanel in main thread (polls /status, shows UI)
-        panel = StatusPanel(console, base_url)
 
         try:
             panel.run()
