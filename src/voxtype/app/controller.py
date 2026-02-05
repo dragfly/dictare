@@ -137,13 +137,16 @@ class AppController:
         )
         engine_ref[0] = self._engine
 
-        # 3. Initialize engine (load models)
+        # 3. Start HTTP server early (so StatusPanel can connect during loading)
+        self._engine.start_http_server()
+
+        # 4. Initialize engine (load models — HTTP server serves loading progress)
         self._engine.init_components(headless=True)
 
-        # 4. Start engine runtime (includes HTTP server if agent mode)
+        # 5. Start engine runtime (audio streaming, hotkey, state controller)
         self._engine.start_runtime(start_listening=start_listening)
 
-        # 5. Create and start keyboard bindings (foreground only)
+        # 6. Create and start keyboard bindings (foreground only)
         if with_bindings:
             self._bindings = KeyboardBindingManager(self, self._config)
             self._bindings.start()

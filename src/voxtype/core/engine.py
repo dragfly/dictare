@@ -167,6 +167,10 @@ class VoxtypeEngine:
         # HTTP server for OpenVIP SSE protocol
         self._http_server: Any = None  # OpenVIPServer
 
+        # Loading progress tracking (for /status endpoint)
+        self._loading_active = False
+        self._loading_models: list[dict[str, Any]] = []
+
         # Note: No more _injector - each Agent handles its own transport
 
     def _emit(self, event: str, *args: Any, **kwargs: Any) -> None:
@@ -388,6 +392,23 @@ class VoxtypeEngine:
     # Initialization
     # -------------------------------------------------------------------------
 
+    def start_http_server(self) -> None:
+        """Start the HTTP server for SSE agent communication.
+
+        Call this before init_components() so the StatusPanel can connect
+        during model loading and show progress.
+        """
+        if self._http_server is not None:
+            return  # Already started
+
+        if self.agent_mode or self.config.server.enabled:
+            from voxtype.core.http_server import OpenVIPServer
+
+            self._http_server = OpenVIPServer(
+                self, self.config.server.host, self.config.server.port
+            )
+            self._http_server.start()
+
     def init_components(self, *, headless: bool = False) -> None:
         """Initialize engine components (STT, VAD, audio, hotkey).
 
@@ -397,7 +418,19 @@ class VoxtypeEngine:
         Args:
             headless: If True, skip all console output (for Engine/daemon mode).
         """
+        self._loading_active = True
+        self._loading_models = [
+            {"name": "stt", "status": "pending", "elapsed": 0, "estimated": 20},
+            {"name": "vad", "status": "pending", "elapsed": 0, "estimated": 3},
+        ]
+
+        # Load STT model
+        stt_start = time.time()
+        self._loading_models[0]["status"] = "loading"
         self._stt = self._create_stt_engine(headless=headless)
+        stt_elapsed = time.time() - stt_start
+        self._loading_models[0]["status"] = "done"
+        self._loading_models[0]["elapsed"] = round(stt_elapsed, 1)
 
         # Load separate fast model for realtime partial transcriptions
         if self._realtime:
@@ -407,6 +440,8 @@ class VoxtypeEngine:
         # The registrar calls register_agent() to add agents before run().
 
         # Create audio manager with VAD
+        vad_start = time.time()
+        self._loading_models[1]["status"] = "loading"
         self._audio_manager = AudioManager(
             config=self.config.audio,
             verbose=self.config.verbose,
@@ -419,6 +454,9 @@ class VoxtypeEngine:
             on_vad_loading=lambda: self._emit("on_vad_loading"),
             headless=headless,
         )
+        vad_elapsed = time.time() - vad_start
+        self._loading_models[1]["status"] = "done"
+        self._loading_models[1]["elapsed"] = round(vad_elapsed, 1)
         # Set reconnect callbacks
         self._audio_manager.set_reconnect_callbacks(
             on_attempt=lambda n: self._emit("on_device_reconnect_attempt", n),
@@ -444,6 +482,9 @@ class VoxtypeEngine:
                 self._hotkey = None
         else:
             self._hotkey = None
+
+        # Loading complete
+        self._loading_active = False
 
     # -------------------------------------------------------------------------
     # VAD Callbacks
@@ -1124,8 +1165,8 @@ class VoxtypeEngine:
                 "bound": self._hotkey is not None,
             },
             "loading": {
-                "active": False,
-                "models": [],
+                "active": self._loading_active,
+                "models": self._loading_models,
             },
         }
 
@@ -1220,14 +1261,8 @@ class VoxtypeEngine:
                 on_other_key=self._tap_detector.on_other_key,
             )
 
-        # Start HTTP server for SSE agent communication
-        if self.agent_mode or self.config.server.enabled:
-            from voxtype.core.http_server import OpenVIPServer
-
-            self._http_server = OpenVIPServer(
-                self, self.config.server.host, self.config.server.port
-            )
-            self._http_server.start()
+        # Start HTTP server if not already started (backward compat for direct callers)
+        self.start_http_server()
 
         # Start audio streaming (always needed for VAD to work)
         if self._audio_manager:
