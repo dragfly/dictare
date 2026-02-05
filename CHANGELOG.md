@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.13] - 2026-02-05
+
+### Fixed - Semaphore leak warning in `engine start`
+
+- Port resource_tracker kill fix to `engine start` foreground and daemon modes
+- Kill `multiprocessing.resource_tracker` subprocess at shutdown to prevent
+  "leaked semaphore objects" warnings from ONNX/MLX model processes
+- Add force-exit (second Ctrl+C) handler with resource_tracker cleanup
+- Fix pre-existing ruff error: `os` not imported in `engine_start()` function
+
 ## [3.0.0-alpha.12] - 2026-02-05
 
 ### Fixed - Loading progress bar not updating in real time

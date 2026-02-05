@@ -1109,6 +1109,8 @@ def engine_start(
         raise typer.Exit(1)
 
     # Check if engine already running
+    import os
+
     pid_path = get_pid_path()
     if pid_path.exists():
         try:
@@ -1176,6 +1178,16 @@ def engine_start(
             pass
         finally:
             controller.stop()
+            # Kill resource_tracker to prevent "leaked semaphore" warnings
+            import signal as sig
+
+            try:
+                from multiprocessing.resource_tracker import _resource_tracker
+
+                if _resource_tracker._pid:
+                    os.kill(_resource_tracker._pid, sig.SIGKILL)
+            except Exception:
+                pass
 
         console.print("[dim]Engine stopped[/]")
     else:
@@ -1222,7 +1234,24 @@ def engine_start(
         panel = StatusPanel(console, base_url)
 
         # Setup signal handlers in main thread
+        shutdown_attempted = False
+
         def signal_handler(signum: int, frame: Any) -> None:
+            nonlocal shutdown_attempted
+            if shutdown_attempted:
+                # Second signal - force exit
+                import os
+                import signal as sig
+
+                try:
+                    from multiprocessing.resource_tracker import _resource_tracker
+
+                    if _resource_tracker._pid:
+                        os.kill(_resource_tracker._pid, sig.SIGKILL)
+                except Exception:
+                    pass
+                os._exit(1)
+            shutdown_attempted = True
             panel.stop()
             controller.request_shutdown()
 
@@ -1236,6 +1265,18 @@ def engine_start(
         finally:
             panel.stop()
             controller.stop()
+            # Kill resource_tracker to prevent "leaked semaphore" warnings
+            # from ONNX/MLX model processes
+            import os
+            import signal as sig
+
+            try:
+                from multiprocessing.resource_tracker import _resource_tracker
+
+                if _resource_tracker._pid:
+                    os.kill(_resource_tracker._pid, sig.SIGKILL)
+            except Exception:
+                pass
 
 
 @engine_app.command("stop")
