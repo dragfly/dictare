@@ -3,7 +3,8 @@
 # voxtype installer
 #
 # Usage:
-#   Local:   ./install.sh [--dev]
+#   Local:   ./install.sh [--dev]           # Lite: only voxtype (default)
+#   Local:   ./install.sh [--dev] full      # Full: voxtype + all dependencies
 #   Remote:  curl -fsSL https://raw.githubusercontent.com/dragfly/voxtype/main/install.sh | sh
 #   Uninstall: ./install.sh uninstall
 #
@@ -42,9 +43,11 @@ fi
 ACTION="install"
 FORCE_MODE=0
 GPU_MODE=0
+FULL_MODE=0
 for arg in "$@"; do
     case $arg in
         uninstall|remove) ACTION="uninstall" ;;
+        full) FULL_MODE=1 ;;
         --dev) DEV_MODE=1 ;;
         --force) FORCE_MODE=1 ;;
         --gpu) GPU_MODE=1 ;;
@@ -60,12 +63,20 @@ show_help() {
 voxtype installer v${VERSION}
 
 Usage:
-  ./install.sh              Install voxtype globally (uv tool)
+  ./install.sh              Lite install: only reinstalls voxtype (fast)
+  ./install.sh full         Full install: reinstalls voxtype + all dependencies
+  ./install.sh --dev        Lite install in development mode (editable)
+  ./install.sh --dev full   Full install in development mode
   ./install.sh --gpu        Install with GPU support (Linux: CUDA, macOS: MLX)
   ./install.sh --force      Force rebuild from source (ignore cache)
-  ./install.sh --dev        Install in development mode (editable, in .venv)
   ./install.sh uninstall    Remove voxtype and dependencies
-  curl ... | sh             Install from remote
+  curl ... | sh             Install from remote (always full)
+
+Install modes:
+  (default)   Lite: reinstalls only voxtype, leaves dependencies untouched.
+              Fast, does not invalidate MLX kernel cache.
+  full        Full: reinstalls voxtype and all dependencies.
+              Use after changing dependencies in pyproject.toml.
 
 Options:
   --gpu       Install with GPU acceleration (cuDNN on Linux, MLX on macOS)
@@ -189,16 +200,36 @@ install_macos() {
 
     # 3. Install voxtype
     if [ $DEV_MODE -eq 1 ]; then
-        step "Installing voxtype (development mode)..."
-        cd "$SCRIPT_DIR"
+        if [ $FULL_MODE -eq 1 ]; then
+            # Full: sync everything (voxtype + all dependencies)
+            step "Installing voxtype (dev, full)..."
+            cd "$SCRIPT_DIR"
 
-        # Use mlx extra on Apple Silicon
-        if [ "$ARCH" = "arm64" ]; then
-            uv sync --python 3.11 --extra mlx
+            if [ "$ARCH" = "arm64" ]; then
+                uv sync --python 3.11 --extra mlx
+            else
+                uv sync --python 3.11
+            fi
+            info "Synced .venv with all dependencies"
         else
-            uv sync --python 3.11
+            # Lite: only reinstall voxtype package, leave deps untouched
+            step "Installing voxtype (dev, lite)..."
+            cd "$SCRIPT_DIR"
+
+            if [ ! -d "$SCRIPT_DIR/.venv" ]; then
+                # No .venv yet — need full install first
+                warn "No .venv found, running full install..."
+                if [ "$ARCH" = "arm64" ]; then
+                    uv sync --python 3.11 --extra mlx
+                else
+                    uv sync --python 3.11
+                fi
+            else
+                # .venv exists — only reinstall voxtype
+                uv pip install --no-deps --reinstall -e .
+            fi
+            info "Reinstalled voxtype (dependencies unchanged)"
         fi
-        info "Created .venv with editable install"
 
         echo ""
         echo "Development mode active. Run with:"
@@ -210,30 +241,38 @@ install_macos() {
     else
         step "Installing voxtype..."
 
+        # Determine package spec (with or without mlx extra)
+        if [ $IS_LOCAL -eq 1 ]; then
+            if [ "$ARCH" = "arm64" ]; then
+                PKG_SPEC="$SCRIPT_DIR[mlx]"
+            else
+                PKG_SPEC="$SCRIPT_DIR"
+            fi
+        else
+            if [ "$ARCH" = "arm64" ]; then
+                PKG_SPEC="voxtype[mlx]"
+            else
+                PKG_SPEC="voxtype"
+            fi
+        fi
+
         # Build install flags
-        # --reinstall: upgrade even if installed
-        # --force: rebuild from source (ignore cached wheel)
         # --prerelease=allow: needed for mlx-audio 0.3.0 which requires transformers==5.0.0rc3
-        INSTALL_FLAGS="--reinstall --python 3.11 --prerelease=allow"
+        INSTALL_FLAGS="--python 3.11 --prerelease=allow"
+
+        if [ $FULL_MODE -eq 1 ]; then
+            # Full: reinstall everything
+            INSTALL_FLAGS="$INSTALL_FLAGS --reinstall"
+        else
+            # Lite: only reinstall voxtype package
+            INSTALL_FLAGS="$INSTALL_FLAGS --reinstall-package voxtype"
+        fi
+
         if [ $FORCE_MODE -eq 1 ]; then
             INSTALL_FLAGS="$INSTALL_FLAGS --force"
         fi
 
-        if [ $IS_LOCAL -eq 1 ]; then
-            # Local install from repo
-            if [ "$ARCH" = "arm64" ]; then
-                uv tool install $INSTALL_FLAGS "$SCRIPT_DIR[mlx]"
-            else
-                uv tool install $INSTALL_FLAGS "$SCRIPT_DIR"
-            fi
-        else
-            # Remote install from PyPI
-            if [ "$ARCH" = "arm64" ]; then
-                uv tool install $INSTALL_FLAGS "voxtype[mlx]"
-            else
-                uv tool install $INSTALL_FLAGS "voxtype"
-            fi
-        fi
+        uv tool install $INSTALL_FLAGS "$PKG_SPEC"
         info "Installed voxtype"
 
         echo ""
@@ -367,13 +406,31 @@ EOF
 
     # 5. Install voxtype
     if [ $DEV_MODE -eq 1 ]; then
-        step "Installing voxtype (development mode)..."
-        cd "$SCRIPT_DIR"
+        if [ $FULL_MODE -eq 1 ]; then
+            # Full: sync everything
+            step "Installing voxtype (dev, full)..."
+            cd "$SCRIPT_DIR"
 
-        if [ $GPU_MODE -eq 1 ]; then
-            uv sync --python 3.11 --extra gpu
+            if [ $GPU_MODE -eq 1 ]; then
+                uv sync --python 3.11 --extra gpu
+            else
+                uv sync --python 3.11
+            fi
         else
-            uv sync --python 3.11
+            # Lite: only reinstall voxtype
+            step "Installing voxtype (dev, lite)..."
+            cd "$SCRIPT_DIR"
+
+            if [ ! -d "$SCRIPT_DIR/.venv" ]; then
+                warn "No .venv found, running full install..."
+                if [ $GPU_MODE -eq 1 ]; then
+                    uv sync --python 3.11 --extra gpu
+                else
+                    uv sync --python 3.11
+                fi
+            else
+                uv pip install --no-deps --reinstall -e .
+            fi
         fi
 
         # Install pre-built evdev if available
@@ -381,7 +438,7 @@ EOF
             uv pip install --reinstall "$SCRIPT_DIR/build/evdev-"*.whl 2>/dev/null || true
         fi
 
-        info "Created .venv with editable install"
+        info "Installed voxtype (dev)"
 
         echo ""
         echo "Development mode active. Run with:"
@@ -392,16 +449,6 @@ EOF
         echo -e "  ${BOLD}uv run voxtype listen${NC}"
     else
         step "Installing voxtype..."
-
-        # Build install flags
-        # --reinstall: upgrade even if installed
-        # --python 3.11: consistent Python version across platforms
-        # --force: rebuild from source (ignore cached wheel)
-        # --prerelease=allow: needed for mlx-audio 0.3.0 which requires transformers==5.0.0rc3
-        INSTALL_FLAGS="--reinstall --python 3.11 --prerelease=allow"
-        if [ $FORCE_MODE -eq 1 ]; then
-            INSTALL_FLAGS="$INSTALL_FLAGS --force"
-        fi
 
         # Determine package spec (with or without gpu extra)
         if [ $IS_LOCAL -eq 1 ]; then
@@ -416,6 +463,20 @@ EOF
             else
                 PKG_SPEC="voxtype"
             fi
+        fi
+
+        # Build install flags
+        # --prerelease=allow: needed for mlx-audio 0.3.0 which requires transformers==5.0.0rc3
+        INSTALL_FLAGS="--python 3.11 --prerelease=allow"
+
+        if [ $FULL_MODE -eq 1 ]; then
+            INSTALL_FLAGS="$INSTALL_FLAGS --reinstall"
+        else
+            INSTALL_FLAGS="$INSTALL_FLAGS --reinstall-package voxtype"
+        fi
+
+        if [ $FORCE_MODE -eq 1 ]; then
+            INSTALL_FLAGS="$INSTALL_FLAGS --force"
         fi
 
         uv tool install $INSTALL_FLAGS "$PKG_SPEC"
