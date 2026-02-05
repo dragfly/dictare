@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.12] - 2026-02-05
+
+### Fixed - Loading progress bar not updating in real time
+
+- Store `start_time` per model and compute `elapsed` dynamically in `/status`
+- Progress bar now animates during model loading (was stuck at 0% before)
+- ETA countdown updates every poll interval
+
 ## [3.0.0-alpha.11] - 2026-02-05
 
 ### Fixed - Ctrl+C not working in `engine start` foreground mode
