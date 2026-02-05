@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.10] - 2026-02-05
+
+### Fixed - HTTP server starts before model loading
+
+- Extracted `start_http_server()` from `start_runtime()` as a public method
+- AppController now calls `start_http_server()` before `init_components()`
+- StatusPanel can connect immediately and show loading progress
+- Added loading progress tracking: `_loading_active`, `_loading_models` fields
+- `init_components()` now tracks elapsed time for each model (STT, VAD)
+- `/status` endpoint returns real loading state instead of hardcoded empty values
+- `start_runtime()` still calls `start_http_server()` with no-op guard for backward compat
+
 ## [3.0.0-alpha.9] - 2026-02-04
 
 ### Changed - Config cleanup and dead code removal
