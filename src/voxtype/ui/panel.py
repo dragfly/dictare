@@ -248,7 +248,7 @@ class StatusPanel:
                 device,
                 stt_loading.get("status", "done"),
                 stt_loading.get("elapsed", 0),
-                stt_loading.get("estimated", 20),
+                stt_loading.get("estimated", 25),
             ))
         else:
             # No loading info, assume loaded
@@ -262,7 +262,7 @@ class StatusPanel:
                 None,
                 vad_loading.get("status", "done"),
                 vad_loading.get("elapsed", 0),
-                vad_loading.get("estimated", 5),
+                vad_loading.get("estimated", 25),
             ))
         else:
             lines.append(self._build_model_line("VAD", "silero-vad", None, "done", 0, 0))
