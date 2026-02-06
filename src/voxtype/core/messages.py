@@ -47,8 +47,8 @@ def create_message(
 
     Args:
         text: Text to inject.
-        submit: If True, send Enter after text (x_submit flag).
-        visual_newline: If True, send visual newline after text (x_visual_newline flag).
+        submit: If True, set x_submit with enter=True.
+        visual_newline: If True, set x_visual_newline flag.
         language: Language code (e.g., "en", "it"). Used by pipeline filters.
 
     Returns:
@@ -58,13 +58,13 @@ def create_message(
         >>> msg = create_message("hello", submit=True, language="en")
         >>> msg["type"]  # "message"
         >>> msg["text"]  # "hello"
-        >>> msg["x_submit"]  # True
+        >>> msg["x_submit"]["enter"]  # True
         >>> msg["language"]  # "en"
     """
     message = _base_message("message")
     message["text"] = text
     if submit:
-        message["x_submit"] = True
+        message["x_submit"] = {"enter": True}
     if visual_newline:
         message["x_visual_newline"] = True
     if language:

@@ -91,7 +91,7 @@ class TestSSEAgentSend:
             "id": "abc-123",
             "timestamp": "2026-01-01T00:00:00Z",
             "text": "hello",
-            "x_submit": True,
+            "x_submit": {"enter": True},
             "language": "en",
         }
         agent.send(msg)

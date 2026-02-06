@@ -250,7 +250,7 @@ class TestLocalReceiverMessageProcessing:
         with patch.object(receiver, "_create_injector", return_value=mock_injector):
             receiver.start()
 
-            message = {"openvip": "1.0", "type": "message", "text": "hello", "x_submit": True}
+            message = {"openvip": "1.0", "type": "message", "text": "hello", "x_submit": {"enter": True}}
             receiver.send(message)
 
             time.sleep(0.2)
@@ -276,7 +276,7 @@ class TestLocalReceiverMessageProcessing:
                 "openvip": "1.0",
                 "type": "message",
                 "text": "hello",
-                "x_submit": True,
+                "x_submit": {"enter": True},
                 "x_visual_newline": True,
             }
             receiver.send(message)

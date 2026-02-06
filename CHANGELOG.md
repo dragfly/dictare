@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.21] - 2026-02-06
+
+### Changed - Structured extension fields (Step 2)
+
+- `x_submit` is now a structured object: `{enter: true, trigger: "...", confidence: 0.99}`
+  instead of flat `x_submit=True` + `x_submit_trigger` + `x_submit_confidence`
+- `x_agent_switch` is now a structured object: `{target: "agent_id", confidence: 0.85}`
+  instead of flat `x_agent_switch="agent_id"`
+- Filters use `derive_message()` for ID triad (id, trace_id, parent_id)
+- `derive_message()` handles messages without `id` field gracefully
+- Updated all consumers: engine, agent mux, local receiver
+- `create_message()` sets structured `x_submit` when `submit=True`
+
 ## [3.0.0-alpha.20] - 2026-02-06
 
 ### Changed - Pipeline foundation (Step 1)
