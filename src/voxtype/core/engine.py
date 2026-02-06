@@ -32,6 +32,7 @@ from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
 from voxtype.pipeline import AgentFilter, Pipeline, SubmitFilter
+from voxtype.pipeline.executors import AgentSwitchExecutor
 from voxtype.stt.base import STTEngine
 
 logger = logging.getLogger(__name__)
@@ -147,8 +148,9 @@ class VoxtypeEngine:
         self._current_agent_id: str | None = None  # ID of currently selected agent
         self._agent_order: list[str] = []  # Ordered list of agent IDs for cycling
 
-        # Pipeline for message processing
+        # Pipelines for message processing
         self._pipeline = self._create_pipeline()
+        self._executor_pipeline = self._create_executor_pipeline()
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
         self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
 
@@ -392,6 +394,21 @@ class VoxtypeEngine:
             pipeline.add_step(submit_filter)
 
         return pipeline if len(pipeline) > 0 else None
+
+    def _create_executor_pipeline(self) -> Pipeline:
+        """Create executor pipeline for acting on extension fields.
+
+        Executors run after filters and handle side effects:
+        - AgentSwitchExecutor: switches the current agent on x_agent_switch
+
+        Returns:
+            Pipeline with executors (always created, may be empty).
+        """
+        pipeline = Pipeline()
+        pipeline.add_step(AgentSwitchExecutor(
+            switch_fn=self._switch_to_agent_by_name_internal,
+        ))
+        return pipeline
 
     # -------------------------------------------------------------------------
     # Initialization
@@ -752,19 +769,16 @@ class VoxtypeEngine:
             language=message_language,
         )
 
-        # Apply pipeline filters (may modify message, set x_submit, etc.)
+        # Apply pipeline: filters (enrich) then executors (act)
         messages_to_send = [message]
         if self._pipeline:
             messages_to_send = self._pipeline.process(message)
+        if self._executor_pipeline and messages_to_send:
+            messages_to_send = self._executor_pipeline.process_many(messages_to_send)
 
-        # Handle x_agent_switch from pipeline (voice-controlled agent switch)
-        if messages_to_send:
-            x_switch = messages_to_send[0].get("x_agent_switch", {})
-            switch_target = x_switch.get("target") if isinstance(x_switch, dict) else None
-            if switch_target:
-                # Switch to the requested agent
-                self._switch_to_agent_by_name_internal(switch_target)
-                target_agent = self._get_current_agent()
+        # Re-resolve target agent (executor may have switched it)
+        if agent is None:
+            target_agent = self._get_current_agent()
 
         # Lock to prevent concurrent injections
         error_msg: str | None = None
