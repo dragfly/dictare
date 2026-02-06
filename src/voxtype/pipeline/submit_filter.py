@@ -25,7 +25,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
-from voxtype.pipeline.base import FilterResult
+from voxtype.pipeline.base import PipelineResult
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,7 @@ class SubmitFilter:
 
         return combined
 
-    def process(self, message: dict) -> FilterResult:
+    def process(self, message: dict) -> PipelineResult:
         """Process message, detecting submit triggers.
 
         Checks triggers for the message's detected language plus English.
@@ -162,25 +162,25 @@ class SubmitFilter:
             message: OpenVIP message dict with 'text' field and optional 'language'.
 
         Returns:
-            FilterResult with potentially modified message.
+            PipelineResult with potentially modified message.
         """
         text = message.get("text", "")
         if not text:
-            return FilterResult.passed(message)
+            return PipelineResult.passed(message)
 
         # Already has submit flag? Pass through
         if message.get("x_submit"):
-            return FilterResult.passed(message)
+            return PipelineResult.passed(message)
 
         # Tokenize and scan for triggers
         tokens = _tokenize(text)
         if not tokens:
-            return FilterResult.passed(message)
+            return PipelineResult.passed(message)
 
         # Get triggers for this message's language
         active_triggers = self._get_triggers_for_message(message)
         if not active_triggers:
-            return FilterResult.passed(message)
+            return PipelineResult.passed(message)
 
         # Find best trigger match
         match = self._find_best_match(tokens, active_triggers)
@@ -213,9 +213,9 @@ class SubmitFilter:
             # Remove visual_newline if present (submit takes precedence)
             new_message.pop("x_visual_newline", None)
 
-            return FilterResult.augmented(new_message)
+            return PipelineResult.augmented(new_message)
 
-        return FilterResult.passed(message)
+        return PipelineResult.passed(message)
 
     def _find_best_match(
         self, tokens: list[str], triggers: list[list[str]]

@@ -5,9 +5,9 @@ import pytest
 from voxtype.events import bus
 from voxtype.pipeline import (
     AgentFilter,
-    FilterAction,
-    FilterResult,
     Pipeline,
+    PipelineAction,
+    PipelineResult,
     SubmitFilter,
 )
 from voxtype.pipeline.agent_filter import (
@@ -53,34 +53,34 @@ class TestHelperFunctions:
         assert _tokenize("  hello   world  ") == ["hello", "world"]
         assert _tokenize("...test...") == ["test"]
 
-class TestFilterResult:
-    """Test FilterResult factory methods."""
+class TestPipelineResult:
+    """Test PipelineResult factory methods."""
 
     def test_passed_creates_pass_action(self) -> None:
-        """FilterResult.passed creates PASS action with message."""
+        """PipelineResult.passed creates PASS action with message."""
         msg = {"text": "hello"}
-        result = FilterResult.passed(msg)
-        assert result.action == FilterAction.PASS
+        result = PipelineResult.passed(msg)
+        assert result.action == PipelineAction.PASS
         assert result.messages == [msg]
 
     def test_augmented_creates_augment_action(self) -> None:
-        """FilterResult.augmented creates AUGMENT action with message."""
+        """PipelineResult.augmented creates AUGMENT action with message."""
         msg = {"text": "hello", "x_submit": True}
-        result = FilterResult.augmented(msg)
-        assert result.action == FilterAction.AUGMENT
+        result = PipelineResult.augmented(msg)
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages == [msg]
 
     def test_consumed_creates_consume_action(self) -> None:
-        """FilterResult.consumed creates CONSUME action."""
-        result = FilterResult.consumed()
-        assert result.action == FilterAction.CONSUME
+        """PipelineResult.consumed creates CONSUME action."""
+        result = PipelineResult.consumed()
+        assert result.action == PipelineAction.CONSUME
         assert result.messages == []
 
     def test_consumed_with_messages(self) -> None:
-        """FilterResult.consumed can include output messages."""
+        """PipelineResult.consumed can include output messages."""
         msgs = [{"text": "a"}, {"text": "b"}]
-        result = FilterResult.consumed(msgs)
-        assert result.action == FilterAction.CONSUME
+        result = PipelineResult.consumed(msgs)
+        assert result.action == PipelineAction.CONSUME
         assert result.messages == msgs
 
 class TestSubmitFilterBasics:
@@ -111,7 +111,7 @@ class TestSubmitFilterBasics:
         f = SubmitFilter()
         msg = {"text": ""}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
         assert result.messages[0]["text"] == ""
 
     def test_existing_submit_flag_passes(self) -> None:
@@ -119,7 +119,7 @@ class TestSubmitFilterBasics:
         f = SubmitFilter()
         msg = {"text": "hello submit", "x_submit": True}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
         assert result.messages[0] == msg
 
 class TestSubmitFilterTriggerDetection:
@@ -130,7 +130,7 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter()
         msg = {"text": "hello world ok send"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert result.messages[0]["text"] == "hello world"
 
@@ -139,7 +139,7 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter()
         msg = {"text": "ho un bug nel parser ok invia", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert result.messages[0]["text"] == "ho un bug nel parser"
 
@@ -148,7 +148,7 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter()
         msg = {"text": "ho un bug nel parser ok in via", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert result.messages[0]["text"] == "ho un bug nel parser"
 
@@ -157,7 +157,7 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter()
         msg = {"text": "fammi vedere il codice ok invia", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert "ok" not in result.messages[0]["text"]
         assert "invia" not in result.messages[0]["text"]
@@ -170,14 +170,14 @@ class TestSubmitFilterTriggerDetection:
         msg = {"text": " ".join(words)}
         result = f.process(msg)
         # Should pass through because submit is too far from end
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
     def test_case_insensitive(self) -> None:
         """Trigger detection is case insensitive."""
         f = SubmitFilter()
         msg = {"text": "hello OK SEND"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
 
     def test_accent_insensitive(self) -> None:
@@ -185,14 +185,14 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter(triggers={"it": [["ok", "invìa"]]})  # With accent
         msg = {"text": "test ok invia", "language": "it"}  # Without accent
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
 
     def test_visual_newline_removed_on_submit(self) -> None:
         """x_visual_newline is removed when x_submit is set."""
         f = SubmitFilter()
         msg = {"text": "hello ok submit", "x_visual_newline": True}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert "x_visual_newline" not in result.messages[0]
 
@@ -201,7 +201,7 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter()
         msg = {"text": "correggi il bug vai", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
         assert result.messages[0]["text"] == "correggi il bug"
 
@@ -210,14 +210,14 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter()
         msg = {"text": "vai a vedere il codice", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
     def test_last_word_only_with_punctuation(self) -> None:
         """Last-word-only trigger works even if transcription has punctuation."""
         f = SubmitFilter()
         msg = {"text": "correggi il bug, vai!", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
 
     def test_last_word_only_case_insensitive(self) -> None:
@@ -225,14 +225,14 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter()
         msg = {"text": "correggi il bug VAI", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
 
     def test_last_word_only_confidence_is_1(self) -> None:
         """Last-word-only trigger has confidence 1.0."""
         f = SubmitFilter()
         msg = {"text": "test vai", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit_confidence"] == 1.0
 
     def test_last_word_only_custom_trigger(self) -> None:
@@ -240,7 +240,7 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter(triggers={"en": [["done."]]})
         msg = {"text": "I finished the task done"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["text"] == "I finished the task"
 
     def test_single_word_not_last_does_not_trigger(self) -> None:
@@ -248,7 +248,7 @@ class TestSubmitFilterTriggerDetection:
         f = SubmitFilter(triggers={"en": [["done."]]})
         msg = {"text": "done with the first part"}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
 class TestSubmitFilterConfidence:
     """Test SubmitFilter confidence-based detection."""
@@ -258,7 +258,7 @@ class TestSubmitFilterConfidence:
         f = SubmitFilter(confidence_threshold=0.85)
         msg = {"text": "test ok invia", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
 
     def test_low_confidence_far_from_end(self) -> None:
         """Multi-word trigger far from end has low confidence."""
@@ -270,7 +270,7 @@ class TestSubmitFilterConfidence:
         # submit is 7 words from end → 0.95^7 * 1.1 = 0.768 < 0.85
         msg = {"text": "submit one two three four five six seven"}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
     def test_adjustable_confidence_threshold(self) -> None:
         """Confidence threshold can be adjusted."""
@@ -280,12 +280,12 @@ class TestSubmitFilterConfidence:
         # With high threshold, should not trigger
         f_strict = SubmitFilter(triggers=triggers, confidence_threshold=0.95)
         result = f_strict.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
         # With low threshold, should trigger
         f_lenient = SubmitFilter(triggers=triggers, confidence_threshold=0.5)
         result = f_lenient.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
 
 class TestPipelineBasics:
     """Test Pipeline basic operations."""
@@ -301,14 +301,14 @@ class TestPipelineBasics:
         """Pipeline length matches filter count."""
         p = Pipeline()
         assert len(p) == 0
-        p.add_filter(SubmitFilter())
+        p.add_step(SubmitFilter())
         assert len(p) == 1
 
-    def test_pipeline_filter_names(self) -> None:
+    def test_pipeline_step_names(self) -> None:
         """Pipeline returns filter names."""
         p = Pipeline()
-        p.add_filter(SubmitFilter())
-        assert p.filter_names == ["submit_filter"]
+        p.add_step(SubmitFilter())
+        assert p.step_names == ["submit_filter"]
 
 class TestPipelineWithFilters:
     """Test Pipeline with filters."""
@@ -371,7 +371,7 @@ class TestLanguageBasedTriggers:
         f = SubmitFilter()
         msg = {"text": "test ok invia", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
 
     def test_english_message_uses_english_triggers(self) -> None:
@@ -379,7 +379,7 @@ class TestLanguageBasedTriggers:
         f = SubmitFilter()
         msg = {"text": "test ok send", "language": "en"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
 
     def test_italian_message_also_checks_english(self) -> None:
@@ -388,28 +388,28 @@ class TestLanguageBasedTriggers:
         # English trigger "ok submit" should work even with Italian language
         msg = {"text": "test ok submit", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
 
     def test_unknown_language_falls_back_to_english(self) -> None:
         """Unknown language uses only English triggers."""
         f = SubmitFilter()
         msg = {"text": "test ok send", "language": "xyz"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
 
     def test_no_language_defaults_to_english(self) -> None:
         """Message without language defaults to English."""
         f = SubmitFilter()
         msg = {"text": "test ok send"}  # No language field
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
 
     def test_language_code_normalized(self) -> None:
         """Language codes like 'en-US' are normalized to 'en'."""
         f = SubmitFilter()
         msg = {"text": "test ok send", "language": "en-US"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
 
     def test_italian_trigger_not_matched_for_english_only(self) -> None:
         """Italian trigger not matched when only English triggers available."""
@@ -418,7 +418,7 @@ class TestLanguageBasedTriggers:
         msg = {"text": "test invia", "language": "en"}
         result = f.process(msg)
         # "invia" is not in English triggers
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
     def test_language_specific_priority(self) -> None:
         """Language-specific triggers have priority over English."""
@@ -431,7 +431,7 @@ class TestLanguageBasedTriggers:
         # Italian message with Italian trigger
         msg = {"text": "test manda", "language": "it"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["text"] == "test"
 
 class TestEdgeCases:
@@ -442,7 +442,7 @@ class TestEdgeCases:
         f = SubmitFilter(triggers={"en": [["submit"]]})
         msg = {"text": "submit"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["text"] == ""
         assert result.messages[0]["x_submit"] is True
 
@@ -451,7 +451,7 @@ class TestEdgeCases:
         f = SubmitFilter()
         msg = {"text": "hello, ok send!"}
         result = f.process(msg)
-        assert result.action == FilterAction.AUGMENT
+        assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_submit"] is True
 
     def test_non_consecutive_multi_word_trigger(self) -> None:
@@ -463,13 +463,13 @@ class TestEdgeCases:
         # Consecutive: high confidence
         msg1 = {"text": "test ok invia", "language": "it"}
         result1 = f.process(msg1)
-        assert result1.action == FilterAction.AUGMENT
+        assert result1.action == PipelineAction.AUGMENT
 
         # Non-consecutive: lower confidence but still passes with low threshold
         msg2 = {"text": "test ok qualcosa invia", "language": "it"}
         result2 = f.process(msg2)
         # With gap_penalty and low threshold (0.7), still triggers
-        assert result2.action == FilterAction.AUGMENT
+        assert result2.action == PipelineAction.AUGMENT
 
     def test_message_preserves_other_fields(self) -> None:
         """Message preserves other fields when augmented."""
@@ -541,21 +541,21 @@ class TestAgentFilterBasics:
         f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         msg = {"text": ""}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
     def test_no_agents_passes(self) -> None:
         """Message passes if no agents configured."""
         f = AgentFilter(agent_ids=[], subscribe_to_events=False)
         msg = {"text": "agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
     def test_existing_agent_switch_passes(self) -> None:
         """Message with existing x_agent_switch passes through."""
         f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         msg = {"text": "agent voxtype", "x_agent_switch": "other"}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
 class TestAgentFilterDetection:
     """Test AgentFilter agent switch detection."""
@@ -565,7 +565,7 @@ class TestAgentFilterDetection:
         f = AgentFilter(agent_ids=["voxtype", "koder"], subscribe_to_events=False)
         msg = {"text": "fammi vedere il codice agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
         # Two messages: text before trigger, then switch command
         assert len(result.messages) == 2
         # First message: text without trigger (no switch flag)
@@ -581,7 +581,7 @@ class TestAgentFilterDetection:
         f = AgentFilter(agent_ids=["koder", "voxtype"], subscribe_to_events=False)
         msg = {"text": "questo bug agent coder"}  # Heard as "coder"
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
         assert len(result.messages) == 2
         assert result.messages[1]["x_agent_switch"] == "koder"
 
@@ -590,7 +590,7 @@ class TestAgentFilterDetection:
         f = AgentFilter(agent_ids=["koder", "voxtype"], subscribe_to_events=False)
         msg = {"text": "questo bug agent quant"}  # Heard as "quant"
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
         assert len(result.messages) == 2
         assert result.messages[1]["x_agent_switch"] == "koder"
 
@@ -603,7 +603,7 @@ class TestAgentFilterDetection:
         )
         msg = {"text": "fammi vedere agente voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
         assert len(result.messages) == 2
         assert result.messages[1]["x_agent_switch"] == "voxtype"
 
@@ -612,7 +612,7 @@ class TestAgentFilterDetection:
         f = AgentFilter(agent_ids=["VoxType"], subscribe_to_events=False)
         msg = {"text": "agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
         # Only switch message when trigger is at start (no text before)
         assert len(result.messages) == 1
         assert result.messages[0]["x_agent_switch"] == "VoxType"
@@ -624,14 +624,14 @@ class TestAgentFilterDetection:
         result = f.process(msg)
         # boxtype vs voxtype: edit=0.857, phonetic different (B vs F/V)
         # With high threshold, should not match
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
     def test_best_match_selected(self) -> None:
         """Best matching agent is selected when multiple could match."""
         f = AgentFilter(agent_ids=["koder", "quant-analysis"], subscribe_to_events=False)
         msg = {"text": "agent coder"}
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
         # koder should match better than quant-analysis
         # Only switch message (no text before trigger)
         assert len(result.messages) == 1
@@ -643,14 +643,14 @@ class TestAgentFilterDetection:
         # agent voxtype is more than 5 words from end
         msg = {"text": "agent voxtype one two three four five six"}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
     def test_text_cleaned_after_match(self) -> None:
         """Text before trigger becomes first message, switch is second."""
         f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
         msg = {"text": "questo è il codice agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
         assert len(result.messages) == 2
         # First message: text before trigger
         assert result.messages[0]["text"] == "questo è il codice"
@@ -669,7 +669,7 @@ class TestAgentFilterDetection:
         # "box" vs "voxtype": phonetic B vs V (different), edit distance 4/7
         # This is a tough case - may not match well
         # Let's see if it passes with 0.5 threshold
-        if result.action == FilterAction.CONSUME:
+        if result.action == PipelineAction.CONSUME:
             # Should only have switch message (no text before)
             assert result.messages[-1]["x_agent_switch"] == "voxtype"
 
@@ -724,14 +724,14 @@ class TestAgentFilterEventBus:
         # Initially no agents
         msg = {"text": "agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.PASS  # No agents to match
+        assert result.action == PipelineAction.PASS  # No agents to match
 
         # Add agent via event
         bus.publish("agent.registered", agent_id="voxtype")
 
         # Now should match
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
         assert result.messages[0]["x_agent_switch"] == "voxtype"
 
     def test_agent_removed_via_event(self) -> None:
@@ -745,19 +745,19 @@ class TestAgentFilterEventBus:
         # Should match voxtype
         msg = {"text": "agent voxtype"}
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
 
         # Remove voxtype
         bus.publish("agent.unregistered", agent_id="voxtype")
 
         # Should not match voxtype anymore
         result = f.process(msg)
-        assert result.action == FilterAction.PASS
+        assert result.action == PipelineAction.PASS
 
         # koder should still work
         msg = {"text": "agent koder"}
         result = f.process(msg)
-        assert result.action == FilterAction.CONSUME
+        assert result.action == PipelineAction.CONSUME
 
     def test_no_subscription_when_disabled(self) -> None:
         """Filter doesn't subscribe when subscribe_to_events=False."""
