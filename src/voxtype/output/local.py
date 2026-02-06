@@ -103,7 +103,7 @@ class LocalReceiver:
         """Send an OpenVIP message to be injected.
 
         Args:
-            message: OpenVIP message with 'text', 'x_submit', 'x_visual_newline', etc.
+            message: OpenVIP message with 'text', 'x_submit' (structured), 'x_visual_newline', etc.
 
         Returns:
             True if queued successfully.
@@ -154,13 +154,14 @@ class LocalReceiver:
             return
 
         text = message.get("text", "")
-        x_submit = message.get("x_submit", False)
+        x_submit = message.get("x_submit", {})
+        has_submit = x_submit.get("enter", False) if isinstance(x_submit, dict) else bool(x_submit)
         x_visual_newline = message.get("x_visual_newline", False)
 
         # Determine auto_enter based on message flags
-        # x_submit=true means auto_enter=true (send Enter)
+        # x_submit.enter=true means auto_enter=true (send Enter)
         # x_visual_newline=true means auto_enter=false (send Shift+Enter)
-        auto_enter = x_submit and not x_visual_newline
+        auto_enter = has_submit and not x_visual_newline
 
         with self._injector_lock:
             if not self._injector:
