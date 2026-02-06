@@ -166,8 +166,9 @@ class AppController:
         self._running = False
         self._shutdown_event.set()
 
-        # Capture stats BEFORE engine shutdown
+        # Capture and display stats FIRST (before slow engine shutdown)
         stats = self._engine.stats if self._engine else None
+        self._display_session_stats(stats)
 
         # Stop bindings
         if self._bindings:
@@ -183,9 +184,6 @@ class AppController:
         if self._logger:
             self._logger.close()
             self._logger = None
-
-        # Display session stats (using captured stats)
-        self._display_session_stats(stats)
 
         logger.info("AppController stopped")
 
@@ -320,7 +318,6 @@ class AppController:
 
         Args:
             stats: SessionStats snapshot captured before engine shutdown.
-                   If None, tries to read from engine (legacy fallback).
         """
         import random
         from datetime import datetime
@@ -333,9 +330,7 @@ class AppController:
 
         s = stats
         if s is None:
-            if not self._engine:
-                return
-            s = self._engine.stats
+            return
 
         # Skip if no transcriptions were made
         if s.count == 0:

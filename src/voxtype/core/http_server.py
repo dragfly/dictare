@@ -208,7 +208,7 @@ class OpenVIPServer:
             self._server.should_exit = True
 
         if self._thread:
-            self._thread.join(timeout=5.0)
+            self._thread.join(timeout=0.5)
             self._thread = None
 
         self._server = None
