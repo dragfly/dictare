@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.22] - 2026-02-06
+
+### Added - Engine-side executor pipeline (Step 3)
+
+- `AgentSwitchExecutor` in `pipeline/executors/agent_switch.py` — handles
+  x_agent_switch by calling the engine's switch function, consumes the message
+- `Pipeline.process_many()` — convenience method for executor pipeline input
+- Executor pipeline runs after filter pipeline in engine's `_inject_text()`
+- Removed inline agent switch handling from engine (was only checking first
+  message — now correctly handles switch in any position)
+
 ## [3.0.0-alpha.21] - 2026-02-06
 
 ### Changed - Structured extension fields (Step 2)

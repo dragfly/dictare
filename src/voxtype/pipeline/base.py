@@ -173,6 +173,23 @@ class Pipeline:
 
         return messages
 
+    def process_many(self, messages: list[dict]) -> list[dict]:
+        """Process multiple messages through all steps.
+
+        Convenience method for running a list of messages (e.g., output
+        from a filter pipeline) through an executor pipeline.
+
+        Args:
+            messages: List of OpenVIP message dicts.
+
+        Returns:
+            Combined list of output messages from all inputs.
+        """
+        output = []
+        for msg in messages:
+            output.extend(self.process(msg))
+        return output
+
     @property
     def step_names(self) -> list[str]:
         """Names of steps in the pipeline."""
