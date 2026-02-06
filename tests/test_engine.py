@@ -694,7 +694,8 @@ def _should_send_message(msg: dict) -> bool:
     - Text with or without submit -> send
     """
     msg_text = msg.get("text", "")
-    has_submit = msg.get("x_submit", False)
+    x_submit = msg.get("x_submit", {})
+    has_submit = x_submit.get("enter", False) if isinstance(x_submit, dict) else bool(x_submit)
     return bool(msg_text.strip()) or has_submit
 
 
@@ -707,42 +708,42 @@ class TestMessageSendingLogic:
 
     def test_empty_text_without_submit_not_sent(self) -> None:
         """Empty text without submit flag should not be sent."""
-        msg = {"text": "", "x_submit": False}
+        msg = {"text": "", "x_submit": {}}
         assert _should_send_message(msg) is False
 
     def test_empty_text_with_submit_is_sent(self) -> None:
         """Empty text WITH submit flag should be sent (submit-only)."""
-        msg = {"text": "", "x_submit": True}
+        msg = {"text": "", "x_submit": {"enter": True}}
         assert _should_send_message(msg) is True
 
     def test_text_with_submit_is_sent(self) -> None:
         """Text with submit flag should be sent."""
-        msg = {"text": "hello world", "x_submit": True}
+        msg = {"text": "hello world", "x_submit": {"enter": True}}
         assert _should_send_message(msg) is True
 
     def test_text_without_submit_is_sent(self) -> None:
         """Text without submit flag should be sent."""
-        msg = {"text": "hello world", "x_submit": False}
+        msg = {"text": "hello world", "x_submit": {}}
         assert _should_send_message(msg) is True
 
     def test_whitespace_only_without_submit_not_sent(self) -> None:
         """Whitespace-only text without submit should not be sent."""
-        msg = {"text": "   \n\t  ", "x_submit": False}
+        msg = {"text": "   \n\t  ", "x_submit": {}}
         assert _should_send_message(msg) is False
 
     def test_whitespace_only_with_submit_is_sent(self) -> None:
         """Whitespace-only text WITH submit should be sent."""
-        msg = {"text": "   ", "x_submit": True}
+        msg = {"text": "   ", "x_submit": {"enter": True}}
         assert _should_send_message(msg) is True
 
     def test_missing_x_submit_treated_as_false(self) -> None:
-        """Missing x_submit key should be treated as False."""
+        """Missing x_submit key should be treated as no submit."""
         msg = {"text": ""}
         assert _should_send_message(msg) is False
 
     def test_missing_text_with_submit_is_sent(self) -> None:
         """Missing text key with submit should be sent."""
-        msg = {"x_submit": True}
+        msg = {"x_submit": {"enter": True}}
         assert _should_send_message(msg) is True
 
     def test_missing_both_not_sent(self) -> None:
@@ -752,11 +753,12 @@ class TestMessageSendingLogic:
 
     def test_none_text_without_submit_not_sent(self) -> None:
         """None text without submit should not be sent."""
-        msg = {"text": None, "x_submit": False}
+        msg = {"text": None, "x_submit": {}}
         # text=None -> .get("text", "") returns None, None.strip() would fail
         # but engine uses msg.get("text", "") which handles this
         # Actually this would fail - let's test that it's handled
         msg_text = msg.get("text", "") or ""  # Handle None
-        has_submit = msg.get("x_submit", False)
+        x_submit = msg.get("x_submit", {})
+        has_submit = x_submit.get("enter", False) if isinstance(x_submit, dict) else bool(x_submit)
         should_send = bool(msg_text.strip()) or has_submit
         assert should_send is False

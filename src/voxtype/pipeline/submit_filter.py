@@ -2,7 +2,7 @@
 
 Detects trigger words at the end of text that indicate the user
 wants to submit/send the message. When detected, the trigger words
-are removed and x_submit is set to true.
+are removed and x_submit is set to a structured object with enter, trigger, and confidence.
 
 Trigger words are organized by language. The filter checks triggers for:
 1. The detected language of the message (from Whisper)
@@ -13,8 +13,8 @@ Pattern types:
 - Last-word-only: ["vai."] - word ending with "." triggers ONLY if it's the last word
 
 Examples:
-    "ho un bug nel parser ok invia" -> "ho un bug nel parser" + x_submit=true
-    "correggi il bug vai" -> "correggi il bug" + x_submit=true (vai. = last word only)
+    "ho un bug nel parser ok invia" -> "ho un bug nel parser" + x_submit={enter: true, ...}
+    "correggi il bug vai" -> "correggi il bug" + x_submit={enter: true, ...} (vai. = last word only)
     "vai a vedere il codice" -> unchanged (vai is NOT the last word)
 """
 
@@ -25,7 +25,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
-from voxtype.pipeline.base import PipelineResult
+from voxtype.pipeline.base import PipelineResult, derive_message
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ class SubmitFilter:
 
     Uses position-weighted confidence: words closer to the end have higher weight.
     When a trigger is detected with sufficient confidence, the trigger words
-    are removed from the text and x_submit is set to true.
+    are removed from the text and x_submit is set to a structured object.
 
     Triggers are organized by language code. The filter checks:
     1. Triggers for the message's detected language
@@ -206,13 +206,15 @@ class SubmitFilter:
             # Remove trigger and everything after from original text
             cleaned_text = self._remove_trigger_from_text(text, match, tokens)
 
-            # Create new message with submit flag and trigger metadata
-            new_message = message.copy()
-            new_message["text"] = cleaned_text
-            new_message["x_submit"] = True
-            # Add trigger details for debugging/logging
-            new_message["x_submit_trigger"] = " ".join(matched_tokens)
-            new_message["x_submit_confidence"] = round(match.confidence, 3)
+            # Create derived message with structured x_submit
+            new_message = derive_message(message, {
+                "text": cleaned_text,
+                "x_submit": {
+                    "enter": True,
+                    "trigger": " ".join(matched_tokens),
+                    "confidence": round(match.confidence, 3),
+                },
+            })
 
             # Remove visual_newline if present (submit takes precedence)
             new_message.pop("x_visual_newline", None)

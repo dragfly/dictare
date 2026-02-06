@@ -207,7 +207,10 @@ def _read_from_sse(
                         "openvip_id": openvip_msg.get("id"),
                         "openvip_ts": openvip_msg.get("timestamp"),
                     }
-                    if openvip_msg.get("x_submit"):
+                    x_submit = openvip_msg.get("x_submit", {})
+                    if isinstance(x_submit, dict) and x_submit.get("enter"):
+                        msg["submit"] = True
+                    elif x_submit:  # legacy bool support
                         msg["submit"] = True
                     if openvip_msg.get("x_visual_newline"):
                         msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"

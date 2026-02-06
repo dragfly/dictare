@@ -122,7 +122,7 @@ def derive_message(original: dict, changes: dict | None = None) -> dict:
         New message dict with updated ID triad and merged changes.
     """
     msg = original.copy()
-    original_id = msg["id"]
+    original_id = msg.get("id", str(uuid.uuid4()))
     msg["id"] = str(uuid.uuid4())
     msg["trace_id"] = original.get("trace_id", original_id)
     msg["parent_id"] = original_id

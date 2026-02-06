@@ -759,7 +759,8 @@ class VoxtypeEngine:
 
         # Handle x_agent_switch from pipeline (voice-controlled agent switch)
         if messages_to_send:
-            switch_target = messages_to_send[0].get("x_agent_switch")
+            x_switch = messages_to_send[0].get("x_agent_switch", {})
+            switch_target = x_switch.get("target") if isinstance(x_switch, dict) else None
             if switch_target:
                 # Switch to the requested agent
                 self._switch_to_agent_by_name_internal(switch_target)
@@ -777,7 +778,8 @@ class VoxtypeEngine:
                 # Send all processed messages
                 for msg in messages_to_send:
                     msg_text = msg.get("text", "")
-                    has_submit = msg.get("x_submit", False)
+                    x_submit = msg.get("x_submit", {})
+                    has_submit = x_submit.get("enter", False) if isinstance(x_submit, dict) else bool(x_submit)
                     if not msg_text.strip() and not has_submit:
                         # Skip empty messages without submit flag
                         success = True  # Consider it successful, nothing to send
@@ -799,9 +801,10 @@ class VoxtypeEngine:
         # Determine final text and submit info (after pipeline processing)
         first_msg = messages_to_send[0] if messages_to_send else {}
         final_text = first_msg.get("text", text)
-        pipeline_submit = first_msg.get("x_submit", False)
-        submit_trigger = first_msg.get("x_submit_trigger")  # e.g., "submit", "invia"
-        submit_confidence = first_msg.get("x_submit_confidence")  # e.g., 0.95
+        x_submit_info = first_msg.get("x_submit", {})
+        pipeline_submit = x_submit_info.get("enter", False) if isinstance(x_submit_info, dict) else bool(x_submit_info)
+        submit_trigger = x_submit_info.get("trigger") if isinstance(x_submit_info, dict) else None
+        submit_confidence = x_submit_info.get("confidence") if isinstance(x_submit_info, dict) else None
 
         # Emit injection event
         self._emit(

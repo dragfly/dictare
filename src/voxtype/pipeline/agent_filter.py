@@ -4,7 +4,7 @@ Detects "agent <name>" or "agente <name>" at the end of text and
 uses phonetic matching to find the best matching agent ID.
 
 When detected, the trigger words are removed and x_agent_switch is set
-to the matched agent ID.
+to a structured object with target agent ID and confidence score.
 
 Dynamic Agent List
 ------------------
@@ -12,8 +12,8 @@ The filter subscribes to the "agents.changed" event on the internal event bus.
 When agents are added/removed, the filter automatically updates its list.
 
 Examples:
-    "fammi vedere il codice agent voxtype" -> "fammi vedere il codice" + x_agent_switch="voxtype"
-    "questo bug agent koder" -> "questo bug" + x_agent_switch="koder" (even if heard as "coder")
+    "fammi vedere il codice agent voxtype" -> "fammi vedere il codice" + x_agent_switch={target: "voxtype", ...}
+    "questo bug agent koder" -> "questo bug" + x_agent_switch={target: "koder", ...} (even if heard as "coder")
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 import jellyfish
 
 from voxtype.events import bus
-from voxtype.pipeline.base import PipelineResult
+from voxtype.pipeline.base import PipelineResult, derive_message
 
 logger = logging.getLogger(__name__)
 
@@ -233,15 +233,18 @@ class AgentFilter:
 
             # Message 1: text before trigger (if any) - sent to CURRENT agent
             if text_before.strip():
-                msg_before = message.copy()
-                msg_before["text"] = text_before
+                msg_before = derive_message(message, {"text": text_before})
                 # No x_agent_switch - goes to current agent
                 output_messages.append(msg_before)
 
             # Message 2: empty text with switch flag - triggers switch, nothing sent
-            switch_msg = message.copy()
-            switch_msg["text"] = ""
-            switch_msg["x_agent_switch"] = match.agent_id
+            switch_msg = derive_message(message, {
+                "text": "",
+                "x_agent_switch": {
+                    "target": match.agent_id,
+                    "confidence": round(match.score, 3),
+                },
+            })
             # Remove visual_newline - switch-only message shouldn't newline
             switch_msg.pop("x_visual_newline", None)
             output_messages.append(switch_msg)
