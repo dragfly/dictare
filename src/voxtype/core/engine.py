@@ -171,6 +171,9 @@ class VoxtypeEngine:
         self._loading_active = False
         self._loading_models: list[dict[str, Any]] = []
 
+        # Last transcribed text (for /status endpoint)
+        self._last_text = ""
+
         # Note: No more _injector - each Agent handles its own transport
 
     def _emit(self, event: str, *args: Any, **kwargs: Any) -> None:
@@ -626,6 +629,7 @@ class VoxtypeEngine:
 
                 if text:
                     transcribed_text = text
+                    self._last_text = text
 
                     # Update session stats
                     audio_duration = len(audio_data) / self.config.audio.sample_rate
@@ -1168,7 +1172,7 @@ class VoxtypeEngine:
             "stt": {
                 "state": stt_state,
                 "model_name": self.config.stt.model,
-                "last_text": "",
+                "last_text": self._last_text,
             },
             "output": {
                 "mode": "agents" if self.agent_mode else "keyboard",
