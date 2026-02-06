@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.18] - 2026-02-06
+
+### Fixed - Session stats not displayed on exit
+
+- Display session stats BEFORE engine shutdown (stats were captured but
+  never printed because the 3s force_exit timer killed the process first)
+- Reduce HTTP server shutdown timeout from 5.0s to 0.5s (daemon thread)
+- Reduce partial worker shutdown timeout from 1.0s to 0.3s (daemon thread)
+- Remove unnecessary `gc.collect()` from shutdown path
+
 ## [3.0.0-alpha.17] - 2026-02-05
 
 ### Changed - Lite install mode (default)
