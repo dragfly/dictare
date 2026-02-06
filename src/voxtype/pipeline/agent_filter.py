@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 import jellyfish
 
 from voxtype.events import bus
-from voxtype.pipeline.base import FilterResult
+from voxtype.pipeline.base import PipelineResult
 
 logger = logging.getLogger(__name__)
 
@@ -185,31 +185,31 @@ class AgentFilter:
     def name(self) -> str:
         return "agent_filter"
 
-    def process(self, message: dict) -> FilterResult:
+    def process(self, message: dict) -> PipelineResult:
         """Process message, detecting agent switch commands.
 
         Args:
             message: OpenVIP message dict with 'text' field.
 
         Returns:
-            FilterResult with potentially modified message.
+            PipelineResult with potentially modified message.
         """
         text = message.get("text", "")
         if not text:
-            return FilterResult.passed(message)
+            return PipelineResult.passed(message)
 
         # Already has agent switch? Pass through
         if message.get("x_agent_switch"):
-            return FilterResult.passed(message)
+            return PipelineResult.passed(message)
 
         # No agents to match against
         if not self.agent_ids:
-            return FilterResult.passed(message)
+            return PipelineResult.passed(message)
 
         # Tokenize and scan for trigger pattern
         tokens = _tokenize(text)
         if len(tokens) < 2:  # Need at least "agent <name>"
-            return FilterResult.passed(message)
+            return PipelineResult.passed(message)
 
         # Find agent switch pattern
         match = self._find_agent_match(tokens)
@@ -246,9 +246,9 @@ class AgentFilter:
             switch_msg.pop("x_visual_newline", None)
             output_messages.append(switch_msg)
 
-            return FilterResult.consumed(output_messages)
+            return PipelineResult.consumed(output_messages)
 
-        return FilterResult.passed(message)
+        return PipelineResult.passed(message)
 
     def _find_agent_match(self, tokens: list[str]) -> AgentMatch | None:
         """Find agent switch pattern in tokens.

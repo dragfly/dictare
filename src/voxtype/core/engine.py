@@ -378,7 +378,7 @@ class VoxtypeEngine:
                 match_threshold=agent_cfg.match_threshold,
                 subscribe_to_events=True,  # Auto-update when agents change
             )
-            pipeline.add_filter(agent_filter)
+            pipeline.add_step(agent_filter)
 
         # Add submit filter if enabled
         submit_cfg = self.config.pipeline.submit_filter
@@ -389,7 +389,7 @@ class VoxtypeEngine:
                 max_scan_words=submit_cfg.max_scan_words,
                 decay_rate=submit_cfg.decay_rate,
             )
-            pipeline.add_filter(submit_filter)
+            pipeline.add_step(submit_filter)
 
         return pipeline if len(pipeline) > 0 else None
 
