@@ -1,15 +1,14 @@
-"""OpenVIP message factory - single point of message creation.
+"""OpenVIP message factory.
 
 OpenVIP (Open Voice Interaction Protocol) v1.0
 See: https://open-voice-input.org
 
-v1.0 Message Types:
-- message: Final text to inject
-- partial: Streaming partial transcription
-- status: Engine state (idle, listening, recording, transcribing, error)
+Message types:
+- message: Final text to inject (OpenVIP v1.0)
+- partial: Streaming partial transcription (internal, for StatusPanel)
+- status: Engine state (internal, for StatusPanel)
 
-This module provides the canonical way to create OpenVIP messages.
-All transports should use these functions instead of creating messages directly.
+Extension fields (x_) are added by pipeline filters, not here.
 """
 
 from __future__ import annotations
