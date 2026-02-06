@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.20] - 2026-02-06
+
+### Changed - Pipeline foundation (Step 1)
+
+- Rewrite `pipeline/base.py`: PipelineAction enum, PipelineResult dataclass with
+  `passed()`, `augmented()`, `consumed()` factory methods
+- Add `Executor` protocol (structural typing) with `name`, `field`, `process()`
+- Add `Filter` protocol with `name`, `process()`
+- Add `derive_message()` helper for ID triad (id, trace_id, parent_id)
+- Rename Pipeline internals: `add_filter` → `add_step`, `filter_names` → `step_names`
+- Rename across codebase: `FilterAction` → `PipelineAction`, `FilterResult` → `PipelineResult`
+
 ## [3.0.0-alpha.19] - 2026-02-06
 
 ### Fixed - "Last" text never shown in StatusPanel
