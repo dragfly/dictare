@@ -1335,8 +1335,6 @@ class VoxtypeEngine:
 
     def stop(self) -> None:
         """Stop the engine."""
-        import gc
-
         self._running = False
 
         # Stop the state controller first
@@ -1345,18 +1343,16 @@ class VoxtypeEngine:
         # Force transition to OFF
         self._state_manager.transition(AppState.OFF, force=True)
 
-        # Stop partial transcription worker
+        # Stop partial transcription worker (daemon thread, don't block long)
         if self._partial_worker:
             self._partial_stop.set()
-            self._partial_worker.join(timeout=1.0)
+            self._partial_worker.join(timeout=0.3)
             self._partial_worker = None
 
         # Close audio/VAD
         if self._audio_manager:
             self._audio_manager.flush_vad()
             self._audio_manager.close()
-
-        gc.collect()
 
         # Cancel any pending tap timer
         self._tap_detector.reset()
