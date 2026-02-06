@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.23] - 2026-02-06
+
+### Added - SubmitExecutor (Step 4)
+
+- `SubmitExecutor` in `pipeline/executors/submit.py` — handles x_submit
+  by calling write_fn with text and enter flag, consumes the message
+- Available for agent-side pipeline integration (mux.py conversion
+  already handles structured x_submit from Step 2)
+
 ## [3.0.0-alpha.22] - 2026-02-06
 
 ### Added - Engine-side executor pipeline (Step 3)
