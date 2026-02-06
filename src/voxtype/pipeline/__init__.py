@@ -9,7 +9,6 @@ Each step can:
 The same Pipeline class is used for both filter and executor pipelines.
 """
 
-from voxtype.pipeline.agent_filter import AgentFilter
 from voxtype.pipeline.base import (
     Executor,
     Filter,
@@ -18,7 +17,7 @@ from voxtype.pipeline.base import (
     PipelineResult,
     derive_message,
 )
-from voxtype.pipeline.submit_filter import SubmitFilter
+from voxtype.pipeline.filters import AgentFilter, SubmitFilter
 
 __all__ = [
     "AgentFilter",

@@ -11,12 +11,12 @@ from voxtype.pipeline import (
     PipelineResult,
     SubmitFilter,
 )
-from voxtype.pipeline.agent_filter import (
+from voxtype.pipeline.filters.agent_filter import (
     edit_score,
     fuzzy_match_score,
     phonetic_score,
 )
-from voxtype.pipeline.submit_filter import (
+from voxtype.pipeline.filters.submit_filter import (
     DEFAULT_SUBMIT_TRIGGERS,
     _normalize,
     _tokenize,
