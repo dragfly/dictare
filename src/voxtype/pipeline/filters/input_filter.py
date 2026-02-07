@@ -168,8 +168,9 @@ class InputFilter:
         if not text:
             return PipelineResult.passed(message)
 
-        # Already has input flag? Pass through
-        if message.get("x_input"):
+        # Already has submit decision? Pass through
+        x_input = message.get("x_input")
+        if isinstance(x_input, dict) and x_input.get("submit"):
             return PipelineResult.passed(message)
 
         # Tokenize and scan for triggers
