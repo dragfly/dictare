@@ -245,8 +245,8 @@ class AgentFilter:
                     "confidence": round(match.score, 3),
                 },
             })
-            # Remove visual_newline - switch-only message shouldn't newline
-            switch_msg.pop("x_visual_newline", None)
+            # Remove x_input - switch-only message doesn't need input behavior
+            switch_msg.pop("x_input", None)
             output_messages.append(switch_msg)
 
             return PipelineResult.consumed(output_messages)

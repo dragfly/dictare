@@ -1,8 +1,8 @@
-"""Submit trigger detection filter.
+"""Input trigger detection filter.
 
 Detects trigger words at the end of text that indicate the user
 wants to submit/send the message. When detected, the trigger words
-are removed and x_submit is set to a structured object with enter, trigger, and confidence.
+are removed and x_input is set with submit, trigger, and confidence.
 
 Trigger words are organized by language. The filter checks triggers for:
 1. The detected language of the message (from Whisper)
@@ -13,8 +13,8 @@ Pattern types:
 - Last-word-only: ["vai."] - word ending with "." triggers ONLY if it's the last word
 
 Examples:
-    "ho un bug nel parser ok invia" -> "ho un bug nel parser" + x_submit={enter: true, ...}
-    "correggi il bug vai" -> "correggi il bug" + x_submit={enter: true, ...} (vai. = last word only)
+    "ho un bug nel parser ok invia" -> "ho un bug nel parser" + x_input={submit: true, ...}
+    "correggi il bug vai" -> "correggi il bug" + x_input={submit: true, ...} (vai. = last word only)
     "vai a vedere il codice" -> unchanged (vai is NOT the last word)
 """
 
@@ -96,12 +96,12 @@ class TriggerMatch:
 
 
 @dataclass
-class SubmitFilter:
-    """Filter that detects submit trigger words at the end of text.
+class InputFilter:
+    """Filter that detects input trigger words at the end of text.
 
     Uses position-weighted confidence: words closer to the end have higher weight.
     When a trigger is detected with sufficient confidence, the trigger words
-    are removed from the text and x_submit is set to a structured object.
+    are removed from the text and x_input is set with submit action.
 
     Triggers are organized by language code. The filter checks:
     1. Triggers for the message's detected language
@@ -123,7 +123,7 @@ class SubmitFilter:
 
     @property
     def name(self) -> str:
-        return "submit_filter"
+        return "input_filter"
 
     def _get_triggers_for_message(self, message: dict) -> list[list[str]]:
         """Get combined trigger patterns for a message based on its language.
@@ -172,8 +172,8 @@ class SubmitFilter:
         if not text:
             return PipelineResult.passed(message)
 
-        # Already has submit flag? Pass through
-        if message.get("x_submit"):
+        # Already has input flag? Pass through
+        if message.get("x_input"):
             return PipelineResult.passed(message)
 
         # Tokenize and scan for triggers
@@ -206,18 +206,15 @@ class SubmitFilter:
             # Remove trigger and everything after from original text
             cleaned_text = self._remove_trigger_from_text(text, match, tokens)
 
-            # Create derived message with structured x_submit
+            # Create derived message with structured x_input
             new_message = derive_message(message, {
                 "text": cleaned_text,
-                "x_submit": {
-                    "enter": True,
+                "x_input": {
+                    "submit": True,
                     "trigger": " ".join(matched_tokens),
                     "confidence": round(match.confidence, 3),
                 },
             })
-
-            # Remove visual_newline if present (submit takes precedence)
-            new_message.pop("x_visual_newline", None)
 
             return PipelineResult.augmented(new_message)
 

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.26] - 2026-02-06
+
+### Changed - Align with OpenVIP v1.0 protocol
+
+- Message type `message` → `transcription`, `tts` → `speech`
+- Field `source` → `origin` in message factory
+- Extension fields: `x_submit`/`x_visual_newline` → unified `x_input` standard extension
+  - `x_input.submit` (was `x_submit.enter`), `x_input.newline` (was `x_visual_newline`)
+- `partial` is now a core boolean field on transcription messages (was internal type)
+- `/status` endpoint: protocol-level fields (`protocol_version`, `connected_agents`)
+  at top level, implementation details under `platform` object
+- Renamed classes: `SubmitFilter` → `InputFilter`, `SubmitExecutor` → `InputExecutor`
+- StatusPanel reads from new `platform`-nested status structure
+- All tests updated for new naming
+
+### Removed
+
+- Debug files: `error_output.txt`, `test_sanitization.py`
+
 ## [3.0.0-alpha.25] - 2026-02-06
 
 ### Fixed

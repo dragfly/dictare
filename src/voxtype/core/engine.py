@@ -31,7 +31,7 @@ from voxtype.core.state import AppState, StateManager
 from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
-from voxtype.pipeline import AgentFilter, Pipeline, SubmitFilter
+from voxtype.pipeline import AgentFilter, InputFilter, Pipeline
 from voxtype.pipeline.executors import AgentSwitchExecutor
 from voxtype.stt.base import STTEngine
 
@@ -382,16 +382,16 @@ class VoxtypeEngine:
             )
             pipeline.add_step(agent_filter)
 
-        # Add submit filter if enabled
-        submit_cfg = self.config.pipeline.submit_filter
-        if submit_cfg.enabled:
-            submit_filter = SubmitFilter(
-                triggers=submit_cfg.triggers,
-                confidence_threshold=submit_cfg.confidence_threshold,
-                max_scan_words=submit_cfg.max_scan_words,
-                decay_rate=submit_cfg.decay_rate,
+        # Add input filter if enabled
+        input_cfg = self.config.pipeline.submit_filter
+        if input_cfg.enabled:
+            input_filter = InputFilter(
+                triggers=input_cfg.triggers,
+                confidence_threshold=input_cfg.confidence_threshold,
+                max_scan_words=input_cfg.max_scan_words,
+                decay_rate=input_cfg.decay_rate,
             )
-            pipeline.add_step(submit_filter)
+            pipeline.add_step(input_filter)
 
         return pipeline if len(pipeline) > 0 else None
 
@@ -763,13 +763,12 @@ class VoxtypeEngine:
         stt_language = self.config.stt.language
         message_language = stt_language if stt_language != "auto" else "it"
 
-        # Build OpenVIP message with unique ID
-        message = create_message(
-            text,
-            submit=auto_enter,
-            visual_newline=not auto_enter,
-            language=message_language,
-        )
+        # Build OpenVIP transcription message
+        message = create_message(text, language=message_language)
+        if auto_enter:
+            message["x_input"] = {"submit": True}
+        else:
+            message["x_input"] = {"newline": True}
 
         # Apply pipeline: filters (enrich) then executors (act)
         messages_to_send = [message]
@@ -794,8 +793,8 @@ class VoxtypeEngine:
                 # Send all processed messages
                 for msg in messages_to_send:
                     msg_text = msg.get("text", "")
-                    x_submit = msg.get("x_submit", {})
-                    has_submit = x_submit.get("enter", False) if isinstance(x_submit, dict) else bool(x_submit)
+                    x_input = msg.get("x_input", {})
+                    has_submit = x_input.get("submit", False) if isinstance(x_input, dict) else False
                     if not msg_text.strip() and not has_submit:
                         # Skip empty messages without submit flag
                         success = True  # Consider it successful, nothing to send
@@ -814,13 +813,13 @@ class VoxtypeEngine:
 
             self._stats_injection_seconds += time.time() - inject_start
 
-        # Determine final text and submit info (after pipeline processing)
+        # Determine final text and input info (after pipeline processing)
         first_msg = messages_to_send[0] if messages_to_send else {}
         final_text = first_msg.get("text", text)
-        x_submit_info = first_msg.get("x_submit", {})
-        pipeline_submit = x_submit_info.get("enter", False) if isinstance(x_submit_info, dict) else bool(x_submit_info)
-        submit_trigger = x_submit_info.get("trigger") if isinstance(x_submit_info, dict) else None
-        submit_confidence = x_submit_info.get("confidence") if isinstance(x_submit_info, dict) else None
+        x_input_info = first_msg.get("x_input", {})
+        pipeline_submit = x_input_info.get("submit", False) if isinstance(x_input_info, dict) else False
+        submit_trigger = x_input_info.get("trigger") if isinstance(x_input_info, dict) else None
+        submit_confidence = x_input_info.get("confidence") if isinstance(x_input_info, dict) else None
 
         # Emit injection event
         self._emit(
@@ -1033,7 +1032,9 @@ class VoxtypeEngine:
         agent = self._get_current_agent()
         if agent:
             # Send empty message with submit flag
-            agent.send(create_message("", submit=True))
+            msg = create_message("")
+            msg["x_input"] = {"submit": True}
+            agent.send(msg)
 
     def _discard_current(self) -> None:
         """Discard current recording/transcription - sends event."""
@@ -1166,12 +1167,12 @@ class VoxtypeEngine:
     def _get_http_status(self) -> dict:
         """Build status dict for the /status HTTP endpoint.
 
-        Returns a JSON-serializable dict compatible with the StatusPanel
-        and the old AdapterState.to_dict() format.
+        Returns OpenVIP protocol-level fields at the top level,
+        with implementation-specific details in the 'platform' object.
         """
         from voxtype.core.state import AppState
 
-        # Map engine state to OpenVIP status
+        # Map engine state to string
         state_map = {
             AppState.OFF: "idle",
             AppState.LISTENING: "listening",
@@ -1182,39 +1183,47 @@ class VoxtypeEngine:
         }
         stt_state = state_map.get(self.state, "idle")
 
+        # Connected agents list
+        connected_agents = self.agents
+
         return {
-            "engine": {
+            # OpenVIP protocol-level fields
+            "protocol_version": "1.0",
+            "connected_agents": connected_agents,
+            # Implementation-specific details
+            "platform": {
+                "name": "Voxtype",
                 "version": __version__,
                 "mode": "agents" if self.agent_mode else "keyboard",
+                "state": stt_state,
                 "uptime_seconds": time.time() - self._stats_start_time
                 if self._stats_start_time
                 else 0,
-            },
-            "stt": {
-                "state": stt_state,
-                "model_name": self.config.stt.model,
-                "last_text": self._last_text,
-            },
-            "output": {
-                "mode": "agents" if self.agent_mode else "keyboard",
-                "current_agent": self.current_agent,
-                "available_agents": self.agents,
-            },
-            "hotkey": {
-                "key": self.config.hotkey.key,
-                "bound": self._hotkey is not None,
-            },
-            "loading": {
-                "active": self._loading_active,
-                "models": [
-                    {
-                        "name": m["name"],
-                        "status": m["status"],
-                        "elapsed": round(time.time() - m["start_time"], 1) if m["status"] == "loading" else m["elapsed"],
-                        "estimated": m["estimated"],
-                    }
-                    for m in self._loading_models
-                ],
+                "stt": {
+                    "model_name": self.config.stt.model,
+                    "last_text": self._last_text,
+                },
+                "output": {
+                    "mode": "agents" if self.agent_mode else "keyboard",
+                    "current_agent": self.current_agent,
+                    "available_agents": connected_agents,
+                },
+                "hotkey": {
+                    "key": self.config.hotkey.key,
+                    "bound": self._hotkey is not None,
+                },
+                "loading": {
+                    "active": self._loading_active,
+                    "models": [
+                        {
+                            "name": m["name"],
+                            "status": m["status"],
+                            "elapsed": round(time.time() - m["start_time"], 1) if m["status"] == "loading" else m["elapsed"],
+                            "estimated": m["estimated"],
+                        }
+                        for m in self._loading_models
+                    ],
+                },
             },
         }
 

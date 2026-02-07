@@ -104,7 +104,7 @@ class LocalReceiver:
         """Send an OpenVIP message to be injected.
 
         Args:
-            message: OpenVIP message with 'text', 'x_submit' (structured), 'x_visual_newline', etc.
+            message: OpenVIP message with 'text', 'x_input' (structured), etc.
 
         Returns:
             True if queued successfully.
@@ -150,19 +150,19 @@ class LocalReceiver:
         Note:
             Uses _injector_lock to safely access _injector from worker thread.
         """
-        msg_type = message.get("type", "message")
-        if msg_type != "message":
+        msg_type = message.get("type", "transcription")
+        if msg_type != "transcription":
             return
 
         text = message.get("text", "")
-        x_submit = message.get("x_submit", {})
-        has_submit = x_submit.get("enter", False) if isinstance(x_submit, dict) else bool(x_submit)
-        x_visual_newline = message.get("x_visual_newline", False)
+        x_input = message.get("x_input", {})
+        has_submit = x_input.get("submit", False) if isinstance(x_input, dict) else False
+        has_newline = x_input.get("newline", False) if isinstance(x_input, dict) else False
 
-        # Determine auto_enter based on message flags
-        # x_submit.enter=true means auto_enter=true (send Enter)
-        # x_visual_newline=true means auto_enter=false (send Shift+Enter)
-        auto_enter = has_submit and not x_visual_newline
+        # Determine auto_enter based on x_input flags
+        # x_input.submit=true means auto_enter=true (send Enter)
+        # x_input.newline=true means auto_enter=false (send Shift+Enter)
+        auto_enter = has_submit and not has_newline
 
         with self._injector_lock:
             if not self._injector:

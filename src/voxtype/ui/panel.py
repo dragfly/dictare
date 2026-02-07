@@ -134,7 +134,8 @@ class StatusPanel:
     def _format_last_text(self) -> str:
         """Format the last transcribed text."""
         # Get last_text from status (synced from engine)
-        stt = self._status.get("stt", {})
+        platform = self._status.get("platform", {})
+        stt = platform.get("stt", {})
         last_text = stt.get("last_text", "") or self._last_text
 
         if not last_text:
@@ -215,16 +216,17 @@ class StatusPanel:
 
     def _is_loading(self) -> bool:
         """Check if engine is still loading."""
-        loading = self._status.get("loading", {})
+        platform = self._status.get("platform", {})
+        loading = platform.get("loading", {})
         return loading.get("active", False)
 
     def _build_panel(self) -> Panel:
         """Build the unified status panel."""
-        stt = self._status.get("stt", {})
-        output = self._status.get("output", {})
-        hotkey = self._status.get("hotkey", {})
-        engine = self._status.get("engine", {})
-        loading = self._status.get("loading", {})
+        platform = self._status.get("platform", {})
+        stt = platform.get("stt", {})
+        output = platform.get("output", {})
+        hotkey = platform.get("hotkey", {})
+        loading = platform.get("loading", {})
         models = loading.get("models", [])
 
         # Get model info
@@ -274,7 +276,7 @@ class StatusPanel:
         # If loading, show minimal panel
         if self._is_loading():
             content = "\n".join(lines)
-            version = engine.get("version", __version__)
+            version = platform.get("version", __version__)
             return Panel(
                 content,
                 title=f"voxtype v{version} - Loading",
@@ -292,7 +294,7 @@ class StatusPanel:
         lines.append(f"Last: {self._format_last_text()}")
 
         content = "\n".join(lines)
-        version = engine.get("version", __version__)
+        version = platform.get("version", __version__)
         return Panel(
             content,
             title=f"voxtype v{version}",
