@@ -97,13 +97,13 @@ class TestControlEndpoint:
         response = client.post("/control", json={"command": "bad"})
         assert response.status_code == 500
 
-class TestTTSEndpoint:
-    """Test POST /tts endpoint."""
+class TestSpeechEndpoint:
+    """Test POST /speech endpoint."""
 
     def test_tts_request(self, client: TestClient, engine: MockEngine) -> None:
-        """POST /tts calls engine TTS handler."""
-        body = {"openvip": "1.0", "type": "tts", "text": "Hello world"}
-        response = client.post("/tts", json=body)
+        """POST /speech calls engine TTS handler."""
+        body = {"openvip": "1.0", "type": "speech", "text": "Hello world"}
+        response = client.post("/speech", json=body)
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
         assert response.json()["duration_ms"] == 100
@@ -111,9 +111,9 @@ class TestTTSEndpoint:
         assert engine._tts_calls[0]["text"] == "Hello world"
 
     def test_tts_error_returns_500(self, client: TestClient, engine: MockEngine) -> None:
-        """POST /tts returns 500 on engine error."""
+        """POST /speech returns 500 on engine error."""
         engine._handle_tts_request = MagicMock(side_effect=RuntimeError("TTS failed"))
-        response = client.post("/tts", json={"text": "test"})
+        response = client.post("/speech", json={"text": "test"})
         assert response.status_code == 500
 
 class TestPostAgentMessage:

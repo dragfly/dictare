@@ -31,7 +31,7 @@ class OpenVIPServer:
     Endpoints:
         GET  /agents/{agent_id}/messages  - SSE stream (connection = registration)
         POST /agents/{agent_id}/messages  - Send message to agent
-        POST /tts                         - TTS request
+        POST /speech                      - Speech (TTS) request
         GET  /status                      - Engine status
         POST /control                     - Control commands
     """
@@ -127,9 +127,9 @@ class OpenVIPServer:
             queue.put_nowait(body)
             return {"status": "ok"}
 
-        @app.post("/tts")
-        async def tts_request(request: Request):
-            """Handle TTS request."""
+        @app.post("/speech")
+        async def speech_request(request: Request):
+            """Handle speech (TTS) request."""
             body = await request.json()
             try:
                 result = await asyncio.to_thread(
