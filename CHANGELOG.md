@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.40] - 2026-02-07
+
+### Changed
+
+- Further test speedup: polling in `test_engine.py` (0.32s → 0.11s per test),
+  replace remaining `time.sleep(0.2)` in `test_local_receiver.py`
+
+### Fixed
+
+- mypy `no-redef` error: `pid` variable name conflict in `engine_start()`
+
 ## [3.0.0-alpha.39] - 2026-02-07
 
 ### Changed
