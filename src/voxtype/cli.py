@@ -2255,16 +2255,25 @@ def agent(
         config = load_config()
         server = config.client.url
 
-    # With allow_interspersed_args=False, flags after positional args go to ctx.args
-    # Check if our flags are in ctx.args and apply them
-    if "--verbose" in ctx.args or "-v" in ctx.args:
-        verbose = True
-    if "--quiet" in ctx.args or "-q" in ctx.args:
-        quiet = True
+    # With allow_interspersed_args=False, flags after positional args go to ctx.args.
+    # Extract our own flags before passing the rest as the command.
+    args = list(ctx.args)
+    own_flags_to_remove: set[int] = set()
+    for i, arg in enumerate(args):
+        if arg in ("--verbose", "-v"):
+            verbose = True
+            own_flags_to_remove.add(i)
+        elif arg in ("--quiet", "-q"):
+            quiet = True
+            own_flags_to_remove.add(i)
+        elif arg in ("--server", "-s") and i + 1 < len(args):
+            server = args[i + 1]
+            own_flags_to_remove.add(i)
+            own_flags_to_remove.add(i + 1)
+        elif arg == "--":
+            own_flags_to_remove.add(i)
 
-    # Get command after -- (filter out --, and our own flags)
-    own_flags = {"--", "--verbose", "-v", "--quiet", "-q"}
-    command = [arg for arg in ctx.args if arg not in own_flags]
+    command = [arg for i, arg in enumerate(args) if i not in own_flags_to_remove]
     if not command:
         console.print("[red]Error: No command specified[/]")
         console.print()
