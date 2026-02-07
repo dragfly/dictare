@@ -186,6 +186,10 @@ class ClientConfig(BaseModel):
         default="http://127.0.0.1:8765",
         description="Default engine URL for 'voxtype agent' command",
     )
+    status_bar: bool = Field(
+        default=True,
+        description="Show persistent status bar in voxtype agent",
+    )
 
 
 class LoggingConfig(BaseModel):
@@ -726,6 +730,7 @@ auto_enter = false               # Visual newline only
 
 [client]
 # url = "http://127.0.0.1:8765"  # Default engine URL for 'voxtype agent'
+# status_bar = true               # Show persistent status bar in voxtype agent
 
 [logging]
 log_file = ""
