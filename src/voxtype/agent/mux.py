@@ -132,6 +132,41 @@ def _read_from_stdin(
     except (BrokenPipeError, OSError):
         pass
 
+def _poll_active_agent(
+    agent_id: str,
+    base_url: str,
+    stop_event: threading.Event,
+    on_status: Callable[[str, str], None],
+    poll_interval: float = 3.0,
+) -> None:
+    """Poll /status to check if this agent is the active one.
+
+    Updates status bar with listening/standby indicator.
+    """
+    import urllib.request
+
+    status_url = f"{base_url}/status"
+    was_active: bool | None = None
+
+    while not stop_event.is_set():
+        try:
+            req = urllib.request.Request(status_url, method="GET")
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read())
+            current = (
+                data.get("platform", {}).get("output", {}).get("current_agent")
+            )
+            is_active = current == agent_id
+            if is_active != was_active:
+                was_active = is_active
+                if is_active:
+                    on_status(f"\u25cf {agent_id} \u00b7 listening", "ok")
+                else:
+                    on_status(f"\u25cb {agent_id} \u00b7 standby", "warn")
+        except (ConnectionRefusedError, OSError, ValueError):
+            pass  # SSE thread handles connection errors
+        stop_event.wait(poll_interval)
+
 def _read_from_sse(
     agent_id: str,
     base_url: str,
@@ -140,7 +175,7 @@ def _read_from_sse(
     session_path: Path | None = None,
     keystroke_counter: KeystrokeCounter | None = None,
     verbose: bool = False,
-    on_status: Callable[[str], None] | None = None,
+    on_status: Callable[[str, str], None] | None = None,
 ) -> None:
     """Connect to engine SSE and receive OpenVIP messages.
 
@@ -155,7 +190,7 @@ def _read_from_sse(
         session_path: Optional session log file path.
         keystroke_counter: Optional keystroke counter for session stats.
         verbose: Log full text in session file.
-        on_status: Optional callback for status changes (connected/reconnecting).
+        on_status: Optional callback(text, style) for status changes.
     """
     import urllib.request
 
@@ -176,6 +211,7 @@ def _read_from_sse(
                     _log_event(session_path, "sse_connected", {"url": url})
                 retry_delay = 0.5  # Reset backoff on successful connection
                 if on_status:
+                    # Temporary "connected" — poll thread will update to listening/standby
                     on_status(f"\u25cf {agent_id} \u00b7 connected", "ok")
 
                 for line_bytes in response:
@@ -501,10 +537,19 @@ def run_agent(
             args=(master_fd, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
+        # Poll engine to track active agent (status bar: listening/standby)
+        if sbar:
+            poll_thread = threading.Thread(
+                target=_poll_active_agent,
+                args=(agent_id, base_url, stop_event, sbar.update),
+                daemon=True,
+            )
 
         stdin_thread.start()
         sse_thread.start()
         writer_thread.start()
+        if sbar:
+            poll_thread.start()
 
         # Read from PTY and write to stdout
         try:
