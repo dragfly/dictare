@@ -466,24 +466,17 @@ def run_agent(
     current_style = "warn"
     status_lock = threading.Lock()
 
+    # Deferred redraw: timestamp after which to repaint status bar (0 = none)
+    redraw_after = 0.0
+
     # Handle window resize
     def handle_sigwinch(signum, frame):
+        nonlocal redraw_after
         rows, cols = _get_winsize()
         _init_scroll_region(rows, cols)
         _set_winsize(master_fd, rows - 1, cols)
-        with status_lock:
-            _set_status_bar(current_status, rows, cols, current_style)
-
-        # Child redraws after SIGWINCH and may overwrite the status bar.
-        # Schedule a deferred redraw so we paint on top of the child's output.
-        def _deferred_redraw() -> None:
-            time.sleep(0.15)
-            r, c = _get_winsize()
-            _init_scroll_region(r, c)
-            with status_lock:
-                _set_status_bar(current_status, r, c, current_style)
-
-        threading.Thread(target=_deferred_redraw, daemon=True).start()
+        # Schedule deferred redraw in main loop (child redraws after SIGWINCH)
+        redraw_after = time.monotonic() + 0.15
 
     old_sigwinch = signal.signal(signal.SIGWINCH, handle_sigwinch)
 
@@ -575,6 +568,14 @@ def run_agent(
                             break
                     except OSError:
                         break
+
+                # Deferred status bar redraw after child settles from resize
+                if redraw_after and time.monotonic() >= redraw_after:
+                    redraw_after = 0.0
+                    sr, sc = _get_winsize()
+                    _init_scroll_region(sr, sc)
+                    with status_lock:
+                        _set_status_bar(current_status, sr, sc, current_style)
         except KeyboardInterrupt:
             os.kill(pid, signal.SIGTERM)
 
