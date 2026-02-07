@@ -413,7 +413,10 @@ class VoxtypeEngine:
     # -------------------------------------------------------------------------
 
     def start_http_server(self) -> None:
-        """Start the HTTP server for SSE agent communication.
+        """Start the OpenVIP HTTP server.
+
+        The HTTP server is the protocol binding — it always starts,
+        regardless of output mode (keyboard or agents).
 
         Call this before init_components() so the StatusPanel can connect
         during model loading and show progress.
@@ -421,13 +424,12 @@ class VoxtypeEngine:
         if self._http_server is not None:
             return  # Already started
 
-        if self.agent_mode or self.config.server.enabled:
-            from voxtype.core.http_server import OpenVIPServer
+        from voxtype.core.http_server import OpenVIPServer
 
-            self._http_server = OpenVIPServer(
-                self, self.config.server.host, self.config.server.port
-            )
-            self._http_server.start()
+        self._http_server = OpenVIPServer(
+            self, self.config.server.host, self.config.server.port
+        )
+        self._http_server.start()
 
     def init_components(self, *, headless: bool = False) -> None:
         """Initialize engine components (STT, VAD, audio, hotkey).
