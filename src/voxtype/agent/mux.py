@@ -386,6 +386,21 @@ def run_agent(
         print(f"[voxtype {__version__}] Session: {session_path}", file=sys.stderr)
         print(f"[voxtype {__version__}] Running: {' '.join(command)}", file=sys.stderr)
 
+    # Health check: verify server is reachable before starting subprocess
+    import urllib.error
+    import urllib.request
+
+    status_url = f"{base_url}/status"
+    try:
+        req = urllib.request.Request(status_url, method="GET")
+        with urllib.request.urlopen(req, timeout=5):
+            pass
+    except (ConnectionRefusedError, urllib.error.URLError, OSError) as e:
+        print(f"[voxtype] Error: cannot reach server at {base_url}", file=sys.stderr)
+        print(f"[voxtype] ({e})", file=sys.stderr)
+        _log_event(session_path, "server_unreachable", {"url": base_url, "error": str(e)})
+        return 1
+
     # Save original terminal settings
     old_settings = None
     if sys.stdin.isatty():
