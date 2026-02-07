@@ -28,11 +28,14 @@ class MockEngine:
     def _get_http_status(self) -> dict:
         return {
             "protocol_version": "1.0",
+            "state": "idle",
             "connected_agents": [],
+            "uptime_seconds": 0,
             "platform": {
                 "name": "Voxtype",
                 "version": "3.0.0a8",
                 "state": "idle",
+                "uptime_seconds": 0,
             },
         }
 
@@ -67,12 +70,14 @@ class TestStatusEndpoint:
     """Test GET /status endpoint."""
 
     def test_status_returns_engine_status(self, client: TestClient) -> None:
-        """GET /status returns engine status dict."""
+        """GET /status returns OpenVIP spec fields at top level."""
         response = client.get("/status")
         assert response.status_code == 200
         data = response.json()
         assert data["protocol_version"] == "1.0"
-        assert "connected_agents" in data
+        assert data["state"] == "idle"
+        assert data["connected_agents"] == []
+        assert data["uptime_seconds"] == 0
         assert "platform" in data
 
     def test_status_returns_json(self, client: TestClient) -> None:

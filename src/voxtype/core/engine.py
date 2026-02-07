@@ -1190,20 +1190,25 @@ class VoxtypeEngine:
 
         # Connected agents list
         connected_agents = self.agents
+        uptime = (
+            time.time() - self._stats_start_time
+            if self._stats_start_time
+            else 0
+        )
 
         return {
             # OpenVIP protocol-level fields
             "protocol_version": "1.0",
+            "state": stt_state,
             "connected_agents": connected_agents,
-            # Implementation-specific details
+            "uptime_seconds": uptime,
+            # Implementation-specific details (StatusPanel)
             "platform": {
                 "name": "Voxtype",
                 "version": __version__,
                 "mode": "agents" if self.agent_mode else "keyboard",
                 "state": stt_state,
-                "uptime_seconds": time.time() - self._stats_start_time
-                if self._stats_start_time
-                else 0,
+                "uptime_seconds": uptime,
                 "stt": {
                     "model_name": self.config.stt.model,
                     "device": self.config.stt.device,
