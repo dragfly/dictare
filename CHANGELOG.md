@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.54] - 2026-02-07
+
+### Fixed
+
+- Status bar resize: repeated redraw (every 150ms for 1s) to survive child
+  TUI apps that reset scroll region during their own redraw cycle
+
 ## [3.0.0-alpha.53] - 2026-02-07
 
 ### Added

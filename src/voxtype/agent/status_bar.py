@@ -34,7 +34,9 @@ class StatusBar:
         self._text = f"\u25cb {agent_id} \u00b7 connecting..."
         self._style = "warn"
         self._lock = threading.Lock()
-        self._redraw_after = 0.0  # monotonic timestamp, 0 = none pending
+        # After resize, keep redrawing for a window to survive child redraws
+        self._redraw_until = 0.0   # stop redrawing after this timestamp
+        self._last_redraw = 0.0    # last redraw timestamp (throttle)
 
     # -- public API -----------------------------------------------------------
 
@@ -53,15 +55,23 @@ class StatusBar:
         self._draw(rows, cols, text, style)
 
     def on_resize(self, rows: int, cols: int) -> None:
-        """Handle terminal resize — re-init scroll region, schedule redraw."""
+        """Handle terminal resize — re-init scroll region, schedule redraws."""
         self._init_scroll_region(rows, cols)
-        self._redraw_after = time.monotonic() + 0.15
+        # Keep redrawing for 1s to survive child full-screen redraws
+        self._redraw_until = time.monotonic() + 1.0
+        self._last_redraw = 0.0
 
     def check_redraw(self) -> None:
-        """Called from main loop — redraw if deferred timer has expired."""
-        deadline = self._redraw_after
-        if deadline and time.monotonic() >= deadline:
-            self._redraw_after = 0.0
+        """Called from main loop — repeated redraw during resize window."""
+        if not self._redraw_until:
+            return
+        now = time.monotonic()
+        if now >= self._redraw_until:
+            self._redraw_until = 0.0
+            return
+        # Throttle: redraw every 150ms within the window
+        if now - self._last_redraw >= 0.15:
+            self._last_redraw = now
             rows, cols = self._get_winsize()
             self._init_scroll_region(rows, cols)
             with self._lock:
