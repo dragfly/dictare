@@ -473,6 +473,17 @@ def run_agent(
         with status_lock:
             _set_status_bar(current_status, rows, cols, current_style)
 
+        # Child redraws after SIGWINCH and may overwrite the status bar.
+        # Schedule a deferred redraw so we paint on top of the child's output.
+        def _deferred_redraw() -> None:
+            time.sleep(0.15)
+            r, c = _get_winsize()
+            _init_scroll_region(r, c)
+            with status_lock:
+                _set_status_bar(current_status, r, c, current_style)
+
+        threading.Thread(target=_deferred_redraw, daemon=True).start()
+
     old_sigwinch = signal.signal(signal.SIGWINCH, handle_sigwinch)
 
     try:
