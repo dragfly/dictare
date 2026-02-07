@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0-alpha.28] - 2026-02-07
+## [3.0.0-alpha.29] - 2026-02-07
+
+### Added
+
+- `voxtype engine start --verbose` flag: shows debug logs in plain text instead of Live panel
+  - Enables Python DEBUG logging to stderr
+  - Polls /status and prints loading progress as text
+  - Essential for diagnosing loading issues
 
 ### Fixed
 
@@ -17,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Moved hardware acceleration detection from `cli.py` to `utils/hardware.py`
   (`auto_detect_acceleration()`), keeping CLI logic clean
+- Added debug logging to engine model loading (STT, VAD phases)
 
 ## [3.0.0-alpha.27] - 2026-02-06
 
