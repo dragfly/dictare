@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.55] - 2026-02-07
+
+### Fixed
+
+- Status bar resize: re-establish scroll region after every chunk of child
+  output during the resize window (child TUI resets `\x1b[r]` during redraw)
+
 ## [3.0.0-alpha.54] - 2026-02-07
 
 ### Fixed

@@ -33,14 +33,21 @@ class StatusBar:
         self._text = f"\u25cb {agent_id} \u00b7 connecting..."
         self._style = "warn"
         self._lock = threading.Lock()
+        self._rows = 0             # cached terminal size
+        self._cols = 0
         # After resize, keep redrawing for a window to survive child redraws
         self._redraw_until = 0.0   # stop redrawing after this timestamp
         self._last_redraw = 0.0    # last redraw timestamp (throttle)
+        # Pre-built scroll region escape (updated on resize)
+        self._region_esc = b""
 
     # -- public API -----------------------------------------------------------
 
     def init(self, rows: int, cols: int) -> None:
         """Set up scroll region and draw initial status bar."""
+        self._rows = rows
+        self._cols = cols
+        self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
         self._init_scroll_region(rows, cols)
         with self._lock:
             self._draw(rows, cols, self._text, self._style)
@@ -55,26 +62,43 @@ class StatusBar:
 
     def on_resize(self, rows: int, cols: int) -> None:
         """Handle terminal resize — re-init scroll region, schedule redraws."""
+        self._rows = rows
+        self._cols = cols
+        self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
         self._init_scroll_region(rows, cols)
         # Keep redrawing for 1s to survive child full-screen redraws
         self._redraw_until = time.monotonic() + 1.0
         self._last_redraw = 0.0
 
+    def after_child_output(self) -> None:
+        """Re-establish scroll region after relaying child output.
+
+        Only active during the resize window. During normal operation this
+        is a no-op (single falsy check). The child's TUI redraw may reset
+        our scroll region; this immediately re-establishes it.
+        """
+        if self._redraw_until and self._region_esc:
+            sys.stdout.buffer.write(self._region_esc)
+            # no flush — next child write or check_redraw will flush
+
     def check_redraw(self) -> None:
-        """Called from main loop — repeated redraw during resize window."""
+        """Called from main loop — repaint status bar during resize window."""
         if not self._redraw_until:
             return
         now = time.monotonic()
         if now >= self._redraw_until:
+            # Final redraw at end of window
             self._redraw_until = 0.0
-            return
-        # Throttle: redraw every 150ms within the window
-        if now - self._last_redraw >= 0.15:
-            self._last_redraw = now
             rows, cols = self._get_winsize()
             self._init_scroll_region(rows, cols)
             with self._lock:
                 self._draw(rows, cols, self._text, self._style)
+            return
+        # Throttle visual repaint to every 150ms
+        if now - self._last_redraw >= 0.15:
+            self._last_redraw = now
+            with self._lock:
+                self._draw(self._rows, self._cols, self._text, self._style)
 
     def cleanup(self) -> None:
         """Reset scroll region and clear status bar line."""
