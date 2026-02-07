@@ -193,13 +193,21 @@ class TestInputFilterTriggerDetection:
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
 
-    def test_x_input_not_overwritten_on_submit(self) -> None:
-        """Existing x_input is preserved (filter passes through)."""
+    def test_x_input_submit_not_overwritten(self) -> None:
+        """Existing x_input with submit=True is preserved (filter passes through)."""
+        f = InputFilter()
+        msg = {"text": "hello ok submit", "x_input": {"submit": True}}
+        result = f.process(msg)
+        assert result.action == PipelineAction.PASS
+        assert result.messages[0]["x_input"] == {"submit": True}
+
+    def test_x_input_newline_still_checks_triggers(self) -> None:
+        """x_input with newline=True does NOT skip trigger detection."""
         f = InputFilter()
         msg = {"text": "hello ok submit", "x_input": {"newline": True}}
         result = f.process(msg)
-        assert result.action == PipelineAction.PASS
-        assert result.messages[0]["x_input"] == {"newline": True}
+        assert result.action == PipelineAction.AUGMENT
+        assert result.messages[0]["x_input"]["submit"] is True
 
     def test_last_word_only_trigger_at_end(self) -> None:
         """Last-word-only trigger ('vai.') matches when last word."""
