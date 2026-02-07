@@ -1007,6 +1007,10 @@ def engine_start(
         bool,
         typer.Option("--agents", "-A", help="Agent mode - starts HTTP server for SSE agents"),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show debug logs (disables loading panel)"),
+    ] = False,
 ) -> None:
     """Start the VoxType engine.
 
@@ -1048,6 +1052,8 @@ def engine_start(
             pid_path.unlink(missing_ok=True)
 
     config = load_config(config_file)
+    if verbose:
+        config.verbose = True
 
     # Apply CLI overrides
     if model:
@@ -1121,8 +1127,6 @@ def engine_start(
         import signal
         import threading
 
-        from voxtype.ui.panel import StatusPanel
-
         base_url = f"http://{config.server.host}:{config.server.port}"
         init_error: Exception | None = None
         init_done = threading.Event()
@@ -1156,12 +1160,6 @@ def engine_start(
         controller_thread = threading.Thread(target=run_controller, daemon=True)
         controller_thread.start()
 
-        # Run StatusPanel in main thread (polls /status, shows UI)
-        panel = StatusPanel(console, base_url)
-
-        # Setup signal handlers in main thread
-        shutdown_attempted = False
-
         def _kill_resource_tracker() -> None:
             """Kill resource_tracker subprocess to prevent leaked semaphore warnings."""
             import signal as sig
@@ -1174,40 +1172,126 @@ def engine_start(
             except Exception:
                 pass
 
-        def signal_handler(signum: int, frame: Any) -> None:
-            nonlocal shutdown_attempted
-            if shutdown_attempted:
-                # Second signal - force exit
-                _kill_resource_tracker()
-                os._exit(1)
+        shutdown_attempted = False
 
-            shutdown_attempted = True
-            panel.stop()
+        if verbose:
+            # Verbose mode: plain text logging, no Live panel
+            import json
+            import logging as _logging
+            import time as _time
+            import urllib.request
 
-            # Timeout: force exit after 3 seconds if graceful shutdown stalls
-            def force_exit() -> None:
-                import time
+            # Enable debug logging to stderr so user sees engine internals
+            _logging.basicConfig(
+                level=_logging.DEBUG,
+                format="%(asctime)s %(name)s %(levelname)s %(message)s",
+                datefmt="%H:%M:%S",
+            )
 
-                time.sleep(3)
-                _kill_resource_tracker()
-                os._exit(1)
+            def _color(status: str) -> str:
+                return {"done": "green", "loading": "cyan", "error": "red"}.get(status, "dim")
 
-            threading.Thread(target=force_exit, daemon=True).start()
+            console.print(f"[dim]Engine starting (verbose mode) — {base_url}[/]")
+            console.print(f"[dim]Device: {config.stt.device}, Model: {config.stt.model}, "
+                          f"Compute: {config.stt.compute_type}[/]")
 
-            controller.request_shutdown()
+            def signal_handler(signum: int, frame: Any) -> None:
+                nonlocal shutdown_attempted
+                if shutdown_attempted:
+                    _kill_resource_tracker()
+                    os._exit(1)
+                shutdown_attempted = True
+                console.print("\n[yellow]Shutting down...[/]")
+                threading.Thread(target=lambda: (_time.sleep(3), _kill_resource_tracker(), os._exit(1)),
+                                 daemon=True).start()
+                controller.request_shutdown()
 
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+            signal.signal(signal.SIGINT, signal_handler)
 
-        try:
-            panel.run()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            panel.stop()
+            # Poll /status and print changes
+            last_status: dict = {}
+            try:
+                while not init_done.is_set() or (not init_error and controller.is_running):
+                    try:
+                        req = urllib.request.Request(f"{base_url}/status")
+                        with urllib.request.urlopen(req, timeout=2) as resp:
+                            status = json.loads(resp.read())
+                    except Exception:
+                        status = {}
+
+                    # Print loading progress changes
+                    platform = status.get("platform", {})
+                    loading = platform.get("loading", {})
+                    models = loading.get("models", [])
+                    for m in models:
+                        name = m.get("name", "?")
+                        st = m.get("status", "?")
+                        elapsed = m.get("elapsed", 0)
+                        key = f"{name}_status"
+                        if last_status.get(key) != st:
+                            console.print(f"  [{_color(st)}]{name}: {st}[/] ({elapsed:.1f}s)")
+                            last_status[key] = st
+
+                    if not loading.get("active", True) and "ready" not in last_status:
+                        console.print("[green]Engine ready[/]")
+                        last_status["ready"] = True
+
+                    if init_error:
+                        console.print(f"[red]Init error: {init_error}[/]")
+                        break
+
+                    _time.sleep(0.5)
+            except KeyboardInterrupt:
+                pass
+
+            # Wait for shutdown
+            if not init_error:
+                try:
+                    controller_thread.join()
+                except KeyboardInterrupt:
+                    pass
             controller.stop()
             _kill_resource_tracker()
             os._exit(0)
+        else:
+            # Normal mode: StatusPanel with Rich Live
+            from voxtype.ui.panel import StatusPanel
+
+            # Run StatusPanel in main thread (polls /status, shows UI)
+            panel = StatusPanel(console, base_url)
+
+            def signal_handler(signum: int, frame: Any) -> None:
+                nonlocal shutdown_attempted
+                if shutdown_attempted:
+                    _kill_resource_tracker()
+                    os._exit(1)
+
+                shutdown_attempted = True
+                panel.stop()
+
+                def force_exit() -> None:
+                    import time
+
+                    time.sleep(3)
+                    _kill_resource_tracker()
+                    os._exit(1)
+
+                threading.Thread(target=force_exit, daemon=True).start()
+                controller.request_shutdown()
+
+            signal.signal(signal.SIGTERM, signal_handler)
+            signal.signal(signal.SIGINT, signal_handler)
+
+            try:
+                panel.run()
+            except KeyboardInterrupt:
+                pass
+            finally:
+                panel.stop()
+                controller.stop()
+                _kill_resource_tracker()
+                os._exit(0)
 
 @engine_app.command("stop")
 def engine_stop() -> None:
