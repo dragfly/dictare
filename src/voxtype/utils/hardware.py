@@ -229,8 +229,7 @@ def auto_detect_acceleration(config, *, cpu_only: bool = False, console=None) ->
     config.stt.device = "cpu"
 
     if is_mlx_available():
-        # Apple Silicon with MLX: used automatically when hw_accel=true
-        pass
+        config.stt.device = "mlx"
     elif is_cuda_available():
         config.stt.device = "cuda"
         config.stt.compute_type = "float16"

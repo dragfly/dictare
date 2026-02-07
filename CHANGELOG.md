@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.34] - 2026-02-07
+
+### Fixed
+
+- **macOS regression**: MLX device not set in config during auto-detection, causing
+  panel to show "on CPU" instead of "MLX (Apple Silicon)" after v3.0.0a30 panel fix
+- Panel device display no longer falls back to platform heuristic — uses explicit
+  device mapping including `mlx`
+
 ## [3.0.0-alpha.33] - 2026-02-07
 
 ### Changed
