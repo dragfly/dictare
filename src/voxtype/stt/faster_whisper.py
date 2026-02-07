@@ -47,38 +47,47 @@ _MODEL_SIZES_MB = {
 
 def _is_model_cached(model_size: str) -> bool:
     """Check if model is already downloaded."""
+    return _get_cached_model_path(model_size) is not None
+
+def _get_cached_model_path(model_size: str) -> str | None:
+    """Get local path for a cached model, or None if not cached."""
     import logging
 
     repo_id = _MODEL_REPOS.get(model_size)
     if repo_id is None:
-        # Turbo models: check faster-whisper's cache location
-        return _is_turbo_model_cached()
+        # Turbo models
+        return _get_turbo_model_path()
 
     try:
         from huggingface_hub import try_to_load_from_cache
 
-        # Check for the main model file
         result = try_to_load_from_cache(repo_id, "model.bin")
-        return result is not None and os.path.exists(result)
+        if result is not None and os.path.exists(result):
+            return os.path.dirname(result)
     except Exception as e:
         logging.getLogger(__name__).debug(f"Error checking model cache for {model_size}: {e}")
-        return False
+    return None
 
 def _is_turbo_model_cached() -> bool:
     """Check if turbo model is cached (faster-whisper uses mobiuslabsgmbh repo)."""
+    return _get_turbo_model_path() is not None
+
+def _get_turbo_model_path() -> str | None:
+    """Get local path for cached turbo model, or None if not cached."""
     import logging
 
     try:
         from huggingface_hub import try_to_load_from_cache
 
-        # faster-whisper uses this repo for turbo
         result = try_to_load_from_cache(
             "mobiuslabsgmbh/faster-whisper-large-v3-turbo", "model.bin"
         )
-        return result is not None and os.path.exists(result)
+        if result is not None and os.path.exists(result):
+            # Return the snapshot directory (parent of model.bin)
+            return os.path.dirname(result)
     except Exception as e:
         logging.getLogger(__name__).debug(f"Error checking turbo model cache: {e}")
-        return False
+    return None
 
 def _download_model_with_progress(model_size: str, console=None) -> str:
     """Download model with real progress bar (monitors cache size), return local path."""
@@ -271,11 +280,12 @@ class FasterWhisperEngine(STTEngine):
                 if console:
                     console.print("[yellow]Using CPU instead of GPU[/]")
 
-        # Check if model needs downloading, show progress if so
-        model_path = model_size  # Default: let faster-whisper handle it
-        needs_download = not _is_model_cached(model_size)
-
-        if needs_download:
+        # Use local path if cached (avoids HuggingFace online check)
+        cached_path = _get_cached_model_path(model_size)
+        if cached_path:
+            model_path = cached_path
+        else:
+            model_path = model_size  # Let faster-whisper download
             if _MODEL_REPOS.get(model_size) is None:
                 # Turbo models: faster-whisper handles download, just show message
                 size_mb = _MODEL_SIZES_MB.get(model_size, "?")
