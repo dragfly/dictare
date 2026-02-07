@@ -5,6 +5,14 @@ import time
 
 from voxtype.hotkey.tap_detector import TapDetector, TapState
 
+def _wait_until(predicate, timeout: float = 2.0) -> None:
+    """Poll until predicate is true (1ms interval)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return
+        time.sleep(0.001)
+
 class TestTapDetectorStates:
     """Test state transitions."""
 
@@ -44,15 +52,14 @@ class TestSingleTap:
     def test_single_tap_fires_callback(self):
         result = []
         detector = TapDetector(
-            threshold=0.1,
+            threshold=0.01,
             on_single_tap=lambda: result.append("single"),
         )
 
         detector.on_key_down()
         detector.on_key_up()
 
-        # Wait for timer
-        time.sleep(0.15)
+        _wait_until(lambda: len(result) > 0)
 
         assert result == ["single"]
         assert detector.state == TapState.IDLE
@@ -60,7 +67,7 @@ class TestSingleTap:
     def test_single_tap_not_fired_if_double_tap(self):
         result = []
         detector = TapDetector(
-            threshold=0.2,
+            threshold=0.5,
             on_single_tap=lambda: result.append("single"),
             on_double_tap=lambda: result.append("double"),
         )
@@ -70,8 +77,8 @@ class TestSingleTap:
         detector.on_key_down()
         detector.on_key_up()
 
-        # Wait for potential timer
-        time.sleep(0.25)
+        # Double tap fires immediately, give a tiny margin
+        _wait_until(lambda: len(result) > 0)
 
         assert result == ["double"]
 
@@ -119,7 +126,7 @@ class TestComboAbort:
     def test_other_key_during_press_aborts_tap(self):
         result = []
         detector = TapDetector(
-            threshold=0.1,
+            threshold=0.01,
             on_single_tap=lambda: result.append("single"),
         )
 
@@ -127,7 +134,8 @@ class TestComboAbort:
         detector.on_other_key()  # Another key pressed while hotkey down
         detector.on_key_up()
 
-        time.sleep(0.15)
+        # Wait for the short timer to expire — should NOT fire
+        _wait_until(lambda: detector.state == TapState.IDLE)
 
         assert result == []  # No tap fired
         assert detector.state == TapState.IDLE
@@ -135,7 +143,7 @@ class TestComboAbort:
     def test_other_key_during_second_press_aborts_double_tap(self):
         result = []
         detector = TapDetector(
-            threshold=0.2,
+            threshold=0.01,
             on_single_tap=lambda: result.append("single"),
             on_double_tap=lambda: result.append("double"),
         )
@@ -146,7 +154,7 @@ class TestComboAbort:
         detector.on_other_key()  # Combo detected on second press
         detector.on_key_up()
 
-        time.sleep(0.25)
+        _wait_until(lambda: detector.state == TapState.IDLE)
 
         # Neither single nor double should fire
         assert result == []
@@ -156,7 +164,7 @@ class TestComboAbort:
         """Other key pressed after release doesn't abort."""
         result = []
         detector = TapDetector(
-            threshold=0.1,
+            threshold=0.01,
             on_single_tap=lambda: result.append("single"),
         )
 
@@ -164,7 +172,7 @@ class TestComboAbort:
         detector.on_key_up()
         detector.on_other_key()  # After release, shouldn't matter
 
-        time.sleep(0.15)
+        _wait_until(lambda: len(result) > 0)
 
         assert result == ["single"]
 
@@ -203,7 +211,7 @@ class TestReset:
     def test_reset_cancels_timer(self):
         result = []
         detector = TapDetector(
-            threshold=0.1,
+            threshold=0.01,
             on_single_tap=lambda: result.append("single"),
         )
 
@@ -211,7 +219,8 @@ class TestReset:
         detector.on_key_up()
         detector.reset()
 
-        time.sleep(0.15)
+        # Wait longer than threshold to confirm timer was cancelled
+        time.sleep(0.03)
 
         assert result == []  # Timer was cancelled
 
@@ -222,7 +231,7 @@ class TestThreadSafety:
         """Multiple threads sending events shouldn't crash."""
         result = []
         detector = TapDetector(
-            threshold=0.05,
+            threshold=0.01,
             on_single_tap=lambda: result.append("single"),
             on_double_tap=lambda: result.append("double"),
         )

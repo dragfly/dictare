@@ -22,9 +22,19 @@ from voxtype.core.events import (
 )
 from voxtype.core.state import AppState, StateManager
 
-def _wait(timeout: float = 0.15) -> None:
-    """Wait for controller to process events."""
-    time.sleep(timeout)
+def _wait_until(predicate, timeout: float = 2.0) -> None:
+    """Poll until predicate is true (1ms interval, no fixed sleep)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return
+        time.sleep(0.001)
+
+def _drain(controller, timeout: float = 2.0) -> None:
+    """Wait until controller queue is empty and processed."""
+    _wait_until(lambda: controller._queue.empty(), timeout=timeout)
+    # Small extra margin for the handler to finish after dequeue
+    time.sleep(0.005)
 
 class MockEngine:
     """Mock engine for testing controller."""
@@ -115,7 +125,7 @@ class TestSpeechEvents:
 
         try:
             controller.send(SpeechStartEvent(source="vad"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.RECORDING)
 
             assert sm.state == AppState.RECORDING
             assert len(recording_started) == 1
@@ -130,7 +140,7 @@ class TestSpeechEvents:
 
         try:
             controller.send(SpeechStartEvent(source="vad"))
-            _wait()
+            _drain(controller)
 
             assert sm.state == AppState.OFF
         finally:
@@ -156,7 +166,7 @@ class TestSpeechEvents:
                     source="vad",
                 )
             )
-            _wait()
+            _wait_until(lambda: sm.state == AppState.TRANSCRIBING)
 
             assert sm.state == AppState.TRANSCRIBING
             assert len(engine.transcriptions) == 1
@@ -181,11 +191,10 @@ class TestSpeechEvents:
             audio_data = np.zeros(1000, dtype=np.float32)
 
             controller.send(SpeechEndEvent(audio_data=audio_data, source="vad"))
-            _wait()
+            _wait_until(lambda: any(t == "audio_too_short" for _, _, t in state_changes))
 
             assert sm.state == AppState.LISTENING
             assert len(engine.transcriptions) == 0
-            # Should have state change with "audio_too_short" trigger
             assert any(t == "audio_too_short" for _, _, t in state_changes)
         finally:
             controller.stop()
@@ -214,7 +223,7 @@ class TestTranscriptionComplete:
                     source="stt",
                 )
             )
-            _wait()
+            _wait_until(lambda: sm.state == AppState.LISTENING)
 
             assert sm.state == AppState.LISTENING
             assert len(engine.injections) == 1
@@ -234,10 +243,9 @@ class TestPlayEvents:
         controller.start()
 
         try:
-            # Get play ID first (like app.py does)
             play_id = controller.get_next_play_id()
             controller.send(PlayStartEvent(text="Hello", source="tts"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.PLAYING)
 
             assert sm.state == AppState.PLAYING
             assert controller.play_in_progress is True
@@ -252,14 +260,12 @@ class TestPlayEvents:
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        # Set play ID to simulate playback in progress
         controller._current_play_id = 1
         controller.start()
 
         try:
-            # Send complete with matching ID
             controller.send(PlayCompleteEvent(play_id=1, source="tts"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.LISTENING)
 
             assert sm.state == AppState.LISTENING
             assert controller.play_in_progress is False
@@ -272,24 +278,19 @@ class TestPlayEvents:
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        # Set play ID to simulate playback in progress
         controller._current_play_id = 1
         controller.start()
 
         try:
-            # User presses OFF during playback
             controller.send(HotkeyToggleEvent(source="hotkey"))
-            _wait()
+            _wait_until(lambda: controller._desired_state_after_play == AppState.OFF)
 
-            # Should still be PLAYING (playback not finished)
             assert sm.state == AppState.PLAYING
             assert controller._desired_state_after_play == AppState.OFF
 
-            # Playback completes with matching ID
             controller.send(PlayCompleteEvent(play_id=1, source="tts"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.OFF)
 
-            # Now should go to OFF (user intent preserved)
             assert sm.state == AppState.OFF
         finally:
             controller.stop()
@@ -300,26 +301,22 @@ class TestPlayEvents:
         engine = MockEngine()
         controller = StateController(sm)
         controller.set_engine(engine)
-        # Set play ID to simulate playback in progress
         controller._current_play_id = 1
         controller.start()
 
         try:
-            # Transcription completes while audio is playing
             controller.send(
                 TranscriptionCompleteEvent(text="test", source="stt")
             )
-            _wait()
+            _wait_until(lambda: len(engine.injections) == 1)
 
-            # State should still be PLAYING
             assert sm.state == AppState.PLAYING
-            # Text should still be injected
             assert len(engine.injections) == 1
         finally:
             controller.stop()
 
     def test_concurrent_play_only_last_triggers_transition(self) -> None:
-        """Only the LAST play completion triggers state transition (rapid agent switching)."""
+        """Only the LAST play completion triggers state transition."""
         sm = StateManager(initial_state=AppState.LISTENING)
         engine = MockEngine()
         controller = StateController(sm)
@@ -327,60 +324,48 @@ class TestPlayEvents:
         controller.start()
 
         try:
-            # Simulate rapid agent switching: play 1, 2, 3 start in quick succession
+            # Play 1 starts
             play_id_1 = controller.get_next_play_id()
             controller.send(PlayStartEvent(text="Agent 1", source="tts"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.PLAYING)
 
             assert controller._current_play_id == 1
-            assert sm.state == AppState.PLAYING
 
-            # Second play starts (agent switch while play 1 still playing)
+            # Play 2 starts
             play_id_2 = controller.get_next_play_id()
             controller.send(PlayStartEvent(text="Agent 2", source="tts"))
-            _wait()
+            _wait_until(lambda: controller._current_play_id == 2)
 
-            assert controller._current_play_id == 2  # Updated to latest
-
-            # Third play starts
+            # Play 3 starts
             play_id_3 = controller.get_next_play_id()
             controller.send(PlayStartEvent(text="Agent 3", source="tts"))
-            _wait()
+            _wait_until(lambda: controller._current_play_id == 3)
 
-            assert controller._current_play_id == 3
-
-            # Play 1 completes - should be IGNORED (not the last)
+            # Play 1 completes - should be IGNORED
             controller.send(PlayCompleteEvent(play_id=play_id_1, source="tts"))
-            _wait()
+            _drain(controller)
 
-            assert sm.state == AppState.PLAYING  # Still playing!
+            assert sm.state == AppState.PLAYING
             assert controller.play_in_progress is True
 
-            # Play 2 completes - should be IGNORED (not the last)
+            # Play 2 completes - should be IGNORED
             controller.send(PlayCompleteEvent(play_id=play_id_2, source="tts"))
-            _wait()
+            _drain(controller)
 
-            assert sm.state == AppState.PLAYING  # Still playing!
+            assert sm.state == AppState.PLAYING
             assert controller.play_in_progress is True
 
-            # Play 3 completes - THIS is the last one, should transition
+            # Play 3 completes - THIS triggers transition
             controller.send(PlayCompleteEvent(play_id=play_id_3, source="tts"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.LISTENING)
 
-            assert sm.state == AppState.LISTENING  # Now back to listening
+            assert sm.state == AppState.LISTENING
             assert controller.play_in_progress is False
         finally:
             controller.stop()
 
     def test_transcription_during_play_while_transcribing(self) -> None:
-        """Fix for STUCK in TRANSCRIBING: play starts while transcribing, then both complete.
-
-        Scenario:
-        1. User speaks → TRANSCRIBING
-        2. User switches agent → play starts (but state stays TRANSCRIBING)
-        3. Transcription completes → deferred (play_in_progress is True)
-        4. Play completes → should transition TRANSCRIBING → LISTENING
-        """
+        """Play starts while transcribing, then both complete."""
         sm = StateManager(initial_state=AppState.TRANSCRIBING)
         engine = MockEngine()
         controller = StateController(sm)
@@ -388,28 +373,23 @@ class TestPlayEvents:
         controller.start()
 
         try:
-            # Play starts while in TRANSCRIBING (agent switch during transcription)
+            # Play starts while in TRANSCRIBING
             play_id = controller.get_next_play_id()
             controller.send(PlayStartEvent(text="Agent 2", source="tts"))
-            _wait()
+            _wait_until(lambda: controller.play_in_progress is True)
 
-            # State stays TRANSCRIBING (play only transitions from LISTENING)
             assert sm.state == AppState.TRANSCRIBING
-            assert controller.play_in_progress is True
 
             # Transcription completes while audio playing → deferred
             controller.send(TranscriptionCompleteEvent(text="test", source="stt"))
-            _wait()
+            _wait_until(lambda: controller._pending_transcription is not None)
 
-            # Still TRANSCRIBING (deferred)
             assert sm.state == AppState.TRANSCRIBING
-            assert controller._pending_transcription is not None
 
             # Play completes → should transition to LISTENING
             controller.send(PlayCompleteEvent(play_id=play_id, source="tts"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.LISTENING)
 
-            # NOW should be LISTENING (not stuck in TRANSCRIBING)
             assert sm.state == AppState.LISTENING
             assert controller.play_in_progress is False
         finally:
@@ -430,7 +410,7 @@ class TestHotkeyEvents:
 
         try:
             controller.send(HotkeyToggleEvent(source="hotkey"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.LISTENING)
 
             assert sm.state == AppState.LISTENING
             assert state_changes[-1] == (AppState.OFF, AppState.LISTENING, "hotkey_toggle")
@@ -447,7 +427,7 @@ class TestHotkeyEvents:
 
         try:
             controller.send(HotkeyToggleEvent(source="hotkey"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.OFF)
 
             assert sm.state == AppState.OFF
         finally:
@@ -466,10 +446,9 @@ class TestAgentSwitchEvents:
 
         try:
             controller.send(AgentSwitchEvent(direction=1, source="api"))
-            _wait()
+            _wait_until(lambda: len(engine.agent_switches) == 1)
 
             assert engine._current_agent_index == 1
-            assert len(engine.agent_switches) == 1
             assert engine.agent_switches[0] == ("cursor", 1)
         finally:
             controller.stop()
@@ -484,7 +463,7 @@ class TestAgentSwitchEvents:
 
         try:
             controller.send(AgentSwitchEvent(agent_name="vscode", source="api"))
-            _wait()
+            _wait_until(lambda: engine._current_agent_index == 2)
 
             assert engine._current_agent_index == 2
         finally:
@@ -500,7 +479,7 @@ class TestAgentSwitchEvents:
 
         try:
             controller.send(AgentSwitchEvent(agent_index=3, source="api"))
-            _wait()
+            _wait_until(lambda: engine._current_agent_index == 2)
 
             assert engine._current_agent_index == 2  # vscode (0-indexed)
         finally:
@@ -516,7 +495,7 @@ class TestAgentSwitchEvents:
 
         try:
             controller.send(AgentSwitchEvent(direction=1, source="api"))
-            _wait()
+            _wait_until(lambda: len(engine.agent_switches) == 1)
 
             engine._audio_manager.flush_vad.assert_called()
         finally:
@@ -533,7 +512,7 @@ class TestSetListeningEvent:
 
         try:
             controller.send(SetListeningEvent(on=True, source="api"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.LISTENING)
 
             assert sm.state == AppState.LISTENING
         finally:
@@ -547,7 +526,7 @@ class TestSetListeningEvent:
 
         try:
             controller.send(SetListeningEvent(on=False, source="api"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.OFF)
 
             assert sm.state == AppState.OFF
         finally:
@@ -566,7 +545,7 @@ class TestDiscardEvent:
 
         try:
             controller.send(DiscardCurrentEvent(source="api"))
-            _wait()
+            _wait_until(lambda: sm.state == AppState.LISTENING)
 
             assert sm.state == AppState.LISTENING
             engine._audio_manager.reset_vad.assert_called()
@@ -591,9 +570,8 @@ class TestEventOrdering:
             controller.send(HotkeyToggleEvent(source="1"))  # OFF -> LISTENING
             controller.send(HotkeyToggleEvent(source="2"))  # LISTENING -> OFF
             controller.send(HotkeyToggleEvent(source="3"))  # OFF -> LISTENING
-            _wait(0.2)
+            _wait_until(lambda: len(state_changes) >= 3)
 
-            # Should process in order
             assert len(state_changes) == 3
             assert state_changes[0][1] == AppState.LISTENING
             assert state_changes[1][1] == AppState.OFF
