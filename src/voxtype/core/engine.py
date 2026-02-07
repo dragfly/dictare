@@ -1234,7 +1234,7 @@ class VoxtypeEngine:
         }
 
     def _handle_tts_request(self, body: dict) -> dict:
-        """Handle a TTS request from the HTTP /tts endpoint.
+        """Handle a TTS request from the HTTP /speech endpoint.
 
         Args:
             body: Request body with text and optional language.
