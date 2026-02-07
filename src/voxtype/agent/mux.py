@@ -524,6 +524,8 @@ def run_agent(
                         data = os.read(master_fd, 4096)
                         if data:
                             os.write(sys.stdout.fileno(), data)
+                            if sbar:
+                                sbar.after_child_output()
                         else:
                             break
                     except OSError:
