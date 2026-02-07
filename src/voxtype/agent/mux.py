@@ -175,7 +175,7 @@ def _read_from_sse(
                     _log_event(session_path, "sse_connected", {"url": url})
                 retry_delay = 0.5  # Reset backoff on successful connection
                 if on_status:
-                    on_status(f"\U0001f3a4 {agent_id} \u00b7 connected")
+                    on_status(f"\u25cf {agent_id} \u00b7 connected", "ok")
 
                 for line_bytes in response:
                     if stop_event.is_set():
@@ -231,7 +231,7 @@ def _read_from_sse(
             if stop_event.is_set():
                 break
             if on_status:
-                on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...")
+                on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...", "error")
             if session_path:
                 _log_event(session_path, "sse_connect_error", {
                     "error": str(e), "retry_delay": retry_delay,
@@ -245,7 +245,7 @@ def _read_from_sse(
             if stop_event.is_set():
                 break
             if on_status:
-                on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...")
+                on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...", "error")
             stop_event.wait(retry_delay)
             retry_delay = min(retry_delay * 2, max_retry_delay)
 
@@ -368,13 +368,20 @@ def _init_scroll_region(rows: int, cols: int) -> None:
     sys.stdout.buffer.write(f"\x1b[1;{rows - 1}r".encode())
     sys.stdout.buffer.flush()
 
-def _set_status_bar(text: str, rows: int, cols: int) -> None:
+_STATUS_STYLES = {
+    "ok": "\x1b[48;5;236m\x1b[38;5;114m",        # soft green on dark gray
+    "warn": "\x1b[48;5;236m\x1b[38;5;229m",       # warm yellow on dark gray
+    "error": "\x1b[48;5;236m\x1b[38;5;210m",      # soft red on dark gray
+}
+
+def _set_status_bar(text: str, rows: int, cols: int, style: str = "ok") -> None:
     """Write status text on last row without disturbing scroll region."""
     # Truncate to terminal width
     display = text[:cols]
-    # save cursor, move to last row col 1, reverse video, write padded, reset attrs, restore cursor
+    ansi = _STATUS_STYLES.get(style, _STATUS_STYLES["ok"])
+    # save cursor, move to last row col 1, colored bg+fg, write padded, reset attrs, restore cursor
     sys.stdout.buffer.write(
-        f"\x1b7\x1b[{rows};1H\x1b[7m{display:<{cols}}\x1b[0m\x1b8".encode()
+        f"\x1b7\x1b[{rows};1H{ansi}{display:<{cols}}\x1b[0m\x1b8".encode()
     )
     sys.stdout.buffer.flush()
 
@@ -448,8 +455,9 @@ def run_agent(
 
     stop_event = threading.Event()
 
-    # Shared status text for redraw on resize
-    current_status = f"\U0001f3a4 {agent_id} \u00b7 connecting..."
+    # Shared status state for redraw on resize
+    current_status = f"\u25cb {agent_id} \u00b7 connecting..."
+    current_style = "warn"
     status_lock = threading.Lock()
 
     # Handle window resize
@@ -458,7 +466,7 @@ def run_agent(
         _init_scroll_region(rows, cols)
         _set_winsize(master_fd, rows - 1, cols)
         with status_lock:
-            _set_status_bar(current_status, rows, cols)
+            _set_status_bar(current_status, rows, cols, current_style)
 
     old_sigwinch = signal.signal(signal.SIGWINCH, handle_sigwinch)
 
@@ -488,7 +496,7 @@ def run_agent(
 
         # Init scroll region and status bar before raw mode
         _init_scroll_region(rows, cols)
-        _set_status_bar(current_status, rows, cols)
+        _set_status_bar(current_status, rows, cols, current_style)
 
         # Put terminal in raw mode
         if old_settings:
@@ -501,12 +509,13 @@ def run_agent(
         keystroke_counter = KeystrokeCounter()
 
         # Status change callback for SSE thread
-        def on_status_change(text: str) -> None:
-            nonlocal current_status
+        def on_status_change(text: str, style: str = "ok") -> None:
+            nonlocal current_status, current_style
             with status_lock:
                 current_status = text
+                current_style = style
             r, c = _get_winsize()
-            _set_status_bar(text, r, c)
+            _set_status_bar(text, r, c, style)
 
         # Start producer threads (read from stdin/SSE, put in queue)
         stdin_thread = threading.Thread(
