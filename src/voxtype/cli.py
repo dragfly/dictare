@@ -2259,12 +2259,16 @@ def agent(
     # Extract our own flags before passing the rest as the command.
     args = list(ctx.args)
     own_flags_to_remove: set[int] = set()
+    show_status_bar = True
     for i, arg in enumerate(args):
         if arg in ("--verbose", "-v"):
             verbose = True
             own_flags_to_remove.add(i)
         elif arg in ("--quiet", "-q"):
             quiet = True
+            own_flags_to_remove.add(i)
+        elif arg == "--no-status-bar":
+            show_status_bar = False
             own_flags_to_remove.add(i)
         elif arg in ("--server", "-s") and i + 1 < len(args):
             server = args[i + 1]
@@ -2281,7 +2285,10 @@ def agent(
         console.print("[dim]Example: voxtype agent claude -- claude[/]")
         raise typer.Exit(1)
 
-    exit_code = run_agent(agent_id, command, quiet=quiet, verbose=verbose, base_url=server)
+    exit_code = run_agent(
+        agent_id, command, quiet=quiet, verbose=verbose,
+        base_url=server, status_bar=show_status_bar,
+    )
     raise typer.Exit(exit_code)
 
 
