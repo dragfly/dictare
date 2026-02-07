@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from voxtype import __version__
+from voxtype.agent.status_bar import StatusBar
 from voxtype.utils.stats import update_keystrokes
 
 # Session logs directory
@@ -363,49 +364,13 @@ def _get_winsize() -> tuple[int, int]:
     except OSError:
         return 24, 80
 
-def _init_scroll_region(rows: int, cols: int) -> None:
-    """Set scroll region to rows 1..N-1, leaving last row for status bar."""
-    # DECSTBM resets cursor to (1,1) as side effect — save/restore around it
-    sys.stdout.buffer.write(f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode())
-    sys.stdout.buffer.flush()
-
-_STATUS_STYLES = {
-    "ok": "\x1b[48;5;236m\x1b[38;5;114m",        # soft green on dark gray
-    "warn": "\x1b[48;5;236m\x1b[38;5;229m",       # warm yellow on dark gray
-    "error": "\x1b[48;5;236m\x1b[38;5;210m",      # soft red on dark gray
-}
-
-def _set_status_bar(text: str, rows: int, cols: int, style: str = "ok") -> None:
-    """Write status text on last row without disturbing scroll region."""
-    right = f"voxtype {__version__}"
-    # Build line: left-aligned status, right-aligned version
-    gap = cols - len(text) - len(right)
-    if gap >= 2:
-        display = text + " " * gap + right
-    else:
-        display = text[:cols]
-    ansi = _STATUS_STYLES.get(style, _STATUS_STYLES["ok"])
-    # save cursor, move to last row col 1, colored bg+fg, write padded, reset attrs, restore cursor
-    sys.stdout.buffer.write(
-        f"\x1b7\x1b[{rows};1H{ansi}{display:<{cols}}\x1b[0m\x1b8".encode()
-    )
-    sys.stdout.buffer.flush()
-
-def _reset_scroll_region() -> None:
-    """Reset scroll region to full terminal and clear the status bar line."""
-    rows, cols = _get_winsize()
-    # Reset scroll region, move to last row, clear it, print newline for prompt
-    sys.stdout.buffer.write(
-        f"\x1b[r\x1b[{rows};1H\x1b[2K\n".encode()
-    )
-    sys.stdout.buffer.flush()
-
 def run_agent(
     agent_id: str,
     command: list[str],
     quiet: bool = False,
     verbose: bool = False,
     base_url: str = DEFAULT_BASE_URL,
+    status_bar: bool = True,
 ) -> int:
     """Run a command with multiplexed input from stdin and voxtype SSE.
 
@@ -418,6 +383,7 @@ def run_agent(
         quiet: Suppress info messages.
         verbose: Log full text in session file (not truncated to 50 chars).
         base_url: Engine HTTP server base URL.
+        status_bar: Show persistent status bar on last terminal row.
 
     Returns:
         Exit code of the process.
@@ -455,28 +421,19 @@ def run_agent(
     # Create pseudo-terminal
     master_fd, slave_fd = pty.openpty()
 
-    # Set initial window size (child gets rows-1 for status bar)
+    # Set initial window size
     rows, cols = _get_winsize()
-    _set_winsize(slave_fd, rows - 1, cols)
+    sbar = StatusBar(agent_id) if status_bar else None
+    _set_winsize(slave_fd, rows - (1 if sbar else 0), cols)
 
     stop_event = threading.Event()
 
-    # Shared status state for redraw on resize
-    current_status = f"\u25cb {agent_id} \u00b7 connecting..."
-    current_style = "warn"
-    status_lock = threading.Lock()
-
-    # Deferred redraw: timestamp after which to repaint status bar (0 = none)
-    redraw_after = 0.0
-
     # Handle window resize
     def handle_sigwinch(signum, frame):
-        nonlocal redraw_after
         rows, cols = _get_winsize()
-        _init_scroll_region(rows, cols)
-        _set_winsize(master_fd, rows - 1, cols)
-        # Schedule deferred redraw in main loop (child redraws after SIGWINCH)
-        redraw_after = time.monotonic() + 0.15
+        if sbar:
+            sbar.on_resize(rows, cols)
+        _set_winsize(master_fd, rows - (1 if sbar else 0), cols)
 
     old_sigwinch = signal.signal(signal.SIGWINCH, handle_sigwinch)
 
@@ -504,9 +461,9 @@ def run_agent(
         # Parent process
         os.close(slave_fd)
 
-        # Init scroll region and status bar before raw mode
-        _init_scroll_region(rows, cols)
-        _set_status_bar(current_status, rows, cols, current_style)
+        # Init status bar before raw mode
+        if sbar:
+            sbar.init(rows, cols)
 
         # Put terminal in raw mode
         if old_settings:
@@ -518,15 +475,6 @@ def run_agent(
         # Create keystroke counter for session statistics
         keystroke_counter = KeystrokeCounter()
 
-        # Status change callback for SSE thread
-        def on_status_change(text: str, style: str = "ok") -> None:
-            nonlocal current_status, current_style
-            with status_lock:
-                current_status = text
-                current_style = style
-            r, c = _get_winsize()
-            _set_status_bar(text, r, c, style)
-
         # Start producer threads (read from stdin/SSE, put in queue)
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
@@ -537,7 +485,7 @@ def run_agent(
         sse_thread = threading.Thread(
             target=_read_from_sse,
             args=(agent_id, base_url, write_queue, stop_event, session_path, keystroke_counter, verbose),
-            kwargs={"on_status": on_status_change},
+            kwargs={"on_status": sbar.update if sbar else None},
             daemon=True,
         )
         # Start consumer thread (read from queue, write to PTY)
@@ -570,12 +518,8 @@ def run_agent(
                         break
 
                 # Deferred status bar redraw after child settles from resize
-                if redraw_after and time.monotonic() >= redraw_after:
-                    redraw_after = 0.0
-                    sr, sc = _get_winsize()
-                    _init_scroll_region(sr, sc)
-                    with status_lock:
-                        _set_status_bar(current_status, sr, sc, current_style)
+                if sbar:
+                    sbar.check_redraw()
         except KeyboardInterrupt:
             os.kill(pid, signal.SIGTERM)
 
@@ -598,7 +542,8 @@ def run_agent(
 
     finally:
         # Reset scroll region before restoring terminal
-        _reset_scroll_region()
+        if sbar:
+            sbar.cleanup()
 
         # Restore terminal settings
         if old_settings:
