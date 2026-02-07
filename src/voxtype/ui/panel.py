@@ -230,7 +230,7 @@ class StatusPanel:
 
         # Get model info
         stt_model = stt.get("model_name", "unknown")
-        stt_state = stt.get("state", "idle")
+        stt_state = platform.get("state", "idle")
 
         # Device from engine status
         stt_device = stt.get("device", "cpu")
