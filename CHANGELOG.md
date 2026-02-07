@@ -5,10 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0-alpha.29] - 2026-02-07
+## [3.0.0-alpha.30] - 2026-02-07
+
+### Fixed
+
+- Status panel showed "on CPU" even when CUDA was active — panel hardcoded
+  device instead of reading it from `/status` endpoint
+- Verbose mode now prints full traceback on init errors (was silently exiting)
 
 ### Added
 
+- `/status` endpoint now includes `stt.device` field (cpu/cuda)
 - `voxtype engine start --verbose` flag: shows debug logs in plain text instead of Live panel
   - Enables Python DEBUG logging to stderr
   - Polls /status and prints loading progress as text
