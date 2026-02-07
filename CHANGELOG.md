@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.37] - 2026-02-07
+
+### Added
+
+- Regression tests for panel state/device display (`test_panel.py`)
+- Regression tests for hardware auto-detection (`test_hardware.py`)
+- Tests for message factory functions (`test_messages.py`)
+- Tests for model cache path resolution (`test_model_cache.py`)
+- Total: 45 new tests (326 → 371), all run in <0.3s
+
 ## [3.0.0-alpha.36] - 2026-02-07
 
 ### Fixed
