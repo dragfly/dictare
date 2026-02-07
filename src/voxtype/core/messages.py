@@ -3,10 +3,12 @@
 OpenVIP (Open Voice Interaction Protocol) v1.0
 See: https://open-voice-input.org
 
-Message types:
-- message: Final text to inject (OpenVIP v1.0)
-- partial: Streaming partial transcription (internal, for StatusPanel)
-- status: Engine state (internal, for StatusPanel)
+Protocol message types:
+- transcription: Transcribed text from speech-to-text (OpenVIP v1.0)
+- speech: Text-to-speech request (OpenVIP v1.0)
+
+Internal message types (NOT part of OpenVIP protocol):
+- status: Engine state changes (StatusPanel)
 
 Extension fields (x_) are added by pipeline filters, not here.
 """
@@ -32,42 +34,36 @@ def _base_message(msg_type: str) -> dict[str, Any]:
         "type": msg_type,
         "id": str(uuid.uuid4()),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "source": f"voxtype/{__version__}",
+        "origin": f"voxtype/{__version__}",
     }
 
 def create_message(
     text: str,
     *,
-    submit: bool = False,
-    visual_newline: bool = False,
     language: str | None = None,
+    partial: bool = False,
 ) -> dict[str, Any]:
-    """Create an OpenVIP message for text injection.
+    """Create an OpenVIP transcription message.
 
     Args:
-        text: Text to inject.
-        submit: If True, set x_submit with enter=True.
-        visual_newline: If True, set x_visual_newline flag.
-        language: Language code (e.g., "en", "it"). Used by pipeline filters.
+        text: Transcribed text.
+        language: Language code (e.g., "en", "it").
+        partial: If True, this is an incomplete transcription in progress.
 
     Returns:
-        OpenVIP message dict.
+        OpenVIP transcription message dict.
 
     Example:
-        >>> msg = create_message("hello", submit=True, language="en")
-        >>> msg["type"]  # "message"
+        >>> msg = create_message("hello", language="en")
+        >>> msg["type"]  # "transcription"
         >>> msg["text"]  # "hello"
-        >>> msg["x_submit"]["enter"]  # True
-        >>> msg["language"]  # "en"
     """
-    message = _base_message("message")
+    message = _base_message("transcription")
     message["text"] = text
-    if submit:
-        message["x_submit"] = {"enter": True}
-    if visual_newline:
-        message["x_visual_newline"] = True
     if language:
         message["language"] = language
+    if partial:
+        message["partial"] = True
     return message
 
 def create_partial(text: str) -> dict[str, Any]:
@@ -80,16 +76,14 @@ def create_partial(text: str) -> dict[str, Any]:
         text: Partial transcription text.
 
     Returns:
-        OpenVIP partial message dict.
+        OpenVIP transcription message with partial=true.
 
     Example:
         >>> msg = create_partial("hel")
-        >>> msg["type"]  # "partial"
-        >>> msg["text"]  # "hel"
+        >>> msg["type"]  # "transcription"
+        >>> msg["partial"]  # True
     """
-    message = _base_message("partial")
-    message["text"] = text
-    return message
+    return create_message(text, partial=True)
 
 def create_status(
     status: StatusValue,
@@ -97,9 +91,10 @@ def create_status(
     error_message: str | None = None,
     error_code: str | None = None,
 ) -> dict[str, Any]:
-    """Create an OpenVIP status message.
+    """Create an internal status message.
 
-    Status messages report engine state changes.
+    Status messages report engine state changes. These are NOT part of
+    the OpenVIP protocol — they are internal to the implementation.
 
     Args:
         status: Current status (idle, listening, recording, transcribing, error).
@@ -107,16 +102,7 @@ def create_status(
         error_code: Machine-readable error code (only when status="error").
 
     Returns:
-        OpenVIP status message dict.
-
-    Example:
-        >>> msg = create_status("listening")
-        >>> msg["type"]  # "status"
-        >>> msg["status"]  # "listening"
-
-        >>> msg = create_status("error", error_message="Mic not found", error_code="MIC_NOT_FOUND")
-        >>> msg["status"]  # "error"
-        >>> msg["error"]["message"]  # "Mic not found"
+        Status message dict.
     """
     message = _base_message("status")
     message["status"] = status
@@ -129,7 +115,7 @@ def create_status(
     return message
 
 def create_error(message: str, code: str | None = None) -> dict[str, Any]:
-    """Create an OpenVIP error message.
+    """Create an internal error message.
 
     Convenience wrapper for create_status("error", ...).
 
@@ -138,6 +124,6 @@ def create_error(message: str, code: str | None = None) -> dict[str, Any]:
         code: Machine-readable error code.
 
     Returns:
-        OpenVIP error status message dict.
+        Error status message dict.
     """
     return create_status("error", error_message=message, error_code=code)

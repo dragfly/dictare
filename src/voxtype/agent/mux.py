@@ -190,8 +190,12 @@ def _read_from_sse(
                             _log_event(session_path, "parse_error", {"line": data[:100]})
                         continue
 
-                    # Skip non-message types
-                    if openvip_msg.get("type") != "message":
+                    # Skip non-transcription types
+                    if openvip_msg.get("type") != "transcription":
+                        continue
+
+                    # Skip partial transcriptions
+                    if openvip_msg.get("partial"):
                         continue
 
                     # Convert OpenVIP to internal format
@@ -200,12 +204,10 @@ def _read_from_sse(
                         "openvip_id": openvip_msg.get("id"),
                         "openvip_ts": openvip_msg.get("timestamp"),
                     }
-                    x_submit = openvip_msg.get("x_submit", {})
-                    if isinstance(x_submit, dict) and x_submit.get("enter"):
+                    x_input = openvip_msg.get("x_input", {})
+                    if isinstance(x_input, dict) and x_input.get("submit"):
                         msg["submit"] = True
-                    elif x_submit:  # legacy bool support
-                        msg["submit"] = True
-                    if openvip_msg.get("x_visual_newline"):
+                    if isinstance(x_input, dict) and x_input.get("newline"):
                         msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
 
                     msg_count += 1
