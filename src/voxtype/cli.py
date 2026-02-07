@@ -225,49 +225,9 @@ def version_callback(value: bool) -> None:
 
 
 def _auto_detect_acceleration(config, cpu_only: bool = False) -> None:
-    """Auto-detect hardware acceleration (MLX on macOS, CUDA on Linux).
-
-    Args:
-        config: The configuration object to update
-        cpu_only: If True, skip detection and force CPU
-    """
-    from voxtype.utils.hardware import (
-        is_cuda_available,
-        is_mlx_available,
-        is_virtualized_macos,
-        setup_cuda_library_path,
-    )
-
-    # If cpu_only flag is set, force CPU and skip detection
-    if cpu_only:
-        config.stt.device = "cpu"
-        config.stt.compute_type = "int8"
-        return
-
-    # Check if running in a VM on macOS - disable MLX if so
-    if is_virtualized_macos():
-        config.stt.device = "cpu"
-        config.stt.compute_type = "int8"
-        config.stt.hw_accel = False
-        # Inform user about VM detection (will be shown before "Ready" panel)
-        console.print("[yellow]⚠ Virtualized macOS detected - hardware acceleration disabled[/]")
-        console.print("[dim]MLX Metal kernels are not compatible with virtualized environments.[/]")
-        return
-
-    # Only auto-detect if device is "auto"
-    if config.stt.device != "auto":
-        return
-
-    # Default to CPU if no acceleration found
-    config.stt.device = "cpu"
-
-    if is_mlx_available():
-        # Apple Silicon with MLX: will be used automatically if hw_accel=true
-        pass
-    elif is_cuda_available():
-        config.stt.device = "cuda"
-        config.stt.compute_type = "float16"
-        setup_cuda_library_path()
+    """Auto-detect hardware acceleration (MLX on macOS, CUDA on Linux)."""
+    from voxtype.utils.hardware import auto_detect_acceleration
+    auto_detect_acceleration(config, cpu_only=cpu_only, console=console)
 
 
 def _apply_cli_overrides(
