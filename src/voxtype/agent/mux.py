@@ -15,6 +15,7 @@ import termios
 import threading
 import time
 import tty
+from collections.abc import Callable
 from datetime import datetime, timezone
 from fcntl import ioctl
 from pathlib import Path
@@ -145,6 +146,7 @@ def _read_from_sse(
     session_path: Path | None = None,
     keystroke_counter: KeystrokeCounter | None = None,
     verbose: bool = False,
+    on_status: Callable[[str], None] | None = None,
 ) -> None:
     """Connect to engine SSE and receive OpenVIP messages.
 
@@ -159,6 +161,7 @@ def _read_from_sse(
         session_path: Optional session log file path.
         keystroke_counter: Optional keystroke counter for session stats.
         verbose: Log full text in session file.
+        on_status: Optional callback for status changes (connected/reconnecting).
     """
     import urllib.request
 
@@ -178,6 +181,8 @@ def _read_from_sse(
                 if session_path:
                     _log_event(session_path, "sse_connected", {"url": url})
                 retry_delay = 0.5  # Reset backoff on successful connection
+                if on_status:
+                    on_status(f"\U0001f3a4 {agent_id} \u00b7 connected")
 
                 for line_bytes in response:
                     if stop_event.is_set():
@@ -232,6 +237,8 @@ def _read_from_sse(
         except (ConnectionRefusedError, urllib.error.URLError, OSError) as e:
             if stop_event.is_set():
                 break
+            if on_status:
+                on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...")
             if session_path:
                 _log_event(session_path, "sse_connect_error", {
                     "error": str(e), "retry_delay": retry_delay,
@@ -244,6 +251,8 @@ def _read_from_sse(
                 _log_event(session_path, "sse_error", {"error": str(e)})
             if stop_event.is_set():
                 break
+            if on_status:
+                on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...")
             stop_event.wait(retry_delay)
             retry_delay = min(retry_delay * 2, max_retry_delay)
 
@@ -366,6 +375,33 @@ def _get_winsize() -> tuple[int, int]:
         return 24, 80
 
 
+def _init_scroll_region(rows: int, cols: int) -> None:
+    """Set scroll region to rows 1..N-1, leaving last row for status bar."""
+    sys.stdout.buffer.write(f"\x1b[1;{rows - 1}r".encode())
+    sys.stdout.buffer.flush()
+
+
+def _set_status_bar(text: str, rows: int, cols: int) -> None:
+    """Write status text on last row without disturbing scroll region."""
+    # Truncate to terminal width
+    display = text[:cols]
+    # save cursor, move to last row col 1, reverse video, write padded, reset attrs, restore cursor
+    sys.stdout.buffer.write(
+        f"\x1b7\x1b[{rows};1H\x1b[7m{display:<{cols}}\x1b[0m\x1b8".encode()
+    )
+    sys.stdout.buffer.flush()
+
+
+def _reset_scroll_region() -> None:
+    """Reset scroll region to full terminal and clear the status bar line."""
+    rows, cols = _get_winsize()
+    # Reset scroll region, move to last row, clear it, move cursor to top
+    sys.stdout.buffer.write(
+        f"\x1b[r\x1b[{rows};1H\x1b[2K\x1b[1;1H".encode()
+    )
+    sys.stdout.buffer.flush()
+
+
 def run_agent(
     agent_id: str,
     command: list[str],
@@ -421,16 +457,23 @@ def run_agent(
     # Create pseudo-terminal
     master_fd, slave_fd = pty.openpty()
 
-    # Set initial window size
+    # Set initial window size (child gets rows-1 for status bar)
     rows, cols = _get_winsize()
-    _set_winsize(slave_fd, rows, cols)
+    _set_winsize(slave_fd, rows - 1, cols)
 
     stop_event = threading.Event()
+
+    # Shared status text for redraw on resize
+    current_status = f"\U0001f3a4 {agent_id} \u00b7 connecting..."
+    status_lock = threading.Lock()
 
     # Handle window resize
     def handle_sigwinch(signum, frame):
         rows, cols = _get_winsize()
-        _set_winsize(master_fd, rows, cols)
+        _init_scroll_region(rows, cols)
+        _set_winsize(master_fd, rows - 1, cols)
+        with status_lock:
+            _set_status_bar(current_status, rows, cols)
 
     old_sigwinch = signal.signal(signal.SIGWINCH, handle_sigwinch)
 
@@ -458,6 +501,10 @@ def run_agent(
         # Parent process
         os.close(slave_fd)
 
+        # Init scroll region and status bar before raw mode
+        _init_scroll_region(rows, cols)
+        _set_status_bar(current_status, rows, cols)
+
         # Put terminal in raw mode
         if old_settings:
             tty.setraw(sys.stdin.fileno())
@@ -467,6 +514,14 @@ def run_agent(
 
         # Create keystroke counter for session statistics
         keystroke_counter = KeystrokeCounter()
+
+        # Status change callback for SSE thread
+        def on_status_change(text: str) -> None:
+            nonlocal current_status
+            with status_lock:
+                current_status = text
+            r, c = _get_winsize()
+            _set_status_bar(text, r, c)
 
         # Start producer threads (read from stdin/SSE, put in queue)
         stdin_thread = threading.Thread(
@@ -478,6 +533,7 @@ def run_agent(
         sse_thread = threading.Thread(
             target=_read_from_sse,
             args=(agent_id, base_url, write_queue, stop_event, session_path, keystroke_counter, verbose),
+            kwargs={"on_status": on_status_change},
             daemon=True,
         )
         # Start consumer thread (read from queue, write to PTY)
@@ -529,6 +585,9 @@ def run_agent(
         return exit_code
 
     finally:
+        # Reset scroll region before restoring terminal
+        _reset_scroll_region()
+
         # Restore terminal settings
         if old_settings:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)

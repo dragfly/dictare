@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.44] - 2026-02-07
+
+### Added
+
+- Status bar in `voxtype agent`: persistent last-row indicator showing
+  connection state (connecting/connected/reconnecting) using DECSTBM scroll
+  region. Subprocess sees 1 row less; status bar survives clear-screen and
+  repositions on terminal resize.
+
 ## [3.0.0-alpha.43] - 2026-02-07
 
 ### Added
