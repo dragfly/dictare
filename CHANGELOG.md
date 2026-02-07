@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.35] - 2026-02-07
+
+### Changed
+
+- `/status` endpoint now exposes OpenVIP spec fields (`state`, `connected_agents`,
+  `uptime_seconds`) at the top level alongside `protocol_version`
+- Implementation-specific details remain in `platform` object (backward-compatible)
+
 ## [3.0.0-alpha.34] - 2026-02-07
 
 ### Fixed
