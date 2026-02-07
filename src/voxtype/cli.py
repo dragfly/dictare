@@ -1245,15 +1245,19 @@ def engine_start(
             except KeyboardInterrupt:
                 pass
 
-            # Wait for shutdown
-            if not init_error:
+            # Wait for shutdown or report error
+            if init_error:
+                console.print(f"[red]Init failed: {init_error}[/]")
+                import traceback
+                traceback.print_exception(type(init_error), init_error, init_error.__traceback__)
+            else:
                 try:
                     controller_thread.join()
                 except KeyboardInterrupt:
                     pass
             controller.stop()
             _kill_resource_tracker()
-            os._exit(0)
+            os._exit(1 if init_error else 0)
         else:
             # Normal mode: StatusPanel with Rich Live
             from voxtype.ui.panel import StatusPanel
