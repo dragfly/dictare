@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.25] - 2026-02-06
+
+### Fixed
+
+- HTTP server now starts in all modes (keyboard and agents). Previously it
+  only started in agent mode, causing StatusPanel to show "Connecting to
+  engine..." indefinitely in keyboard mode.
+
 ## [3.0.0-alpha.24] - 2026-02-06
 
 ### Changed - Remove dead code + reorganize files (Step 6)
