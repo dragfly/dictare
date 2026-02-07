@@ -377,7 +377,8 @@ def _get_winsize() -> tuple[int, int]:
 
 def _init_scroll_region(rows: int, cols: int) -> None:
     """Set scroll region to rows 1..N-1, leaving last row for status bar."""
-    sys.stdout.buffer.write(f"\x1b[1;{rows - 1}r".encode())
+    # DECSTBM resets cursor to (1,1) as side effect — save/restore around it
+    sys.stdout.buffer.write(f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode())
     sys.stdout.buffer.flush()
 
 
