@@ -383,6 +383,7 @@ def run_agent(
     verbose: bool = False,
     base_url: str = DEFAULT_BASE_URL,
     status_bar: bool = True,
+    clear_on_start: bool = True,
 ) -> int:
     """Run a command with multiplexed input from stdin and voxtype SSE.
 
@@ -396,6 +397,7 @@ def run_agent(
         verbose: Log full text in session file (not truncated to 50 chars).
         base_url: Engine HTTP server base URL.
         status_bar: Show persistent status bar on last terminal row.
+        clear_on_start: Clear terminal before launching child process.
 
     Returns:
         Exit code of the process.
@@ -472,6 +474,11 @@ def run_agent(
 
         # Parent process
         os.close(slave_fd)
+
+        # Clear terminal for clean start
+        if clear_on_start:
+            sys.stdout.buffer.write(b"\x1b[2J\x1b[H")
+            sys.stdout.buffer.flush()
 
         # Init status bar before raw mode
         if sbar:

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.56] - 2026-02-07
+
+### Added
+
+- Clear terminal on `voxtype agent` start — prevents dirty screen when
+  relaunching after Ctrl+C. Configurable: `[client] clear_on_start = true`
+
 ## [3.0.0-alpha.55] - 2026-02-07
 
 ### Fixed

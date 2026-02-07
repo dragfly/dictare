@@ -2285,13 +2285,14 @@ def agent(
         console.print("[dim]Example: voxtype agent claude -- claude[/]")
         raise typer.Exit(1)
 
-    # --no-status-bar overrides config; otherwise use config value
+    # CLI flags override config
     if show_status_bar is None:
         show_status_bar = config.client.status_bar
 
     exit_code = run_agent(
         agent_id, command, quiet=quiet, verbose=verbose,
         base_url=server, status_bar=show_status_bar,
+        clear_on_start=config.client.clear_on_start,
     )
     raise typer.Exit(exit_code)
 
