@@ -235,7 +235,7 @@ class StatusPanel:
 
         # Device from engine status
         stt_device = stt.get("device", "cpu")
-        device = {"cuda": "GPU (CUDA)", "cpu": "CPU", "mlx": "MLX (Apple Silicon)"}.get(stt_device, stt_device.upper())
+        device = {"cuda": "CUDA", "cpu": "CPU", "mlx": "MLX"}.get(stt_device, stt_device.upper())
 
         # Build model status lines
         lines = []
