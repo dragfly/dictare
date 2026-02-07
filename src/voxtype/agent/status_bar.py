@@ -38,6 +38,9 @@ class StatusBar:
         # After resize, keep redrawing for a window to survive child redraws
         self._redraw_until = 0.0   # stop redrawing after this timestamp
         self._last_redraw = 0.0    # last redraw timestamp (throttle)
+        # Periodic redraw to survive child full-screen redraws (Ctrl+O etc.)
+        self._next_periodic = 0.0  # next scheduled periodic redraw
+        self._periodic_interval = 2.0  # seconds between periodic redraws
         # Pre-built scroll region escape (updated on resize)
         self._region_esc = b""
 
@@ -51,6 +54,7 @@ class StatusBar:
         self._init_scroll_region(rows, cols)
         with self._lock:
             self._draw(rows, cols, self._text, self._style)
+        self._next_periodic = time.monotonic() + self._periodic_interval
 
     def update(self, text: str, style: str = "ok") -> None:
         """Update status text (callable from any thread)."""
@@ -73,30 +77,44 @@ class StatusBar:
     def after_child_output(self) -> None:
         """Re-establish scroll region after relaying child output.
 
-        Only active during the resize window. During normal operation this
-        is a no-op (single falsy check). The child's TUI redraw may reset
-        our scroll region; this immediately re-establishes it.
+        Always active: the child may reset scroll region at any time
+        (e.g. Ctrl+O mode toggle in Claude Code). Writing the pre-built
+        escape (~15 bytes, no flush) after every output chunk is cheap
+        and keeps our region intact.
         """
-        if self._redraw_until and self._region_esc:
+        if self._region_esc:
             sys.stdout.buffer.write(self._region_esc)
-            # no flush — next child write or check_redraw will flush
 
     def check_redraw(self) -> None:
-        """Called from main loop — repaint status bar during resize window."""
-        if not self._redraw_until:
-            return
+        """Called from main loop — repaint status bar.
+
+        During resize window: fast redraws every 150ms for 1s.
+        Normal operation: periodic redraw every 2s to survive child
+        full-screen redraws (e.g. Ctrl+O in Claude Code).
+        """
         now = time.monotonic()
-        if now >= self._redraw_until:
-            # Final redraw at end of window
-            self._redraw_until = 0.0
-            rows, cols = self._get_winsize()
-            self._init_scroll_region(rows, cols)
-            with self._lock:
-                self._draw(rows, cols, self._text, self._style)
+
+        # Resize window: fast redraws
+        if self._redraw_until:
+            if now >= self._redraw_until:
+                # Final redraw at end of window
+                self._redraw_until = 0.0
+                rows, cols = self._get_winsize()
+                self._init_scroll_region(rows, cols)
+                with self._lock:
+                    self._draw(rows, cols, self._text, self._style)
+                self._next_periodic = now + self._periodic_interval
+                return
+            # Throttle visual repaint to every 150ms
+            if now - self._last_redraw >= 0.15:
+                self._last_redraw = now
+                with self._lock:
+                    self._draw(self._rows, self._cols, self._text, self._style)
             return
-        # Throttle visual repaint to every 150ms
-        if now - self._last_redraw >= 0.15:
-            self._last_redraw = now
+
+        # Periodic redraw: keep status bar alive after child redraws
+        if now >= self._next_periodic:
+            self._next_periodic = now + self._periodic_interval
             with self._lock:
                 self._draw(self._rows, self._cols, self._text, self._style)
 
