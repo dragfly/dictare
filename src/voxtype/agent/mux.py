@@ -376,8 +376,13 @@ _STATUS_STYLES = {
 
 def _set_status_bar(text: str, rows: int, cols: int, style: str = "ok") -> None:
     """Write status text on last row without disturbing scroll region."""
-    # Truncate to terminal width
-    display = text[:cols]
+    right = f"voxtype {__version__}"
+    # Build line: left-aligned status, right-aligned version
+    gap = cols - len(text) - len(right)
+    if gap >= 2:
+        display = text + " " * gap + right
+    else:
+        display = text[:cols]
     ansi = _STATUS_STYLES.get(style, _STATUS_STYLES["ok"])
     # save cursor, move to last row col 1, colored bg+fg, write padded, reset attrs, restore cursor
     sys.stdout.buffer.write(
