@@ -26,7 +26,7 @@ from voxtype.utils.stats import update_keystrokes
 # Session logs directory
 SESSIONS_DIR = Path.home() / ".local" / "share" / "voxtype" / "sessions"
 
-# Default engine HTTP server URL
+# Default engine HTTP server URL (also configurable via [client] in config.toml)
 DEFAULT_BASE_URL = "http://127.0.0.1:8765"
 
 def _get_session_log_path(agent_id: str) -> Path:
