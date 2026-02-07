@@ -408,9 +408,9 @@ def _set_status_bar(text: str, rows: int, cols: int, style: str = "ok") -> None:
 def _reset_scroll_region() -> None:
     """Reset scroll region to full terminal and clear the status bar line."""
     rows, cols = _get_winsize()
-    # Reset scroll region, move to last row, clear it, move cursor to top
+    # Reset scroll region, move to last row, clear it, print newline for prompt
     sys.stdout.buffer.write(
-        f"\x1b[r\x1b[{rows};1H\x1b[2K\x1b[1;1H".encode()
+        f"\x1b[r\x1b[{rows};1H\x1b[2K\n".encode()
     )
     sys.stdout.buffer.flush()
 
