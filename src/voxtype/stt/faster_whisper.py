@@ -249,6 +249,7 @@ class FasterWhisperEngine(STTEngine):
         compute_type: str = "int8",
         console=None,
         verbose: bool = False,
+        headless: bool = False,
         **kwargs,
     ) -> None:
         """Load the Whisper model.
