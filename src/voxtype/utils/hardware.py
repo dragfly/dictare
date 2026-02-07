@@ -28,6 +28,29 @@ def is_mlx_available() -> bool:
     except (ImportError, ModuleNotFoundError):
         return False
 
+def detect_nvidia_gpu() -> str:
+    """Check if an NVIDIA GPU is physically present (via nvidia-smi).
+
+    Returns:
+        "found" if GPU detected, "no_tool" if nvidia-smi not installed,
+        "none" if nvidia-smi works but no GPU found.
+    """
+    if sys.platform != "linux":
+        return "none"
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return "found"
+        return "none"
+    except FileNotFoundError:
+        return "no_tool"
+    except subprocess.TimeoutExpired:
+        return "none"
+
 def is_cuda_available() -> bool:
     """Check if CUDA is available for GPU acceleration."""
     if sys.platform != "linux":
@@ -163,3 +186,56 @@ def get_best_device() -> str:
     if is_cuda_available():
         return "cuda"
     return "cpu"
+
+def auto_detect_acceleration(config, *, cpu_only: bool = False, console=None) -> None:
+    """Auto-detect hardware acceleration and update config accordingly.
+
+    Detects MLX (macOS Apple Silicon), CUDA (Linux NVIDIA), or falls back
+    to CPU. When a GPU is present but CUDA libs are missing, prints
+    install instructions.
+
+    Args:
+        config: Config object to update (stt.device, stt.compute_type, stt.hw_accel).
+        cpu_only: Force CPU mode, skip all detection.
+        console: Optional Rich console for user-facing messages.
+    """
+    if cpu_only:
+        config.stt.device = "cpu"
+        config.stt.compute_type = "int8"
+        return
+
+    # macOS VM check — MLX doesn't work in VMs
+    if is_virtualized_macos():
+        config.stt.device = "cpu"
+        config.stt.compute_type = "int8"
+        config.stt.hw_accel = False
+        if console:
+            console.print("[yellow]⚠ Virtualized macOS detected - hardware acceleration disabled[/]")
+            console.print("[dim]MLX Metal kernels are not compatible with virtualized environments.[/]")
+        return
+
+    # Only auto-detect if device is "auto"
+    if config.stt.device != "auto":
+        return
+
+    config.stt.device = "cpu"
+
+    if is_mlx_available():
+        # Apple Silicon with MLX: used automatically when hw_accel=true
+        pass
+    elif is_cuda_available():
+        config.stt.device = "cuda"
+        config.stt.compute_type = "float16"
+        setup_cuda_library_path()
+    elif sys.platform == "linux":
+        # GPU might be present but CUDA Python libs not configured
+        gpu_status = detect_nvidia_gpu()
+        if gpu_status == "found":
+            from voxtype.cuda_setup import _print_acceleration_hint
+            if console:
+                _print_acceleration_hint(console, "cuda")
+        elif gpu_status == "no_tool" and console:
+            console.print(
+                "[dim]Cannot detect NVIDIA GPU (nvidia-smi not found). "
+                "If you have a GPU, install nvidia drivers first.[/]"
+            )
