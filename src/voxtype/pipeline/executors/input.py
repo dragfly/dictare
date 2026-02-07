@@ -1,8 +1,8 @@
-"""Submit executor.
+"""Input executor.
 
-Handles x_submit messages by calling the write function with submit action.
-Messages with x_submit are consumed after execution.
-Messages without x_submit pass through unchanged.
+Handles x_input messages by calling the write function with submit action.
+Messages with x_input are consumed after execution.
+Messages without x_input pass through unchanged.
 """
 
 from __future__ import annotations
@@ -16,10 +16,10 @@ from voxtype.pipeline.base import PipelineResult
 logger = logging.getLogger(__name__)
 
 @dataclass
-class SubmitExecutor:
-    """Executor that handles submit actions.
+class InputExecutor:
+    """Executor that handles text input actions.
 
-    When a message has x_submit with enter=True, calls write_fn
+    When a message has x_input with submit=True, calls write_fn
     with the text and submit flag, then consumes the message.
 
     Attributes:
@@ -31,36 +31,36 @@ class SubmitExecutor:
 
     @property
     def name(self) -> str:
-        return "submit"
+        return "input"
 
     @property
     def field(self) -> str:
-        return "x_submit"
+        return "x_input"
 
     def process(self, message: dict) -> PipelineResult:
-        """Process message, executing submit if requested.
+        """Process message, executing input action if requested.
 
         Args:
             message: OpenVIP message dict.
 
         Returns:
-            CONSUMED if submit executed, PASS otherwise.
+            CONSUMED if input action executed, PASS otherwise.
         """
-        x_submit = message.get("x_submit", {})
-        if not x_submit:
+        x_input = message.get("x_input", {})
+        if not x_input:
             return PipelineResult.passed(message)
 
-        enter = x_submit.get("enter", False) if isinstance(x_submit, dict) else bool(x_submit)
+        submit = x_input.get("submit", False) if isinstance(x_input, dict) else bool(x_input)
         text = message.get("text", "")
 
-        self.write_fn(text, enter)
+        self.write_fn(text, submit)
 
         logger.debug(
-            "submit_executed",
+            "input_executed",
             extra={
                 "text_len": len(text),
-                "enter": enter,
-                "trigger": x_submit.get("trigger") if isinstance(x_submit, dict) else None,
+                "submit": submit,
+                "trigger": x_input.get("trigger") if isinstance(x_input, dict) else None,
             },
         )
 

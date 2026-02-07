@@ -26,10 +26,13 @@ class MockEngine:
 
     def _get_http_status(self) -> dict:
         return {
-            "status": "idle",
-            "agents": [],
-            "current_agent": None,
-            "version": "3.0.0a8",
+            "protocol_version": "1.0",
+            "connected_agents": [],
+            "platform": {
+                "name": "Voxtype",
+                "version": "3.0.0a8",
+                "state": "idle",
+            },
         }
 
     def _handle_tts_request(self, body: dict) -> dict:
@@ -63,8 +66,9 @@ class TestStatusEndpoint:
         response = client.get("/status")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "idle"
-        assert "version" in data
+        assert data["protocol_version"] == "1.0"
+        assert "connected_agents" in data
+        assert "platform" in data
 
     def test_status_returns_json(self, client: TestClient) -> None:
         """GET /status returns valid JSON."""

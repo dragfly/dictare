@@ -55,6 +55,10 @@ build/evdev.whl
 # Debug session logs
 debug-session*.jsonl
 
+# Debug output files
+error_output.txt
+test_sanitization.py
+
 # Local sound files (originals)
 sounds/
 

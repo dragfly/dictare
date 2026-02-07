@@ -17,15 +17,15 @@ from voxtype.pipeline.base import (
     PipelineResult,
     derive_message,
 )
-from voxtype.pipeline.filters import AgentFilter, SubmitFilter
+from voxtype.pipeline.filters import AgentFilter, InputFilter
 
 __all__ = [
     "AgentFilter",
     "Executor",
     "Filter",
+    "InputFilter",
     "Pipeline",
     "PipelineAction",
     "PipelineResult",
-    "SubmitFilter",
     "derive_message",
 ]

@@ -173,7 +173,7 @@ class TestLocalReceiverSend:
         with patch.object(receiver, "_create_injector", return_value=mock_injector):
             receiver.start()
 
-            message = {"openvip": "1.0", "type": "message", "text": "hello"}
+            message = {"openvip": "1.0", "type": "transcription", "text": "hello"}
             result = receiver.send(message)
 
             assert result is True
@@ -186,7 +186,7 @@ class TestLocalReceiverSend:
         config = MockConfig()
         receiver = LocalReceiver(config)
 
-        message = {"openvip": "1.0", "type": "message", "text": "hello"}
+        message = {"openvip": "1.0", "type": "transcription", "text": "hello"}
         result = receiver.send(message)
 
         assert result is False
@@ -194,8 +194,8 @@ class TestLocalReceiverSend:
 class TestLocalReceiverMessageProcessing:
     """Test message processing."""
 
-    def test_processes_message_type_message(self) -> None:
-        """Processes messages with type 'message'."""
+    def test_processes_transcription_type(self) -> None:
+        """Processes messages with type 'transcription'."""
         from voxtype.output.local import LocalReceiver
 
         config = MockConfig()
@@ -205,7 +205,7 @@ class TestLocalReceiverMessageProcessing:
         with patch.object(receiver, "_create_injector", return_value=mock_injector):
             receiver.start()
 
-            message = {"openvip": "1.0", "type": "message", "text": "hello world"}
+            message = {"openvip": "1.0", "type": "transcription", "text": "hello world"}
             receiver.send(message)
 
             # Wait for processing
@@ -217,8 +217,8 @@ class TestLocalReceiverMessageProcessing:
 
             receiver.stop()
 
-    def test_ignores_non_message_types(self) -> None:
-        """Ignores messages with type other than 'message'."""
+    def test_ignores_non_transcription_types(self) -> None:
+        """Ignores messages with type other than 'transcription'."""
         from voxtype.output.local import LocalReceiver
 
         config = MockConfig()
@@ -228,9 +228,9 @@ class TestLocalReceiverMessageProcessing:
         with patch.object(receiver, "_create_injector", return_value=mock_injector):
             receiver.start()
 
-            # Send non-message types
-            receiver.send({"openvip": "1.0", "type": "partial", "text": "hello"})
-            receiver.send({"openvip": "1.0", "type": "state", "state": "listening"})
+            # Send non-transcription types
+            receiver.send({"openvip": "1.0", "type": "speech", "text": "hello"})
+            receiver.send({"openvip": "1.0", "type": "status", "status": "listening"})
             receiver.send({"openvip": "1.0", "type": "start"})
 
             time.sleep(0.2)
@@ -239,8 +239,8 @@ class TestLocalReceiverMessageProcessing:
 
             receiver.stop()
 
-    def test_x_submit_sets_auto_enter(self) -> None:
-        """x_submit flag sets auto_enter=True."""
+    def test_x_input_submit_sets_auto_enter(self) -> None:
+        """x_input.submit flag sets auto_enter=True."""
         from voxtype.output.local import LocalReceiver
 
         config = MockConfig()
@@ -250,7 +250,7 @@ class TestLocalReceiverMessageProcessing:
         with patch.object(receiver, "_create_injector", return_value=mock_injector):
             receiver.start()
 
-            message = {"openvip": "1.0", "type": "message", "text": "hello", "x_submit": {"enter": True}}
+            message = {"openvip": "1.0", "type": "transcription", "text": "hello", "x_input": {"submit": True}}
             receiver.send(message)
 
             time.sleep(0.2)
@@ -260,8 +260,8 @@ class TestLocalReceiverMessageProcessing:
 
             receiver.stop()
 
-    def test_x_visual_newline_disables_auto_enter(self) -> None:
-        """x_visual_newline flag disables auto_enter even with x_submit."""
+    def test_x_input_newline_disables_auto_enter(self) -> None:
+        """x_input.newline flag disables auto_enter."""
         from voxtype.output.local import LocalReceiver
 
         config = MockConfig()
@@ -271,13 +271,12 @@ class TestLocalReceiverMessageProcessing:
         with patch.object(receiver, "_create_injector", return_value=mock_injector):
             receiver.start()
 
-            # Both flags set - visual_newline takes precedence
+            # Newline flag set
             message = {
                 "openvip": "1.0",
-                "type": "message",
+                "type": "transcription",
                 "text": "hello",
-                "x_submit": {"enter": True},
-                "x_visual_newline": True,
+                "x_input": {"newline": True},
             }
             receiver.send(message)
 
@@ -300,7 +299,7 @@ class TestLocalReceiverMessageProcessing:
         with patch.object(receiver, "_create_injector", return_value=mock_injector):
             receiver.start()
 
-            message = {"openvip": "1.0", "type": "message", "text": "hello"}
+            message = {"openvip": "1.0", "type": "transcription", "text": "hello"}
             receiver.send(message)
 
             time.sleep(0.2)
@@ -326,7 +325,7 @@ class TestLocalReceiverErrorHandling:
             receiver.start()
 
             # Send message that will cause exception
-            message1 = {"openvip": "1.0", "type": "message", "text": "fail"}
+            message1 = {"openvip": "1.0", "type": "transcription", "text": "fail"}
             receiver.send(message1)
 
             time.sleep(0.2)
@@ -338,7 +337,7 @@ class TestLocalReceiverErrorHandling:
             mock_injector.raise_on_type = False
 
             # Send another message
-            message2 = {"openvip": "1.0", "type": "message", "text": "success"}
+            message2 = {"openvip": "1.0", "type": "transcription", "text": "success"}
             receiver.send(message2)
 
             time.sleep(0.2)
@@ -365,7 +364,7 @@ class TestLocalReceiverErrorHandling:
 
                 message = {
                     "openvip": "1.0",
-                    "type": "message",
+                    "type": "transcription",
                     "id": "test-msg-123",
                     "text": "fail",
                 }
@@ -401,7 +400,7 @@ class TestLocalReceiverThreadSafety:
                     for i in range(message_count):
                         receiver.send({
                             "openvip": "1.0",
-                            "type": "message",
+                            "type": "transcription",
                             "text": f"msg-{threading.current_thread().name}-{i}",
                         })
                 except Exception as e:
@@ -437,7 +436,7 @@ class TestLocalReceiverThreadSafety:
             for i in range(100):
                 receiver.send({
                     "openvip": "1.0",
-                    "type": "message",
+                    "type": "transcription",
                     "text": f"msg-{i}",
                 })
 
@@ -464,7 +463,7 @@ class TestLocalReceiverThreadSafety:
                     for _ in range(100):
                         receiver.send({
                             "openvip": "1.0",
-                            "type": "message",
+                            "type": "transcription",
                             "text": "test",
                         })
                         time.sleep(0.001)
