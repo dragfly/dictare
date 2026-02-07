@@ -12,6 +12,26 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+def _wait_until(predicate, timeout: float = 2.0) -> None:
+    """Poll until predicate is true (1ms interval)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return
+        time.sleep(0.001)
+
+
+def _wait_for_calls(injector, count: int, timeout: float = 2.0) -> None:
+    """Wait until mock injector has received `count` calls."""
+    _wait_until(lambda: len(injector.calls) >= count, timeout=timeout)
+
+
+def _wait_queue_empty(receiver, timeout: float = 2.0) -> None:
+    """Wait until receiver's queue is drained."""
+    _wait_until(lambda: receiver._queue.empty(), timeout=timeout)
+    time.sleep(0.005)  # margin for handler to finish
+
+
 class MockConfig:
     """Mock config for testing."""
 
@@ -214,8 +234,7 @@ class TestLocalReceiverMessageProcessing:
             message = {"openvip": "1.0", "type": "transcription", "text": "hello world"}
             receiver.send(message)
 
-            # Wait for processing
-            time.sleep(0.2)
+            _wait_for_calls(mock_injector, 1)
 
             assert len(mock_injector.calls) == 1
             assert mock_injector.calls[0]["text"] == "hello world"
@@ -239,7 +258,8 @@ class TestLocalReceiverMessageProcessing:
             receiver.send({"openvip": "1.0", "type": "status", "status": "listening"})
             receiver.send({"openvip": "1.0", "type": "start"})
 
-            time.sleep(0.2)
+            # Give queue time to process (these should be ignored)
+            time.sleep(0.05)
 
             assert len(mock_injector.calls) == 0
 
@@ -335,7 +355,8 @@ class TestLocalReceiverErrorHandling:
             message1 = {"openvip": "1.0", "type": "transcription", "text": "fail"}
             receiver.send(message1)
 
-            time.sleep(0.2)
+            # Wait for queue to drain (error will be raised and caught)
+            _wait_queue_empty(receiver)
 
             # Worker should still be alive
             assert receiver._worker.is_alive()
@@ -347,7 +368,7 @@ class TestLocalReceiverErrorHandling:
             message2 = {"openvip": "1.0", "type": "transcription", "text": "success"}
             receiver.send(message2)
 
-            time.sleep(0.2)
+            _wait_for_calls(mock_injector, 1)
 
             # Should have processed the second message
             assert len(mock_injector.calls) == 1
@@ -377,7 +398,7 @@ class TestLocalReceiverErrorHandling:
                 }
                 receiver.send(message)
 
-                time.sleep(0.2)
+                _wait_queue_empty(receiver)
 
                 receiver.stop()
 
@@ -420,11 +441,9 @@ class TestLocalReceiverThreadSafety:
             for t in threads:
                 t.join()
 
-            # Wait for all messages to be processed
-            time.sleep(0.5)
+            _wait_for_calls(mock_injector, 5 * message_count)
 
             assert len(errors) == 0
-            # All messages should be processed (5 threads * 50 messages)
             assert len(mock_injector.calls) == 5 * message_count
 
             receiver.stop()

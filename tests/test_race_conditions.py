@@ -97,8 +97,10 @@ class TestMuxFileReaderRaceConditions:
                     f.flush()
                 time.sleep(0.001)  # Very fast writes
 
-            # Wait for reader to catch up
-            time.sleep(0.5)
+            # Wait for reader to catch up (poll instead of fixed sleep)
+            deadline = time.time() + 5.0
+            while len([r for r in results if "error" not in r]) < num_messages and time.time() < deadline:
+                time.sleep(0.001)
             stop_event.set()
             reader_thread.join(timeout=2.0)
 
@@ -139,7 +141,9 @@ class TestMuxFileReaderRaceConditions:
                     f.write(json.dumps({"text": f"burst_{i}"}) + "\n")
                 f.flush()
 
-            time.sleep(0.5)
+            deadline = time.time() + 5.0
+            while len([r for r in results if "error" not in r]) < num_messages and time.time() < deadline:
+                time.sleep(0.001)
             stop_event.set()
             reader_thread.join(timeout=2.0)
 
@@ -181,7 +185,10 @@ class TestMuxFileReaderRaceConditions:
                     f.flush()
                 time.sleep(0.005)
 
-            time.sleep(0.5)
+            expected = num_pairs * 2
+            deadline = time.time() + 5.0
+            while len([r for r in results if "error" not in r]) < expected and time.time() < deadline:
+                time.sleep(0.001)
             stop_event.set()
             reader_thread.join(timeout=2.0)
 
@@ -228,12 +235,14 @@ class TestMuxFileReaderRaceConditions:
             for t in writer_threads:
                 t.join()
 
-            time.sleep(1.0)
+            expected_total = num_writers * messages_per_writer
+            deadline = time.time() + 5.0
+            while len([r for r in results if "error" not in r]) < expected_total and time.time() < deadline:
+                time.sleep(0.001)
             stop_event.set()
             reader_thread.join(timeout=2.0)
 
             valid_results = [r for r in results if "error" not in r]
-            expected_total = num_writers * messages_per_writer
             assert len(valid_results) == expected_total, (
                 f"Expected {expected_total} messages, got {len(valid_results)}"
             )
@@ -272,7 +281,9 @@ class TestMuxFileReaderRaceConditions:
                 # Variable delays
                 time.sleep(0.001 * (i % 5))
 
-            time.sleep(0.5)
+            deadline = time.time() + 5.0
+            while len(results) < 50 and time.time() < deadline:
+                time.sleep(0.001)
             stop_event.set()
             reader_thread.join(timeout=2.0)
 
