@@ -2205,16 +2205,16 @@ def agent(
     from voxtype.agent import run_agent
     from voxtype.config import load_config
 
-    # Resolve server URL: --server flag > config > default
+    # Load config for defaults
+    config = load_config()
     if server is None:
-        config = load_config()
         server = config.client.url
 
     # With allow_interspersed_args=False, flags after positional args go to ctx.args.
     # Extract our own flags before passing the rest as the command.
     args = list(ctx.args)
     own_flags_to_remove: set[int] = set()
-    show_status_bar = True
+    show_status_bar: bool | None = None  # None = use config default
     for i, arg in enumerate(args):
         if arg in ("--verbose", "-v"):
             verbose = True
@@ -2239,6 +2239,10 @@ def agent(
         console.print("[dim]Usage: voxtype agent AGENT_ID -- COMMAND...[/]")
         console.print("[dim]Example: voxtype agent claude -- claude[/]")
         raise typer.Exit(1)
+
+    # --no-status-bar overrides config; otherwise use config value
+    if show_status_bar is None:
+        show_status_bar = config.client.status_bar
 
     exit_code = run_agent(
         agent_id, command, quiet=quiet, verbose=verbose,
