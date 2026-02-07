@@ -1153,9 +1153,9 @@ def engine_start(
             try:
                 from multiprocessing.resource_tracker import _resource_tracker
 
-                pid: int | None = getattr(_resource_tracker, "_pid", None)
-                if pid is not None:
-                    os.kill(pid, sig.SIGKILL)
+                tracker_pid: int | None = getattr(_resource_tracker, "_pid", None)
+                if tracker_pid is not None:
+                    os.kill(tracker_pid, sig.SIGKILL)
             except Exception:
                 pass
             os._exit(0)

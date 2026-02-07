@@ -279,7 +279,7 @@ class TestLocalReceiverMessageProcessing:
             message = {"openvip": "1.0", "type": "transcription", "text": "hello", "x_input": {"submit": True}}
             receiver.send(message)
 
-            time.sleep(0.2)
+            _wait_for_calls(mock_injector, 1)
 
             assert len(mock_injector.calls) == 1
             assert mock_injector.calls[0]["auto_enter"] is True
@@ -306,7 +306,7 @@ class TestLocalReceiverMessageProcessing:
             }
             receiver.send(message)
 
-            time.sleep(0.2)
+            _wait_for_calls(mock_injector, 1)
 
             assert len(mock_injector.calls) == 1
             assert mock_injector.calls[0]["auto_enter"] is False
@@ -328,7 +328,7 @@ class TestLocalReceiverMessageProcessing:
             message = {"openvip": "1.0", "type": "transcription", "text": "hello"}
             receiver.send(message)
 
-            time.sleep(0.2)
+            _wait_for_calls(mock_injector, 1)
 
             assert mock_injector.calls[0]["delay_ms"] == 50
 

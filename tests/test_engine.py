@@ -220,9 +220,14 @@ class TestEventEmission:
         engine._emit("on_error", "test", "test")
 
 
-def _wait_for_controller(timeout: float = 0.1) -> None:
-    """Wait for controller to process events."""
-    time.sleep(timeout)
+def _wait_for_controller(engine, *, predicate=None, timeout: float = 2.0) -> None:
+    """Wait for controller to drain its queue and optionally satisfy a predicate."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if engine._controller._queue.empty() and (predicate is None or predicate()):
+            return
+        time.sleep(0.001)
+    time.sleep(0.005)  # small margin for handler to finish
 
 
 class TestStateControl:
@@ -241,7 +246,7 @@ class TestStateControl:
 
         try:
             engine._toggle_listening()
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert engine.state == AppState.LISTENING
             assert len(events.state_changes) == 1
             assert events.state_changes[0] == (AppState.OFF, AppState.LISTENING, "hotkey_toggle")
@@ -258,10 +263,10 @@ class TestStateControl:
         try:
             # First toggle ON
             engine._toggle_listening()
-            _wait_for_controller()
+            _wait_for_controller(engine)
             # Then toggle OFF
             engine._toggle_listening()
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert engine.state == AppState.OFF
             assert len(events.state_changes) == 2
             assert events.state_changes[1] == (AppState.LISTENING, AppState.OFF, "hotkey_toggle")
@@ -277,7 +282,7 @@ class TestStateControl:
 
         try:
             engine._set_listening(True)
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert engine.state == AppState.LISTENING
         finally:
             engine._controller.stop()
@@ -291,9 +296,9 @@ class TestStateControl:
 
         try:
             engine._set_listening(True)
-            _wait_for_controller()
+            _wait_for_controller(engine)
             engine._set_listening(False)
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert engine.state == AppState.OFF
         finally:
             engine._controller.stop()
@@ -307,10 +312,10 @@ class TestStateControl:
 
         try:
             engine._set_listening(True)
-            _wait_for_controller()
+            _wait_for_controller(engine)
             events.state_changes.clear()
             engine._set_listening(True)  # Already on
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert len(events.state_changes) == 0
         finally:
             engine._controller.stop()
@@ -332,7 +337,7 @@ class TestAgentSwitch:
 
         try:
             engine._switch_agent(1)
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert engine.current_agent == "cursor"
             assert engine.current_agent_index == 1
             assert events.agent_changes[0] == ("cursor", 1)
@@ -349,7 +354,7 @@ class TestAgentSwitch:
 
         try:
             engine._switch_agent(-1)  # Wraps to last
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert engine.current_agent == "vscode"
             assert engine.current_agent_index == 2
         finally:
@@ -365,9 +370,9 @@ class TestAgentSwitch:
 
         try:
             engine._switch_agent(1)  # cursor
-            _wait_for_controller()
+            _wait_for_controller(engine)
             engine._switch_agent(1)  # wraps to claude
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert engine.current_agent == "claude"
             assert engine.current_agent_index == 0
         finally:
@@ -382,7 +387,7 @@ class TestAgentSwitch:
 
         try:
             engine._switch_agent(1)  # Should not crash
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert len(events.agent_changes) == 0
         finally:
             engine._controller.stop()
@@ -397,7 +402,7 @@ class TestAgentSwitch:
 
         try:
             result = engine._switch_to_agent_by_name("cursor")
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert result is True
             assert engine.current_agent == "cursor"
         finally:
@@ -413,7 +418,7 @@ class TestAgentSwitch:
 
         try:
             result = engine._switch_to_agent_by_name("CURSOR")
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert result is True
             assert engine.current_agent == "cursor"
         finally:
@@ -429,7 +434,7 @@ class TestAgentSwitch:
 
         try:
             result = engine._switch_to_agent_by_name("code")
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert result is True
             assert engine.current_agent == "claude-code"
         finally:
@@ -445,7 +450,7 @@ class TestAgentSwitch:
 
         try:
             result = engine._switch_to_agent_by_name("vscode")
-            _wait_for_controller()
+            _wait_for_controller(engine)
             # With async processing, result is always True but no switch happens
             assert result is True
             # Agent should still be the original
@@ -463,7 +468,7 @@ class TestAgentSwitch:
 
         try:
             result = engine._switch_to_agent_by_index(2)  # 1-based
-            _wait_for_controller()
+            _wait_for_controller(engine)
             assert result is True
             assert engine.current_agent == "cursor"
             assert engine.current_agent_index == 1
@@ -480,7 +485,7 @@ class TestAgentSwitch:
 
         try:
             result = engine._switch_to_agent_by_index(10)
-            _wait_for_controller()
+            _wait_for_controller(engine)
             # With async processing, result is always True but no switch happens
             assert result is True
             # Agent should still be the original
@@ -532,7 +537,7 @@ class TestAgentId:
 
         try:
             engine._switch_agent(1)
-            _wait_for_controller()
+            _wait_for_controller(engine)
             result = engine.current_agent
             assert result == "cursor"
         finally:
@@ -621,7 +626,7 @@ class TestVADCallbacks:
             # Need to be in LISTENING state first
             engine._state_manager.transition(AppState.LISTENING)
             engine._on_vad_speech_start()
-            _wait_for_controller()
+            _wait_for_controller(engine)
 
             assert len(recording_started) == 1
             assert engine.state == AppState.RECORDING
@@ -640,7 +645,7 @@ class TestVADCallbacks:
         try:
             # State is OFF
             engine._on_vad_speech_start()
-            _wait_for_controller()
+            _wait_for_controller(engine)
 
             assert len(recording_started) == 0
             assert engine.state == AppState.OFF
@@ -678,7 +683,7 @@ class TestDiscardCurrent:
             engine._state_manager.transition(AppState.RECORDING)
 
             engine._discard_current()
-            _wait_for_controller()
+            _wait_for_controller(engine)
 
             assert engine.state == AppState.LISTENING
         finally:
