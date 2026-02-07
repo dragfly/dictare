@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.46] - 2026-02-07
+
+### Fixed
+
+- InputFilter skipped trigger detection when `x_input` had `newline: true` —
+  the guard now only skips if `x_input.submit` is already set, not for any
+  truthy `x_input` value
+
 ## [3.0.0-alpha.45] - 2026-02-07
 
 ### Changed
