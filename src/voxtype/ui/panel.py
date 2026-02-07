@@ -233,8 +233,9 @@ class StatusPanel:
         stt_model = stt.get("model_name", "unknown")
         stt_state = stt.get("state", "idle")
 
-        # Device detection (could be enhanced with actual hardware info)
-        device = "MLX" if sys.platform == "darwin" else "CPU"
+        # Device from engine status
+        stt_device = stt.get("device", "cpu")
+        device = {"cuda": "GPU (CUDA)", "cpu": "CPU"}.get(stt_device, "MLX" if sys.platform == "darwin" else stt_device.upper())
 
         # Build model status lines
         lines = []

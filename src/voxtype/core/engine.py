@@ -1206,6 +1206,7 @@ class VoxtypeEngine:
                 else 0,
                 "stt": {
                     "model_name": self.config.stt.model,
+                    "device": self.config.stt.device,
                     "last_text": self._last_text,
                 },
                 "output": {
