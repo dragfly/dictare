@@ -210,10 +210,6 @@ def _read_from_sse(
                 if session_path:
                     _log_event(session_path, "sse_connected", {"url": url})
                 retry_delay = 0.5  # Reset backoff on successful connection
-                if on_status:
-                    # Neutral state — poll thread will update to listening/standby
-                    on_status(f"\u25cb {agent_id} \u00b7 connected", "warn")
-
                 for line_bytes in response:
                     if stop_event.is_set():
                         break
