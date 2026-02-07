@@ -179,6 +179,15 @@ class ServerConfig(BaseModel):
     )
 
 
+class ClientConfig(BaseModel):
+    """Agent client configuration for connecting to a remote engine."""
+
+    url: str = Field(
+        default="http://127.0.0.1:8765",
+        description="Default engine URL for 'voxtype agent' command",
+    )
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
@@ -347,6 +356,7 @@ class Config(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
     keyboard: KeyboardConfig = Field(default_factory=KeyboardConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
+    client: ClientConfig = Field(default_factory=ClientConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     stats: StatsConfig = Field(default_factory=StatsConfig)
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
@@ -709,6 +719,13 @@ auto_enter = false               # Visual newline only
 # [[keyboard.shortcuts]]
 # keys = "Ctrl+Alt+N"
 # command = "project-next"
+
+[server]
+# host = "127.0.0.1"             # Bind address (use "0.0.0.0" for remote agents)
+# port = 8765                     # OpenVIP HTTP server port
+
+[client]
+# url = "http://127.0.0.1:8765"  # Default engine URL for 'voxtype agent'
 
 [logging]
 log_file = ""

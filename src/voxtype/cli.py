@@ -2168,9 +2168,9 @@ def agent(
         typer.Option("--verbose", "-v", help="Log full text in session file (not truncated)"),
     ] = False,
     server: Annotated[
-        str,
-        typer.Option("--server", "-s", help="Engine HTTP server URL"),
-    ] = "http://127.0.0.1:8765",
+        str | None,
+        typer.Option("--server", "-s", help="Engine HTTP server URL (default: from config)"),
+    ] = None,
 ) -> None:
     """Run a command with voxtype voice input via OpenVIP SSE.
 
@@ -2192,6 +2192,12 @@ def agent(
         raise typer.Exit(0)
 
     from voxtype.agent import run_agent
+    from voxtype.config import load_config
+
+    # Resolve server URL: --server flag > config > default
+    if server is None:
+        config = load_config()
+        server = config.client.url
 
     # With allow_interspersed_args=False, flags after positional args go to ctx.args
     # Check if our flags are in ctx.args and apply them
