@@ -161,9 +161,14 @@ class AudioCapture:
     ) -> None:
         """Callback for streaming mode."""
         if status:
-            # Device error detected - schedule reconnect
-            self._needs_reconnect = True
-            return
+            if status.input_overflow:
+                # Input overflow is benign — CPU spike, brief lag, etc.
+                # Process the chunk anyway (data is valid, just slightly late).
+                pass
+            else:
+                # Real device error (output underflow, priming output) — reconnect
+                self._needs_reconnect = True
+                return
         if self._streaming_callback is not None:
             self._streaming_callback(indata.flatten().copy())
 

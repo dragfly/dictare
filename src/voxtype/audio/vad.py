@@ -205,6 +205,11 @@ class StreamingVAD:
         self._total_speech_samples = 0  # Track total for max duration
         self._samples_since_partial = 0  # Track samples since last partial callback
 
+        # Periodic VAD reset: after prolonged silence, reset LSTM hidden state
+        # to prevent numerical drift. 5 minutes of silence = 5*60*16000 samples.
+        self._silence_total_samples = 0
+        self._silence_reset_threshold = 5 * 60 * vad.sample_rate  # 5 minutes
+
         # Pre-buffer for capturing audio just before speech starts
         self._pre_buffer: list[NDArray[np.float32]] = []
         chunk_ms = SileroVAD.CHUNK_SIZE * 1000 // vad.sample_rate  # ~32ms
@@ -217,6 +222,16 @@ class StreamingVAD:
             chunk: Audio samples (512 float32 samples).
         """
         prob = self.vad.is_speech(chunk)
+
+        # Track prolonged silence and periodically reset LSTM state
+        if not self._is_speaking:
+            if prob < self.vad.threshold:
+                self._silence_total_samples += len(chunk)
+                if self._silence_total_samples >= self._silence_reset_threshold:
+                    self.vad.reset()
+                    self._silence_total_samples = 0
+            else:
+                self._silence_total_samples = 0
 
         if not self._is_speaking:
             # Not currently speaking - look for speech start
@@ -313,5 +328,6 @@ class StreamingVAD:
         self._speech_samples = 0
         self._total_speech_samples = 0
         self._samples_since_partial = 0
+        self._silence_total_samples = 0
         self._pre_buffer = []
         self.vad.reset()

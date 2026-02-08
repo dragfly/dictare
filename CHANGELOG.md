@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.66] - 2026-02-08
+
+### Fixed
+
+- Engine stops recognizing speech after prolonged silence or CPU spikes:
+  audio callback treated benign `input_overflow` as fatal device error,
+  triggering unnecessary stream reconnect and losing VAD state
+- Add periodic VAD LSTM state reset after 5 minutes of continuous silence
+  to prevent numerical drift in Silero hidden states
+
 ## [3.0.0-alpha.65] - 2026-02-08
 
 ### Changed
