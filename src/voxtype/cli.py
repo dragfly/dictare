@@ -2297,9 +2297,9 @@ def agent(
     raise typer.Exit(exit_code)
 
 
-# Log subcommand for viewing logs
+# Logs subcommand for viewing logs
 log_app = typer.Typer(help="View voxtype logs", no_args_is_help=True)
-app.add_typer(log_app, name="log")
+app.add_typer(log_app, name="logs")
 
 
 def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) -> None:
@@ -2485,10 +2485,10 @@ def log_listen(
     Shows recent log entries from ~/.local/share/voxtype/logs/listen.jsonl
 
     Examples:
-        voxtype log listen              # Show last 20 entries
-        voxtype log listen -f           # Follow live
-        voxtype log listen -n 50        # Show last 50 entries
-        voxtype log listen --json       # Output raw JSON
+        voxtype logs listen              # Show last 20 entries
+        voxtype logs listen -f           # Follow live
+        voxtype logs listen -n 50        # Show last 50 entries
+        voxtype logs listen --json       # Output raw JSON
     """
     from voxtype.logging.jsonl import get_default_log_path
 
@@ -2518,10 +2518,10 @@ def log_engine(
     Use --verbose flag when starting engine to see full text in logs.
 
     Examples:
-        voxtype log engine              # Show last 20 entries
-        voxtype log engine -f           # Follow live
-        voxtype log engine -n 50        # Show last 50 entries
-        voxtype log engine --json       # Output raw JSON
+        voxtype logs engine              # Show last 20 entries
+        voxtype logs engine -f           # Follow live
+        voxtype logs engine -n 50        # Show last 50 entries
+        voxtype logs engine --json       # Output raw JSON
     """
     from voxtype.logging.jsonl import get_default_log_path
 
@@ -2554,8 +2554,8 @@ def log_agent(
     Shows recent log entries from ~/.local/share/voxtype/logs/agent.<name>.jsonl
 
     Examples:
-        voxtype log agent claude        # Show logs for claude agent
-        voxtype log agent claude -f     # Follow live
+        voxtype logs agent claude        # Show logs for claude agent
+        voxtype logs agent claude -f     # Follow live
     """
     if agent_name is None:
         import click
@@ -2578,8 +2578,8 @@ def log_path_cmd(
     """Show log file path.
 
     Examples:
-        voxtype log path           # Show listen log path
-        voxtype log path claude    # Show claude agent log path
+        voxtype logs path           # Show listen log path
+        voxtype logs path claude    # Show claude agent log path
     """
     from voxtype.logging.jsonl import get_default_log_path
 
@@ -2666,9 +2666,9 @@ def log_session(
     Shows the most recent session file from ~/.local/share/voxtype/sessions/
 
     Examples:
-        voxtype log session claude        # Show latest claude session
-        voxtype log session claude -f     # Follow live
-        voxtype log session claude -n 50  # Show last 50 lines
+        voxtype logs session claude        # Show latest claude session
+        voxtype logs session claude -f     # Follow live
+        voxtype logs session claude -n 50  # Show last 50 lines
     """
     if agent_id is None:
         import click
