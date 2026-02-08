@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.65] - 2026-02-08
+
+### Changed
+
+- Split monolithic `cli.py` (3141 lines) into `cli/` package with 17 modules:
+  `__init__.py`, `_helpers.py`, `listen.py`, `engine.py`, `speak.py`,
+  `transcribe.py`, `execute.py`, `agent.py`, `daemon.py`, `models.py`,
+  `config.py`, `completion.py`, `dependencies.py`, `devices.py`, `logs.py`,
+  `tray.py`, `misc.py`
+- Sub-app groups (completion, daemon, models, etc.) use `app = typer.Typer()`
+  pattern; top-level commands (listen, speak, etc.) use `register(app)` pattern
+- All public API preserved: `from voxtype.cli import app, main`
+
 ## [3.0.0-alpha.64] - 2026-02-08
 
 ### Changed
