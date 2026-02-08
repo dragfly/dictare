@@ -37,27 +37,27 @@ app = typer.Typer(
 )
 
 # Completion subcommand
-completion_app = typer.Typer(help="Manage shell completion", no_args_is_help=True)
+completion_app = typer.Typer(help="Manage shell completion.", no_args_is_help=True)
 app.add_typer(completion_app, name="completion")
 
 # Daemon subcommand
-daemon_app = typer.Typer(help="Manage the voxtype daemon", no_args_is_help=True)
+daemon_app = typer.Typer(help="Manage the daemon.", no_args_is_help=True)
 app.add_typer(daemon_app, name="daemon")
 
 # Models subcommand
-models_app = typer.Typer(help="Manage TTS/STT models", no_args_is_help=True)
+models_app = typer.Typer(help="Manage TTS/STT models.", no_args_is_help=True)
 app.add_typer(models_app, name="models")
 
 # Dependencies subcommand
-deps_app = typer.Typer(help="Manage system dependencies", no_args_is_help=True)
+deps_app = typer.Typer(help="Manage system dependencies.", no_args_is_help=True)
 app.add_typer(deps_app, name="dependencies")
 
 # Tray subcommand
-tray_app = typer.Typer(help="System tray integration", no_args_is_help=True)
+tray_app = typer.Typer(help="Manage the system tray.", no_args_is_help=True)
 app.add_typer(tray_app, name="tray")
 
-# Engine subcommand (new architecture)
-engine_app = typer.Typer(help="Engine management (new architecture)", no_args_is_help=True)
+# Engine subcommand
+engine_app = typer.Typer(help="Manage the engine.", no_args_is_help=True)
 app.add_typer(engine_app, name="engine")
 
 def _register_plugins() -> None:
@@ -726,7 +726,7 @@ def init() -> None:
     console.print(f"  [cyan]{created_path}[/]")
 
 # Config subcommands
-config_app = typer.Typer(help="Manage configuration", no_args_is_help=True)
+config_app = typer.Typer(help="Manage configuration.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 
 @config_app.command("list")
@@ -1014,7 +1014,7 @@ def engine_start(
         typer.Option("--verbose", "-v", help="Show debug logs (disables loading panel)"),
     ] = False,
 ) -> None:
-    """Start the VoxType engine.
+    """Start the voxtype engine.
 
     Foreground mode (default):
         voxtype engine start --keyboard    # Types what you say, listening immediately
@@ -2251,19 +2251,101 @@ def agent(
     )
     raise typer.Exit(exit_code)
 
-# Logs subcommand for viewing logs
-log_app = typer.Typer(help="View voxtype logs", no_args_is_help=True)
-app.add_typer(log_app, name="logs")
+@app.command("logs")
+def logs_command(
+    name: Annotated[
+        str | None,
+        typer.Argument(help="Log name: listen, engine, agent.<name>."),
+    ] = None,
+    follow: Annotated[
+        bool,
+        typer.Option("--follow", "-f", help="Follow log output (like tail -f)."),
+    ] = False,
+    raw: Annotated[
+        bool,
+        typer.Option("--raw", help="Output raw JSON lines."),
+    ] = False,
+    lines: Annotated[
+        int,
+        typer.Option("--lines", "-n", help="Number of lines to show."),
+    ] = 20,
+    path: Annotated[
+        bool,
+        typer.Option("--path", help="Show log file path instead of content."),
+    ] = False,
+) -> None:
+    """View voxtype logs.
 
-def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) -> None:
-    """Tail a log file with optional follow mode.
+    Without arguments, lists all available log files.
+    With a name, shows log entries from that log.
 
-    Args:
-        log_path: Path to the JSONL log file.
-        follow: If True, continuously follow the file.
-        json_output: If True, output raw JSON; otherwise format for readability.
-        lines: Number of lines to show initially.
+    Examples:
+        voxtype logs                     # List available log files
+        voxtype logs engine              # Show last 20 engine entries
+        voxtype logs listen -f           # Follow listen log live
+        voxtype logs agent.claude        # Show agent claude logs
+        voxtype logs engine --raw        # Output raw JSON
+        voxtype logs engine --path       # Show log file path
     """
+    from voxtype.logging.jsonl import DEFAULT_LOG_DIR, get_default_log_path
+
+    if name is None:
+        # No args: list available log files
+        _list_log_files(DEFAULT_LOG_DIR)
+        return
+
+    log_path = get_default_log_path(name)
+
+    if path:
+        console.print(str(log_path))
+        return
+
+    _tail_log(log_path, follow, raw, lines)
+
+def _list_log_files(log_dir: Path) -> None:
+    """List available log files in the log directory."""
+    from datetime import datetime
+
+    if not log_dir.exists():
+        console.print(f"[yellow]Log directory not found: {log_dir}[/]")
+        console.print("[dim]Start voxtype first to create logs.[/]")
+        raise typer.Exit(1)
+
+    log_files = list(log_dir.glob("*.jsonl"))
+
+    if not log_files:
+        console.print("[yellow]No log files found.[/]")
+        raise typer.Exit(0)
+
+    # Sort by modification time (newest first)
+    log_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    table = Table(show_header=True, header_style="bold", expand=False)
+    table.add_column("Name", style="cyan")
+    table.add_column("Size", justify="right")
+    table.add_column("Last Modified")
+
+    for log_file in log_files:
+        stat = log_file.stat()
+        size = stat.st_size
+        if size < 1024:
+            size_str = f"{size} B"
+        elif size < 1024 * 1024:
+            size_str = f"{size / 1024:.1f} KB"
+        else:
+            size_str = f"{size / 1024 / 1024:.1f} MB"
+
+        mtime = datetime.fromtimestamp(stat.st_mtime)
+        mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
+
+        name = log_file.stem  # e.g., "listen" or "agent.claude"
+        table.add_row(name, size_str, mtime_str)
+
+    console.print(table)
+    console.print("\n[dim]Usage: voxtype logs <name> [-f] [--raw] [-n N][/]")
+
+def _tail_log(log_path: Path, follow: bool, raw: bool, lines: int = 20) -> None:
+    """Tail a log file with optional follow mode."""
     import json
     import time
     from datetime import datetime
@@ -2299,7 +2381,6 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
             # Format event-specific info
             extra = ""
             if event == "session_start":
-                # Support both listen logs and session logs
                 version = entry.get("version") or entry.get("voxtype_version", "?")
                 model = entry.get("stt_model")
                 agent_id = entry.get("agent_id")
@@ -2315,44 +2396,37 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
                 extra = f"exit={exit_code} keystrokes={keystrokes}"
             elif event in ("msg_read", "msg_sent"):
                 text = entry.get("text", "")
-                # Show up to 80 chars
                 display_text = text[:80]
                 if len(text) > 80:
                     display_text += "..."
                 extra = display_text.replace("\n", "\\n")
             elif event == "transcription":
-                chars = entry.get("chars", 0)
-                words = entry.get("words", 0)
                 duration = entry.get("duration_ms", 0)
-                text = entry.get("text")  # May be None (privacy mode)
+                text = entry.get("text")
                 if text:
-                    # Verbose mode - show text
                     display = text[:60].replace("\n", "\\n")
                     if len(text) > 60:
                         display += "..."
                     extra = f'{duration:.0f}ms "{display}"'
                 else:
-                    # Privacy mode - show only metadata
+                    words = entry.get("words", 0)
+                    chars = entry.get("chars", 0)
                     extra = f"{words}w {chars}c {duration:.0f}ms"
             elif event == "transcription_text":
-                # Legacy format (kept for old logs)
                 text = entry.get("text", "")[:60]
                 extra = f'"{text}"' + ("..." if len(entry.get("text", "")) > 60 else "")
             elif event == "injection":
                 chars = entry.get("chars", 0)
                 method = entry.get("method", "?")
                 trigger = entry.get("submit_trigger")
-                text = entry.get("text")  # May be None (privacy mode)
+                text = entry.get("text")
                 if text:
-                    # Verbose mode - show text
                     display = text[:60].replace("\n", "\\n")
                     if len(text) > 60:
                         display += "..."
                     extra = f'via {method} "{display}"'
                 else:
-                    # Privacy mode - show only metadata
                     extra = f"{chars}c via {method}"
-                # Always show trigger (even in privacy mode)
                 if trigger:
                     conf = entry.get("submit_confidence", 0)
                     extra += f' [SUBMIT: "{trigger}" {conf:.0%}]'
@@ -2384,7 +2458,7 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
         line = line.strip()
         if not line:
             continue
-        if json_output:
+        if raw:
             print(line)
         else:
             formatted = format_line(line)
@@ -2399,14 +2473,13 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
 
     try:
         with open(log_path) as f:
-            # Seek to end
             f.seek(0, 2)
 
             while True:
                 line = f.readline()
                 if line:
                     line = line.strip()
-                    if json_output:
+                    if raw:
                         print(line)
                     else:
                         formatted = format_line(line)
@@ -2416,236 +2489,6 @@ def _tail_log(log_path: Path, follow: bool, json_output: bool, lines: int = 20) 
                     time.sleep(0.1)
     except KeyboardInterrupt:
         console.print("\n[dim]Stopped.[/]")
-
-@log_app.command("listen")
-def log_listen(
-    follow: Annotated[
-        bool,
-        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
-    ] = False,
-    json_output: Annotated[
-        bool,
-        typer.Option("--json", "-j", help="Output raw JSON lines"),
-    ] = False,
-    lines: Annotated[
-        int,
-        typer.Option("--lines", "-n", help="Number of lines to show"),
-    ] = 20,
-) -> None:
-    """View logs from voxtype listen sessions.
-
-    Shows recent log entries from ~/.local/share/voxtype/logs/listen.jsonl
-
-    Examples:
-        voxtype logs listen              # Show last 20 entries
-        voxtype logs listen -f           # Follow live
-        voxtype logs listen -n 50        # Show last 50 entries
-        voxtype logs listen --json       # Output raw JSON
-    """
-    from voxtype.logging.jsonl import get_default_log_path
-
-    log_path = get_default_log_path("listen")
-    _tail_log(log_path, follow, json_output, lines)
-
-@log_app.command("engine")
-def log_engine(
-    follow: Annotated[
-        bool,
-        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
-    ] = False,
-    json_output: Annotated[
-        bool,
-        typer.Option("--json", "-j", help="Output raw JSON lines"),
-    ] = False,
-    lines: Annotated[
-        int,
-        typer.Option("--lines", "-n", help="Number of lines to show"),
-    ] = 20,
-) -> None:
-    """View logs from voxtype engine sessions.
-
-    Shows recent log entries from ~/.local/share/voxtype/logs/engine.jsonl
-
-    Use --verbose flag when starting engine to see full text in logs.
-
-    Examples:
-        voxtype logs engine              # Show last 20 entries
-        voxtype logs engine -f           # Follow live
-        voxtype logs engine -n 50        # Show last 50 entries
-        voxtype logs engine --json       # Output raw JSON
-    """
-    from voxtype.logging.jsonl import get_default_log_path
-
-    log_path = get_default_log_path("engine")
-    _tail_log(log_path, follow, json_output, lines)
-
-@log_app.command("agent")
-def log_agent(
-    ctx: typer.Context,
-    agent_name: Annotated[
-        str | None,
-        typer.Argument(help="Agent name to view logs for"),
-    ] = None,
-    follow: Annotated[
-        bool,
-        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
-    ] = False,
-    json_output: Annotated[
-        bool,
-        typer.Option("--json", "-j", help="Output raw JSON lines"),
-    ] = False,
-    lines: Annotated[
-        int,
-        typer.Option("--lines", "-n", help="Number of lines to show"),
-    ] = 20,
-) -> None:
-    """View logs for a specific agent.
-
-    Shows recent log entries from ~/.local/share/voxtype/logs/agent.<name>.jsonl
-
-    Examples:
-        voxtype logs agent claude        # Show logs for claude agent
-        voxtype logs agent claude -f     # Follow live
-    """
-    if agent_name is None:
-        import click
-        click.echo(ctx.get_help())
-        raise typer.Exit(0)
-
-    from voxtype.logging.jsonl import get_default_log_path
-
-    log_path = get_default_log_path(f"agent.{agent_name}")
-    _tail_log(log_path, follow, json_output, lines)
-
-@log_app.command("path")
-def log_path_cmd(
-    agent_name: Annotated[
-        str | None,
-        typer.Argument(help="Agent name (optional)"),
-    ] = None,
-) -> None:
-    """Show log file path.
-
-    Examples:
-        voxtype logs path           # Show listen log path
-        voxtype logs path claude    # Show claude agent log path
-    """
-    from voxtype.logging.jsonl import get_default_log_path
-
-    if agent_name:
-        log_path = get_default_log_path(f"agent.{agent_name}")
-    else:
-        log_path = get_default_log_path("listen")
-
-    console.print(str(log_path))
-
-@log_app.command("list")
-def log_list() -> None:
-    """List available log files.
-
-    Shows all log files in ~/.local/share/voxtype/logs/
-    """
-    from voxtype.logging.jsonl import DEFAULT_LOG_DIR
-
-    if not DEFAULT_LOG_DIR.exists():
-        console.print(f"[yellow]Log directory not found: {DEFAULT_LOG_DIR}[/]")
-        console.print("[dim]Start voxtype first to create logs.[/]")
-        raise typer.Exit(1)
-
-    log_files = list(DEFAULT_LOG_DIR.glob("*.jsonl"))
-
-    if not log_files:
-        console.print("[yellow]No log files found.[/]")
-        raise typer.Exit(0)
-
-    # Sort by modification time (newest first)
-    log_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-
-    table = Table(show_header=True, header_style="bold", expand=False)
-    table.add_column("Log File", style="cyan")
-    table.add_column("Size", justify="right")
-    table.add_column("Last Modified")
-
-    for log_file in log_files:
-        stat = log_file.stat()
-        size = stat.st_size
-        if size < 1024:
-            size_str = f"{size} B"
-        elif size < 1024 * 1024:
-            size_str = f"{size / 1024:.1f} KB"
-        else:
-            size_str = f"{size / 1024 / 1024:.1f} MB"
-
-        from datetime import datetime
-
-        mtime = datetime.fromtimestamp(stat.st_mtime)
-        mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
-
-        # Extract name from filename
-        name = log_file.stem  # e.g., "listen" or "agent.claude"
-        table.add_row(name, size_str, mtime_str)
-
-    console.print(table)
-    console.print(f"\n[dim]Log directory: {DEFAULT_LOG_DIR}[/]")
-
-@log_app.command("session")
-def log_session(
-    ctx: typer.Context,
-    agent_id: Annotated[
-        str | None,
-        typer.Argument(help="Agent ID to view session for"),
-    ] = None,
-    follow: Annotated[
-        bool,
-        typer.Option("--follow", "-f", help="Follow log output (like tail -f)"),
-    ] = False,
-    json_output: Annotated[
-        bool,
-        typer.Option("--json", "-j", help="Output raw JSON lines"),
-    ] = False,
-    lines: Annotated[
-        int,
-        typer.Option("--lines", "-n", help="Number of lines to show"),
-    ] = 20,
-) -> None:
-    """View session log for an agent.
-
-    Shows the most recent session file from ~/.local/share/voxtype/sessions/
-
-    Examples:
-        voxtype logs session claude        # Show latest claude session
-        voxtype logs session claude -f     # Follow live
-        voxtype logs session claude -n 50  # Show last 50 lines
-    """
-    if agent_id is None:
-        import click
-        click.echo(ctx.get_help())
-        raise typer.Exit(0)
-
-    from pathlib import Path
-
-    sessions_dir = Path.home() / ".local" / "share" / "voxtype" / "sessions"
-
-    if not sessions_dir.exists():
-        console.print(f"[yellow]Sessions directory not found: {sessions_dir}[/]")
-        raise typer.Exit(1)
-
-    # Find session files for this agent (format: YYYY-MM-DD_HH-MM-SS_voxtype-X.Y.Z_AGENT.session.jsonl)
-    pattern = f"*_{agent_id}.session.jsonl"
-    session_files = list(sessions_dir.glob(pattern))
-
-    if not session_files:
-        console.print(f"[yellow]No sessions found for agent: {agent_id}[/]")
-        raise typer.Exit(1)
-
-    # Sort by name (contains timestamp) and get the latest
-    session_files.sort(reverse=True)
-    latest_session = session_files[0]
-
-    if not json_output:
-        console.print(f"[dim]Session: {latest_session}[/]")
-
-    _tail_log(latest_session, follow, json_output, lines)
 
 def _load_model_registry() -> dict:
     """Load model registry from JSON file."""
@@ -3068,7 +2911,7 @@ def tray_start(
         typer.Option("--foreground", "-f", help="Run in foreground (for debugging)"),
     ] = False,
 ) -> None:
-    """Start the VoxType system tray application.
+    """Start the voxtype system tray application.
 
     Shows an icon in the system tray/menu bar with controls for:
     - Start/Stop listening
@@ -3091,7 +2934,7 @@ def tray_start(
         raise typer.Exit(1)
 
     if foreground:
-        console.print("[dim]Starting VoxType tray (foreground)...[/]")
+        console.print("[dim]Starting voxtype tray (foreground)...[/]")
         console.print("[dim]Right-click the icon for menu. Ctrl+C to quit.[/]")
 
         # Connect to daemon if running
@@ -3124,7 +2967,7 @@ def tray_start(
 
 @tray_app.command("stop")
 def tray_stop() -> None:
-    """Stop the VoxType system tray application.
+    """Stop the voxtype system tray application.
 
     Example:
         voxtype tray stop
@@ -3147,7 +2990,7 @@ def tray_stop() -> None:
 
 @tray_app.command("status")
 def tray_status() -> None:
-    """Show VoxType tray status.
+    """Show voxtype tray status.
 
     Example:
         voxtype tray status

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.64] - 2026-02-08
+
+### Changed
+
+- Simplify `voxtype logs` — single unified command replaces 6 subcommands:
+  `voxtype logs` (list files), `voxtype logs <name>` (tail), `--raw`, `--path`
+- Consistent help text across all CLI commands: trailing periods, uniform verb
+  form ("Manage ..."), lowercase "voxtype" branding everywhere
+- Remove `logs session` subcommand (obsolete)
+
 ## [3.0.0-alpha.63] - 2026-02-08
 
 ### Changed
