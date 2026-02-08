@@ -1,0 +1,37 @@
+#!/bin/bash
+set -e
+
+# Setup ydotoold systemd user service if ydotool is available
+if command -v ydotoold &>/dev/null; then
+    YDOTOOLD_PATH=$(command -v ydotoold)
+
+    # Create systemd user service directory for the installing user
+    SUDO_USER_HOME=$(eval echo "~${SUDO_USER:-$USER}")
+    SERVICE_DIR="${SUDO_USER_HOME}/.config/systemd/user"
+    mkdir -p "$SERVICE_DIR"
+
+    cat > "${SERVICE_DIR}/ydotoold.service" << EOF
+[Unit]
+Description=ydotool daemon
+
+[Service]
+ExecStart=${YDOTOOLD_PATH}
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+
+    echo ""
+    echo "ydotoold systemd user service created."
+    echo "Enable it with:"
+    echo "  systemctl --user daemon-reload"
+    echo "  systemctl --user enable --now ydotoold"
+fi
+
+# Suggest input group membership
+echo ""
+echo "For keyboard simulation, your user needs to be in the 'input' group:"
+echo "  sudo usermod -aG input \$USER"
+echo ""
+echo "Log out and back in for group changes to take effect."

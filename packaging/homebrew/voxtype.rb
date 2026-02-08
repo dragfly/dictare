@@ -1,0 +1,45 @@
+class Voxtype < Formula
+  desc "Voice-to-text for your terminal"
+  homepage "https://github.com/dragfly/voxtype"
+  url "https://github.com/dragfly/voxtype.git", tag: "v3.0.0a61"
+  license "MIT"
+
+  depends_on "portaudio"
+  depends_on "uv"
+
+  def install
+    # Determine extras based on architecture
+    if Hardware::CPU.arm?
+      pkg_spec = "voxtype[mlx]"
+    else
+      pkg_spec = "voxtype"
+    end
+
+    system "uv", "tool", "install",
+           "--python", "3.11",
+           "--prerelease=allow",
+           pkg_spec
+
+    # Create a wrapper script so brew can manage the binary
+    uv_tool_bin = Pathname.new(Dir.home) / ".local" / "bin" / "voxtype"
+    bin.install_symlink uv_tool_bin => "voxtype" if uv_tool_bin.exist?
+  end
+
+  def caveats
+    <<~EOS
+      voxtype requires Accessibility permission for keyboard simulation.
+
+        1. Open System Settings -> Privacy & Security -> Accessibility
+        2. Click '+' and add your terminal app
+        3. Enable the toggle
+        4. Restart your terminal
+
+      If you installed on Apple Silicon, the MLX backend is included
+      for on-device speech recognition.
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/voxtype --version")
+  end
+end
