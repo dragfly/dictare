@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.62] - 2026-02-08
+
+### Added
+
+- Homebrew formula (`packaging/homebrew/voxtype.rb`) for `brew install` on macOS
+- Debian package build scripts (`packaging/deb/`) with build-deb.sh, control,
+  postinst, prerm, postrm for .deb distribution
+- install.sh VERSION synced to current release (3.0.0a61 -> 3.0.0a62)
+
 ## [3.0.0-alpha.61] - 2026-02-08
 
 ### Fixed

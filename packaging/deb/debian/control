@@ -1,0 +1,9 @@
+Package: voxtype
+Version: @VERSION@
+Architecture: @ARCH@
+Depends: libportaudio2, portaudio19-dev
+Recommends: ydotool
+Maintainer: dragfly <dragfly@users.noreply.github.com>
+Description: Voice-to-text for your terminal
+ voxtype captures audio from your microphone, transcribes it using
+ Whisper, and types the result into the active window via ydotool.
