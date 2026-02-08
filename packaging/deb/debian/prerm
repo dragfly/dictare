@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+
+# Stop ydotoold user service if running
+SUDO_USER_HOME=$(eval echo "~${SUDO_USER:-$USER}")
+SERVICE_FILE="${SUDO_USER_HOME}/.config/systemd/user/ydotoold.service"
+
+if [ -f "$SERVICE_FILE" ]; then
+    # Run as the actual user, not root
+    if [ -n "$SUDO_USER" ]; then
+        su - "$SUDO_USER" -c "systemctl --user stop ydotoold 2>/dev/null || true"
+        su - "$SUDO_USER" -c "systemctl --user disable ydotoold 2>/dev/null || true"
+    fi
+fi
