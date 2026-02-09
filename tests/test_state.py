@@ -69,6 +69,19 @@ class TestStateManagerBasics:
         sm.transition(AppState.LISTENING)
         assert sm.is_listening is True
 
+    def test_should_process_audio_true_for_vad_states(self) -> None:
+        """VAD runs in LISTENING, RECORDING, TRANSCRIBING, INJECTING."""
+        for state in (AppState.LISTENING, AppState.RECORDING,
+                      AppState.TRANSCRIBING, AppState.INJECTING):
+            sm = StateManager(initial_state=state)
+            assert sm.should_process_audio is True, f"Expected True for {state}"
+
+    def test_should_process_audio_false_for_off_and_playing(self) -> None:
+        """VAD does not run in OFF or PLAYING."""
+        for state in (AppState.OFF, AppState.PLAYING):
+            sm = StateManager(initial_state=state)
+            assert sm.should_process_audio is False, f"Expected False for {state}"
+
     def test_is_active_property(self) -> None:
         """Test is_active property."""
         sm = StateManager(initial_state=AppState.LISTENING)

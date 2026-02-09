@@ -199,6 +199,78 @@ class TestSpeechEvents:
         finally:
             controller.stop()
 
+class TestSpeechEndQueuesAudio:
+    """Test speech queuing in busy states."""
+
+    def test_speech_end_during_transcribing_queues_audio(self) -> None:
+        """SpeechEndEvent during TRANSCRIBING queues audio for later."""
+        sm = StateManager(initial_state=AppState.TRANSCRIBING)
+        engine = MockEngine()
+        controller = StateController(sm)
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            audio_data = np.zeros(5000, dtype=np.float32)
+            controller.send(SpeechEndEvent(audio_data=audio_data, source="vad"))
+            _drain(controller)
+
+            assert sm.state == AppState.TRANSCRIBING
+            engine._audio_manager.queue_audio.assert_called_once_with(audio_data)
+        finally:
+            controller.stop()
+
+    def test_speech_end_during_injecting_queues_audio(self) -> None:
+        """SpeechEndEvent during INJECTING queues audio for later."""
+        sm = StateManager(initial_state=AppState.INJECTING)
+        engine = MockEngine()
+        controller = StateController(sm)
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            audio_data = np.zeros(5000, dtype=np.float32)
+            controller.send(SpeechEndEvent(audio_data=audio_data, source="vad"))
+            _drain(controller)
+
+            assert sm.state == AppState.INJECTING
+            engine._audio_manager.queue_audio.assert_called_once_with(audio_data)
+        finally:
+            controller.stop()
+
+    def test_speech_end_during_playing_queues_audio(self) -> None:
+        """SpeechEndEvent during PLAYING queues audio defensively."""
+        sm = StateManager(initial_state=AppState.PLAYING)
+        engine = MockEngine()
+        controller = StateController(sm)
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            audio_data = np.zeros(5000, dtype=np.float32)
+            controller.send(SpeechEndEvent(audio_data=audio_data, source="vad"))
+            _drain(controller)
+
+            assert sm.state == AppState.PLAYING
+            engine._audio_manager.queue_audio.assert_called_once_with(audio_data)
+        finally:
+            controller.stop()
+
+    def test_speech_end_without_engine_does_not_crash(self) -> None:
+        """SpeechEndEvent in busy state without engine doesn't crash."""
+        sm = StateManager(initial_state=AppState.TRANSCRIBING)
+        controller = StateController(sm)
+        controller.start()
+
+        try:
+            audio_data = np.zeros(5000, dtype=np.float32)
+            controller.send(SpeechEndEvent(audio_data=audio_data, source="vad"))
+            _drain(controller)
+
+            assert sm.state == AppState.TRANSCRIBING
+        finally:
+            controller.stop()
+
 class TestTranscriptionComplete:
     """Test transcription completion events."""
 
