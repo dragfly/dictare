@@ -7,6 +7,8 @@ import time
 from typing import Any
 from unittest.mock import MagicMock
 
+import numpy as np
+
 from voxtype.agent.base import OpenVIPMessage
 from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import InjectionResult, TranscriptionResult
@@ -686,6 +688,103 @@ class TestDiscardCurrent:
             _wait_for_controller(engine)
 
             assert engine.state == AppState.LISTENING
+        finally:
+            engine._controller.stop()
+
+
+class TestProcessQueuedAudio:
+    """Test _process_queued_audio handles numpy arrays correctly."""
+
+    def test_queued_numpy_array_does_not_raise(self) -> None:
+        """Queued numpy audio data doesn't raise ValueError on truthiness check."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine._controller.start()
+
+        try:
+            engine._state_manager.transition(AppState.LISTENING)
+
+            # Mock audio manager with numpy array in queue
+            mock_am = MagicMock()
+            mock_am.sample_rate = 16000
+            audio = np.zeros(5000, dtype=np.float32)
+            mock_am.has_queued_audio = True
+            mock_am.pop_queued_audio = MagicMock(side_effect=[audio, None])
+
+            # has_queued_audio: True on first call, False after pop returns None
+            call_count = [0]
+            def has_queued():
+                call_count[0] += 1
+                return call_count[0] <= 1
+
+            mock_am.has_queued_audio = property(lambda self: True)
+            # Simpler approach: just set it as a regular attribute toggled by side_effect
+            queue_state = [True]
+            type(mock_am).has_queued_audio = property(lambda self: queue_state[0])
+
+            def pop_and_drain():
+                queue_state[0] = False
+                return audio
+
+            mock_am.pop_queued_audio = pop_and_drain
+            engine._audio_manager = mock_am
+
+            # This used to raise: ValueError: The truth value of an array...
+            engine._process_queued_audio()
+        finally:
+            engine._controller.stop()
+
+    def test_queued_empty_array_skipped(self) -> None:
+        """Empty numpy array is skipped without error."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine._controller.start()
+
+        try:
+            engine._state_manager.transition(AppState.LISTENING)
+
+            mock_am = MagicMock()
+            mock_am.sample_rate = 16000
+            empty = np.array([], dtype=np.float32)
+
+            queue_state = [True]
+            type(mock_am).has_queued_audio = property(lambda self: queue_state[0])
+
+            def pop_and_drain():
+                queue_state[0] = False
+                return empty
+
+            mock_am.pop_queued_audio = pop_and_drain
+            engine._audio_manager = mock_am
+
+            engine._process_queued_audio()
+            # Should not raise, and no event sent (empty audio)
+        finally:
+            engine._controller.stop()
+
+    def test_queued_none_skipped(self) -> None:
+        """None from pop_queued_audio is skipped without error."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine._controller.start()
+
+        try:
+            engine._state_manager.transition(AppState.LISTENING)
+
+            mock_am = MagicMock()
+            mock_am.sample_rate = 16000
+
+            queue_state = [True]
+            type(mock_am).has_queued_audio = property(lambda self: queue_state[0])
+
+            def pop_and_drain():
+                queue_state[0] = False
+                return None
+
+            mock_am.pop_queued_audio = pop_and_drain
+            engine._audio_manager = mock_am
+
+            engine._process_queued_audio()
         finally:
             engine._controller.stop()
 

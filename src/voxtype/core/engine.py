@@ -718,7 +718,7 @@ class VoxtypeEngine:
 
         while self._audio_manager.has_queued_audio:
             audio_data = self._audio_manager.pop_queued_audio()
-            if not audio_data:
+            if audio_data is None or len(audio_data) == 0:
                 continue
 
             # Check minimum duration
