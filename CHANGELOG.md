@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.84] - 2026-02-10
+
+### Fixed
+
+- Multiagent: X button and Ctrl+C now work — `HeadlessAgent.stop()` uses
+  non-blocking `waitpid(WNOHANG)` + SIGKILL fallback instead of blocking
+  `waitpid(0)`. DELETE endpoint runs in executor to not block the async loop.
+
+### Added
+
+- Multiagent: keyboard input in `/current` view — type directly in the
+  browser terminal (xterm.js `onData` → WS → PTY). Works like a real terminal.
+- Multiagent: working directory field (`cwd`) in agent creation form.
+
 ## [3.0.0-alpha.83] - 2026-02-10
 
 ### Added
