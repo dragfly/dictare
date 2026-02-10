@@ -348,27 +348,28 @@ def _write_to_pty(
                 text = data.get("text", "")
                 bytes_written = 0
 
-                # Build atomic payload: text + visual newline + submit
-                # Written as single os.write() to prevent partial delivery
-                # if the slave process flushes its input buffer mid-write.
-                payload = bytearray()
-
+                # Write text and control sequences as SEPARATE writes.
+                # Escape sequences (\x1b) must not be in the same buffer
+                # as text — the slave's input parser treats ESC as the
+                # start of a key sequence and discards preceding text.
                 if text:
                     has_visual_newline = text.endswith("\n")
                     if has_visual_newline:
                         text = text.rstrip("\n")
 
                     if text:
-                        payload.extend(text.encode())
+                        text_bytes = text.encode()
+                        bytes_written += _write_all(master_fd, text_bytes)
+                        termios.tcdrain(master_fd)
 
+                    # Alt+Enter for visual newline (contains ESC — must be separate)
                     if has_visual_newline:
-                        payload.extend(alt_enter)
+                        bytes_written += _write_all(master_fd, alt_enter)
+                        termios.tcdrain(master_fd)
 
+                # Submit enter (plain CR — no ESC, safe to write anytime)
                 if data.get("submit"):
-                    payload.extend(enter_key)
-
-                if payload:
-                    bytes_written = _write_all(master_fd, bytes(payload))
+                    bytes_written += _write_all(master_fd, enter_key)
                     termios.tcdrain(master_fd)
 
                 # Log message AFTER successful write AND drain
