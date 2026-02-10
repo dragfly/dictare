@@ -1,10 +1,14 @@
-"""Tests for SSEAgent message delivery."""
+"""Tests for SSEAgent message delivery and mux status logic."""
 
 from __future__ import annotations
 
+import http.server
+import json
+import queue
 import threading
 
 from voxtype.agent.base import BaseAgent, OpenVIPMessage
+from voxtype.agent.mux import _poll_active_agent, _read_from_sse
 from voxtype.agent.sse import SSEAgent
 
 
@@ -127,3 +131,195 @@ class TestSSEAgentThreadSafety:
 
         assert len(errors) == 0
         assert len(server.messages) == 250  # 5 threads * 50 messages
+
+
+def _make_status_handler(agent_id: str, current_agent: str):
+    """Create an HTTP handler that serves /status JSON."""
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/status":
+                body = json.dumps({
+                    "platform": {"output": {"current_agent": current_agent}},
+                }).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path.startswith("/agents/"):
+                # SSE endpoint — send one event then close
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                msg = json.dumps({"type": "heartbeat"})
+                self.wfile.write(f"data: {msg}\n\n".encode())
+                self.wfile.flush()
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, format, *args):
+            pass  # Suppress logs
+
+    return Handler
+
+
+class TestPollActiveAgentStatus:
+    """Test _poll_active_agent status updates."""
+
+    def test_poll_updates_status_on_active(self) -> None:
+        """Polling sets 'listening' when agent is active."""
+        handler = _make_status_handler("myagent", "myagent")
+        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        port = server.server_address[1]
+        t = threading.Thread(target=server.handle_request, daemon=True)
+        t.start()
+
+        stop = threading.Event()
+        statuses: list[tuple[str, str]] = []
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            stop.set()  # Stop after first update
+
+        _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop, on_status,
+                           poll_interval=0.05)
+        server.server_close()
+
+        assert len(statuses) >= 1
+        assert "listening" in statuses[0][0]
+        assert statuses[0][1] == "ok"
+
+    def test_poll_resets_was_active_on_error(self) -> None:
+        """After connection error, next success forces status update."""
+        # Use a port with no server to simulate connection error
+        statuses: list[tuple[str, str]] = []
+
+        handler = _make_status_handler("myagent", "myagent")
+        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        port = server.server_address[1]
+        server.server_close()  # Close immediately — first poll will fail
+
+        def on_status(text, style):
+            statuses.append((text, style))
+
+        # Run poll once — will fail (server closed), was_active resets to None
+        # Then start server and poll again — should force "listening" update
+        # We test this indirectly: poll twice, second time with server up
+
+        # First: poll against closed port (error → was_active = None)
+        stop_once = threading.Event()
+
+        def poll_once():
+            _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop_once,
+                               on_status, poll_interval=0.01)
+
+        pt = threading.Thread(target=poll_once, daemon=True)
+        pt.start()
+        # Let it poll once (error)
+        import time
+        time.sleep(0.05)
+        stop_once.set()
+        pt.join(timeout=1)
+
+        # No status update on error
+        assert len(statuses) == 0
+
+        # Now start server and poll again
+        server2 = http.server.HTTPServer(("127.0.0.1", port), handler)
+        t = threading.Thread(target=server2.handle_request, daemon=True)
+        t.start()
+
+        stop2 = threading.Event()
+
+        def on_status2(text, style):
+            statuses.append((text, style))
+            stop2.set()
+
+        _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop2, on_status2,
+                           poll_interval=0.05)
+        server2.server_close()
+
+        # Should have gotten "listening" since was_active was reset
+        assert len(statuses) >= 1
+        assert "listening" in statuses[0][0]
+
+
+class TestSSEReconnectStatus:
+    """Test _read_from_sse emits 'connected' status on reconnect."""
+
+    def test_sse_connect_emits_status_ok(self) -> None:
+        """SSE connection success calls on_status with 'connected'."""
+        handler = _make_status_handler("myagent", "myagent")
+        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        port = server.server_address[1]
+        t = threading.Thread(target=server.handle_request, daemon=True)
+        t.start()
+
+        stop = threading.Event()
+        statuses: list[tuple[str, str]] = []
+        wq: queue.Queue = queue.Queue()
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            stop.set()  # Stop after first status
+
+        _read_from_sse(
+            "myagent",
+            f"http://127.0.0.1:{port}",
+            wq, stop,
+            on_status=on_status,
+        )
+        server.server_close()
+
+        assert len(statuses) >= 1
+        assert "connected" in statuses[0][0]
+        assert statuses[0][1] == "ok"
+
+    def test_sse_error_then_reconnect_updates_status(self) -> None:
+        """After SSE error, successful reconnect shows 'connected'."""
+        handler = _make_status_handler("myagent", "myagent")
+        # First: no server → error status
+        # Then: server up → connected status
+        stop = threading.Event()
+        statuses: list[tuple[str, str]] = []
+        wq: queue.Queue = queue.Queue()
+
+        # Use a free port
+        temp_server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        port = temp_server.server_address[1]
+        temp_server.server_close()
+
+        connect_count = [0]
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            # After getting "connected" (second status), stop
+            if "connected" in text and style == "ok":
+                connect_count[0] += 1
+                if connect_count[0] >= 1:
+                    stop.set()
+
+        # Start server after a short delay so first attempt fails
+        def start_server_later():
+            import time
+            time.sleep(0.3)
+            server = http.server.HTTPServer(("127.0.0.1", port), handler)
+            server.handle_request()
+            server.server_close()
+
+        delayed = threading.Thread(target=start_server_later, daemon=True)
+        delayed.start()
+
+        _read_from_sse(
+            "myagent",
+            f"http://127.0.0.1:{port}",
+            wq, stop,
+            on_status=on_status,
+        )
+
+        # Should have error first, then connected
+        error_statuses = [(t, s) for t, s in statuses if s == "error"]
+        ok_statuses = [(t, s) for t, s in statuses if s == "ok"]
+        assert len(error_statuses) >= 1, f"Expected error status, got: {statuses}"
+        assert len(ok_statuses) >= 1, f"Expected ok status, got: {statuses}"
