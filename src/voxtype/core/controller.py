@@ -199,9 +199,10 @@ class StateController:
 
         # Valid transitions: LISTENING or RECORDING → TRANSCRIBING
         if current not in (AppState.LISTENING, AppState.RECORDING):
-            # Can't transition - queue audio for later processing
-            if self._engine and self._engine._audio_manager:
-                self._engine._audio_manager.queue_audio(event.audio_data)
+            # Can't transition - queue audio if busy transcribing
+            if current == AppState.TRANSCRIBING and self._engine:
+                if self._engine._audio_manager:
+                    self._engine._audio_manager.queue_audio(event.audio_data)
             return
 
         # Calculate duration

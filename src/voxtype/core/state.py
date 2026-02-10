@@ -97,12 +97,8 @@ class StateManager:
 
     @property
     def should_process_audio(self) -> bool:
-        """Check if audio should be processed by VAD.
-
-        VAD runs in all states except OFF and PLAYING.
-        During TRANSCRIBING/INJECTING, VAD detects new speech which gets queued.
-        """
-        return self.state not in (AppState.OFF, AppState.PLAYING)
+        """Check if audio should be processed (LISTENING or RECORDING)."""
+        return self.state in (AppState.LISTENING, AppState.RECORDING)
 
     def transition(self, to_state: AppState, *, force: bool = False) -> bool:
         """Attempt state transition.
