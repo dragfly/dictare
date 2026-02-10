@@ -164,7 +164,7 @@ def _poll_active_agent(
                 else:
                     on_status(f"\u25cb {agent_id} \u00b7 standby", "warn")
         except (ConnectionRefusedError, OSError, ValueError):
-            pass  # SSE thread handles connection errors
+            was_active = None  # Reset so next successful poll forces status update
         stop_event.wait(poll_interval)
 
 def _read_from_sse(
@@ -207,6 +207,8 @@ def _read_from_sse(
                 url, headers={"Accept": "text/event-stream"}
             )
             with urllib.request.urlopen(req, timeout=60) as response:
+                if on_status:
+                    on_status(f"\u25cf {agent_id} \u00b7 connected", "ok")
                 if session_path:
                     _log_event(session_path, "sse_connected", {"url": url})
                 retry_delay = 0.5  # Reset backoff on successful connection
