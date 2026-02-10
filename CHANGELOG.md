@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.74] - 2026-02-10
+
+### Reverted
+
+- VAD no longer runs during TRANSCRIBING/INJECTING (reverts a67): caused
+  MLX Whisper infinite decoding on queued audio fragments, burning GPU and
+  locking engine on TRANSCRIBING. VAD only active in LISTENING/RECORDING
+- Audio queuing restored to TRANSCRIBING-only (reverts a68 broadening)
+
+### Kept
+
+- Transcription watchdog timer (a72) retained as generic safety net
+- STT lock timeout retained to prevent thread pile-up
+- Test rules in CLAUDE.md
+
 ## [3.0.0-alpha.73] - 2026-02-10
 
 ### Changed
