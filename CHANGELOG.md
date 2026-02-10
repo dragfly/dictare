@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.78] - 2026-02-10
+
+### Fixed
+
+- PTY write: revert atomic write (a75) — text and ESC sequences must be
+  separate os.write() calls. When combined in one buffer, the slave's input
+  parser treats ESC as the start of a key sequence and discards preceding text.
+  Now: text → tcdrain → alt_enter → tcdrain → enter → tcdrain (no sleep)
+
 ## [3.0.0-alpha.77] - 2026-02-10
 
 ### Fixed
