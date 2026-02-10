@@ -624,6 +624,82 @@ class TestDiscardEvent:
         finally:
             controller.stop()
 
+class TestTranscriptionWatchdog:
+    """Test transcription watchdog timer."""
+
+    def test_watchdog_recovers_stuck_transcribing(self) -> None:
+        """Watchdog forces recovery when STT hangs."""
+        sm = StateManager(initial_state=AppState.LISTENING)
+        engine = MockEngine()
+        state_changes = []
+        controller = StateController(
+            sm,
+            on_state_change=lambda o, n, t: state_changes.append((o, n, t)),
+        )
+        controller.set_engine(engine)
+        controller.TRANSCRIPTION_TIMEOUT = 0.3  # Short timeout for test
+        controller.start()
+
+        try:
+            # Send speech end — transitions to TRANSCRIBING
+            audio_data = np.zeros(5000, dtype=np.float32)
+            controller.send(SpeechEndEvent(audio_data=audio_data, source="vad"))
+            _wait_until(lambda: sm.state == AppState.TRANSCRIBING)
+
+            assert sm.state == AppState.TRANSCRIBING
+
+            # Don't send TranscriptionCompleteEvent — simulate hung STT
+            # Watchdog should fire after 0.3s and recover
+            _wait_until(lambda: sm.state == AppState.LISTENING, timeout=2.0)
+
+            assert sm.state == AppState.LISTENING
+            # Verify the timeout triggered a state change
+            assert any(t == "transcription_complete" for _, _, t in state_changes)
+        finally:
+            controller.stop()
+
+    def test_watchdog_cancelled_on_normal_completion(self) -> None:
+        """Watchdog is cancelled when transcription completes normally."""
+        sm = StateManager(initial_state=AppState.TRANSCRIBING)
+        engine = MockEngine()
+        controller = StateController(sm)
+        controller.set_engine(engine)
+        controller.TRANSCRIPTION_TIMEOUT = 0.3
+        controller.start()
+
+        try:
+            # Start watchdog manually (normally done by _handle_speech_end)
+            controller._start_transcription_watchdog()
+            assert controller._transcription_watchdog is not None
+
+            # Normal completion cancels watchdog
+            controller.send(
+                TranscriptionCompleteEvent(text="hello", source="stt")
+            )
+            _wait_until(lambda: sm.state == AppState.LISTENING)
+
+            assert controller._transcription_watchdog is None
+        finally:
+            controller.stop()
+
+    def test_watchdog_does_not_fire_if_not_transcribing(self) -> None:
+        """Watchdog only fires if still in TRANSCRIBING state."""
+        sm = StateManager(initial_state=AppState.LISTENING)
+        controller = StateController(sm)
+        controller.TRANSCRIPTION_TIMEOUT = 0.1
+        controller.start()
+
+        try:
+            # Start watchdog while in LISTENING (edge case)
+            controller._start_transcription_watchdog()
+            time.sleep(0.3)
+            _drain(controller)
+
+            # Should still be LISTENING — watchdog checks state before acting
+            assert sm.state == AppState.LISTENING
+        finally:
+            controller.stop()
+
 class TestEventOrdering:
     """Test FIFO event ordering."""
 
