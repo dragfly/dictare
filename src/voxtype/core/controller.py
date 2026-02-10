@@ -89,6 +89,10 @@ class StateController:
         # Pending transcription during TTS
         self._pending_transcription: TranscriptionCompleteEvent | None = None
 
+        # Transcription watchdog timer
+        self._transcription_watchdog: threading.Timer | None = None
+        self.TRANSCRIPTION_TIMEOUT: float = 30.0
+
     def set_engine(self, engine: Any) -> None:
         """Set the engine reference for side effects.
 
@@ -123,6 +127,7 @@ class StateController:
 
     def stop(self) -> None:
         """Stop the event processing loop."""
+        self._cancel_transcription_watchdog()
         self._running = False
         if self._worker:
             self._worker.join(timeout=1.0)
@@ -222,13 +227,40 @@ class StateController:
             return
 
         # Start transcription (with captured agent)
+        self._start_transcription_watchdog()
         if self._engine:
             self._engine._transcribe_and_process(
                 event.audio_data, agent=event.agent
             )
 
+    def _start_transcription_watchdog(self) -> None:
+        """Start watchdog timer for transcription timeout."""
+        self._cancel_transcription_watchdog()
+        self._transcription_watchdog = threading.Timer(
+            self.TRANSCRIPTION_TIMEOUT,
+            self._on_transcription_timeout,
+        )
+        self._transcription_watchdog.daemon = True
+        self._transcription_watchdog.start()
+
+    def _cancel_transcription_watchdog(self) -> None:
+        """Cancel the transcription watchdog timer."""
+        if self._transcription_watchdog is not None:
+            self._transcription_watchdog.cancel()
+            self._transcription_watchdog = None
+
+    def _on_transcription_timeout(self) -> None:
+        """Watchdog fired: STT took too long, force recovery."""
+        if self._state_manager.state == AppState.TRANSCRIBING:
+            logger.warning(
+                "Transcription watchdog timeout (%.0fs) — forcing recovery",
+                self.TRANSCRIPTION_TIMEOUT,
+            )
+            self.send(TranscriptionCompleteEvent(text="", source="timeout"))
+
     def _handle_transcription_complete(self, event: TranscriptionCompleteEvent) -> None:
         """Transcription finished."""
+        self._cancel_transcription_watchdog()
         # If TTS is playing, defer the state transition
         if self.play_in_progress:
             # Store for later processing when TTS completes

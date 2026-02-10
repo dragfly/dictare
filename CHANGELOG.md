@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.72] - 2026-02-10
+
+### Fixed
+
+- Engine stuck on TRANSCRIBING when MLX Whisper enters infinite decoding
+  loop on queued audio fragments: added 30s watchdog timer in controller
+  that forces state recovery, plus STT lock timeout to prevent thread pile-up
+
 ## [3.0.0-alpha.71] - 2026-02-10
 
 ### Changed

@@ -68,6 +68,9 @@ class VoxtypeEngine:
     # Minimum recording duration in seconds
     MIN_RECORDING_DURATION = 0.3
 
+    # Maximum time to wait for STT lock (prevents thread pile-up if STT hangs)
+    STT_LOCK_TIMEOUT = 30.0
+
     # Double-tap detection threshold in seconds
     DOUBLE_TAP_THRESHOLD = 0.4
 
@@ -642,7 +645,10 @@ class VoxtypeEngine:
                 # Track transcription time
                 transcribe_start = time.time()
                 task = "translate" if self.config.stt.translate else "transcribe"
-                with self._stt_lock:
+                if not self._stt_lock.acquire(timeout=self.STT_LOCK_TIMEOUT):
+                    logger.warning("STT lock timeout — previous transcription may be stuck")
+                    return
+                try:
                     text = self._stt.transcribe(
                         audio_data,
                         language=self.config.stt.language,
@@ -651,6 +657,8 @@ class VoxtypeEngine:
                         max_repetitions=self.config.stt.max_repetitions,
                         task=task,
                     )
+                finally:
+                    self._stt_lock.release()
                 transcribe_time = time.time() - transcribe_start
 
                 if text:
