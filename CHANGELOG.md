@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.85] - 2026-02-10
+
+### Fixed
+
+- Engine status endpoint now reports the **actual** STT device (after cuDNN
+  fallback) instead of the configured device. Previously, missing cuDNN would
+  silently fall back to CPU while the panel still showed "CUDA" in green.
+- Status panel now warns when GPU is detected but not accelerated: shows
+  `CPU` in yellow/red with hint `(GPU detected, run: ./install.sh --gpu)`
+  instead of misleading green "CUDA". Same for Apple Silicon without MLX.
+
 ## [3.0.0-alpha.84] - 2026-02-10
 
 ### Fixed

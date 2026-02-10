@@ -172,6 +172,8 @@ class StatusPanel:
         status: str,
         elapsed: float,
         estimated: float,
+        device_markup: str | None = None,
+        suffix: str = "",
     ) -> str:
         """Build a single model status line.
 
@@ -182,6 +184,8 @@ class StatusPanel:
             status: Loading status (pending, loading, done)
             elapsed: Elapsed time in seconds
             estimated: Estimated total time in seconds
+            device_markup: Pre-formatted Rich markup for device (overrides default green)
+            suffix: Additional text appended after the line (e.g., GPU warning)
 
         Returns:
             Formatted line string
@@ -191,7 +195,10 @@ class StatusPanel:
             name_part = f"[dim]{label}: (disabled)[/]"
             return name_part
 
-        device_str = f" on [bold green]{device}[/]" if device else ""
+        if device_markup:
+            device_str = f" on {device_markup}" if device else ""
+        else:
+            device_str = f" on [bold green]{device}[/]" if device else ""
         name_part = f"[cyan]{label}:[/] {model_name}{device_str}"
 
         # Pad name to fixed width for alignment
@@ -212,7 +219,10 @@ class StatusPanel:
             bar = self._build_progress_bar(0.0)
             time_str = "[dim]waiting[/]"
 
-        return f"{name_part}{padding}  {bar}  {time_str}"
+        line = f"{name_part}{padding}  {bar}  {time_str}"
+        if suffix:
+            line += f"\n{suffix}"
+        return line
 
     def _is_loading(self) -> bool:
         """Check if engine is still loading."""
@@ -233,9 +243,22 @@ class StatusPanel:
         stt_model = stt.get("model_name", "unknown")
         stt_state = platform.get("state", "idle")
 
-        # Device from engine status
+        # Device from engine status (reflects actual device after fallback)
         stt_device = stt.get("device", "cpu")
-        device = {"cuda": "CUDA", "cpu": "CPU", "mlx": "MLX"}.get(stt_device, stt_device.upper())
+        device_map = {"cuda": "CUDA", "cpu": "CPU", "mlx": "MLX"}
+        device = device_map.get(stt_device, stt_device.upper())
+
+        # Warn if GPU was expected but fell back to CPU
+        gpu_warning = ""
+        device_markup = None
+        if stt_device == "cpu":
+            from voxtype.utils.hardware import detect_nvidia_gpu, is_mlx_available
+            if detect_nvidia_gpu():
+                device_markup = "[bold yellow on red] CPU [/]"
+                gpu_warning = "  [dim](GPU detected, run: ./install.sh --gpu)[/]"
+            elif is_mlx_available():
+                device_markup = "[bold yellow on red] CPU [/]"
+                gpu_warning = "  [dim](Apple Silicon detected, run: ./install.sh --gpu)[/]"
 
         # Build model status lines
         lines = []
@@ -253,10 +276,16 @@ class StatusPanel:
                 stt_loading.get("status", "done"),
                 stt_loading.get("elapsed", 0),
                 stt_loading.get("estimated", 25),
+                device_markup=device_markup,
+                suffix=gpu_warning,
             ))
         else:
             # No loading info, assume loaded
-            lines.append(self._build_model_line("STT", stt_model, device, "done", 0, 0))
+            lines.append(self._build_model_line(
+                "STT", stt_model, device, "done", 0, 0,
+                device_markup=device_markup,
+                suffix=gpu_warning,
+            ))
 
         # VAD line
         if vad_loading:
