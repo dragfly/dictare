@@ -210,8 +210,12 @@ class StateController:
             sample_rate = self._engine._audio_manager.sample_rate
         duration_ms = len(event.audio_data) / sample_rate * 1000
 
+        old_state = current
         if not self._state_manager.try_transition(AppState.TRANSCRIBING):
             return
+
+        if self._on_state_change:
+            self._on_state_change(old_state, AppState.TRANSCRIBING, "speech_end")
 
         if self._on_recording_end:
             self._on_recording_end(duration_ms)
