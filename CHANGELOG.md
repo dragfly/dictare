@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.86] - 2026-02-10
+
+### Changed
+
+- Multiagent UI: redesigned with Pico CSS framework (dark mode, professional
+  look). Click anywhere on a card to switch agent (removed ▶ button). Toolbar
+  reworked as a compact header with form. Cards have hover/active transitions
+  and accent border highlight.
+
 ## [3.0.0-alpha.85] - 2026-02-10
 
 ### Fixed
