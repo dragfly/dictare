@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.75] - 2026-02-10
+
+### Fixed
+
+- PTY write atomicity: text, visual newline, and submit enter are now written
+  as a single `os.write()` call instead of 3 separate writes with 100ms delays.
+  Prevents partial message delivery if the slave process flushes its input
+  buffer between writes (observed: text lost but enter arrives → empty submit)
+- Removed `time` import from mux.py (no longer needed without inter-write sleeps)
+
 ## [3.0.0-alpha.74] - 2026-02-10
 
 ### Reverted
