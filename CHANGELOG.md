@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.82] - 2026-02-10
+
+### Added
+
+- Terminal viewer: 1 MB ring buffer replay — new clients/refresh see current
+  screen state instead of blank screen. xterm.js re-processes the buffered
+  escape sequences on connect.
+- Terminal viewer: PTY size sync — server sends `cols x rows` on WebSocket
+  connect and on terminal resize (SIGWINCH). xterm.js matches the real PTY
+  dimensions exactly. Removed FitAddon (was causing size mismatch).
+
 ## [3.0.0-alpha.81] - 2026-02-10
 
 ### Added

@@ -484,6 +484,8 @@ def run_agent(
     rows, cols = _get_winsize()
     sbar = StatusBar(agent_id) if status_bar else None
     _set_winsize(slave_fd, rows - (1 if sbar else 0), cols)
+    if viewer:
+        viewer.set_size(rows - (1 if sbar else 0), cols)
 
     stop_event = threading.Event()
 
@@ -493,6 +495,8 @@ def run_agent(
         if sbar:
             sbar.on_resize(rows, cols)
         _set_winsize(master_fd, rows - (1 if sbar else 0), cols)
+        if viewer:
+            viewer.set_size(rows - (1 if sbar else 0), cols)
 
     old_sigwinch = signal.signal(signal.SIGWINCH, handle_sigwinch)
 
