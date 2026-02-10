@@ -355,8 +355,12 @@ class TestSSEConnectedEvent:
         assert emit_count[0] >= 2, f"Expected 2+ emits, got {emit_count[0]}: {statuses}"
         assert all("listening" in t for t, s in statuses), f"Unexpected statuses: {statuses}"
 
-class TestWriteToPtyAtomic:
-    """Test that _write_to_pty writes text + newline + submit as single os.write()."""
+class TestWriteToPtySeparateEsc:
+    """Test that text and ESC sequences are written as SEPARATE os.write() calls.
+
+    ESC (\x1b) in the same buffer as text confuses the slave's input parser,
+    which treats ESC as the start of a key sequence and discards preceding text.
+    """
 
     def _run_writer(self, data: dict) -> tuple[list[bytes], int]:
         """Helper: run _write_to_pty with one message, return (writes, drain_count)."""
@@ -368,14 +372,19 @@ class TestWriteToPtyAtomic:
         stop = threading.Event()
         writes: list[bytes] = []
         drain_count = [0]
+        write_count = [0]
 
         def fake_write(fd, data_bytes):
             writes.append(data_bytes)
-            stop.set()  # Stop after first write
+            write_count[0] += 1
             return len(data_bytes)
 
         def fake_tcdrain(fd):
             drain_count[0] += 1
+            # Stop after all writes for this message are done
+            # (tcdrain is called after each write segment)
+            if not wq.qsize():
+                stop.set()
 
         wq.put(("msg", data))
 
@@ -385,32 +394,39 @@ class TestWriteToPtyAtomic:
 
         return writes, drain_count[0]
 
-    def test_text_with_submit_single_write(self) -> None:
-        """Text + submit must be written in one os.write() call."""
-        writes, _ = self._run_writer({"text": "hello world", "submit": True})
-        assert len(writes) == 1
-        assert writes[0] == b"hello world\r"
+    def test_text_with_submit_two_writes(self) -> None:
+        """Text + submit: text in one write, enter in separate write."""
+        writes, drains = self._run_writer({"text": "hello world", "submit": True})
+        assert len(writes) == 2
+        assert writes[0] == b"hello world"
+        assert writes[1] == b"\r"
+        assert drains == 2
 
-    def test_text_with_visual_newline_and_submit_single_write(self) -> None:
-        """Text ending with \\n + submit = single write with text + alt_enter + enter."""
-        writes, _ = self._run_writer({"text": "line one\n", "submit": True})
-        assert len(writes) == 1
-        # text + alt_enter (ESC + CR) + enter (CR)
-        assert writes[0] == b"line one\x1b\r\r"
+    def test_text_with_visual_newline_three_writes(self) -> None:
+        """Text + visual newline + submit: three separate writes."""
+        writes, drains = self._run_writer({"text": "line one\n", "submit": True})
+        assert len(writes) == 3
+        assert writes[0] == b"line one"       # text (no ESC)
+        assert writes[1] == b"\x1b\r"         # alt_enter (ESC — separate!)
+        assert writes[2] == b"\r"             # enter
+        assert drains == 3
 
-    def test_text_only_no_submit_single_write(self) -> None:
-        """Text without submit = single write with just text."""
-        writes, _ = self._run_writer({"text": "just text"})
+    def test_text_only_one_write(self) -> None:
+        """Text without newline or submit = single write."""
+        writes, drains = self._run_writer({"text": "just text"})
         assert len(writes) == 1
         assert writes[0] == b"just text"
+        assert drains == 1
 
-    def test_submit_only_single_write(self) -> None:
+    def test_submit_only_one_write(self) -> None:
         """Submit without text = single write with just enter."""
-        writes, _ = self._run_writer({"submit": True})
+        writes, drains = self._run_writer({"submit": True})
         assert len(writes) == 1
         assert writes[0] == b"\r"
+        assert drains == 1
 
-    def test_tcdrain_called_once(self) -> None:
-        """tcdrain should be called exactly once per message."""
-        _, drain_count = self._run_writer({"text": "hello\n", "submit": True})
-        assert drain_count == 1
+    def test_text_never_contains_esc(self) -> None:
+        """The text write must NEVER contain ESC byte."""
+        writes, _ = self._run_writer({"text": "hello world\n", "submit": True})
+        text_write = writes[0]
+        assert b"\x1b" not in text_write, f"Text write contains ESC: {text_write!r}"
