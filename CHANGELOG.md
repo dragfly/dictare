@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.76] - 2026-02-10
+
+### Fixed
+
+- Remove `time.sleep` from SSE tests: reconnect test down from 0.51s to 0.02s,
+  poll test from 0.06s to 0.01s. Made `retry_delay` configurable in `_read_from_sse`
+  (default 0.5s production, 0.01s in tests). Test suite median back to ~8.7s
+
 ## [3.0.0-alpha.75] - 2026-02-10
 
 ### Fixed

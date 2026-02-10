@@ -183,6 +183,7 @@ def _read_from_sse(
     keystroke_counter: KeystrokeCounter | None = None,
     verbose: bool = False,
     on_status: Callable[[str, str], None] | None = None,
+    retry_delay: float = 0.5,
 ) -> None:
     """Connect to engine SSE and receive OpenVIP messages.
 
@@ -205,7 +206,6 @@ def _read_from_sse(
     url = f"{base_url}/agents/{agent_id}/messages"
 
     # Retry connection with backoff
-    retry_delay = 0.5
     max_retry_delay = 5.0
 
     while not stop_event.is_set():
