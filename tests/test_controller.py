@@ -710,3 +710,82 @@ class TestEventOrdering:
             assert state_changes[2][1] == AppState.LISTENING
         finally:
             controller.stop()
+
+class TestAudioFeedbackSounds:
+    """Test audio feedback sound files and config."""
+
+    def test_transcribing_sound_exists(self) -> None:
+        """Bundled transcribing.mp3 exists."""
+        from voxtype.audio.beep import DEFAULT_SOUND_TRANSCRIBING
+
+        assert DEFAULT_SOUND_TRANSCRIBING.exists()
+
+    def test_ready_sound_exists(self) -> None:
+        """Bundled ready.mp3 exists."""
+        from voxtype.audio.beep import DEFAULT_SOUND_READY
+
+        assert DEFAULT_SOUND_READY.exists()
+
+    def test_config_fields_default_to_none(self) -> None:
+        """AudioConfig sound_transcribing and sound_ready default to None."""
+        from voxtype.config import AudioConfig
+
+        cfg = AudioConfig()
+        assert cfg.sound_transcribing is None
+        assert cfg.sound_ready is None
+
+    def test_transcribing_transition_fires_callback(self) -> None:
+        """RECORDING→TRANSCRIBING fires on_state_change callback."""
+        from voxtype.audio.beep import DEFAULT_SOUND_TRANSCRIBING
+
+        sm = StateManager(initial_state=AppState.RECORDING)
+        engine = MockEngine()
+        played = []
+
+        controller = StateController(
+            sm,
+            on_state_change=lambda o, n, t: played.append((o, n)),
+        )
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            audio_data = np.zeros(5000, dtype=np.float32)
+            controller.send(
+                SpeechEndEvent(audio_data=audio_data, source="vad")
+            )
+            _wait_until(lambda: sm.state == AppState.TRANSCRIBING)
+
+            assert any(n == AppState.TRANSCRIBING for _, n in played)
+            assert DEFAULT_SOUND_TRANSCRIBING.suffix == ".mp3"
+        finally:
+            controller.stop()
+
+    def test_ready_feedback_played(self) -> None:
+        """TRANSCRIBING→LISTENING triggers ready sound."""
+        from voxtype.audio.beep import DEFAULT_SOUND_READY
+
+        sm = StateManager(initial_state=AppState.TRANSCRIBING)
+        engine = MockEngine()
+        played = []
+
+        controller = StateController(
+            sm,
+            on_state_change=lambda o, n, t: played.append((o, n)),
+        )
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            controller.send(
+                TranscriptionCompleteEvent(text="hello", source="stt")
+            )
+            _wait_until(lambda: sm.state == AppState.LISTENING)
+
+            assert any(
+                o == AppState.TRANSCRIBING and n == AppState.LISTENING
+                for o, n in played
+            )
+            assert DEFAULT_SOUND_READY.suffix == ".mp3"
+        finally:
+            controller.stop()

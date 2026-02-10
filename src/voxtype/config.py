@@ -52,6 +52,14 @@ class AudioConfig(BaseModel):
         default=None,
         description="Custom sound file for listening stop (default: bundled down-beep.mp3)",
     )
+    sound_transcribing: str | None = Field(
+        default=None,
+        description="Custom sound for RECORDING→TRANSCRIBING (default: bundled transcribing.mp3)",
+    )
+    sound_ready: str | None = Field(
+        default=None,
+        description="Custom sound for TRANSCRIBING→LISTENING (default: bundled ready.mp3)",
+    )
 
 class STTConfig(BaseModel):
     """Speech-to-text configuration."""

@@ -27,6 +27,8 @@ _SOUNDS_DIR = Path(__file__).parent / "sounds"
 # Default bundled sound files
 DEFAULT_SOUND_START = _SOUNDS_DIR / "up-beep.mp3"
 DEFAULT_SOUND_STOP = _SOUNDS_DIR / "down-beep.mp3"
+DEFAULT_SOUND_TRANSCRIBING = _SOUNDS_DIR / "transcribing.mp3"
+DEFAULT_SOUND_READY = _SOUNDS_DIR / "ready.mp3"
 
 def get_sound_path(name: str) -> Path:
     """Get path to a bundled sound file.

@@ -89,9 +89,12 @@ class AppController:
                 # Play beep if audio feedback enabled
                 if config.audio.audio_feedback:
                     from voxtype.audio.beep import (
+                        DEFAULT_SOUND_READY,
                         DEFAULT_SOUND_START,
                         DEFAULT_SOUND_STOP,
+                        DEFAULT_SOUND_TRANSCRIBING,
                         play_audio,
+                        play_sound_file_async,
                     )
 
                     eng = engine_ref[0]
@@ -104,6 +107,17 @@ class AppController:
                     elif new == AppState.OFF:
                         path = config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
                         play_audio(path, pause_mic=False)
+                    elif new == AppState.TRANSCRIBING:
+                        path = config.audio.sound_transcribing or str(
+                            DEFAULT_SOUND_TRANSCRIBING
+                        )
+                        play_sound_file_async(path)
+                    elif new == AppState.LISTENING and old in (
+                        AppState.TRANSCRIBING,
+                        AppState.INJECTING,
+                    ):
+                        path = config.audio.sound_ready or str(DEFAULT_SOUND_READY)
+                        play_sound_file_async(path)
 
             def on_agent_change(self, agent_name: str, index: int) -> None:
                 eng = engine_ref[0]
