@@ -137,10 +137,13 @@ def _poll_active_agent(
     stop_event: threading.Event,
     on_status: Callable[[str, str], None],
     poll_interval: float = 3.0,
+    sse_connected: threading.Event | None = None,
 ) -> None:
     """Poll /status to check if this agent is the active one.
 
     Updates status bar with listening/standby indicator.
+    This is the ONLY source of status updates — SSE thread signals
+    reconnection via sse_connected event instead of emitting status directly.
     """
     import urllib.request
 
@@ -148,6 +151,11 @@ def _poll_active_agent(
     was_active: bool | None = None
 
     while not stop_event.is_set():
+        # SSE reconnected — force status refresh on next successful poll
+        if sse_connected and sse_connected.is_set():
+            sse_connected.clear()
+            was_active = None
+
         try:
             req = urllib.request.Request(status_url, method="GET")
             with urllib.request.urlopen(req, timeout=5) as response:
@@ -176,6 +184,7 @@ def _read_from_sse(
     verbose: bool = False,
     on_status: Callable[[str, str], None] | None = None,
     retry_delay: float = 0.5,
+    sse_connected: threading.Event | None = None,
 ) -> None:
     """Connect to engine SSE and receive OpenVIP messages.
 
@@ -206,8 +215,8 @@ def _read_from_sse(
                 url, headers={"Accept": "text/event-stream"}
             )
             with urllib.request.urlopen(req, timeout=60) as response:
-                if on_status:
-                    on_status(f"\u25cf {agent_id} \u00b7 connected", "ok")
+                if sse_connected:
+                    sse_connected.set()  # Signal poll thread to refresh status
                 if session_path:
                     _log_event(session_path, "sse_connected", {"url": url})
                 retry_delay = 0.5  # Reset backoff on successful connection
@@ -505,11 +514,13 @@ def run_agent(
             args=(write_queue, stop_event, keystroke_counter),
             daemon=True,
         )
+        # Shared event: SSE thread signals reconnection, poll thread refreshes status
+        sse_connected_event = threading.Event()
         # SSE-based IPC: connect to engine HTTP server
         sse_thread = threading.Thread(
             target=_read_from_sse,
             args=(agent_id, base_url, write_queue, stop_event, session_path, keystroke_counter, verbose),
-            kwargs={"on_status": sbar.update if sbar else None},
+            kwargs={"on_status": sbar.update if sbar else None, "sse_connected": sse_connected_event},
             daemon=True,
         )
         # Start consumer thread (read from queue, write to PTY)
@@ -523,6 +534,7 @@ def run_agent(
             poll_thread = threading.Thread(
                 target=_poll_active_agent,
                 args=(agent_id, base_url, stop_event, sbar.update),
+                kwargs={"sse_connected": sse_connected_event},
                 daemon=True,
             )
 

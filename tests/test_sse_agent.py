@@ -233,11 +233,11 @@ class TestPollActiveAgentStatus:
         assert len(statuses) >= 1
         assert "listening" in statuses[0][0]
 
-class TestSSEReconnectStatus:
-    """Test _read_from_sse emits 'connected' status on reconnect."""
+class TestSSEConnectedEvent:
+    """Test _read_from_sse signals sse_connected event (no direct status emit)."""
 
-    def test_sse_connect_emits_status_ok(self) -> None:
-        """SSE connection success calls on_status with 'connected'."""
+    def test_sse_connect_sets_event(self) -> None:
+        """SSE connection success sets sse_connected event."""
         handler = _make_status_handler("myagent", "myagent")
         server = http.server.HTTPServer(("127.0.0.1", 0), handler)
         port = server.server_address[1]
@@ -245,31 +245,41 @@ class TestSSEReconnectStatus:
         t.start()
 
         stop = threading.Event()
-        statuses: list[tuple[str, str]] = []
         wq: queue.Queue = queue.Queue()
+        sse_connected = threading.Event()
+
+        # SSE should NOT call on_status for "connected" anymore
+        statuses: list[tuple[str, str]] = []
 
         def on_status(text, style):
             statuses.append((text, style))
-            stop.set()  # Stop after first status
+
+        def stop_when_connected():
+            sse_connected.wait(timeout=2)
+            stop.set()
+
+        threading.Thread(target=stop_when_connected, daemon=True).start()
 
         _read_from_sse(
             "myagent",
             f"http://127.0.0.1:{port}",
             wq, stop,
             on_status=on_status,
+            sse_connected=sse_connected,
         )
         server.server_close()
 
-        assert len(statuses) >= 1
-        assert "connected" in statuses[0][0]
-        assert statuses[0][1] == "ok"
+        assert sse_connected.is_set()
+        # No "connected" status emitted — poll thread owns all status updates
+        ok_statuses = [(t, s) for t, s in statuses if "connected" in t]
+        assert len(ok_statuses) == 0, f"SSE should not emit 'connected': {statuses}"
 
-    def test_sse_error_then_reconnect_updates_status(self) -> None:
-        """After SSE error, successful reconnect shows 'connected'."""
+    def test_sse_error_then_reconnect_sets_event(self) -> None:
+        """After SSE error, successful reconnect sets sse_connected event."""
         handler = _make_status_handler("myagent", "myagent")
         stop = threading.Event()
-        statuses: list[tuple[str, str]] = []
         wq: queue.Queue = queue.Queue()
+        sse_connected = threading.Event()
 
         # Get a free port, close it so first SSE attempt fails
         temp_server = http.server.HTTPServer(("127.0.0.1", 0), handler)
@@ -277,17 +287,21 @@ class TestSSEReconnectStatus:
         temp_server.server_close()
 
         error_seen = threading.Event()
+        statuses: list[tuple[str, str]] = []
 
         def on_status(text, style):
             statuses.append((text, style))
-            if style == "error":
+            if style == "error" and not error_seen.is_set():
                 # First attempt failed — start server so retry succeeds
-                if not error_seen.is_set():
-                    error_seen.set()
-                    server = http.server.HTTPServer(("127.0.0.1", port), handler)
-                    threading.Thread(target=server.handle_request, daemon=True).start()
-            elif "connected" in text and style == "ok":
-                stop.set()
+                error_seen.set()
+                server = http.server.HTTPServer(("127.0.0.1", port), handler)
+                threading.Thread(target=server.handle_request, daemon=True).start()
+
+        def stop_when_connected():
+            sse_connected.wait(timeout=2)
+            stop.set()
+
+        threading.Thread(target=stop_when_connected, daemon=True).start()
 
         _read_from_sse(
             "myagent",
@@ -295,12 +309,51 @@ class TestSSEReconnectStatus:
             wq, stop,
             on_status=on_status,
             retry_delay=0.01,
+            sse_connected=sse_connected,
         )
 
+        assert sse_connected.is_set()
         error_statuses = [(t, s) for t, s in statuses if s == "error"]
-        ok_statuses = [(t, s) for t, s in statuses if s == "ok"]
         assert len(error_statuses) >= 1, f"Expected error status, got: {statuses}"
-        assert len(ok_statuses) >= 1, f"Expected ok status, got: {statuses}"
+
+    def test_poll_refreshes_on_sse_connected(self) -> None:
+        """Poll thread re-emits status when sse_connected event is set."""
+        statuses: list[tuple[str, str]] = []
+        handler = _make_status_handler("myagent", "myagent")
+        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        port = server.server_address[1]
+
+        stop = threading.Event()
+        sse_connected = threading.Event()
+        emit_count = [0]
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            emit_count[0] += 1
+            if emit_count[0] == 1:
+                # After first "listening" emit, set sse_connected to force refresh
+                sse_connected.set()
+            elif emit_count[0] == 2:
+                # Second emit confirms poll re-emitted after sse_connected
+                stop.set()
+
+        # Serve enough requests for 2 poll cycles then stop
+        def serve_requests():
+            while not stop.is_set():
+                server.handle_request()
+
+        t = threading.Thread(target=serve_requests, daemon=True)
+        t.start()
+
+        _poll_active_agent(
+            "myagent", f"http://127.0.0.1:{port}", stop, on_status,
+            poll_interval=0.001, sse_connected=sse_connected,
+        )
+        server.server_close()
+
+        # Should have emitted "listening" twice: initial + refresh after sse_connected
+        assert emit_count[0] >= 2, f"Expected 2+ emits, got {emit_count[0]}: {statuses}"
+        assert all("listening" in t for t, s in statuses), f"Unexpected statuses: {statuses}"
 
 class TestWriteToPtyAtomic:
     """Test that _write_to_pty writes text + newline + submit as single os.write()."""
