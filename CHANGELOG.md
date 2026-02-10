@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.83] - 2026-02-10
+
+### Added
+
+- `voxtype multiagent` command — web UI to manage multiple headless agents.
+  Grid view (`/`) shows all agents with xterm.js terminals, full-screen view
+  (`/current`) follows the active agent. Agents are created/removed from the
+  browser. Click-to-switch calls engine `output.set_agent`. Each agent runs in
+  a headless PTY with SSE input from the engine. New files: `headless.py`,
+  `multiagent_server.py`, `cli/multiagent.py`.
+
 ## [3.0.0-alpha.82] - 2026-02-10
 
 ### Added
