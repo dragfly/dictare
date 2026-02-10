@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.87] - 2026-02-10
+
+### Fixed
+
+- Multiagent: child process wrapped in try/except with `os._exit(127)` — if
+  `chdir` or `execvp` fails the forked child no longer corrupts the parent.
+- Multiagent: `_read_pty_output` catches `OSError` from `select.select` on
+  closed fd — clean shutdown without traceback spam.
+- Multiagent: validate `cwd` exists before forking (returns 400 to browser).
+
 ## [3.0.0-alpha.86] - 2026-02-10
 
 ### Changed
