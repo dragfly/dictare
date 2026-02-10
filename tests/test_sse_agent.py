@@ -323,3 +323,64 @@ class TestSSEReconnectStatus:
         ok_statuses = [(t, s) for t, s in statuses if s == "ok"]
         assert len(error_statuses) >= 1, f"Expected error status, got: {statuses}"
         assert len(ok_statuses) >= 1, f"Expected ok status, got: {statuses}"
+
+
+class TestWriteToPtyAtomic:
+    """Test that _write_to_pty writes text + newline + submit as single os.write()."""
+
+    def _run_writer(self, data: dict) -> tuple[list[bytes], int]:
+        """Helper: run _write_to_pty with one message, return (writes, drain_count)."""
+        from unittest.mock import patch
+
+        from voxtype.agent.mux import _write_to_pty
+
+        wq: queue.Queue = queue.Queue()
+        stop = threading.Event()
+        writes: list[bytes] = []
+        drain_count = [0]
+
+        def fake_write(fd, data_bytes):
+            writes.append(data_bytes)
+            stop.set()  # Stop after first write
+            return len(data_bytes)
+
+        def fake_tcdrain(fd):
+            drain_count[0] += 1
+
+        wq.put(("msg", data))
+
+        with patch("os.write", side_effect=fake_write), \
+             patch("termios.tcdrain", side_effect=fake_tcdrain):
+            _write_to_pty(master_fd=99, write_queue=wq, stop_event=stop)
+
+        return writes, drain_count[0]
+
+    def test_text_with_submit_single_write(self) -> None:
+        """Text + submit must be written in one os.write() call."""
+        writes, _ = self._run_writer({"text": "hello world", "submit": True})
+        assert len(writes) == 1
+        assert writes[0] == b"hello world\r"
+
+    def test_text_with_visual_newline_and_submit_single_write(self) -> None:
+        """Text ending with \\n + submit = single write with text + alt_enter + enter."""
+        writes, _ = self._run_writer({"text": "line one\n", "submit": True})
+        assert len(writes) == 1
+        # text + alt_enter (ESC + CR) + enter (CR)
+        assert writes[0] == b"line one\x1b\r\r"
+
+    def test_text_only_no_submit_single_write(self) -> None:
+        """Text without submit = single write with just text."""
+        writes, _ = self._run_writer({"text": "just text"})
+        assert len(writes) == 1
+        assert writes[0] == b"just text"
+
+    def test_submit_only_single_write(self) -> None:
+        """Submit without text = single write with just enter."""
+        writes, _ = self._run_writer({"submit": True})
+        assert len(writes) == 1
+        assert writes[0] == b"\r"
+
+    def test_tcdrain_called_once(self) -> None:
+        """tcdrain should be called exactly once per message."""
+        _, drain_count = self._run_writer({"text": "hello\n", "submit": True})
+        assert drain_count == 1
