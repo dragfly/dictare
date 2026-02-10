@@ -66,6 +66,7 @@ def register(app: typer.Typer) -> None:
         args = list(ctx.args)
         own_flags_to_remove: set[int] = set()
         show_status_bar: bool | None = None  # None = use config default
+        tv_port: int | None = None
         for i, arg in enumerate(args):
             if arg in ("--verbose", "-v"):
                 verbose = True
@@ -78,6 +79,10 @@ def register(app: typer.Typer) -> None:
                 own_flags_to_remove.add(i)
             elif arg in ("--server", "-s") and i + 1 < len(args):
                 server = args[i + 1]
+                own_flags_to_remove.add(i)
+                own_flags_to_remove.add(i + 1)
+            elif arg == "--tv" and i + 1 < len(args):
+                tv_port = int(args[i + 1])
                 own_flags_to_remove.add(i)
                 own_flags_to_remove.add(i + 1)
             elif arg == "--":
@@ -99,5 +104,6 @@ def register(app: typer.Typer) -> None:
             agent_id, command, quiet=quiet, verbose=verbose,
             base_url=server, status_bar=show_status_bar,
             clear_on_start=config.client.clear_on_start,
+            terminal_viewer_port=tv_port,
         )
         raise typer.Exit(exit_code)
