@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.79] - 2026-02-10
+
+### Fixed
+
+- PTY write: add 10ms grace period (`stop_event.wait(0.01)`) between text and
+  ESC/enter writes. Without the delay, fast consecutive writes can land in the
+  same kernel read buffer, causing the slave's input parser to discard text
+  preceding ESC. The 10ms lets the slave consume the text before ESC arrives.
+  Uses cancellable `stop_event.wait()` instead of `time.sleep()`.
+
 ## [3.0.0-alpha.78] - 2026-02-10
 
 ### Fixed
