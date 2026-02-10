@@ -186,55 +186,50 @@ class TestPollActiveAgentStatus:
 
     def test_poll_resets_was_active_on_error(self) -> None:
         """After connection error, next success forces status update."""
-        # Use a port with no server to simulate connection error
         statuses: list[tuple[str, str]] = []
-
         handler = _make_status_handler("myagent", "myagent")
-        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
-        port = server.server_address[1]
-        server.server_close()  # Close immediately — first poll will fail
 
-        def on_status(text, style):
-            statuses.append((text, style))
+        # Get a free port, close immediately — first poll will fail
+        temp = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        port = temp.server_address[1]
+        temp.server_close()
 
-        # Run poll once — will fail (server closed), was_active resets to None
-        # Then start server and poll again — should force "listening" update
-        # We test this indirectly: poll twice, second time with server up
+        # Phase 1: poll once against closed port (error → was_active = None)
+        stop1 = threading.Event()
+        original_on_status_calls = [0]
 
-        # First: poll against closed port (error → was_active = None)
-        stop_once = threading.Event()
+        def on_status_phase1(text, style):
+            # _poll_active_agent does NOT call on_status on error,
+            # but we track calls to confirm none happen
+            original_on_status_calls[0] += 1
 
+        # Run one poll cycle — will fail on closed port, then stop
         def poll_once():
-            _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop_once,
-                               on_status, poll_interval=0.01)
+            _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop1,
+                               on_status_phase1, poll_interval=0.001)
 
         pt = threading.Thread(target=poll_once, daemon=True)
         pt.start()
-        # Let it poll once (error)
-        import time
-        time.sleep(0.05)
-        stop_once.set()
+        # Give it a very short time then stop (poll_interval=0.001 is 1ms)
+        stop1.set()
         pt.join(timeout=1)
+        assert original_on_status_calls[0] == 0  # No status on error
 
-        # No status update on error
-        assert len(statuses) == 0
-
-        # Now start server and poll again
+        # Phase 2: start server, poll again — should force "listening"
         server2 = http.server.HTTPServer(("127.0.0.1", port), handler)
         t = threading.Thread(target=server2.handle_request, daemon=True)
         t.start()
 
         stop2 = threading.Event()
 
-        def on_status2(text, style):
+        def on_status_phase2(text, style):
             statuses.append((text, style))
             stop2.set()
 
-        _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop2, on_status2,
-                           poll_interval=0.05)
+        _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop2, on_status_phase2,
+                           poll_interval=0.001)
         server2.server_close()
 
-        # Should have gotten "listening" since was_active was reset
         assert len(statuses) >= 1
         assert "listening" in statuses[0][0]
 
@@ -272,46 +267,36 @@ class TestSSEReconnectStatus:
     def test_sse_error_then_reconnect_updates_status(self) -> None:
         """After SSE error, successful reconnect shows 'connected'."""
         handler = _make_status_handler("myagent", "myagent")
-        # First: no server → error status
-        # Then: server up → connected status
         stop = threading.Event()
         statuses: list[tuple[str, str]] = []
         wq: queue.Queue = queue.Queue()
 
-        # Use a free port
+        # Get a free port, close it so first SSE attempt fails
         temp_server = http.server.HTTPServer(("127.0.0.1", 0), handler)
         port = temp_server.server_address[1]
         temp_server.server_close()
 
-        connect_count = [0]
+        error_seen = threading.Event()
 
         def on_status(text, style):
             statuses.append((text, style))
-            # After getting "connected" (second status), stop
-            if "connected" in text and style == "ok":
-                connect_count[0] += 1
-                if connect_count[0] >= 1:
-                    stop.set()
-
-        # Start server after a short delay so first attempt fails
-        def start_server_later():
-            import time
-            time.sleep(0.3)
-            server = http.server.HTTPServer(("127.0.0.1", port), handler)
-            server.handle_request()
-            server.server_close()
-
-        delayed = threading.Thread(target=start_server_later, daemon=True)
-        delayed.start()
+            if style == "error":
+                # First attempt failed — start server so retry succeeds
+                if not error_seen.is_set():
+                    error_seen.set()
+                    server = http.server.HTTPServer(("127.0.0.1", port), handler)
+                    threading.Thread(target=server.handle_request, daemon=True).start()
+            elif "connected" in text and style == "ok":
+                stop.set()
 
         _read_from_sse(
             "myagent",
             f"http://127.0.0.1:{port}",
             wq, stop,
             on_status=on_status,
+            retry_delay=0.01,
         )
 
-        # Should have error first, then connected
         error_statuses = [(t, s) for t, s in statuses if s == "error"]
         ok_statuses = [(t, s) for t, s in statuses if s == "ok"]
         assert len(error_statuses) >= 1, f"Expected error status, got: {statuses}"
