@@ -372,13 +372,16 @@ def _write_to_pty(
                         bytes_written += _write_all(master_fd, text_bytes)
                         termios.tcdrain(master_fd)
 
-                    # Alt+Enter for visual newline (contains ESC — must be separate)
+                    # Alt+Enter for visual newline (contains ESC — must be separate).
+                    # 10ms grace period so the slave reads text before ESC arrives.
                     if has_visual_newline:
+                        stop_event.wait(0.01)
                         bytes_written += _write_all(master_fd, alt_enter)
                         termios.tcdrain(master_fd)
 
                 # Submit enter (plain CR — no ESC, safe to write anytime)
                 if data.get("submit"):
+                    stop_event.wait(0.01)
                     bytes_written += _write_all(master_fd, enter_key)
                     termios.tcdrain(master_fd)
 
