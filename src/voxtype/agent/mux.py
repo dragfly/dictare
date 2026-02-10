@@ -13,7 +13,6 @@ import struct
 import sys
 import termios
 import threading
-import time
 import tty
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -340,28 +339,27 @@ def _write_to_pty(
                 text = data.get("text", "")
                 bytes_written = 0
 
+                # Build atomic payload: text + visual newline + submit
+                # Written as single os.write() to prevent partial delivery
+                # if the slave process flushes its input buffer mid-write.
+                payload = bytearray()
+
                 if text:
                     has_visual_newline = text.endswith("\n")
                     if has_visual_newline:
                         text = text.rstrip("\n")
 
                     if text:
-                        text_bytes = text.encode()
-                        bytes_written += _write_all(master_fd, text_bytes)
-                        # Drain to ensure bytes reach slave side
-                        termios.tcdrain(master_fd)
-                        time.sleep(0.1)  # 100ms delay for Claude Code to process
+                        payload.extend(text.encode())
 
-                    # Send Alt+Enter for visual newline
                     if has_visual_newline:
-                        bytes_written += _write_all(master_fd, alt_enter)
-                        termios.tcdrain(master_fd)
-                        time.sleep(0.1)  # 100ms delay
+                        payload.extend(alt_enter)
 
-                # Handle submit flag
                 if data.get("submit"):
-                    time.sleep(0.01)
-                    bytes_written += _write_all(master_fd, enter_key)
+                    payload.extend(enter_key)
+
+                if payload:
+                    bytes_written = _write_all(master_fd, bytes(payload))
                     termios.tcdrain(master_fd)
 
                 # Log message AFTER successful write AND drain
