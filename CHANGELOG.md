@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.80] - 2026-02-10
+
+### Added
+
+- Audio feedback on state transitions: descending tone when RECORDING→TRANSCRIBING
+  (processing), ascending tone when TRANSCRIBING→LISTENING (ready). Uses
+  `play_sound_file_async()` (fire-and-forget, no mic pause). Bundled sounds:
+  `transcribing.mp3` and `ready.mp3`. Configurable via `sound_transcribing` and
+  `sound_ready` in audio config.
+- StateController now fires `on_state_change` callback for RECORDING→TRANSCRIBING
+  transition (was missing, needed for audio feedback).
+
 ## [3.0.0-alpha.79] - 2026-02-10
 
 ### Fixed
