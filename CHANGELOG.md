@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.81] - 2026-02-10
+
+### Added
+
+- Web terminal viewer: stream PTY output to browser via WebSocket + xterm.js.
+  Opt-in with `--tv PORT` flag on `voxtype agent` command (e.g. `voxtype agent
+  claude --tv 8766 -- claude`). Opens `http://127.0.0.1:PORT` in browser to
+  mirror the agent's terminal. Zero overhead when not enabled. Uses FastAPI +
+  uvicorn in a daemon thread (same pattern as the engine HTTP server).
+
 ## [3.0.0-alpha.80] - 2026-02-10
 
 ### Added
