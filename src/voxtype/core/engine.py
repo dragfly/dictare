@@ -1217,7 +1217,7 @@ class VoxtypeEngine:
                 "uptime_seconds": uptime,
                 "stt": {
                     "model_name": self.config.stt.model,
-                    "device": self.config.stt.device,
+                    "device": getattr(self._stt, "_device", self.config.stt.device),
                     "last_text": self._last_text,
                 },
                 "output": {
