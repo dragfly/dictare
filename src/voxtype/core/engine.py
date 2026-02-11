@@ -1209,6 +1209,10 @@ class VoxtypeEngine:
                     "key": self.config.hotkey.key,
                     "bound": self._hotkey is not None,
                 },
+                "tts": {
+                    "engine": self.config.tts.engine,
+                    "language": self.config.tts.language,
+                },
                 "loading": {
                     "active": self._loading_active,
                     "models": [

@@ -299,8 +299,15 @@ class StatusPanel:
         else:
             lines.append(self._build_model_line("VAD", "silero-vad", None, "done", 0, 0))
 
-        # TTS line (placeholder - disabled for now)
-        lines.append("[dim]TTS: (disabled)[/]")
+        # TTS line
+        tts = platform.get("tts", {})
+        tts_engine = tts.get("engine", "")
+        if tts_engine:
+            tts_lang = tts.get("language", "")
+            tts_label = f"{tts_engine} ({tts_lang})" if tts_lang else tts_engine
+            lines.append(f"[cyan]TTS:[/] {tts_label}")
+        else:
+            lines.append("[dim]TTS: (disabled)[/]")
 
         # If loading, show minimal panel
         if self._is_loading():
