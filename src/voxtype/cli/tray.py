@@ -43,15 +43,6 @@ def tray_start(
         console.print("[dim]Starting voxtype tray (foreground)...[/]")
         console.print("[dim]Right-click the icon for menu. Ctrl+C to quit.[/]")
 
-        # Connect to daemon if running
-        from voxtype.daemon import get_daemon_status
-
-        daemon_status = get_daemon_status()
-        if daemon_status.running:
-            console.print(f"[green]Connected to daemon[/] (PID: {daemon_status.pid})")
-        else:
-            console.print("[yellow]Daemon not running.[/] Start with: voxtype daemon start")
-
         result = start_tray(foreground=True)
         raise typer.Exit(result)
     else:
