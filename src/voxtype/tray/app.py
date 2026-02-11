@@ -82,7 +82,7 @@ def _create_fallback_icon(name: str) -> Image.Image:
 class TrayApp:
     """System tray application for VoxType.
 
-    This is a UI-only component. It communicates with the daemon via API
+    This is a UI-only component. It communicates with the engine HTTP API
     to control listening, get status, etc. It does NOT spawn processes.
     """
 
@@ -300,35 +300,39 @@ class TrayApp:
         """Get current output mode."""
         return self._output_mode
 
-    def start_status_polling(self) -> None:
-        """Start polling daemon status every 500ms."""
+    def start_status_polling(self, host: str = "127.0.0.1", port: int = 8765) -> None:
+        """Start polling engine HTTP status every 500ms."""
         if self._polling:
             return
 
         def poll() -> None:
+            import json
             import time
+            import urllib.error
+            import urllib.request
 
-            from voxtype.daemon.client import DaemonClient
-            from voxtype.daemon.protocol import StatusResponse
-
-            client = DaemonClient(timeout=2.0)
+            status_url = f"http://{host}:{port}/status"
 
             while self._polling:
                 try:
-                    response = client.get_status()
-                    if isinstance(response, StatusResponse):
-                        # Update all state from daemon
-                        self.set_state(
-                            state=response.state,
-                            progress=response.progress,
-                            loading_stage=response.loading_stage,
-                        )
-                        self.set_output_mode(response.output_mode)
-                        if response.available_agents:
-                            self.set_targets(
-                                response.available_agents,
-                                response.current_agent or "",
-                            )
+                    with urllib.request.urlopen(status_url, timeout=2) as resp:
+                        data = json.loads(resp.read())
+
+                    platform = data.get("platform", {})
+                    state = platform.get("state", data.get("state", "idle"))
+                    # Map engine states to tray states
+                    tray_state = "listening" if state in ("listening", "recording", "transcribing") else "off"
+                    self.set_state(state=tray_state)
+
+                    mode = platform.get("mode", "keyboard")
+                    self.set_output_mode(mode)
+
+                    output = platform.get("output", {})
+                    agents = output.get("available_agents", [])
+                    if agents:
+                        self.set_targets(agents, output.get("current_agent", ""))
+                except (urllib.error.URLError, ConnectionRefusedError, OSError):
+                    pass  # Engine not running
                 except Exception as e:
                     import sys
                     print(f"Tray poll error: {e}", file=sys.stderr)
@@ -366,10 +370,13 @@ class TrayApp:
 def main() -> None:
     """Entry point for standalone tray app (used when run as module).
 
-    Connects to the daemon via Unix socket API for all operations.
+    Connects to the engine via HTTP API for all operations.
     """
+    import json
     import os
     import signal
+    import urllib.error
+    import urllib.request
 
     try:
         import pystray  # noqa: F401
@@ -379,36 +386,49 @@ def main() -> None:
         print("Install with: pip install voxtype[tray]", file=sys.stderr)
         sys.exit(1)
 
-    from voxtype.daemon.client import DaemonClient, is_daemon_running
+    from voxtype.config import load_config
     from voxtype.tray.lifecycle import remove_pid, write_pid
 
     # Write PID for lifecycle management
     write_pid(os.getpid())
 
+    config = load_config()
+    host = config.server.host
+    port = config.server.port
+    control_url = f"http://{host}:{port}/control"
+
     app = TrayApp()
-    client = DaemonClient(timeout=5.0)
 
-    # Check if daemon is running
-    if not is_daemon_running():
-        print("Warning: Daemon is not running. Start it with 'voxtype daemon start'", file=sys.stderr)
+    def _send_control(command: str) -> None:
+        """Send a control command to the engine HTTP API."""
+        payload = json.dumps({"command": command}).encode()
+        req = urllib.request.Request(
+            control_url, data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5):
+                pass
+        except (urllib.error.URLError, ConnectionRefusedError, OSError) as e:
+            print(f"Engine unavailable: {e}", file=sys.stderr)
 
-    # Connect tray callbacks to daemon client (all async to not block UI)
+    # Connect tray callbacks to engine HTTP API (async to not block UI)
     def on_toggle_listening() -> None:
-        def do_toggle() -> None:
-            try:
-                client.toggle_listening()
-                # Polling will update the tray state
-            except Exception as e:
-                print(f"Error toggling listening: {e}", file=sys.stderr)
-
-        # Run in background thread to not block UI
-        threading.Thread(target=do_toggle, daemon=True).start()
+        threading.Thread(
+            target=lambda: _send_control("stt.toggle"), daemon=True
+        ).start()
 
     def on_output_mode_change(mode: str) -> None:
         def do_change() -> None:
+            payload = json.dumps({"command": "output.set_mode", "mode": mode}).encode()
+            req = urllib.request.Request(
+                control_url, data=payload,
+                headers={"Content-Type": "application/json"},
+            )
             try:
-                client.set_mode(mode)
-            except Exception as e:
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+            except (urllib.error.URLError, ConnectionRefusedError, OSError) as e:
                 print(f"Error setting output mode: {e}", file=sys.stderr)
 
         threading.Thread(target=do_change, daemon=True).start()
@@ -416,18 +436,14 @@ def main() -> None:
     app.on_toggle_listening(on_toggle_listening)
     app.on_output_mode_change(on_output_mode_change)
 
-    # Start global hotkey listener (runs on main thread - works on macOS!)
-    # Hotkey press toggles listening via daemon
+    # Start global hotkey listener
     def start_hotkey_listener() -> None:
         try:
-            from voxtype.config import load_config
             from voxtype.hotkey.pynput_listener import PynputHotkeyListener
             from voxtype.hotkey.tap_detector import TapDetector
 
-            config = load_config()
             hotkey = PynputHotkeyListener(config.hotkey.key)
 
-            # Tap detector: single tap = toggle, double tap = switch agent
             tap_detector = TapDetector(
                 threshold=0.3,
                 on_single_tap=on_toggle_listening,
@@ -443,11 +459,10 @@ def main() -> None:
         except Exception as e:
             print(f"Warning: Could not register hotkey: {e}", file=sys.stderr)
 
-    # Start hotkey in background thread (pynput creates its own listener thread)
     threading.Thread(target=start_hotkey_listener, daemon=True).start()
 
-    # Start polling to sync state with daemon
-    app.start_status_polling()
+    # Start polling engine HTTP status
+    app.start_status_polling(host=host, port=port)
 
     # Handle SIGINT/SIGTERM gracefully
     def signal_handler(signum: int, frame: object) -> None:

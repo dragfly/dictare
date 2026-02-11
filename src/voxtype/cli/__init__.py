@@ -16,7 +16,6 @@ from voxtype.cli import (
     agent,
     completion,
     config,
-    daemon,
     dependencies,
     devices,
     engine,
@@ -43,7 +42,6 @@ app = typer.Typer(
 
 # Sub-app groups
 app.add_typer(completion.app, name="completion")
-app.add_typer(daemon.app, name="daemon")
 app.add_typer(models.app, name="models")
 app.add_typer(dependencies.app, name="dependencies")
 app.add_typer(tray.app, name="tray")

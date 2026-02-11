@@ -47,9 +47,9 @@ def register(app: typer.Typer) -> None:
             bool,
             typer.Option("--list-engines", help="List available TTS engines and exit"),
         ] = False,
-        no_daemon: Annotated[
+        no_engine: Annotated[
             bool,
-            typer.Option("--no-daemon", help="Force in-process TTS (skip daemon even if running)"),
+            typer.Option("--no-engine", help="Force in-process TTS (skip running engine even if available)"),
         ] = False,
     ) -> None:
         """Speak text using text-to-speech.
@@ -59,7 +59,7 @@ def register(app: typer.Typer) -> None:
             echo "Hello world" | voxtype speak
             llm "Tell me a joke" | voxtype speak --engine say
             voxtype speak --list-engines
-            voxtype speak "Hello" --no-daemon  # Force in-process
+            voxtype speak "Hello" --no-engine  # Force in-process
         """
         import sys
 
@@ -116,33 +116,41 @@ def register(app: typer.Typer) -> None:
             voice=voice or config.tts.voice,
         )
 
-        # Try to use daemon if available and not --no-daemon
-        if not no_daemon:
-            from voxtype.daemon.client import DaemonClient, is_daemon_running
+        # Try to use running engine via HTTP /speech if available
+        if not no_engine:
+            import json
+            import urllib.error
+            import urllib.request
 
-            if is_daemon_running():
-                try:
-                    client = DaemonClient()
-                    response = client.send_tts_request(
-                        text=text,
-                        engine=tts_config.engine,
-                        language=tts_config.language,
-                        voice=tts_config.voice if tts_config.voice else None,
-                        speed=tts_config.speed,
-                    )
+            from voxtype.config import load_config as _load_config
 
-                    if hasattr(response, "status") and response.status == "ok":
-                        if not quiet:
-                            console.print(f"[dim]Spoken via daemon ({response.duration_ms}ms)[/]")
-                        return
-                    elif hasattr(response, "error"):
-                        if not quiet:
-                            console.print(f"[yellow]Daemon error: {response.error}[/]")
-                        # Fall through to in-process TTS
-                except Exception as e:
-                    if not quiet:
-                        console.print(f"[yellow]Daemon unavailable: {e}[/]")
-                    # Fall through to in-process TTS
+            _cfg = _load_config(config_file)
+            speech_url = f"http://{_cfg.server.host}:{_cfg.server.port}/speech"
+            payload = json.dumps({
+                "text": text,
+                "engine": tts_config.engine,
+                "language": tts_config.language,
+                "voice": tts_config.voice or None,
+                "speed": tts_config.speed,
+            }).encode()
+
+            try:
+                req = urllib.request.Request(
+                    speech_url, data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    result = json.loads(resp.read())
+                if not quiet:
+                    duration = result.get("duration_ms", "?")
+                    console.print(f"[dim]Spoken via engine ({duration}ms)[/]")
+                return
+            except (urllib.error.URLError, ConnectionRefusedError, OSError):
+                pass  # Engine not running, fall through to in-process
+            except Exception as e:
+                if not quiet:
+                    console.print(f"[yellow]Engine unavailable: {e}[/]")
+                # Fall through to in-process TTS
 
         # Fallback: in-process TTS
         try:
