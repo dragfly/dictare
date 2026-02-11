@@ -338,12 +338,11 @@ class StatusPanel:
         else:
             lines.append("[dim]TTS: (disabled)[/]")
 
-        # Show loading errors with install hints
-        tts_error = tts_info.get("error")
-        if tts_error:
-            # Error already contains install hint from create_tts_engine
-            for line in tts_error.splitlines():
-                lines.append(f"[yellow]  {line}[/]")
+        # Show TTS error with actionable fix
+        if not tts_available and tts_engine:
+            lines.append(
+                "[yellow]  Fix: voxtype dependencies resolve[/]"
+            )
 
         # If loading, show minimal panel
         if self._is_loading():

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.91] - 2026-02-11
+
+### Changed
+
+- TTS error in panel now shows actionable fix: `voxtype dependencies resolve`
+  instead of raw `uv pip install` command.
+- `voxtype dependencies resolve` now installs optional dependencies too
+  (configured TTS engine: piper-tts, TTS, mlx-audio, etc.).
+
 ## [3.0.0-alpha.90] - 2026-02-11
 
 ### Added

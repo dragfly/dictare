@@ -128,9 +128,11 @@ def deps_resolve(
 
     console.print("[dim]Checking dependencies...[/]")
 
-    results, all_ok, missing_with_hints, _ = _check_dependencies_internal()
+    results, all_ok, missing_with_hints, optional_with_hints = _check_dependencies_internal()
 
-    if all_ok:
+    all_resolvable = missing_with_hints + optional_with_hints
+
+    if all_ok and not all_resolvable:
         console.print("[green]All dependencies are already satisfied![/]")
         raise typer.Exit(0)
 
@@ -138,7 +140,7 @@ def deps_resolve(
     commands: list[str] = []
     seen_hints: set[str] = set()
 
-    for result in missing_with_hints:
+    for result in all_resolvable:
         if result.install_hint and result.install_hint not in seen_hints:
             seen_hints.add(result.install_hint)
             commands.append(result.install_hint)

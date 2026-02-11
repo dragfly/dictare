@@ -177,8 +177,6 @@ class VoxtypeEngine:
         # Loading progress tracking (for /status endpoint)
         self._loading_active = False
         self._loading_models: list[dict[str, Any]] = []
-        self._loading_errors: list[str] = []
-
         # TTS engine (loaded at startup, None if unavailable)
         self._tts_engine: Any = None
         self._tts_error: str = ""
@@ -537,8 +535,10 @@ class VoxtypeEngine:
             self._loading_models[2]["elapsed"] = tts_elapsed
             self._loading_models[2]["status"] = "error"
             self._tts_error = str(exc)
-            self._loading_errors.append(f"TTS: {self._tts_error}")
-            logger.warning("TTS engine '%s' not available: %s", tts_engine_name, exc)
+            logger.warning(
+                "TTS engine '%s' not available — fix: voxtype dependencies resolve",
+                tts_engine_name,
+            )
 
         # Start partial transcription worker if realtime mode
         if self._realtime:
