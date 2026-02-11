@@ -17,6 +17,23 @@ class ConfigError(Exception):
 
     pass
 
+class SoundConfig(BaseModel):
+    """Configuration for a single audio feedback event."""
+
+    enabled: bool = Field(default=True, description="Enable this sound")
+    path: str | None = Field(default=None, description="Custom sound file path (None = bundled default)")
+
+def _default_sounds() -> dict[str, SoundConfig]:
+    """Default sound configurations for all audio feedback events."""
+    return {
+        "start": SoundConfig(),
+        "stop": SoundConfig(),
+        "transcribing": SoundConfig(),
+        "ready": SoundConfig(),
+        "sent": SoundConfig(),
+        "agent_announce": SoundConfig(),
+    }
+
 class AudioConfig(BaseModel):
     """Audio capture configuration."""
 
@@ -26,7 +43,7 @@ class AudioConfig(BaseModel):
     max_duration: int = Field(default=60, description="Max recording duration in seconds")
     audio_feedback: bool = Field(
         default=True,
-        description="Play beep when entering/exiting LISTENING mode",
+        description="Master switch: enable all audio feedback (individual sounds configured in [audio.sounds.*])",
     )
     silence_ms: int = Field(
         default=1200,
@@ -44,21 +61,9 @@ class AudioConfig(BaseModel):
         default=150,
         description="Minimum speech duration in milliseconds before VAD triggers",
     )
-    sound_start: str | None = Field(
-        default=None,
-        description="Custom sound file for listening start (default: bundled up-beep.mp3)",
-    )
-    sound_stop: str | None = Field(
-        default=None,
-        description="Custom sound file for listening stop (default: bundled down-beep.mp3)",
-    )
-    sound_transcribing: str | None = Field(
-        default=None,
-        description="Custom sound for RECORDING→TRANSCRIBING (default: bundled transcribing.mp3)",
-    )
-    sound_ready: str | None = Field(
-        default=None,
-        description="Custom sound for TRANSCRIBING→LISTENING (default: bundled ready.mp3)",
+    sounds: dict[str, SoundConfig] = Field(
+        default_factory=_default_sounds,
+        description="Per-event sound configuration (start, stop, transcribing, ready, sent, agent_announce)",
     )
 
 class STTConfig(BaseModel):
@@ -549,10 +554,18 @@ def _write_config(config_dict: dict, config_path: Path) -> None:
             # Handle nested dicts as subsections
             for key, value in values.items():
                 if isinstance(value, dict):
-                    lines.append(f"[{section}.{key}]\n")
-                    for subkey, subvalue in value.items():
-                        lines.append(f"{subkey} = {_format_toml_value(subvalue)}\n")
-                    lines.append("\n")
+                    # Check if values are themselves dicts (three-level nesting)
+                    if value and all(isinstance(v, dict) for v in value.values()):
+                        for subkey, subvalue in value.items():
+                            lines.append(f"[{section}.{key}.{subkey}]\n")
+                            for k, v in subvalue.items():
+                                lines.append(f"{k} = {_format_toml_value(v)}\n")
+                            lines.append("\n")
+                    else:
+                        lines.append(f"[{section}.{key}]\n")
+                        for subkey, subvalue in value.items():
+                            lines.append(f"{subkey} = {_format_toml_value(subvalue)}\n")
+                        lines.append("\n")
 
     with open(config_path, "w") as f:
         f.writelines(lines)
@@ -666,18 +679,34 @@ def create_default_config() -> Path:
 sample_rate = 16000
 channels = 1
 # device = "default"            # Audio device name (None = system default)
-audio_feedback = true            # Play beep on listening mode toggle
+audio_feedback = true            # Master switch for all audio feedback
 silence_ms = 1200                # VAD silence duration to end speech (ms)
 # headphones_mode = false        # Set to true when using headphones (TTS won't pause listening)
 # max_duration = 60              # Max recording duration in seconds
 
-# Custom sound files (absolute paths to mp3/wav, default: bundled beeps)
-# sound_start = "/path/to/my-start.mp3"
-# sound_stop = "/path/to/my-stop.mp3"
-
 # Advanced VAD tuning
 # pre_buffer_ms = 640            # Audio captured before VAD triggers (increase if speech start is clipped)
 # min_speech_ms = 150            # Min speech duration before VAD activates (lower = faster, may trigger on noise)
+
+# Per-event sound configuration (disable individual sounds or set custom paths)
+# [audio.sounds.start]           # OFF → LISTENING beep
+# enabled = true
+# path = "/path/to/custom-start.mp3"
+#
+# [audio.sounds.stop]            # → OFF beep
+# enabled = true
+#
+# [audio.sounds.transcribing]    # LISTENING → TRANSCRIBING
+# enabled = true
+#
+# [audio.sounds.ready]           # TRANSCRIBING → LISTENING
+# enabled = true
+#
+# [audio.sounds.sent]            # File write / max duration beep
+# enabled = true
+#
+# [audio.sounds.agent_announce]  # TTS agent name on switch
+# enabled = true
 
 [stt]
 model = "large-v3-turbo"         # tiny, base, small, medium, large-v3, large-v3-turbo

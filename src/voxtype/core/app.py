@@ -134,8 +134,11 @@ class VoxtypeApp(EngineEvents):
 
         # Beep when file write succeeds
         if result.success and result.method.startswith("file:"):
-            from voxtype.audio.beep import play_beep_sent
-            play_beep_sent()
+            from voxtype.audio.beep import get_sound_for_event, play_sound_file_async
+
+            enabled, path = get_sound_for_event(self.config.audio, "sent")
+            if enabled:
+                play_sound_file_async(path)
 
     def on_agent_change(self, agent_name: str, index: int) -> None:
         """Handle agent change."""
@@ -180,9 +183,11 @@ class VoxtypeApp(EngineEvents):
         """Handle max speech duration reached."""
         # Note: Don't print here - it corrupts the Live panel
         # The beep provides audio feedback instead
-        if self.config.audio.audio_feedback:
-            from voxtype.audio.beep import play_beep_sent
-            play_beep_sent()
+        from voxtype.audio.beep import get_sound_for_event, play_sound_file_async
+
+        enabled, path = get_sound_for_event(self.config.audio, "sent")
+        if enabled:
+            play_sound_file_async(path)
 
     def on_vad_loading(self) -> None:
         """Handle VAD model loading start.
@@ -255,20 +260,19 @@ class VoxtypeApp(EngineEvents):
 
     def _play_feedback(self, event: str) -> None:
         """Play audio feedback for state changes."""
-        if not self.config.audio.audio_feedback:
-            return
-
-        from voxtype.audio.beep import DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, play_audio
+        from voxtype.audio.beep import get_sound_for_event, play_audio
 
         pause = not self.config.audio.headphones_mode
         ctrl = self._engine._controller
 
         if event == "listening_on":
-            path = self.config.audio.sound_start or str(DEFAULT_SOUND_START)
-            play_audio(path, pause_mic=pause, controller=ctrl)
+            enabled, path = get_sound_for_event(self.config.audio, "start")
+            if enabled:
+                play_audio(path, pause_mic=pause, controller=ctrl)
         elif event == "listening_off":
-            path = self.config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
-            play_audio(path, pause_mic=False)
+            enabled, path = get_sound_for_event(self.config.audio, "stop")
+            if enabled:
+                play_audio(path, pause_mic=False)
 
     def _display_session_stats(self) -> None:
         """Display session statistics on exit."""
