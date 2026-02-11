@@ -100,7 +100,7 @@ def get_dependency_install_message(dependency: str, purpose: str = "") -> str:
 # Mapping of optional features to their dependencies
 OPTIONAL_DEPENDENCIES = {
     # TTS engines
-    "piper": ("piper-tts", "Piper neural TTS"),
+    "piper": ("piper-tts pathvalidate", "Piper neural TTS"),
     "coqui": ("TTS", "Coqui XTTS neural TTS"),
     "qwen3": ("mlx-audio", "Qwen3 TTS - NOT WORKING with mlx-audio yet"),
     "outetts": ("mlx-audio", "OuteTTS neural TTS (Apple Silicon)"),

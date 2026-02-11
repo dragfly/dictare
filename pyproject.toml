@@ -77,6 +77,7 @@ mlx = [
 ]
 tts = [
     "piper-tts>=1.2.0",
+    "pathvalidate>=3.0.0",  # Missing piper-tts dependency
 ]
 
 [project.scripts]
