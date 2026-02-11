@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.99] - 2026-02-11
+
+### Added
+
+- `voxtype config edit` — opens config file in your editor. Respects
+  `editor` config field, `$VISUAL`, `$EDITOR`, or falls back to platform
+  default (`open -t` on macOS, `xdg-open` on Linux). Creates default
+  config if file doesn't exist. Config file includes commented examples
+  for common editors (vim, nano, VS Code, Sublime Text).
+
 ## [3.0.0-alpha.98] - 2026-02-11
 
 ### Fixed

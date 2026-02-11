@@ -385,6 +385,10 @@ class Config(BaseModel):
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
 
+    editor: str = Field(
+        default="",
+        description="Editor command for 'voxtype config edit' (empty = $EDITOR or system default)",
+    )
     verbose: bool = Field(default=False, description="Enable verbose output")
 
 
@@ -781,6 +785,14 @@ log_file = ""
 
 [stats]
 typing_wpm = 40                  # Your average typing speed (for time saved calculation)
+
+# Editor for 'voxtype config edit'. If empty, uses $EDITOR or system default.
+# Examples:
+#   editor = "vim"
+#   editor = "nano"
+#   editor = "code --wait"          # VS Code (--wait keeps terminal until closed)
+#   editor = "subl --wait"          # Sublime Text
+#   editor = "open -a TextEdit"     # macOS TextEdit
 
 verbose = false
 """
