@@ -118,31 +118,24 @@ def register(app: typer.Typer) -> None:
 
         # Try to use running engine via HTTP /speech if available
         if not no_engine:
-            import json
             import urllib.error
-            import urllib.request
 
-            from voxtype.config import load_config as _load_config
-
-            _cfg = _load_config(config_file)
-            speech_url = f"http://{_cfg.server.host}:{_cfg.server.port}/speech"
-            payload = json.dumps({
-                "text": text,
-                "engine": tts_config.engine,
-                "language": tts_config.language,
-                "voice": tts_config.voice or None,
-                "speed": tts_config.speed,
-            }).encode()
+            from openvip import Client
 
             try:
-                req = urllib.request.Request(
-                    speech_url, data=payload,
-                    headers={"Content-Type": "application/json"},
+                client = Client(
+                    f"http://{config.server.host}:{config.server.port}",
+                    timeout=30.0,
                 )
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    result = json.loads(resp.read())
+                response = client.speak(
+                    text,
+                    language=tts_config.language,
+                    engine=tts_config.engine,
+                    voice=tts_config.voice or None,
+                    speed=tts_config.speed,
+                )
                 if not quiet:
-                    duration = result.get("duration_ms", "?")
+                    duration = response.duration_ms or "?"
                     console.print(f"[dim]Spoken via engine ({duration}ms)[/]")
                 return
             except (urllib.error.URLError, ConnectionRefusedError, OSError):

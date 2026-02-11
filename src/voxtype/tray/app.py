@@ -306,20 +306,19 @@ class TrayApp:
             return
 
         def poll() -> None:
-            import json
             import time
             import urllib.error
-            import urllib.request
 
-            status_url = f"http://{host}:{port}/status"
+            from openvip import Client
+
+            client = Client(f"http://{host}:{port}", timeout=2.0)
 
             while self._polling:
                 try:
-                    with urllib.request.urlopen(status_url, timeout=2) as resp:
-                        data = json.loads(resp.read())
+                    status = client.get_status()
+                    platform = status.platform or {}
 
-                    platform = data.get("platform", {})
-                    state = platform.get("state", data.get("state", "idle"))
+                    state = platform.get("state", "idle")
                     # Map engine states to tray states
                     tray_state = "listening" if state in ("listening", "recording", "transcribing") else "off"
                     self.set_state(state=tray_state)
@@ -372,11 +371,11 @@ def main() -> None:
 
     Connects to the engine via HTTP API for all operations.
     """
-    import json
     import os
     import signal
     import urllib.error
-    import urllib.request
+
+    from openvip import Client
 
     try:
         import pystray  # noqa: F401
@@ -395,20 +394,15 @@ def main() -> None:
     config = load_config()
     host = config.server.host
     port = config.server.port
-    control_url = f"http://{host}:{port}/control"
+
+    client = Client(f"http://{host}:{port}", timeout=5.0)
 
     app = TrayApp()
 
     def _send_control(command: str) -> None:
         """Send a control command to the engine HTTP API."""
-        payload = json.dumps({"command": command}).encode()
-        req = urllib.request.Request(
-            control_url, data=payload,
-            headers={"Content-Type": "application/json"},
-        )
         try:
-            with urllib.request.urlopen(req, timeout=5):
-                pass
+            client.control(command)
         except (urllib.error.URLError, ConnectionRefusedError, OSError) as e:
             print(f"Engine unavailable: {e}", file=sys.stderr)
 
@@ -419,19 +413,9 @@ def main() -> None:
         ).start()
 
     def on_output_mode_change(mode: str) -> None:
-        def do_change() -> None:
-            payload = json.dumps({"command": "output.set_mode", "mode": mode}).encode()
-            req = urllib.request.Request(
-                control_url, data=payload,
-                headers={"Content-Type": "application/json"},
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=5):
-                    pass
-            except (urllib.error.URLError, ConnectionRefusedError, OSError) as e:
-                print(f"Error setting output mode: {e}", file=sys.stderr)
-
-        threading.Thread(target=do_change, daemon=True).start()
+        threading.Thread(
+            target=lambda: _send_control(f"output.set_mode:{mode}"), daemon=True
+        ).start()
 
     app.on_toggle_listening(on_toggle_listening)
     app.on_output_mode_change(on_output_mode_change)
