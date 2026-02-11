@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.88] - 2026-02-11
+
+### Changed
+
+- `POST /speech` now uses the TTS engine system (espeak, say, piper, coqui,
+  outetts, qwen3) instead of raw subprocess calls. Request body accepts
+  `engine`, `language`, `voice`, `speed` overrides with fallback to config.
+- `speak_text()` delegates to `get_cached_tts_engine()` instead of shelling
+  out to `say`/`espeak` directly.
+- `_handle_tts_request()` returns accurate `duration_ms` (blocking call
+  instead of fire-and-forget) and handles mic-pausing inline.
+
 ## [3.0.0-alpha.87] - 2026-02-10
 
 ### Fixed
