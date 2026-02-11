@@ -412,6 +412,54 @@ def _check_gpu_deps() -> list[CheckResult]:
     return results
 
 
+def _check_tts_deps() -> list[CheckResult]:
+    """Check TTS engine dependency based on user config."""
+    from voxtype.config import load_config
+
+    results: list[CheckResult] = []
+
+    try:
+        config = load_config()
+    except Exception:
+        return results
+
+    engine = config.tts.engine
+
+    # System engines (espeak, say) don't need pip packages
+    if engine in ("espeak", "say"):
+        return results
+
+    from voxtype.tts import create_tts_engine
+    from voxtype.utils.install_info import (
+        OPTIONAL_DEPENDENCIES,
+        get_install_command,
+    )
+
+    try:
+        tts = create_tts_engine(config.tts)
+        if tts.is_available():
+            results.append(CheckResult(
+                name=f"TTS ({engine})",
+                available=True,
+                message="Available",
+                required=False,
+            ))
+        else:
+            raise ValueError("not available")
+    except (ValueError, Exception):
+        dep_info = OPTIONAL_DEPENDENCIES.get(engine)
+        hint = get_install_command(dep_info[0]) if dep_info else None
+        results.append(CheckResult(
+            name=f"TTS ({engine})",
+            available=False,
+            message=f"Configured engine '{engine}' not available",
+            required=False,
+            install_hint=hint,
+        ))
+
+    return results
+
+
 def check_dependencies() -> list[CheckResult]:
     """Check all system dependencies.
 
@@ -423,6 +471,7 @@ def check_dependencies() -> list[CheckResult]:
     results.extend(_check_python_version())
     results.extend(_check_audio_deps())
     results.extend(_check_stt_deps())
+    results.extend(_check_tts_deps())
     results.extend(_check_gpu_deps())
 
     if is_linux():

@@ -177,6 +177,11 @@ class VoxtypeEngine:
         # Loading progress tracking (for /status endpoint)
         self._loading_active = False
         self._loading_models: list[dict[str, Any]] = []
+        self._loading_errors: list[str] = []
+
+        # TTS engine (loaded at startup, None if unavailable)
+        self._tts_engine: Any = None
+        self._tts_error: str = ""
 
         # Last transcribed text (for /status endpoint)
         self._last_text = ""
@@ -456,12 +461,16 @@ class VoxtypeEngine:
             stt_model_id = f"faster-whisper-{model}"
         vad_model_id = "silero-vad"
 
+        tts_engine_name = self.config.tts.engine
+
         self._loading_active = True
         self._loading_models = [
             {"name": "stt", "status": "pending", "start_time": 0, "elapsed": 0,
              "estimated": get_model_load_time(stt_model_id) or 25},
             {"name": "vad", "status": "pending", "start_time": 0, "elapsed": 0,
              "estimated": get_model_load_time(vad_model_id) or 25},
+            {"name": "tts", "status": "pending", "start_time": 0, "elapsed": 0,
+             "estimated": get_model_load_time(tts_engine_name) or 1},
         ]
 
         # Load STT model
@@ -509,6 +518,27 @@ class VoxtypeEngine:
             on_attempt=lambda n: self._emit("on_device_reconnect_attempt", n),
             on_success=lambda name: self._emit("on_device_reconnect_success", name),
         )
+
+        # Load TTS engine (optional — engine continues if unavailable)
+        logger.debug("Loading TTS engine: %s", tts_engine_name)
+        self._loading_models[2]["start_time"] = time.time()
+        self._loading_models[2]["status"] = "loading"
+        try:
+            from voxtype.tts import get_cached_tts_engine
+
+            self._tts_engine = get_cached_tts_engine(self.config.tts)
+            tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
+            self._loading_models[2]["elapsed"] = tts_elapsed
+            self._loading_models[2]["status"] = "done"
+            save_model_load_time(tts_engine_name, tts_elapsed)
+            logger.debug("TTS engine loaded in %.1fs", tts_elapsed)
+        except ValueError as exc:
+            tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
+            self._loading_models[2]["elapsed"] = tts_elapsed
+            self._loading_models[2]["status"] = "error"
+            self._tts_error = str(exc)
+            self._loading_errors.append(f"TTS: {self._tts_error}")
+            logger.warning("TTS engine '%s' not available: %s", tts_engine_name, exc)
 
         # Start partial transcription worker if realtime mode
         if self._realtime:
@@ -1087,21 +1117,17 @@ class VoxtypeEngine:
         return default_phrases
 
     def speak_text(self, text: str) -> None:
-        """Speak text using the configured TTS engine, optionally pausing the mic.
-
-        Uses get_cached_tts_engine() with the engine's TTSConfig, then
-        play_audio() for mic-pausing (fire-and-forget on background thread).
+        """Speak text using the pre-loaded TTS engine, optionally pausing the mic.
 
         Args:
             text: Text to speak.
         """
-        if not self.config.audio.audio_feedback:
+        if not self.config.audio.audio_feedback or self._tts_engine is None:
             return
 
         from voxtype.audio.beep import play_audio
-        from voxtype.tts import get_cached_tts_engine
 
-        tts = get_cached_tts_engine(self.config.tts)
+        tts = self._tts_engine
 
         def _do_tts() -> None:
             try:
@@ -1214,6 +1240,8 @@ class VoxtypeEngine:
                 "tts": {
                     "engine": self.config.tts.engine,
                     "language": self.config.tts.language,
+                    "available": self._tts_engine is not None,
+                    "error": self._tts_error or None,
                 },
                 "loading": {
                     "active": self._loading_active,
@@ -1254,15 +1282,25 @@ class VoxtypeEngine:
         from voxtype.tts import get_cached_tts_engine
 
         # Build TTSConfig with overrides from request body
-        base = self.config.tts
-        tts_config = TTSConfig(
-            engine=body.get("engine", base.engine),
-            language=body.get("language", base.language),
-            voice=body.get("voice", base.voice),
-            speed=body.get("speed", base.speed),
-        )
+        has_override = any(k in body for k in ("engine", "language", "voice", "speed"))
 
-        tts = get_cached_tts_engine(tts_config)
+        if has_override:
+            base = self.config.tts
+            tts_config = TTSConfig(
+                engine=body.get("engine", base.engine),
+                language=body.get("language", base.language),
+                voice=body.get("voice", base.voice),
+                speed=body.get("speed", base.speed),
+            )
+            try:
+                tts = get_cached_tts_engine(tts_config)
+            except ValueError as exc:
+                return {"status": "error", "error": str(exc)}
+        elif self._tts_engine is not None:
+            tts = self._tts_engine
+        else:
+            error = self._tts_error or "TTS engine not loaded"
+            return {"status": "error", "error": error}
 
         # Mic-pausing: blocking speak with PlayStart/PlayComplete events
         pause = not self.config.audio.headphones_mode

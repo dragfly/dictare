@@ -210,6 +210,9 @@ class StatusPanel:
         if status == "done":
             bar = self._build_progress_bar(1.0, done=True)
             time_str = f"[green]✓ {elapsed:.1f}s[/]"
+        elif status == "error":
+            bar = self._build_progress_bar(1.0, done=True)
+            time_str = "[red]✗ error[/]"
         elif status == "loading":
             progress = min(elapsed / estimated, 0.99) if estimated > 0 else 0
             bar = self._build_progress_bar(progress)
@@ -301,14 +304,46 @@ class StatusPanel:
             lines.append(self._build_model_line("VAD", "silero-vad", None, "done", 0, 0))
 
         # TTS line
-        tts = platform.get("tts", {})
-        tts_engine = tts.get("engine", "")
+        tts_info = platform.get("tts", {})
+        tts_engine = tts_info.get("engine", "")
+        tts_loading = next((m for m in models if m.get("name") == "tts"), None)
+        tts_available = tts_info.get("available", True)
+
         if tts_engine:
-            tts_lang = tts.get("language", "")
+            tts_lang = tts_info.get("language", "")
             tts_label = f"{tts_engine} ({tts_lang})" if tts_lang else tts_engine
-            lines.append(f"[cyan]TTS:[/] {tts_label}")
+
+            if not tts_available:
+                # Error status — show red ✗
+                if tts_loading:
+                    lines.append(self._build_model_line(
+                        "TTS", tts_label, None,
+                        "error",
+                        tts_loading.get("elapsed", 0),
+                        tts_loading.get("estimated", 1),
+                    ))
+                else:
+                    lines.append(f"[red]TTS: {tts_label}  ✗ not available[/]")
+            elif tts_loading:
+                lines.append(self._build_model_line(
+                    "TTS", tts_label, None,
+                    tts_loading.get("status", "done"),
+                    tts_loading.get("elapsed", 0),
+                    tts_loading.get("estimated", 1),
+                ))
+            else:
+                lines.append(self._build_model_line(
+                    "TTS", tts_label, None, "done", 0, 0,
+                ))
         else:
             lines.append("[dim]TTS: (disabled)[/]")
+
+        # Show loading errors with install hints
+        tts_error = tts_info.get("error")
+        if tts_error:
+            # Error already contains install hint from create_tts_engine
+            for line in tts_error.splitlines():
+                lines.append(f"[yellow]  {line}[/]")
 
         # If loading, show minimal panel
         if self._is_loading():
