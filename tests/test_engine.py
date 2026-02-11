@@ -5,11 +5,12 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from voxtype.agent.base import OpenVIPMessage
+from voxtype.config import TTSConfig
 from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import InjectionResult, TranscriptionResult
 from voxtype.core.state import AppState
@@ -79,6 +80,9 @@ class MockConfig:
         # Stats config
         self.stats = MagicMock()
         self.stats.typing_wpm = 40
+
+        # TTS config
+        self.tts = TTSConfig(engine="espeak", language="en", speed=175, voice="")
 
         # Pipeline config
         self.pipeline = MagicMock()
@@ -848,3 +852,79 @@ class TestMessageSendingLogic:
         has_submit = x_input.get("submit", False) if isinstance(x_input, dict) else bool(x_input)
         should_send = bool(msg_text.strip()) or has_submit
         assert should_send is False
+
+class TestTTSIntegration:
+    """Tests for TTS engine integration in speak_text / _handle_tts_request."""
+
+    def _make_engine(self) -> VoxtypeEngine:
+        config = MockConfig()
+        config.audio.audio_feedback = True
+        config.audio.headphones_mode = True  # no mic-pausing
+        return VoxtypeEngine(config=config)
+
+    @patch("voxtype.tts.get_cached_tts_engine")
+    @patch("voxtype.audio.beep.play_audio")
+    def test_speak_text_uses_tts_engine(
+        self, mock_play_audio: MagicMock, mock_get_tts: MagicMock
+    ) -> None:
+        """speak_text() delegates to get_cached_tts_engine().speak() via play_audio."""
+        engine = self._make_engine()
+        mock_tts = MagicMock()
+        mock_get_tts.return_value = mock_tts
+
+        engine.speak_text("hello world")
+
+        mock_get_tts.assert_called_once_with(engine.config.tts)
+        mock_play_audio.assert_called_once()
+        # The callable passed to play_audio should call tts.speak
+        fn = mock_play_audio.call_args[0][0]
+        fn()
+        mock_tts.speak.assert_called_once_with("hello world")
+
+    @patch("voxtype.tts.get_cached_tts_engine")
+    def test_handle_tts_request_uses_tts_engine(
+        self, mock_get_tts: MagicMock
+    ) -> None:
+        """_handle_tts_request uses TTS engine and returns duration."""
+        engine = self._make_engine()
+        mock_tts = MagicMock()
+        mock_get_tts.return_value = mock_tts
+
+        result = engine._handle_tts_request({"text": "test"})
+
+        assert result["status"] == "ok"
+        assert "duration_ms" in result
+        mock_tts.speak.assert_called_once_with("test")
+
+    @patch("voxtype.tts.get_cached_tts_engine")
+    def test_handle_tts_request_override_config(
+        self, mock_get_tts: MagicMock
+    ) -> None:
+        """_handle_tts_request applies engine/language/voice/speed overrides."""
+        engine = self._make_engine()
+        mock_tts = MagicMock()
+        mock_get_tts.return_value = mock_tts
+
+        engine._handle_tts_request({
+            "text": "ciao",
+            "engine": "piper",
+            "language": "it",
+            "voice": "paola",
+            "speed": 200,
+        })
+
+        cfg = mock_get_tts.call_args[0][0]
+        assert cfg.engine == "piper"
+        assert cfg.language == "it"
+        assert cfg.voice == "paola"
+        assert cfg.speed == 200
+
+    def test_handle_tts_request_empty_text(self) -> None:
+        """_handle_tts_request returns error for empty text."""
+        engine = self._make_engine()
+
+        result = engine._handle_tts_request({"text": ""})
+        assert result["status"] == "error"
+
+        result2 = engine._handle_tts_request({})
+        assert result2["status"] == "error"
