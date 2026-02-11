@@ -372,6 +372,90 @@ class TestSSEConnectedEvent:
         assert emit_count[0] >= 2, f"Expected 2+ emits, got {emit_count[0]}: {statuses}"
         assert all("listening" in t for t, s in statuses), f"Unexpected statuses: {statuses}"
 
+class TestSSEDuplicateAgent:
+    """Test client behavior when server returns 409 (agent already connected)."""
+
+    def test_409_stops_retry_and_reports_error(self) -> None:
+        """HTTP 409 causes immediate exit with error, no retry loop."""
+        import unittest.mock as _mock
+        import urllib.error
+
+        stop = threading.Event()
+        wq: queue.Queue = queue.Queue()
+        statuses: list[tuple[str, str]] = []
+        call_count = [0]
+
+        def fake_urlopen(req, **kw):
+            call_count[0] += 1
+            raise urllib.error.HTTPError(
+                req.full_url, 409, "Conflict", {}, None,
+            )
+
+        def on_status(text, style):
+            statuses.append((text, style))
+
+        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+            _read_from_sse(
+                "claude",
+                "http://127.0.0.1:9999",
+                wq, stop,
+                on_status=on_status,
+                retry_delay=0.01,
+            )
+
+        # Should have called urlopen exactly once (no retry)
+        assert call_count[0] == 1
+
+        # Should have reported error via status bar
+        assert any("already connected" in t for t, s in statuses), f"Expected duplicate error, got: {statuses}"
+
+        # Should have put error on write_queue
+        assert not wq.empty()
+        msg_type, data = wq.get_nowait()
+        assert msg_type == "error"
+        assert "already connected" in data
+
+        # stop_event should NOT be set (SSE thread exits, child process continues)
+        assert not stop.is_set()
+
+    def test_other_http_errors_retry(self) -> None:
+        """Non-409 HTTP errors still trigger retry with backoff."""
+        import unittest.mock as _mock
+        import urllib.error
+
+        stop = threading.Event()
+        wq: queue.Queue = queue.Queue()
+        statuses: list[tuple[str, str]] = []
+        call_count = [0]
+
+        def fake_urlopen(req, **kw):
+            call_count[0] += 1
+            if call_count[0] >= 3:
+                stop.set()
+                raise urllib.error.HTTPError(
+                    req.full_url, 500, "Internal Server Error", {}, None,
+                )
+            raise urllib.error.HTTPError(
+                req.full_url, 500, "Internal Server Error", {}, None,
+            )
+
+        def on_status(text, style):
+            statuses.append((text, style))
+
+        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+            _read_from_sse(
+                "claude",
+                "http://127.0.0.1:9999",
+                wq, stop,
+                on_status=on_status,
+                retry_delay=0.001,
+            )
+
+        # Should have retried (more than 1 call)
+        assert call_count[0] >= 2
+        # Error statuses should mention HTTP code
+        assert any("500" in t for t, s in statuses), f"Expected HTTP 500 in status, got: {statuses}"
+
 class TestWriteToPtySeparateEsc:
     """Test that text and ESC sequences are written as SEPARATE os.write() calls.
 
