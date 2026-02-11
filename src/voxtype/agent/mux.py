@@ -281,12 +281,12 @@ def _read_from_sse(
         except urllib.error.HTTPError as e:
             # Permanent application errors — don't retry
             if e.code == 409:
-                msg = f"Agent '{agent_id}' already connected"
+                err_msg = f"Agent '{agent_id}' already connected"
                 if on_status:
-                    on_status(f"\u2716 {msg}", "error")
+                    on_status(f"\u2716 {err_msg}", "error")
                 if session_path:
                     _log_event(session_path, "sse_duplicate", {"agent_id": agent_id})
-                write_queue.put(("error", msg))
+                write_queue.put(("error", err_msg))  # type: ignore[arg-type]
                 break
             # Other HTTP errors: log and retry
             if stop_event.is_set():
