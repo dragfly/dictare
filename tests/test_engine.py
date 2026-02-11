@@ -856,39 +856,48 @@ class TestMessageSendingLogic:
 class TestTTSIntegration:
     """Tests for TTS engine integration in speak_text / _handle_tts_request."""
 
-    def _make_engine(self) -> VoxtypeEngine:
+    def _make_engine(self, tts_available: bool = True) -> tuple[VoxtypeEngine, MagicMock]:
         config = MockConfig()
         config.audio.audio_feedback = True
         config.audio.headphones_mode = True  # no mic-pausing
-        return VoxtypeEngine(config=config)
+        engine = VoxtypeEngine(config=config)
+        mock_tts = MagicMock()
+        if tts_available:
+            engine._tts_engine = mock_tts
+        else:
+            engine._tts_engine = None
+            engine._tts_error = "TTS engine 'piper' is not available."
+        return engine, mock_tts
 
-    @patch("voxtype.tts.get_cached_tts_engine")
     @patch("voxtype.audio.beep.play_audio")
     def test_speak_text_uses_tts_engine(
-        self, mock_play_audio: MagicMock, mock_get_tts: MagicMock
+        self, mock_play_audio: MagicMock
     ) -> None:
-        """speak_text() delegates to get_cached_tts_engine().speak() via play_audio."""
-        engine = self._make_engine()
-        mock_tts = MagicMock()
-        mock_get_tts.return_value = mock_tts
+        """speak_text() uses pre-loaded _tts_engine via play_audio."""
+        engine, mock_tts = self._make_engine()
 
         engine.speak_text("hello world")
 
-        mock_get_tts.assert_called_once_with(engine.config.tts)
         mock_play_audio.assert_called_once()
         # The callable passed to play_audio should call tts.speak
         fn = mock_play_audio.call_args[0][0]
         fn()
         mock_tts.speak.assert_called_once_with("hello world")
 
-    @patch("voxtype.tts.get_cached_tts_engine")
-    def test_handle_tts_request_uses_tts_engine(
-        self, mock_get_tts: MagicMock
+    @patch("voxtype.audio.beep.play_audio")
+    def test_speak_text_skips_when_tts_unavailable(
+        self, mock_play_audio: MagicMock
     ) -> None:
-        """_handle_tts_request uses TTS engine and returns duration."""
-        engine = self._make_engine()
-        mock_tts = MagicMock()
-        mock_get_tts.return_value = mock_tts
+        """speak_text() silently skips when TTS engine not loaded."""
+        engine, _ = self._make_engine(tts_available=False)
+
+        engine.speak_text("hello world")
+
+        mock_play_audio.assert_not_called()
+
+    def test_handle_tts_request_uses_tts_engine(self) -> None:
+        """_handle_tts_request uses pre-loaded TTS engine and returns duration."""
+        engine, mock_tts = self._make_engine()
 
         result = engine._handle_tts_request({"text": "test"})
 
@@ -901,9 +910,9 @@ class TestTTSIntegration:
         self, mock_get_tts: MagicMock
     ) -> None:
         """_handle_tts_request applies engine/language/voice/speed overrides."""
-        engine = self._make_engine()
-        mock_tts = MagicMock()
-        mock_get_tts.return_value = mock_tts
+        engine, _ = self._make_engine()
+        mock_override_tts = MagicMock()
+        mock_get_tts.return_value = mock_override_tts
 
         engine._handle_tts_request({
             "text": "ciao",
@@ -918,13 +927,23 @@ class TestTTSIntegration:
         assert cfg.language == "it"
         assert cfg.voice == "paola"
         assert cfg.speed == 200
+        mock_override_tts.speak.assert_called_once_with("ciao")
 
     def test_handle_tts_request_empty_text(self) -> None:
         """_handle_tts_request returns error for empty text."""
-        engine = self._make_engine()
+        engine, _ = self._make_engine()
 
         result = engine._handle_tts_request({"text": ""})
         assert result["status"] == "error"
 
         result2 = engine._handle_tts_request({})
         assert result2["status"] == "error"
+
+    def test_handle_tts_request_unavailable_returns_error(self) -> None:
+        """_handle_tts_request returns error when TTS engine not loaded."""
+        engine, _ = self._make_engine(tts_available=False)
+
+        result = engine._handle_tts_request({"text": "test"})
+
+        assert result["status"] == "error"
+        assert "not available" in result["error"]
