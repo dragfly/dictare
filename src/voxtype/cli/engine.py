@@ -62,7 +62,7 @@ def engine_start(
     import os
 
     from voxtype.app import AppController
-    from voxtype.engine.engine import get_pid_path
+    from voxtype.utils.paths import get_pid_path
 
     # Validate: require --keyboard or --agents
     if not keyboard and not agents:
@@ -348,7 +348,7 @@ def _run_panel_mode(
 @app.command("stop")
 def engine_stop() -> None:
     """Stop the running engine."""
-    from voxtype.engine import get_pid_path
+    from voxtype.utils.paths import get_pid_path
 
     pid_path = get_pid_path()
     if not pid_path.exists():
@@ -404,7 +404,7 @@ def engine_status(
     """Show engine status."""
     import json
 
-    from voxtype.engine import get_pid_path
+    from voxtype.utils.paths import get_pid_path
 
     pid_path = get_pid_path()
     if not pid_path.exists():
