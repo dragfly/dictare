@@ -1087,13 +1087,10 @@ class VoxtypeEngine:
         return default_phrases
 
     def speak_text(self, text: str) -> None:
-        """Speak text using OS TTS, optionally pausing the mic.
+        """Speak text using the configured TTS engine, optionally pausing the mic.
 
-        Uses play_audio() with a blocking callable that invokes say (macOS)
-        or espeak/espeak-ng (Linux). pause_mic is determined by headphones_mode.
-
-        This is a temporary OS-based TTS — will be replaced by a proper
-        TTS service in a future version.
+        Uses get_cached_tts_engine() with the engine's TTSConfig, then
+        play_audio() for mic-pausing (fire-and-forget on background thread).
 
         Args:
             text: Text to speak.
@@ -1101,33 +1098,16 @@ class VoxtypeEngine:
         if not self.config.audio.audio_feedback:
             return
 
-        import subprocess
-        import sys
-
         from voxtype.audio.beep import play_audio
+        from voxtype.tts import get_cached_tts_engine
 
-        phrases = self._load_tts_phrases()
-        voice = phrases.get("voice", "Samantha")
+        tts = get_cached_tts_engine(self.config.tts)
 
         def _do_tts() -> None:
             try:
-                if sys.platform == "darwin":
-                    subprocess.run(
-                        ["say", "-v", voice, text], capture_output=True, timeout=10
-                    )
-                else:
-                    for cmd in [
-                        ["espeak-ng", text],
-                        ["espeak", text],
-                        ["spd-say", "-w", text],
-                    ]:
-                        try:
-                            subprocess.run(cmd, capture_output=True, timeout=5)
-                            break
-                        except FileNotFoundError:
-                            continue
+                tts.speak(text)
             except Exception:
-                pass
+                logger.debug("TTS speak failed", exc_info=True)
 
         pause = not self.config.audio.headphones_mode
         play_audio(_do_tts, pause_mic=pause, controller=self._controller)
@@ -1249,8 +1229,15 @@ class VoxtypeEngine:
     def _handle_tts_request(self, body: dict) -> dict:
         """Handle a TTS request from the HTTP /speech endpoint.
 
+        Accepts override fields from the request body: engine, language,
+        voice, speed. Falls back to the engine's TTSConfig for any field
+        not provided.
+
+        Called via asyncio.to_thread — blocking is fine.
+
         Args:
-            body: Request body with text and optional language.
+            body: Request body with ``text`` (required) and optional
+                ``engine``, ``language``, ``voice``, ``speed``.
 
         Returns:
             Response dict with status and duration.
@@ -1259,8 +1246,51 @@ class VoxtypeEngine:
         if not text:
             return {"status": "error", "error": "No text provided"}
 
+        from voxtype.config import TTSConfig
+        from voxtype.tts import get_cached_tts_engine
+
+        # Build TTSConfig with overrides from request body
+        base = self.config.tts
+        tts_config = TTSConfig(
+            engine=body.get("engine", base.engine),
+            language=body.get("language", base.language),
+            voice=body.get("voice", base.voice),
+            speed=body.get("speed", base.speed),
+        )
+
+        tts = get_cached_tts_engine(tts_config)
+
+        # Mic-pausing: blocking speak with PlayStart/PlayComplete events
+        pause = not self.config.audio.headphones_mode
+
         start = time.time()
-        self.speak_text(text)
+
+        if pause and self._controller is not None:
+            from voxtype.core.events import PlayCompleteEvent, PlayStartEvent
+            from voxtype.core.state import AppState
+
+            if self._controller.state != AppState.OFF:
+                try:
+                    play_id = self._controller.get_next_play_id()
+                    self._controller.send(PlayStartEvent(text="", source="tts"))
+                except Exception:
+                    play_id = None
+
+                try:
+                    tts.speak(text)
+                finally:
+                    if play_id is not None:
+                        try:
+                            self._controller.send(
+                                PlayCompleteEvent(play_id=play_id, source="tts")
+                            )
+                        except Exception:
+                            pass
+            else:
+                tts.speak(text)
+        else:
+            tts.speak(text)
+
         duration_ms = int((time.time() - start) * 1000)
 
         return {"status": "ok", "duration_ms": duration_ms}
