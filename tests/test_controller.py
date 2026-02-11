@@ -670,6 +670,10 @@ class TestTranscriptionWatchdog:
             audio_data = np.zeros(5000, dtype=np.float32)
             controller.send(SpeechEndEvent(audio_data=audio_data, source="vad"))
             _wait_until(lambda: sm.state == AppState.TRANSCRIBING)
+            _wait_until(
+                lambda: controller._transcription_watchdog is not None
+                and controller._transcription_watchdog.is_alive()
+            )
 
             assert controller._transcription_watchdog is not None
             assert controller._transcription_watchdog.is_alive()

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.108] - 2026-02-11
+
+### Fixed
+
+- CI: checkout OpenVIP SDK via PAT token + `actions/checkout` (cross-org access).
+- CI: use `--no-sources` flag for uv install (ignore local `[tool.uv.sources]`).
+- CI: lint only `src/` and `tests/` (avoid linting generated SDK code).
+- Flaky test `test_speech_end_starts_watchdog`: use `_wait_until` for watchdog startup.
+
 ## [3.0.0-alpha.107] - 2026-02-11
 
 ### Added
