@@ -278,6 +278,27 @@ def _read_from_sse(
 
                     write_queue.put(("msg", msg))
 
+        except urllib.error.HTTPError as e:
+            # Permanent application errors — don't retry
+            if e.code == 409:
+                msg = f"Agent '{agent_id}' already connected"
+                if on_status:
+                    on_status(f"\u2716 {msg}", "error")
+                if session_path:
+                    _log_event(session_path, "sse_duplicate", {"agent_id": agent_id})
+                write_queue.put(("error", msg))
+                break
+            # Other HTTP errors: log and retry
+            if stop_event.is_set():
+                break
+            if on_status:
+                on_status(f"\u26a0 {agent_id} \u00b7 HTTP {e.code}, reconnecting...", "error")
+            if session_path:
+                _log_event(session_path, "sse_http_error", {
+                    "code": e.code, "error": str(e), "retry_delay": retry_delay,
+                })
+            stop_event.wait(retry_delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
         except (ConnectionRefusedError, urllib.error.URLError, OSError) as e:
             if stop_event.is_set():
                 break
@@ -349,7 +370,13 @@ def _write_to_pty(
         msg_type, data = item
 
         try:
-            if msg_type == "raw":
+            if msg_type == "error":
+                # Fatal error from SSE thread — log and continue
+                # (status bar already updated by SSE thread)
+                if session_path:
+                    _log_event(session_path, "agent_error", {"error": data})
+                continue
+            elif msg_type == "raw":
                 # Raw bytes from stdin - write directly, handle short writes
                 _write_all(master_fd, data)
             elif msg_type == "msg":

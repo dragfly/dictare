@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.97] - 2026-02-11
+
+### Fixed
+
+- Agent with duplicate name now shows clear error instead of retrying forever.
+  `_read_from_sse()` catches HTTP 409 separately from transient network errors
+  and exits immediately with `"✖ Agent 'name' already connected"` on the status
+  bar. Previously, `HTTPError` was caught as `URLError` (its parent class) and
+  treated as a reconnectable error, causing an infinite retry loop.
+
 ## [3.0.0-alpha.96] - 2026-02-11
 
 ### Added
