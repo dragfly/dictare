@@ -104,6 +104,51 @@ def config_set(
         console.print(f"[red]Invalid value:[/] {e}")
         raise typer.Exit(1)
 
+@app.command("edit")
+def config_edit() -> None:
+    """Open config file in your editor.
+
+    Uses (in order): config 'editor' field, $VISUAL, $EDITOR, or platform default.
+    """
+    import os
+    import shlex
+    import subprocess
+    import sys
+
+    config_path = get_config_path()
+
+    # Create config file if it doesn't exist
+    if not config_path.exists():
+        from voxtype.config import create_default_config
+
+        create_default_config()
+        console.print(f"[dim]Created default config: {config_path}[/]")
+
+    # Determine editor: config field > $VISUAL > $EDITOR > platform default
+    cfg = load_config(config_path)
+    editor_cmd = cfg.editor or os.environ.get("VISUAL") or os.environ.get("EDITOR")
+
+    if editor_cmd:
+        parts = shlex.split(editor_cmd)
+        parts.append(str(config_path))
+        try:
+            subprocess.run(parts, check=True)
+        except FileNotFoundError:
+            console.print(f"[red]Editor not found:[/] {parts[0]}")
+            raise typer.Exit(1)
+        except subprocess.CalledProcessError as e:
+            raise typer.Exit(e.returncode)
+    elif sys.platform == "darwin":
+        subprocess.run(["open", "-t", str(config_path)])
+    else:
+        # Linux: xdg-open for graphical, fallback to vi
+        for cmd in [["xdg-open", str(config_path)], ["vi", str(config_path)]]:
+            try:
+                subprocess.run(cmd, check=True)
+                break
+            except FileNotFoundError:
+                continue
+
 @app.command("path")
 def config_path_cmd() -> None:
     """Show config file path."""
