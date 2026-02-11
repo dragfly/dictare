@@ -12,17 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout OpenVIP SDK
-        run: |
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_ed25519 2>/dev/null || ssh-add ~/.ssh/id_rsa 2>/dev/null || true
-          SDK_DIR="../../nottoplay/openvip-sdks"
-          if [ -d "$SDK_DIR/.git" ]; then
-            git -C "$SDK_DIR" pull --ff-only
-          else
-            mkdir -p "$(dirname "$SDK_DIR")"
-            git clone git@github.com:openvip-dev/sdks.git "$SDK_DIR"
-          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: openvip-dev/sdks
+          token: ${{ secrets.OPENVIP_SDK_TOKEN }}
+          path: ../../nottoplay/openvip-sdks
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -48,17 +42,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout OpenVIP SDK
-        run: |
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_ed25519 2>/dev/null || ssh-add ~/.ssh/id_rsa 2>/dev/null || true
-          SDK_DIR="../../nottoplay/openvip-sdks"
-          if [ -d "$SDK_DIR/.git" ]; then
-            git -C "$SDK_DIR" pull --ff-only
-          else
-            mkdir -p "$(dirname "$SDK_DIR")"
-            git clone git@github.com:openvip-dev/sdks.git "$SDK_DIR"
-          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: openvip-dev/sdks
+          token: ${{ secrets.OPENVIP_SDK_TOKEN }}
+          path: ../../nottoplay/openvip-sdks
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -84,17 +72,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout OpenVIP SDK
-        run: |
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_ed25519 2>/dev/null || ssh-add ~/.ssh/id_rsa 2>/dev/null || true
-          SDK_DIR="../../nottoplay/openvip-sdks"
-          if [ -d "$SDK_DIR/.git" ]; then
-            git -C "$SDK_DIR" pull --ff-only
-          else
-            mkdir -p "$(dirname "$SDK_DIR")"
-            git clone git@github.com:openvip-dev/sdks.git "$SDK_DIR"
-          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: openvip-dev/sdks
+          token: ${{ secrets.OPENVIP_SDK_TOKEN }}
+          path: ../../nottoplay/openvip-sdks
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
