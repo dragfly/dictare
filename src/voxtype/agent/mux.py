@@ -5,22 +5,24 @@ from __future__ import annotations
 import json
 import os
 import platform
-import pty
 import queue
 import select
-import signal
-import struct
 import sys
 import termios
 import threading
 import tty
 from collections.abc import Callable
 from datetime import datetime, timezone
-from fcntl import ioctl
 from pathlib import Path
 from typing import Any
 
 from voxtype import __version__
+from voxtype.agent.pty_session import (
+    PTYSession,
+    _get_winsize,
+    _set_winsize,  # noqa: F401  — backward-compat re-export
+    _write_all,
+)
 from voxtype.agent.status_bar import StatusBar
 from voxtype.utils.stats import update_keystrokes
 
@@ -316,22 +318,6 @@ def _read_from_sse(
     if session_path:
         _log_event(session_path, "sse_disconnected", {"total_messages": msg_count})
 
-def _write_all(fd: int, data: bytes) -> int:
-    """Write all bytes to fd, handling short writes.
-
-    os.write() can return fewer bytes than requested if the buffer is full.
-    This function loops until all bytes are written.
-
-    Returns total bytes written, raises on error.
-    """
-    total_written = 0
-    while total_written < len(data):
-        written = os.write(fd, data[total_written:])
-        if written == 0:
-            raise OSError("write() returned 0 - cannot make progress")
-        total_written += written
-    return total_written
-
 def _write_to_pty(
     master_fd: int,
     write_queue: queue.Queue,
@@ -418,24 +404,6 @@ def _write_to_pty(
                 _log_event(session_path, "writer_error", {"error": str(e), "msg_count": msg_count})
             break
 
-def _set_winsize(fd: int, rows: int, cols: int) -> None:
-    """Set terminal window size."""
-    try:
-        winsize = struct.pack("HHHH", rows, cols, 0, 0)
-        ioctl(fd, termios.TIOCSWINSZ, winsize)
-    except OSError:
-        pass
-
-def _get_winsize() -> tuple[int, int]:
-    """Get current terminal window size."""
-    try:
-        winsize = struct.pack("HHHH", 0, 0, 0, 0)
-        result = ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, winsize)
-        rows, cols, _, _ = struct.unpack("HHHH", result)
-        return rows, cols
-    except OSError:
-        return 24, 80
-
 def run_agent(
     agent_id: str,
     command: list[str],
@@ -477,48 +445,27 @@ def run_agent(
     if sys.stdin.isatty():
         old_settings = termios.tcgetattr(sys.stdin.fileno())
 
-    # Create pseudo-terminal
-    master_fd, slave_fd = pty.openpty()
-
-    # Set initial window size
     rows, cols = _get_winsize()
     sbar = StatusBar(agent_id) if status_bar else None
-    _set_winsize(slave_fd, rows - (1 if sbar else 0), cols)
 
-    stop_event = threading.Event()
-
-    # Handle window resize
-    def handle_sigwinch(signum, frame):
-        rows, cols = _get_winsize()
+    def on_output(data: bytes) -> None:
+        os.write(sys.stdout.fileno(), data)
         if sbar:
-            sbar.on_resize(rows, cols)
-        _set_winsize(master_fd, rows - (1 if sbar else 0), cols)
+            sbar.after_child_output()
 
-    old_sigwinch = signal.signal(signal.SIGWINCH, handle_sigwinch)
+    def on_resize(r: int, c: int) -> None:
+        if sbar:
+            sbar.on_resize(r, c)
+
+    session = PTYSession(
+        command, rows, cols,
+        on_output=on_output,
+        on_resize=on_resize,
+        reserve_rows=1 if sbar else 0,
+    )
 
     try:
-        # Fork process with PTY
-        pid = os.fork()
-
-        if pid == 0:
-            # Child process
-            os.close(master_fd)
-            os.setsid()
-
-            # Set slave as controlling terminal
-            ioctl(slave_fd, termios.TIOCSCTTY, 0)
-
-            os.dup2(slave_fd, 0)
-            os.dup2(slave_fd, 1)
-            os.dup2(slave_fd, 2)
-
-            if slave_fd > 2:
-                os.close(slave_fd)
-
-            os.execvp(command[0], command)
-
-        # Parent process
-        os.close(slave_fd)
+        session.start()
 
         # Clear terminal for clean start
         if clear_on_start:
@@ -533,11 +480,15 @@ def run_agent(
         if old_settings:
             tty.setraw(sys.stdin.fileno())
 
+        stop_event = threading.Event()
+
         # Create thread-safe queue for serialized writes to PTY
         write_queue: queue.Queue = queue.Queue()
 
         # Create keystroke counter for session statistics
         keystroke_counter = KeystrokeCounter()
+
+        master_fd = session.master_fd
 
         # Start producer threads (read from stdin/SSE, put in queue)
         stdin_thread = threading.Thread(
@@ -575,40 +526,10 @@ def run_agent(
         if sbar:
             poll_thread.start()
 
-        # Read from PTY and write to stdout
-        try:
-            while True:
-                result = os.waitpid(pid, os.WNOHANG)
-                if result[0] != 0:
-                    break
-
-                r, _, _ = select.select([master_fd], [], [], 0.1)
-                if master_fd in r:
-                    try:
-                        data = os.read(master_fd, 4096)
-                        if data:
-                            os.write(sys.stdout.fileno(), data)
-                            if sbar:
-                                sbar.after_child_output()
-                        else:
-                            break
-                    except OSError:
-                        break
-
-                # Deferred status bar redraw after child settles from resize
-                if sbar:
-                    sbar.check_redraw()
-        except KeyboardInterrupt:
-            os.kill(pid, signal.SIGTERM)
-
-        # Wait for child and get exit status
-        _, status = os.waitpid(pid, 0)
+        exit_code = session.run_output_loop(
+            on_idle=sbar.check_redraw if sbar else None,
+        )
         stop_event.set()
-
-        if os.WIFEXITED(status):
-            exit_code = os.WEXITSTATUS(status)
-        else:
-            exit_code = 1
 
         # Log session end with total keystrokes
         _write_session_end(session_path, exit_code, keystroke_counter.count)
@@ -627,9 +548,4 @@ def run_agent(
         if old_settings:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
 
-        signal.signal(signal.SIGWINCH, old_sigwinch)
-
-        try:
-            os.close(master_fd)
-        except OSError:
-            pass
+        session.cleanup()
