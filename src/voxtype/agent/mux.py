@@ -30,7 +30,7 @@ from voxtype.utils.stats import update_keystrokes
 SESSIONS_DIR = Path.home() / ".local" / "share" / "voxtype" / "sessions"
 
 # Default engine HTTP server URL (also configurable via [client] in config.toml)
-DEFAULT_BASE_URL = "http://127.0.0.1:8765"
+DEFAULT_BASE_URL = "http://127.0.0.1:8770"
 
 def _get_session_log_path(agent_id: str) -> Path:
     """Get path for session log file.
@@ -195,7 +195,7 @@ def _read_from_sse(
 
     Args:
         agent_id: Agent identifier.
-        base_url: Engine HTTP server base URL (e.g. "http://127.0.0.1:8765").
+        base_url: Engine HTTP server base URL (e.g. "http://127.0.0.1:8770").
         write_queue: Queue for writing messages to PTY.
         stop_event: Event to signal thread to stop.
         session_path: Optional session log file path.

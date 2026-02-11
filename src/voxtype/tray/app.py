@@ -300,7 +300,7 @@ class TrayApp:
         """Get current output mode."""
         return self._output_mode
 
-    def start_status_polling(self, host: str = "127.0.0.1", port: int = 8765) -> None:
+    def start_status_polling(self, host: str = "127.0.0.1", port: int = 8770) -> None:
         """Start polling engine HTTP status every 500ms."""
         if self._polling:
             return
