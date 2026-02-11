@@ -41,7 +41,7 @@ class OpenVIPServer:
         self,
         engine: VoxtypeEngine,
         host: str = "127.0.0.1",
-        port: int = 8765,
+        port: int = 8770,
     ) -> None:
         self._engine = engine
         self._host = host

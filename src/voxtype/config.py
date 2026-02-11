@@ -189,7 +189,7 @@ class ServerConfig(BaseModel):
         description="Host to bind server to (127.0.0.1 = localhost only for security)",
     )
     port: int = Field(
-        default=8765,
+        default=8770,
         description="Port for OpenVIP HTTP server",
     )
 
@@ -198,7 +198,7 @@ class ClientConfig(BaseModel):
     """Agent client configuration for connecting to a remote engine."""
 
     url: str = Field(
-        default="http://127.0.0.1:8765",
+        default="http://127.0.0.1:8770",
         description="Default engine URL for 'voxtype agent' command",
     )
     status_bar: bool = Field(
@@ -773,10 +773,10 @@ auto_enter = false               # Visual newline only
 
 [server]
 # host = "127.0.0.1"             # Bind address (use "0.0.0.0" for remote agents)
-# port = 8765                     # OpenVIP HTTP server port
+# port = 8770                     # OpenVIP HTTP server port
 
 [client]
-# url = "http://127.0.0.1:8765"  # Default engine URL for 'voxtype agent'
+# url = "http://127.0.0.1:8770"  # Default engine URL for 'voxtype agent'
 # status_bar = true               # Show persistent status bar in voxtype agent
 # clear_on_start = true            # Clear terminal before launching child process
 
