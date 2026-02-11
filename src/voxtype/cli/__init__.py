@@ -25,7 +25,6 @@ from voxtype.cli import (
     logs,
     misc,
     models,
-    multiagent,
     speak,
     transcribe,
     tray,
@@ -57,7 +56,6 @@ speak.register(app)
 transcribe.register(app)
 execute.register(app)
 agent.register(app)
-multiagent.register(app)
 devices.register(app)
 logs.register(app)
 misc.register(app)

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.100] - 2026-02-11
+
+### Removed
+
+- Parked web PTY features for go-live cleanup: terminal viewer (`--tv` flag),
+  multi-agent server (`voxtype multiagent`), and headless agent. Code moved
+  to `_parked/web-pty/` with README for re-insertion instructions. These are
+  experimental features that will be restored in a future release.
+
 ## [3.0.0-alpha.99] - 2026-02-11
 
 ### Added

@@ -98,6 +98,7 @@ path = "src/voxtype/__init__.py"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = ["_parked"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]

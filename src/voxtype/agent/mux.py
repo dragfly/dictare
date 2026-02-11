@@ -457,7 +457,6 @@ def run_agent(
     base_url: str = DEFAULT_BASE_URL,
     status_bar: bool = True,
     clear_on_start: bool = True,
-    terminal_viewer_port: int | None = None,
 ) -> int:
     """Run a command with multiplexed input from stdin and voxtype SSE.
 
@@ -486,19 +485,6 @@ def run_agent(
         print(f"[voxtype {__version__}] Session: {session_path}", file=sys.stderr)
         print(f"[voxtype {__version__}] Running: {' '.join(command)}", file=sys.stderr)
 
-    # Start terminal viewer (web PTY mirror) if requested
-    viewer = None
-    if terminal_viewer_port is not None:
-        from voxtype.agent.terminal_viewer import TerminalViewer
-
-        viewer = TerminalViewer(port=terminal_viewer_port)
-        viewer.start()
-        if not quiet:
-            print(
-                f"[voxtype {__version__}] Terminal viewer: http://127.0.0.1:{terminal_viewer_port}",
-                file=sys.stderr,
-            )
-
     # Save original terminal settings
     old_settings = None
     if sys.stdin.isatty():
@@ -511,8 +497,6 @@ def run_agent(
     rows, cols = _get_winsize()
     sbar = StatusBar(agent_id) if status_bar else None
     _set_winsize(slave_fd, rows - (1 if sbar else 0), cols)
-    if viewer:
-        viewer.set_size(rows - (1 if sbar else 0), cols)
 
     stop_event = threading.Event()
 
@@ -522,8 +506,6 @@ def run_agent(
         if sbar:
             sbar.on_resize(rows, cols)
         _set_winsize(master_fd, rows - (1 if sbar else 0), cols)
-        if viewer:
-            viewer.set_size(rows - (1 if sbar else 0), cols)
 
     old_sigwinch = signal.signal(signal.SIGWINCH, handle_sigwinch)
 
@@ -619,8 +601,6 @@ def run_agent(
                         data = os.read(master_fd, 4096)
                         if data:
                             os.write(sys.stdout.fileno(), data)
-                            if viewer:
-                                viewer.broadcast(data)
                             if sbar:
                                 sbar.after_child_output()
                         else:
@@ -652,10 +632,6 @@ def run_agent(
         return exit_code
 
     finally:
-        # Stop terminal viewer
-        if viewer:
-            viewer.stop()
-
         # Reset scroll region before restoring terminal
         if sbar:
             sbar.cleanup()
