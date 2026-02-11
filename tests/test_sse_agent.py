@@ -240,84 +240,102 @@ class TestPollActiveAgentStatus:
         assert "listening" in statuses[0][0]
 
 
+class _FakeSSEResponse:
+    """Fake HTTP response that yields SSE lines then stops."""
+
+    def __init__(self, lines: list[str], stop_event: threading.Event) -> None:
+        self._lines = iter(lines)
+        self._stop = stop_event
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        pass
+
+    def __iter__(self):
+        for line in self._lines:
+            if self._stop.is_set():
+                return
+            yield line.encode("utf-8")
+        # After all lines delivered, wait for stop to avoid retry loop
+        self._stop.wait(timeout=1)
+
+
 class TestSSEConnectedEvent:
     """Test _read_from_sse signals sse_connected event (no direct status emit)."""
 
     def test_sse_connect_sets_event(self) -> None:
         """SSE connection success sets sse_connected event."""
-        handler = _make_status_handler("myagent", "myagent")
-        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
-        port = server.server_address[1]
-        t = threading.Thread(target=server.handle_request, daemon=True)
-        t.start()
-
         stop = threading.Event()
         wq: queue.Queue = queue.Queue()
         sse_connected = threading.Event()
-
-        # SSE should NOT call on_status for "connected" anymore
         statuses: list[tuple[str, str]] = []
 
         def on_status(text, style):
             statuses.append((text, style))
 
+        heartbeat = json.dumps({"type": "heartbeat"})
+        fake_resp = _FakeSSEResponse([f"data: {heartbeat}\n"], stop)
+
+        def fake_urlopen(req, **kw):
+            return fake_resp
+
         def stop_when_connected():
-            sse_connected.wait(timeout=2)
+            sse_connected.wait(timeout=1)
             stop.set()
 
         threading.Thread(target=stop_when_connected, daemon=True).start()
 
-        _read_from_sse(
-            "myagent",
-            f"http://127.0.0.1:{port}",
-            wq, stop,
-            on_status=on_status,
-            sse_connected=sse_connected,
-        )
-        server.server_close()
+        import unittest.mock as _mock
+        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+            _read_from_sse(
+                "myagent",
+                "http://127.0.0.1:9999",
+                wq, stop,
+                on_status=on_status,
+                sse_connected=sse_connected,
+            )
 
         assert sse_connected.is_set()
-        # No "connected" status emitted — poll thread owns all status updates
         ok_statuses = [(t, s) for t, s in statuses if "connected" in t]
         assert len(ok_statuses) == 0, f"SSE should not emit 'connected': {statuses}"
 
     def test_sse_error_then_reconnect_sets_event(self) -> None:
         """After SSE error, successful reconnect sets sse_connected event."""
-        handler = _make_status_handler("myagent", "myagent")
         stop = threading.Event()
         wq: queue.Queue = queue.Queue()
         sse_connected = threading.Event()
-
-        # Get a free port, close it so first SSE attempt fails
-        temp_server = http.server.HTTPServer(("127.0.0.1", 0), handler)
-        port = temp_server.server_address[1]
-        temp_server.server_close()
-
-        error_seen = threading.Event()
         statuses: list[tuple[str, str]] = []
+        call_count = [0]
+
+        heartbeat = json.dumps({"type": "heartbeat"})
+
+        def fake_urlopen(req, **kw):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ConnectionRefusedError("Connection refused")
+            return _FakeSSEResponse([f"data: {heartbeat}\n"], stop)
 
         def on_status(text, style):
             statuses.append((text, style))
-            if style == "error" and not error_seen.is_set():
-                # First attempt failed — start server so retry succeeds
-                error_seen.set()
-                server = http.server.HTTPServer(("127.0.0.1", port), handler)
-                threading.Thread(target=server.handle_request, daemon=True).start()
 
         def stop_when_connected():
-            sse_connected.wait(timeout=2)
+            sse_connected.wait(timeout=1)
             stop.set()
 
         threading.Thread(target=stop_when_connected, daemon=True).start()
 
-        _read_from_sse(
-            "myagent",
-            f"http://127.0.0.1:{port}",
-            wq, stop,
-            on_status=on_status,
-            retry_delay=0.01,
-            sse_connected=sse_connected,
-        )
+        import unittest.mock as _mock
+        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+            _read_from_sse(
+                "myagent",
+                "http://127.0.0.1:9999",
+                wq, stop,
+                on_status=on_status,
+                retry_delay=0.01,
+                sse_connected=sse_connected,
+            )
 
         assert sse_connected.is_set()
         error_statuses = [(t, s) for t, s in statuses if s == "error"]
