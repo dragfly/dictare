@@ -523,6 +523,9 @@ class VoxtypeEngine:
             from voxtype.tts import get_cached_tts_engine
 
             self._tts_engine = get_cached_tts_engine(self.config.tts)
+            # Ensure voice model is downloaded (piper downloads on first use)
+            if hasattr(self._tts_engine, "_get_model_path"):
+                self._tts_engine._get_model_path()
             tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
             self._loading_models[2]["elapsed"] = tts_elapsed
             self._loading_models[2]["status"] = "done"
