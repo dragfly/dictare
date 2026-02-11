@@ -84,45 +84,45 @@ class AppController:
             """Event handler for audio feedback and logging."""
 
             def on_state_change(self, old: Any, new: Any, trigger: str) -> None:
+                from voxtype.audio.beep import (
+                    get_sound_for_event,
+                    play_audio,
+                    play_sound_file_async,
+                )
                 from voxtype.core.state import AppState
 
-                # Play beep if audio feedback enabled
-                if config.audio.audio_feedback:
-                    from voxtype.audio.beep import (
-                        DEFAULT_SOUND_READY,
-                        DEFAULT_SOUND_START,
-                        DEFAULT_SOUND_STOP,
-                        DEFAULT_SOUND_TRANSCRIBING,
-                        play_audio,
-                        play_sound_file_async,
-                    )
+                eng = engine_ref[0]
+                ctrl = eng._controller if eng else None
+                pause = not config.audio.headphones_mode
 
-                    eng = engine_ref[0]
-                    ctrl = eng._controller if eng else None
-                    pause = not config.audio.headphones_mode
-
-                    if new == AppState.LISTENING and old == AppState.OFF:
-                        path = config.audio.sound_start or str(DEFAULT_SOUND_START)
+                if new == AppState.LISTENING and old == AppState.OFF:
+                    enabled, path = get_sound_for_event(config.audio, "start")
+                    if enabled:
                         play_audio(path, pause_mic=pause, controller=ctrl)
-                    elif new == AppState.OFF:
-                        path = config.audio.sound_stop or str(DEFAULT_SOUND_STOP)
+                elif new == AppState.OFF:
+                    enabled, path = get_sound_for_event(config.audio, "stop")
+                    if enabled:
                         play_audio(path, pause_mic=False)
-                    elif new == AppState.TRANSCRIBING:
-                        path = config.audio.sound_transcribing or str(
-                            DEFAULT_SOUND_TRANSCRIBING
-                        )
+                elif new == AppState.TRANSCRIBING:
+                    enabled, path = get_sound_for_event(config.audio, "transcribing")
+                    if enabled:
                         play_sound_file_async(path)
-                    elif new == AppState.LISTENING and old in (
-                        AppState.TRANSCRIBING,
-                        AppState.INJECTING,
-                    ):
-                        path = config.audio.sound_ready or str(DEFAULT_SOUND_READY)
+                elif new == AppState.LISTENING and old in (
+                    AppState.TRANSCRIBING,
+                    AppState.INJECTING,
+                ):
+                    enabled, path = get_sound_for_event(config.audio, "ready")
+                    if enabled:
                         play_sound_file_async(path)
 
             def on_agent_change(self, agent_name: str, index: int) -> None:
-                eng = engine_ref[0]
-                if eng:
-                    eng.speak_agent(agent_name)
+                from voxtype.audio.beep import get_sound_for_event
+
+                enabled, _ = get_sound_for_event(config.audio, "agent_announce")
+                if enabled:
+                    eng = engine_ref[0]
+                    if eng:
+                        eng.speak_agent(agent_name)
 
         # 1. Create logger for engine
         from voxtype import __version__
