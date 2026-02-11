@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0-alpha.92] - 2026-02-11
+## [3.0.0-alpha.93] - 2026-02-11
 
 ### Fixed
 
+- `install.sh` now runs `voxtype dependencies resolve` after installation
+  to re-install optional dependencies (e.g., piper-tts) that `uv tool install`
+  removes during upgrade.
 - SSE agent test `test_sse_connect_sets_event` no longer blocks for 60s —
   mocked `urllib.request.urlopen` instead of real HTTP server. Full suite
   dropped from ~70s to ~9s.

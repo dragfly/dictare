@@ -503,6 +503,14 @@ main() {
                 *) error "Unsupported OS: $OS" ;;
             esac
 
+            # Resolve optional dependencies (TTS engine, etc.)
+            # uv tool install removes extras not in pyproject.toml,
+            # so we re-install them based on user config
+            if [ $DEV_MODE -eq 0 ] && command -v voxtype &>/dev/null; then
+                step "Resolving optional dependencies..."
+                voxtype dependencies resolve 2>/dev/null && info "Dependencies resolved" || true
+            fi
+
             echo ""
             info "Installation complete!"
             echo ""
