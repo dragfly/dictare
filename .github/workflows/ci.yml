@@ -26,12 +26,12 @@ jobs:
           uv venv --python 3.11 .venv
           . .venv/bin/activate
           uv pip install -e ./openvip-sdks/python
-          uv pip install -e ".[dev]"
+          uv pip install --no-sources -e ".[dev]"
 
       - name: Run linter
         run: |
           . .venv/bin/activate
-          ruff check .
+          ruff check src/ tests/
 
       - name: Run tests
         run: |
@@ -57,12 +57,12 @@ jobs:
           uv venv --python 3.11 .venv
           . .venv/bin/activate
           uv pip install -e ./openvip-sdks/python
-          uv pip install -e ".[dev]"
+          uv pip install --no-sources -e ".[dev]"
 
       - name: Run linter
         run: |
           . .venv/bin/activate
-          ruff check .
+          ruff check src/ tests/
 
       - name: Run tests
         run: |
@@ -88,7 +88,7 @@ jobs:
           uv venv --python 3.11 .venv
           . .venv/bin/activate
           uv pip install -e ./openvip-sdks/python
-          uv pip install -e ".[dev]"
+          uv pip install --no-sources -e ".[dev]"
 
       - name: Run mypy
         run: |
