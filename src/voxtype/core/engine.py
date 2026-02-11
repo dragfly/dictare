@@ -1125,7 +1125,13 @@ class VoxtypeEngine:
         Args:
             text: Text to speak.
         """
-        if not self.config.audio.audio_feedback or self._tts_engine is None:
+        if self._tts_engine is None:
+            return
+
+        from voxtype.audio.beep import get_sound_for_event
+
+        enabled, _ = get_sound_for_event(self.config.audio, "agent_announce")
+        if not enabled:
             return
 
         from voxtype.audio.beep import play_audio

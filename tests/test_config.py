@@ -8,6 +8,7 @@ from voxtype.config import (
     Config,
     HotkeyConfig,
     OutputConfig,
+    SoundConfig,
     STTConfig,
     load_config,
 )
@@ -100,3 +101,106 @@ language = "en"
             assert config.audio.sample_rate == 16000
         finally:
             temp_path.unlink()
+
+
+class TestSoundConfig:
+    """Test per-event sound configuration with TOML sub-tables."""
+
+    def test_defaults_all_enabled(self) -> None:
+        """All 6 sound events default to enabled with no custom path."""
+        cfg = AudioConfig()
+        expected = {"start", "stop", "transcribing", "ready", "sent", "agent_announce"}
+        assert set(cfg.sounds.keys()) == expected
+        for sc in cfg.sounds.values():
+            assert sc.enabled is True
+            assert sc.path is None
+
+    def test_toml_subtable_parsing(self) -> None:
+        """TOML sub-tables parse into SoundConfig correctly."""
+        toml_content = """
+[audio]
+audio_feedback = true
+
+[audio.sounds.start]
+enabled = true
+path = "/custom/start.mp3"
+
+[audio.sounds.transcribing]
+enabled = false
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            temp_path = Path(f.name)
+
+        try:
+            config = load_config(temp_path)
+            assert config.audio.sounds["start"].enabled is True
+            assert config.audio.sounds["start"].path == "/custom/start.mp3"
+            assert config.audio.sounds["transcribing"].enabled is False
+        finally:
+            temp_path.unlink()
+
+    def test_backward_compat_no_sounds_section(self) -> None:
+        """Config without [audio.sounds.*] uses defaults."""
+        toml_content = """
+[audio]
+audio_feedback = true
+silence_ms = 1000
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml_content)
+            temp_path = Path(f.name)
+
+        try:
+            config = load_config(temp_path)
+            assert config.audio.audio_feedback is True
+            assert len(config.audio.sounds) == 6
+            assert config.audio.sounds["start"].enabled is True
+        finally:
+            temp_path.unlink()
+
+    def test_get_sound_for_event_enabled(self) -> None:
+        """get_sound_for_event returns (True, path) when enabled."""
+        from voxtype.audio.beep import DEFAULT_SOUND_START, get_sound_for_event
+
+        cfg = AudioConfig()
+        enabled, path = get_sound_for_event(cfg, "start")
+        assert enabled is True
+        assert path == str(DEFAULT_SOUND_START)
+
+    def test_get_sound_for_event_disabled(self) -> None:
+        """get_sound_for_event returns (False, '') when event disabled."""
+        from voxtype.audio.beep import get_sound_for_event
+
+        cfg = AudioConfig()
+        cfg.sounds["start"] = SoundConfig(enabled=False)
+        enabled, path = get_sound_for_event(cfg, "start")
+        assert enabled is False
+
+    def test_get_sound_for_event_custom_path(self) -> None:
+        """get_sound_for_event returns custom path when set."""
+        from voxtype.audio.beep import get_sound_for_event
+
+        cfg = AudioConfig()
+        cfg.sounds["stop"] = SoundConfig(enabled=True, path="/my/custom.mp3")
+        enabled, path = get_sound_for_event(cfg, "stop")
+        assert enabled is True
+        assert path == "/my/custom.mp3"
+
+    def test_get_sound_for_event_master_switch_off(self) -> None:
+        """Master switch audio_feedback=false disables all sounds."""
+        from voxtype.audio.beep import get_sound_for_event
+
+        cfg = AudioConfig(audio_feedback=False)
+        for name in ("start", "stop", "transcribing", "ready", "sent", "agent_announce"):
+            enabled, _ = get_sound_for_event(cfg, name)
+            assert enabled is False
+
+    def test_get_sound_for_event_agent_announce(self) -> None:
+        """agent_announce returns (True, '') since it uses TTS not a file."""
+        from voxtype.audio.beep import get_sound_for_event
+
+        cfg = AudioConfig()
+        enabled, path = get_sound_for_event(cfg, "agent_announce")
+        assert enabled is True
+        assert path == ""

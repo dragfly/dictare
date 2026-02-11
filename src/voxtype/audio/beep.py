@@ -31,6 +31,48 @@ DEFAULT_SOUND_TRANSCRIBING = _SOUNDS_DIR / "transcribing.mp3"
 DEFAULT_SOUND_READY = _SOUNDS_DIR / "ready.mp3"
 
 
+# Map event names to their default bundled sound files
+_DEFAULT_SOUNDS: dict[str, Path] = {
+    "start": DEFAULT_SOUND_START,
+    "stop": DEFAULT_SOUND_STOP,
+    "transcribing": DEFAULT_SOUND_TRANSCRIBING,
+    "ready": DEFAULT_SOUND_READY,
+    "sent": DEFAULT_SOUND_START,  # reuses up-beep
+}
+
+
+def get_sound_for_event(audio_config: Any, name: str) -> tuple[bool, str]:
+    """Check if a sound event is enabled and return its file path.
+
+    Considers the master switch (audio_feedback) and per-event config.
+    For 'agent_announce', returns (enabled, "") since it uses TTS, not a file.
+
+    Args:
+        audio_config: AudioConfig instance.
+        name: Event name (start, stop, transcribing, ready, sent, agent_announce).
+
+    Returns:
+        (enabled, path) — enabled=False means skip playback.
+    """
+    if not audio_config.audio_feedback:
+        return False, ""
+
+    sound_cfg = audio_config.sounds.get(name)
+    if sound_cfg is None:
+        # Unknown event or not configured — use default if available
+        default = _DEFAULT_SOUNDS.get(name)
+        return (True, str(default)) if default else (False, "")
+
+    if not sound_cfg.enabled:
+        return False, ""
+
+    if name == "agent_announce":
+        return True, ""  # TTS, no file path
+
+    path = sound_cfg.path or str(_DEFAULT_SOUNDS.get(name, ""))
+    return True, path
+
+
 def get_sound_path(name: str) -> Path:
     """Get path to a bundled sound file.
 

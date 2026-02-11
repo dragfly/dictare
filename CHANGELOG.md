@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.96] - 2026-02-11
+
+### Added
+
+- Granular audio feedback configuration via TOML sub-tables. Each sound event
+  (start, stop, transcribing, ready, sent, agent_announce) can be individually
+  enabled/disabled and assigned a custom sound file path without losing settings.
+  Master switch `audio_feedback` still controls all sounds globally.
+
+  ```toml
+  [audio.sounds.transcribing]
+  enabled = false
+
+  [audio.sounds.start]
+  enabled = true
+  path = "/custom/beep.mp3"
+  ```
+
+### Changed
+
+- Replaced flat `sound_start`/`sound_stop`/`sound_transcribing`/`sound_ready`
+  config fields with structured `[audio.sounds.*]` sub-tables.
+
 ## [3.0.0-alpha.95] - 2026-02-11
 
 ### Added
