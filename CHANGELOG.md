@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.105] - 2026-02-11
+
+### Removed
+
+- Entire `daemon/` module (~1640 lines) — Unix socket server, client, protocol,
+  lifecycle management. All functionality already provided by `core/` HTTP API
+  (FastAPI OpenVIPServer on `/status`, `/control`, `/speech`).
+- `cli/daemon.py` — `voxtype daemon start/stop/status/restart` commands removed.
+
+### Changed
+
+- `cli/speak.py`: uses HTTP `/speech` endpoint instead of daemon Unix socket.
+- `tray/app.py`: polls engine via HTTP `/status` and controls via `/control`.
+- `services/stt_service.py`, `services/tts_service.py`: removed daemon code
+  paths, simplified to local engine only.
+
 ## [3.0.0-alpha.104] - 2026-02-11
 
 ### Changed

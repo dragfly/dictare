@@ -1,4 +1,4 @@
-"""Speech-to-text service with daemon integration."""
+"""Speech-to-text service."""
 
 from __future__ import annotations
 
@@ -19,10 +19,7 @@ if TYPE_CHECKING:
 class STTService(BaseService):
     """Speech-to-text service.
 
-    Provides high-level STT API with:
-    - Automatic daemon integration when available
-    - Fallback to local engine when daemon is not running
-    - Lazy model loading
+    Provides high-level STT API with lazy model loading.
     """
 
     def __init__(self, config: Config | None = None) -> None:
@@ -41,31 +38,8 @@ class STTService(BaseService):
         return "stt"
 
     def is_available(self) -> bool:
-        """Check if STT service is available.
-
-        Returns:
-            True if daemon is running or local engine can be loaded.
-        """
-        return self._daemon_available() or self._can_load_local()
-
-    def _daemon_available(self) -> bool:
-        """Check if daemon is running and has STT loaded."""
-        try:
-            from voxtype.daemon.client import DaemonClient, is_daemon_running
-
-            if not is_daemon_running():
-                return False
-
-            client = DaemonClient()
-            response = client.get_status()
-            return hasattr(response, "stt_loaded") and response.stt_loaded
-        except Exception:
-            return False
-
-    def _can_load_local(self) -> bool:
-        """Check if local STT engine can be loaded."""
-        # MLX on macOS or faster-whisper on Linux - both are always available to try
-        return True
+        """Check if STT service is available."""
+        return True  # MLX on macOS or faster-whisper on Linux
 
     def _ensure_engine(self, model_size: str | None = None, *, headless: bool = False) -> STTEngine:
         """Ensure local STT engine is loaded.
@@ -118,7 +92,6 @@ class STTService(BaseService):
         beam_size: int | None = None,
         max_repetitions: int | None = None,
         task: str = "transcribe",
-        prefer_daemon: bool = True,
     ) -> str:
         """Transcribe audio to text.
 
@@ -130,7 +103,6 @@ class STTService(BaseService):
             beam_size: Beam size for decoding.
             max_repetitions: Max consecutive word repetitions before filtering.
             task: "transcribe" for same-language, "translate" for English output.
-            prefer_daemon: If True, use daemon when available (faster).
 
         Returns:
             Transcribed (or translated) text.
@@ -144,19 +116,6 @@ class STTService(BaseService):
             else self.config.stt.max_repetitions
         )
 
-        # Use daemon if available and preferred
-        if prefer_daemon and self._daemon_available():
-            return self._transcribe_via_daemon(
-                audio,
-                language=lang,
-                model_size=model_size,
-                hotwords=hw,
-                beam_size=beam,
-                max_repetitions=max_rep,
-                task=task,
-            )
-
-        # Fall back to local engine
         engine = self._ensure_engine(model_size)
         return engine.transcribe(
             audio,
@@ -166,53 +125,6 @@ class STTService(BaseService):
             max_repetitions=max_rep,
             task=task,
         )
-
-    def _transcribe_via_daemon(
-        self,
-        audio: NDArray[np.float32],
-        *,
-        language: str,
-        model_size: str | None,
-        hotwords: str | None,
-        beam_size: int,
-        max_repetitions: int,
-        task: str,
-    ) -> str:
-        """Transcribe audio via daemon.
-
-        Args:
-            audio: Audio samples (float32, mono, 16kHz).
-            language: Language code.
-            model_size: Model size (if different from daemon's loaded model).
-            hotwords: Comma-separated words to boost.
-            beam_size: Beam size for decoding.
-            max_repetitions: Max word repetitions.
-            task: "transcribe" or "translate".
-
-        Returns:
-            Transcribed text.
-
-        Raises:
-            RuntimeError: If daemon returns an error.
-        """
-        from voxtype.daemon.client import DaemonClient
-        from voxtype.daemon.protocol import ErrorResponse
-
-        client = DaemonClient()
-        response = client.send_stt_request(
-            audio=audio,
-            language=language,
-            model_size=model_size,
-            hotwords=hotwords,
-            beam_size=beam_size,
-            max_repetitions=max_repetitions,
-            task=task,
-        )
-
-        if isinstance(response, ErrorResponse):
-            raise RuntimeError(f"STT daemon error: {response.error}")
-
-        return response.text
 
     def transcribe_file(
         self,

@@ -13,7 +13,6 @@ class BaseService(ABC):
     """Abstract base class for voxtype services.
 
     Services provide high-level APIs for STT, TTS, and other features.
-    They handle daemon integration and fallback to local engines.
     """
 
     def __init__(self, config: Config | None = None) -> None:
@@ -52,7 +51,7 @@ class BaseService(ABC):
 class ServiceRegistry:
     """Registry for voxtype services.
 
-    Provides lazy-loaded access to services with daemon integration.
+    Provides lazy-loaded access to services.
     """
 
     def __init__(self, config: Config | None = None) -> None:
