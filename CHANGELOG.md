@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.107] - 2026-02-11
+
+### Added
+
+- `openvip` SDK as project dependency — the official OpenVIP Python client.
+- Local development source configured via `[tool.uv.sources]` pointing to
+  `openvip-sdks/python` repo.
+
+### Changed
+
+- `cli/speak.py`: replaced manual `urllib` HTTP calls with `openvip.Client.speak()`.
+  Platform-specific TTS params (engine, voice, speed) passed via `**kwargs`.
+- `tray/app.py`: replaced manual `urllib` polling and control calls with
+  `openvip.Client.get_status()` and `openvip.Client.control()`.
+
 ## [3.0.0-alpha.106] - 2026-02-11
 
 ### Changed
