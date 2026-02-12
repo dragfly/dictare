@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.114] - 2026-02-12
+
+### Changed
+
+- **README rewrite**: voice-first positioning, architecture diagram, agent templates, quick start in 2 commands.
+- Updated pyproject.toml description and keywords to match new positioning.
+- CLI help text updated: "Voice-first control for AI coding agents".
+
 ## [3.0.0-alpha.113] - 2026-02-12
 
 ### Added

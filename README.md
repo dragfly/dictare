@@ -1,146 +1,181 @@
 # voxtype
 
-Voice-to-text for your terminal. Speak and your words appear.
+Voice-first control for AI coding agents.
+
+Speak to control Claude Code, Cursor, Aider, or any CLI tool — privately, on your hardware.
+
+<!-- TODO: demo GIF here -->
+
+## Features
+
+- **Voice-to-Agent** — voice commands drive your AI coding agent, not just text
+- **Single command** — `voxtype agent claude` and you're talking to Claude Code
+- **100% local** — Whisper STT runs on-device, zero data leaves your machine
+- **Multi-agent** — switch agents with your voice: *"agent cursor"*
+- **Open protocol** — [OpenVIP](spec/) lets any tool connect via SSE
+- **Bidirectional** — STT (voice in) + TTS (voice out)
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragfly/voxtype/main/install.sh | sh
+pip install voxtype
 ```
 
 Or from source:
+
 ```bash
-git clone https://github.com/dragfly/voxtype && cd voxtype && ./install.sh
+git clone https://github.com/dragfly/voxtype && cd voxtype
+uv sync --python 3.11
 ```
 
 ## Quick Start
 
 ```bash
-voxtype listen
+# 1. Install as system service (starts at login, like Ollama)
+voxtype service install
+
+# 2. Launch your agent
+voxtype agent claude
 ```
 
-**Tap hotkey** to toggle listening. **Double-tap** to switch mode.
+Speak and Claude Code executes. That's it.
 
+## How It Works
+
+```
+  Microphone
+      |
+      v
+ ┌─────────────────────┐
+ │  Whisper STT         │  (local, on-device)
+ └──────────┬───────────┘
+            v
+ ┌─────────────────────┐
+ │  Pipeline            │  filters: submit detection,
+ │  (filters + executor)│  agent switching, enrichment
+ └──────────┬───────────┘
+            v
+ ┌─────────────────────┐
+ │  OpenVIP HTTP/SSE    │  open protocol
+ └──────────┬───────────┘
+            v
+ ┌─────────────────────┐
+ │  Agent (PTY)         │  Claude Code, Cursor, Aider, ...
+ └─────────────────────┘
+```
+
+The **engine** runs as a system service (launchd on macOS, systemd on Linux).
+It preloads STT models so there's zero cold-start when you speak.
+Agents connect via SSE — each in its own terminal.
+
+## Agent Templates
+
+Define agents in `~/.config/voxtype/config.toml`:
+
+```toml
+[agents.claude]
+command = ["claude"]
+
+[agents.aider]
+command = ["aider", "--model", "claude-3-opus"]
+```
+
+Then launch with a single command:
+
+```bash
+voxtype agent claude                          # uses template
+voxtype agent claude -- claude --model opus   # override command
+```
+
+## Voice Commands
+
+| Voice command | Action |
+|---|---|
+| *"invia"* / *"send"* / *"submit"* | Submit text to the agent (Enter) |
+| *"agent claude"* / *"agent cursor"* | Switch to a different agent |
+
+Submit triggers are multilingual (en, it, es, de, fr) and configurable in config.
+
+## Service Management
+
+```bash
+voxtype service install     # Install + enable + start (auto-start at login)
+voxtype service status      # Check service and engine status
+voxtype service stop        # Stop the service
+voxtype service uninstall   # Remove the service
+voxtype service logs        # View recent logs
+```
+
+## Engine
+
+For manual control without the system service:
+
+```bash
+voxtype engine start -d --agents   # Start engine as daemon
+voxtype engine status              # Check engine status
+voxtype engine stop                # Stop engine
+```
+
+## Keyboard Mode
+
+Don't need an agent? Use voxtype as a pure dictation tool — voice to keystrokes:
+
+```bash
+voxtype listen --keyboard
+```
+
+**Hotkey** to toggle listening:
 - macOS: **Command**
 - Linux: **ScrollLock**
 
-## Commands
-
-### Voice Input
+## Text-to-Speech
 
 ```bash
-voxtype listen                    # Start listening for voice input
-voxtype transcribe                # One-shot: record and output text
-voxtype execute -- llm "{{text}}" # Record and run command with transcript
+voxtype speak "Hello world"
+voxtype speak --engine qwen3 "Hello"
+echo "Hello" | voxtype speak
 ```
 
-### Text-to-Speech
+Engines: `espeak`, `say` (macOS), `piper`, `coqui`, `qwen3`, `outetts`
+
+## Configuration
 
 ```bash
-voxtype speak "Hello world"           # Speak text
-voxtype speak --engine qwen3 "Hello"  # Use specific TTS engine
-echo "Hello" | voxtype speak          # Pipe text to speak
-voxtype speak --list-engines          # List available engines
-```
-
-Available engines: `espeak`, `say` (macOS), `piper`, `coqui`, `qwen3`, `outetts`
-
-### Daemon (Fast TTS)
-
-Keep models loaded in memory for instant TTS:
-
-```bash
-voxtype daemon start      # Start daemon in background
-voxtype daemon status     # Show daemon status
-voxtype daemon stop       # Stop daemon
-
-# With daemon running, speak is instant:
-voxtype speak "Hello"     # Uses daemon (fast)
-voxtype speak "Hello" --no-daemon  # Force in-process
-```
-
-### Agent Mode
-
-Run commands with voice input via OpenVIP protocol:
-
-```bash
-# Terminal 1: Start the agent
-voxtype agent claude -- claude
-
-# Terminal 2: Send voice to agent
-voxtype listen --agents claude
-```
-
-### Configuration
-
-```bash
-voxtype init              # Create default config file
-voxtype config list       # Show all settings
+voxtype config edit           # Open config in editor
+voxtype config list           # Show all settings
 voxtype config get stt.model
 voxtype config set stt.language it
-voxtype config shortcuts  # Configure keyboard shortcuts
-```
-
-### Utilities
-
-```bash
-voxtype check             # Verify system setup
-voxtype devices           # List input devices
-voxtype devices --hid     # List HID devices (for profiles)
-voxtype backends          # List device backends
-voxtype cmd toggle-listening  # Send command to running instance
-```
-
-### Logs
-
-```bash
-voxtype log listen        # View listen session logs
-voxtype log listen -f     # Follow logs live
-voxtype log agent claude  # View agent logs
-voxtype log list          # List all log files
 ```
 
 ## Requirements
 
-**macOS**: Grant Accessibility permission for your terminal app:
-1. System Settings → Privacy & Security → Accessibility
-2. Click **+** and add your terminal (Terminal, iTerm2, etc.)
-3. Restart your terminal
+- **Python 3.11**
+- **macOS** or **Linux**
 
-**Linux**: The installer sets up everything automatically. If needed:
-- Join input group: `sudo usermod -aG input $USER` (then log out/in)
-- Start daemon: `systemctl --user start ydotoold`
+**macOS**: Grant Accessibility permission for your terminal:
+System Settings > Privacy & Security > Accessibility > add your terminal app.
+
+**Linux**: Join input group: `sudo usermod -aG input $USER` (log out/in).
 
 ## Development
 
 ```bash
 git clone https://github.com/dragfly/voxtype && cd voxtype
 
-# macOS Apple Silicon (with MLX GPU acceleration)
+# macOS Apple Silicon (MLX GPU acceleration)
 uv sync --python 3.11 --extra mlx
-uv run --python 3.11 voxtype listen
 
 # macOS Intel / Linux
 uv sync --python 3.11
-uv run --python 3.11 voxtype listen
+
+# Run
+uv run --python 3.11 voxtype listen --keyboard
+
+# Tests
+uv run --python 3.11 python -m pytest tests/ -x
 ```
 
-> **Note**: Python 3.11 is required for MLX/torch compatibility.
-
-### Ghostty Terminal
-
-If using Ghostty, add to `~/.config/ghostty/config`:
-```
-keybind = shift+enter=text:\n
-```
-This fixes Shift+Enter for multi-line input. See [TERMINAL_COMPATIBILITY.md](TERMINAL_COMPATIBILITY.md).
-
-## Help
-
-```bash
-voxtype --help            # All commands
-voxtype <command> --help  # Command options
-```
+> Ghostty users: add `keybind = shift+enter=text:\n` to config. See [TERMINAL_COMPATIBILITY.md](TERMINAL_COMPATIBILITY.md).
 
 ## License
 
