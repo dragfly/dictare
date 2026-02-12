@@ -24,6 +24,7 @@ from voxtype.cli import (
     logs,
     misc,
     models,
+    service,
     speak,
     transcribe,
     tray,
@@ -47,6 +48,7 @@ app.add_typer(dependencies.app, name="dependencies")
 app.add_typer(tray.app, name="tray")
 app.add_typer(engine.app, name="engine")
 app.add_typer(config.app, name="config")
+app.add_typer(service.app, name="service")
 
 # Top-level commands (register pattern)
 listen.register(app)
