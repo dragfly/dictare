@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from voxtype.cli.agent import _check_engine, _try_start_service
 from voxtype.config import AgentTemplateConfig, Config, load_config
@@ -70,25 +70,11 @@ model = "tiny"
 
 class TestCheckEngine:
     def test_engine_reachable(self):
-        with patch("voxtype.cli.agent.urllib.request.urlopen") as mock_open:
-            mock_open.return_value.__enter__ = MagicMock()
-            mock_open.return_value.__exit__ = MagicMock(return_value=False)
+        with patch("openvip.Client.is_available", return_value=True):
             assert _check_engine("http://127.0.0.1:8770") is True
 
     def test_engine_unreachable(self):
-        import urllib.error
-
-        with patch(
-            "voxtype.cli.agent.urllib.request.urlopen",
-            side_effect=urllib.error.URLError("refused"),
-        ):
-            assert _check_engine("http://127.0.0.1:8770") is False
-
-    def test_engine_timeout(self):
-        with patch(
-            "voxtype.cli.agent.urllib.request.urlopen",
-            side_effect=OSError("timeout"),
-        ):
+        with patch("openvip.Client.is_available", return_value=False):
             assert _check_engine("http://127.0.0.1:8770") is False
 
 # ---------------------------------------------------------------------------
@@ -106,24 +92,17 @@ class TestTryStartService:
         with (
             patch("voxtype.service.launchd.is_installed", return_value=True),
             patch("voxtype.service.launchd.start"),
-            patch("voxtype.cli.agent.urllib.request.urlopen") as mock_open,
+            patch("openvip.Client.is_available", return_value=True),
             patch("time.sleep"),
         ):
-            mock_open.return_value.__enter__ = MagicMock()
-            mock_open.return_value.__exit__ = MagicMock(return_value=False)
             assert _try_start_service() is True
 
     def test_service_start_engine_never_ready(self, monkeypatch):
-        import urllib.error
-
         monkeypatch.setattr("sys.platform", "darwin")
         with (
             patch("voxtype.service.launchd.is_installed", return_value=True),
             patch("voxtype.service.launchd.start"),
-            patch(
-                "voxtype.cli.agent.urllib.request.urlopen",
-                side_effect=urllib.error.URLError("refused"),
-            ),
+            patch("openvip.Client.is_available", return_value=False),
             patch("time.sleep"),
         ):
             assert _try_start_service() is False

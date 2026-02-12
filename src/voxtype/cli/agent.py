@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import urllib.error
-import urllib.request
 from typing import Annotated
 
 import typer
@@ -12,11 +10,9 @@ from voxtype.cli._helpers import console
 
 def _check_engine(url: str) -> bool:
     """Return True if the engine is reachable at *url*."""
-    try:
-        with urllib.request.urlopen(f"{url}/status", timeout=2):
-            return True
-    except (urllib.error.URLError, OSError):
-        return False
+    from openvip import Client
+
+    return Client(url, timeout=2).is_available()
 
 def _try_start_service() -> bool:
     """Attempt to start the voxtype service. Return True on success."""
@@ -36,13 +32,13 @@ def _try_start_service() -> bool:
 
         start()
         # Give the engine a moment to bind the HTTP port
+        from openvip import Client
+
+        client = Client("http://127.0.0.1:8770", timeout=1)
         for _ in range(20):
             time.sleep(0.5)
-            try:
-                with urllib.request.urlopen("http://127.0.0.1:8770/status", timeout=1):
-                    return True
-            except (urllib.error.URLError, OSError):
-                continue
+            if client.is_available():
+                return True
         return False
     except Exception:
         return False

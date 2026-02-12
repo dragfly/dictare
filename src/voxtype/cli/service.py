@@ -98,22 +98,21 @@ def service_status() -> None:
     console.print("[green]Service is installed[/]")
 
     # Also check engine HTTP status
-    import json
-    import urllib.error
-    import urllib.request
+    from openvip import Client
 
     from voxtype.config import load_config
 
     try:
         config = load_config()
-        url = f"http://{config.server.host}:{config.server.port}/status"
-        with urllib.request.urlopen(url, timeout=2) as response:
-            data = json.loads(response.read().decode())
-
-        engine_state = data.get("engine", {})
-        console.print(f"  Engine: [green]running[/] ({engine_state.get('mode', '?')})")
-        console.print(f"  Version: {engine_state.get('version', '?')}")
-    except urllib.error.URLError:
+        client = Client(
+            f"http://{config.server.host}:{config.server.port}",
+            timeout=2,
+        )
+        status = client.get_status()
+        platform = status.platform or {}
+        console.print(f"  Engine: [green]running[/] ({platform.get('mode', '?')})")
+        console.print(f"  Version: {platform.get('version', '?')}")
+    except (ConnectionRefusedError, OSError):
         console.print("  Engine: [yellow]not responding[/]")
     except Exception as e:
         console.print(f"  Engine: [red]error[/] ({e})")
