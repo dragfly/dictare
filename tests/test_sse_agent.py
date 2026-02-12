@@ -257,14 +257,19 @@ class _FakeSSEResponse:
 class TestSSEInputExecutorIntegration:
     """Test _read_from_sse processes x_input via InputExecutor."""
 
+    _UUID1 = "550e8400-e29b-41d4-a716-446655440000"
+    _UUID2 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+    _UUID3 = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+
     def test_submit_via_executor(self) -> None:
         """x_input with submit=True is processed by InputExecutor."""
         stop = threading.Event()
         wq: queue.Queue = queue.Queue()
 
         msg = json.dumps({
+            "openvip": "1.0",
             "type": "transcription",
-            "id": "msg-1",
+            "id": self._UUID1,
             "timestamp": "2026-01-01T00:00:00Z",
             "text": "hello",
             "x_input": {"submit": True},
@@ -289,7 +294,7 @@ class TestSSEInputExecutorIntegration:
         assert item[0] == "msg"
         assert item[1]["text"] == "hello"
         assert item[1]["submit"] is True
-        assert item[1]["openvip_id"] == "msg-1"
+        assert item[1]["openvip_id"] == self._UUID1
 
     def test_newline_via_executor(self) -> None:
         """x_input with newline=True appends \\n to text."""
@@ -297,7 +302,10 @@ class TestSSEInputExecutorIntegration:
         wq: queue.Queue = queue.Queue()
 
         msg = json.dumps({
+            "openvip": "1.0",
             "type": "transcription",
+            "id": self._UUID2,
+            "timestamp": "2026-01-01T00:00:00Z",
             "text": "line one",
             "x_input": {"newline": True},
         })
@@ -327,8 +335,9 @@ class TestSSEInputExecutorIntegration:
         wq: queue.Queue = queue.Queue()
 
         msg = json.dumps({
+            "openvip": "1.0",
             "type": "transcription",
-            "id": "msg-2",
+            "id": self._UUID3,
             "timestamp": "2026-01-01T00:00:00Z",
             "text": "plain text",
         })
@@ -351,7 +360,7 @@ class TestSSEInputExecutorIntegration:
         item = wq.get_nowait()
         assert item[0] == "msg"
         assert item[1]["text"] == "plain text"
-        assert item[1]["openvip_id"] == "msg-2"
+        assert item[1]["openvip_id"] == self._UUID3
         assert "submit" not in item[1]
 
 class TestSSEConnectedEvent:
@@ -413,19 +422,19 @@ class TestSSEConnectedEvent:
             statuses.append((text, style))
 
         def stop_when_connected():
-            sse_connected.wait(timeout=1)
+            sse_connected.wait(timeout=2)
             stop.set()
 
         threading.Thread(target=stop_when_connected, daemon=True).start()
 
         import unittest.mock as _mock
-        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+        with _mock.patch("urllib.request.urlopen", fake_urlopen), \
+             _mock.patch("openvip.client.time.sleep"):
             _read_from_sse(
                 "myagent",
                 "http://127.0.0.1:9999",
                 wq, stop,
                 on_status=on_status,
-                retry_delay=0.01,
                 sse_connected=sse_connected,
             )
 
@@ -500,7 +509,6 @@ class TestSSEDuplicateAgent:
                 "http://127.0.0.1:9999",
                 wq, stop,
                 on_status=on_status,
-                retry_delay=0.01,
             )
 
         # Should have called urlopen exactly once (no retry)
@@ -542,13 +550,13 @@ class TestSSEDuplicateAgent:
         def on_status(text, style):
             statuses.append((text, style))
 
-        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+        with _mock.patch("urllib.request.urlopen", fake_urlopen), \
+             _mock.patch("openvip.client.time.sleep"):
             _read_from_sse(
                 "claude",
                 "http://127.0.0.1:9999",
                 wq, stop,
                 on_status=on_status,
-                retry_delay=0.001,
             )
 
         # Should have retried (more than 1 call)

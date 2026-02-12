@@ -7,14 +7,12 @@ Polls /status endpoint and renders a Rich panel with:
 
 from __future__ import annotations
 
-import json
 import sys
 import threading
 import time
-import urllib.error
-import urllib.request
 from typing import TYPE_CHECKING, Any
 
+from openvip import Client
 from rich.live import Live
 from rich.panel import Panel
 
@@ -70,6 +68,7 @@ class StatusPanel:
         """
         self._console = console
         self._base_url = base_url.rstrip("/")
+        self._client = Client(base_url, timeout=2)
         self._poll_interval = poll_interval
         self._running = False
         self._stop_event = threading.Event()
@@ -85,10 +84,9 @@ class StatusPanel:
     def _fetch_status(self) -> dict[str, Any] | None:
         """Fetch /status from engine."""
         try:
-            url = f"{self._base_url}/status"
-            with urllib.request.urlopen(url, timeout=2) as response:
-                return json.loads(response.read().decode())
-        except (urllib.error.URLError, json.JSONDecodeError, TimeoutError, ConnectionResetError, OSError):
+            status = self._client.get_status()
+            return {"platform": status.platform or {}}
+        except (ConnectionRefusedError, OSError, TimeoutError, ValueError):
             return None
 
     def _format_state(self, state: str) -> str:
