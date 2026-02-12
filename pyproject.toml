@@ -93,7 +93,7 @@ openvip = { path = "../../nottoplay/openvip-sdks/python", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/voxtype"]
-artifacts = ["*.mp3"]
+artifacts = ["*.mp3", "*.icns", "*.png"]
 
 [tool.hatch.version]
 path = "src/voxtype/__init__.py"

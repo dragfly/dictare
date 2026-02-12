@@ -1,13 +1,23 @@
-"""Tests for system service management (launchd/systemd)."""
+"""Tests for system service management (launchd/systemd) and .app bundle."""
 
 from __future__ import annotations
 
 import plistlib
+import stat
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from voxtype.service.app_bundle import (
+    APP_NAME,
+    BUNDLE_ID,
+    create_app_bundle,
+    get_app_path,
+    get_executable_path,
+    remove_app_bundle,
+)
 from voxtype.service.launchd import (
     LABEL,
     generate_plist,
@@ -16,6 +26,71 @@ from voxtype.service.launchd import (
 )
 from voxtype.service.systemd import generate_unit, get_unit_path
 from voxtype.service.systemd import is_installed as systemd_is_installed
+
+# ---------------------------------------------------------------------------
+# .app bundle
+# ---------------------------------------------------------------------------
+
+
+class TestAppBundleCreate:
+    def test_creates_directory_structure(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        app_path = create_app_bundle("/usr/bin/python3")
+        assert (app_path / "Contents" / "Info.plist").exists()
+        assert (app_path / "Contents" / "MacOS" / APP_NAME).exists()
+        assert (app_path / "Contents" / "Resources").exists()
+
+    def test_info_plist_contents(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        app_path = create_app_bundle("/usr/bin/python3")
+        with open(app_path / "Contents" / "Info.plist", "rb") as f:
+            plist = plistlib.load(f)
+        assert plist["CFBundleIdentifier"] == BUNDLE_ID
+        assert plist["CFBundleName"] == APP_NAME
+        assert plist["LSUIElement"] is True
+        assert plist["CFBundleIconFile"] == APP_NAME
+
+    def test_launcher_is_executable(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        app_path = create_app_bundle("/opt/brew/bin/python3.11")
+        launcher = app_path / "Contents" / "MacOS" / APP_NAME
+        assert launcher.stat().st_mode & stat.S_IEXEC
+        content = launcher.read_text()
+        assert "/opt/brew/bin/python3.11" in content
+        assert "-m voxtype engine start -d --agents" in content
+
+    def test_replaces_existing_bundle(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        create_app_bundle("/usr/bin/python3")
+        create_app_bundle("/other/python")
+        launcher = (tmp_path / "Test.app" / "Contents" / "MacOS" / APP_NAME).read_text()
+        assert "/other/python" in launcher
+
+
+class TestAppBundleRemove:
+    def test_removes_bundle(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        create_app_bundle("/usr/bin/python3")
+        assert (tmp_path / "Test.app").exists()
+        remove_app_bundle()
+        assert not (tmp_path / "Test.app").exists()
+
+    def test_noop_if_not_exists(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        remove_app_bundle()  # Should not raise
+
+
+class TestAppBundlePaths:
+    def test_app_path(self):
+        path = get_app_path()
+        assert path.name == "Voxtype.app"
+        assert path.parent == Path("/Applications")
+
+    def test_executable_path(self):
+        exe = get_executable_path()
+        assert exe.endswith(f"Contents/MacOS/{APP_NAME}")
+        assert "Voxtype.app" in exe
+
 
 # ---------------------------------------------------------------------------
 # launchd
@@ -28,16 +103,28 @@ class TestLaunchdGeneratePlist:
         parsed = plistlib.loads(xml.encode())
         assert parsed["Label"] == LABEL
 
-    def test_contains_python_path(self):
+    def test_fallback_when_no_app_bundle(self, monkeypatch):
+        """Without .app bundle, plist uses raw python path."""
+        monkeypatch.setattr(
+            "voxtype.service.app_bundle.get_app_path",
+            lambda: Path("/tmp/nonexistent/Voxtype.app"),
+        )
         xml = generate_plist("/opt/venv/bin/python")
         parsed = plistlib.loads(xml.encode())
         assert parsed["ProgramArguments"][0] == "/opt/venv/bin/python"
 
-    def test_program_arguments(self):
+    def test_uses_app_bundle_when_exists(self, tmp_path, monkeypatch):
+        """With .app bundle, plist points to the bundle executable."""
+        app_path = tmp_path / "Voxtype.app"
+        app_path.mkdir()
+        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: app_path)
+        monkeypatch.setattr(
+            "voxtype.service.app_bundle.get_executable_path",
+            lambda: str(app_path / "Contents" / "MacOS" / "Voxtype"),
+        )
         xml = generate_plist("/usr/bin/python3")
         parsed = plistlib.loads(xml.encode())
-        args = parsed["ProgramArguments"]
-        assert args == ["/usr/bin/python3", "-m", "voxtype", "engine", "start", "-d", "--agents"]
+        assert str(app_path) in parsed["ProgramArguments"][0]
 
     def test_run_at_load(self):
         xml = generate_plist("/usr/bin/python3")
