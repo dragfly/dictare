@@ -24,6 +24,8 @@ from voxtype.agent.pty_session import (
     _write_all,
 )
 from voxtype.agent.status_bar import StatusBar
+from voxtype.pipeline.base import PipelineAction
+from voxtype.pipeline.executors import InputExecutor
 from voxtype.utils.stats import update_keystrokes
 
 # Session logs directory
@@ -208,6 +210,18 @@ def _read_from_sse(
     msg_count = 0
     url = f"{base_url}/agents/{agent_id}/messages"
 
+    # Executor pipeline for x_input messages
+    _openvip_meta: dict[str, Any] = {}
+
+    def _enqueue_input(text: str, submit: bool) -> None:
+        msg: dict[str, Any] = {"text": text}
+        if submit:
+            msg["submit"] = True
+        msg.update(_openvip_meta)
+        write_queue.put(("msg", msg))
+
+    input_executor = InputExecutor(write_fn=_enqueue_input)
+
     # Retry connection with backoff
     max_retry_delay = 5.0
 
@@ -248,21 +262,14 @@ def _read_from_sse(
                     if openvip_msg.get("partial"):
                         continue
 
-                    # Convert OpenVIP to internal format
-                    msg: dict[str, Any] = {
-                        "text": openvip_msg.get("text", ""),
-                        "openvip_id": openvip_msg.get("id"),
-                        "openvip_ts": openvip_msg.get("timestamp"),
-                    }
-                    x_input = openvip_msg.get("x_input", {})
-                    if isinstance(x_input, dict) and x_input.get("submit"):
-                        msg["submit"] = True
-                    if isinstance(x_input, dict) and x_input.get("newline"):
-                        msg["text"] = msg["text"] + "\n" if msg["text"] else "\n"
+                    # Set openvip metadata for the executor's write_fn
+                    _openvip_meta.clear()
+                    _openvip_meta["openvip_id"] = openvip_msg.get("id")
+                    _openvip_meta["openvip_ts"] = openvip_msg.get("timestamp")
 
                     msg_count += 1
                     if session_path:
-                        text = msg.get("text", "")
+                        text = openvip_msg.get("text", "")
                         _log_event(session_path, "msg_read", {
                             "seq": msg_count,
                             "text": text if verbose else text[:50],
@@ -270,7 +277,15 @@ def _read_from_sse(
                             "keystrokes": keystroke_counter.count if keystroke_counter else 0,
                         })
 
-                    write_queue.put(("msg", msg))
+                    # Process through executor pipeline
+                    result = input_executor.process(openvip_msg)
+                    if result.action == PipelineAction.PASS:
+                        # No x_input — enqueue as plain text
+                        write_queue.put(("msg", {
+                            "text": openvip_msg.get("text", ""),
+                            "openvip_id": openvip_msg.get("id"),
+                            "openvip_ts": openvip_msg.get("timestamp"),
+                        }))
 
         except urllib.error.HTTPError as e:
             # Permanent application errors — don't retry
