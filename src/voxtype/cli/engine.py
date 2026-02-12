@@ -221,12 +221,12 @@ def _run_verbose_mode(
     base_url, config, os, shutdown_attempted,
 ) -> None:
     """Verbose mode: plain text logging, no Live panel."""
-    import json
     import logging as _logging
     import signal
     import threading
     import time as _time
-    import urllib.request
+
+    from openvip import Client as _Client
 
     # Enable debug logging to stderr so user sees engine internals
     _logging.basicConfig(
@@ -262,13 +262,13 @@ def _run_verbose_mode(
     signal.signal(signal.SIGINT, signal_handler)
 
     # Poll /status and print changes
+    _verbose_client = _Client(base_url, timeout=2)
     last_status: dict = {}
     try:
         while not init_done.is_set() or (not init_error and controller.is_running):
             try:
-                req = urllib.request.Request(f"{base_url}/status")
-                with urllib.request.urlopen(req, timeout=2) as resp:
-                    status = json.loads(resp.read())
+                _s = _verbose_client.get_status()
+                status = {"platform": _s.platform or {}}
             except Exception:
                 status = {}
 
@@ -442,29 +442,31 @@ def engine_status(
         raise typer.Exit(0)
 
     # Engine is running, try to get status via HTTP
-    import urllib.error
-    import urllib.request
+    from openvip import Client
 
     try:
         config = load_config()
-        url = f"http://{config.server.host}:{config.server.port}/status"
-        with urllib.request.urlopen(url, timeout=2) as response:
-            data = json.loads(response.read().decode())
+        client = Client(
+            f"http://{config.server.host}:{config.server.port}",
+            timeout=2,
+        )
+        status = client.get_status()
+        platform = status.platform or {}
 
         if json_output:
+            data = status.to_dict()
             data["running"] = True
             data["pid"] = pid
             console.print(json.dumps(data, indent=2))
         else:
             console.print(f"[green]Engine is running[/] (PID: {pid})")
-            engine_state = data.get("engine", {})
-            stt_state = data.get("stt", {})
-            output_state = data.get("output", {})
+            stt_data = platform.get("stt", {})
+            output_data = platform.get("output", {})
 
-            console.print(f"  Mode: {engine_state.get('mode', 'unknown')}")
-            console.print(f"  Version: {engine_state.get('version', 'unknown')}")
+            console.print(f"  Mode: {platform.get('mode', 'unknown')}")
+            console.print(f"  Version: {platform.get('version', 'unknown')}")
 
-            uptime = engine_state.get("uptime_seconds", 0)
+            uptime = platform.get("uptime_seconds", 0)
             if uptime < 60:
                 uptime_str = f"{uptime:.0f}s"
             elif uptime < 3600:
@@ -473,18 +475,18 @@ def engine_status(
                 uptime_str = f"{uptime / 3600:.1f}h"
             console.print(f"  Uptime: {uptime_str}")
 
-            console.print(f"  STT state: {stt_state.get('state', 'unknown')}")
-            console.print(f"  STT model: {stt_state.get('model_name', 'not loaded')}")
-            console.print(f"  Output mode: {output_state.get('mode', 'unknown')}")
+            console.print(f"  STT state: {platform.get('state', 'unknown')}")
+            console.print(f"  STT model: {stt_data.get('model_name', 'not loaded')}")
+            console.print(f"  Output mode: {output_data.get('mode', 'unknown')}")
 
-            agents = output_state.get("available_agents", [])
+            agents = output_data.get("available_agents", [])
             if agents:
-                current = output_state.get("current_agent", "")
+                current = output_data.get("current_agent", "")
                 console.print(f"  Agents: {len(agents)} available")
                 for agent in agents:
                     marker = " *" if agent == current else ""
                     console.print(f"    - {agent}{marker}")
-    except urllib.error.URLError:
+    except (ConnectionRefusedError, OSError):
         if json_output:
             console.print(json.dumps({"running": True, "pid": pid, "http_unavailable": True}))
         else:

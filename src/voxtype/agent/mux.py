@@ -156,9 +156,9 @@ def _poll_active_agent(
     This is the ONLY source of status updates — SSE thread signals
     reconnection via sse_connected event instead of emitting status directly.
     """
-    import urllib.request
+    from openvip import Client
 
-    status_url = f"{base_url}/status"
+    client = Client(base_url, timeout=5)
     was_active: bool | None = None
 
     while not stop_event.is_set():
@@ -168,12 +168,9 @@ def _poll_active_agent(
             was_active = None
 
         try:
-            req = urllib.request.Request(status_url, method="GET")
-            with urllib.request.urlopen(req, timeout=5) as response:
-                data = json.loads(response.read())
-            current = (
-                data.get("platform", {}).get("output", {}).get("current_agent")
-            )
+            status = client.get_status()
+            platform = status.platform or {}
+            current = platform.get("output", {}).get("current_agent")
             is_active = current == agent_id
             if is_active != was_active:
                 was_active = is_active
@@ -195,13 +192,11 @@ def _read_from_sse(
     keystroke_counter: KeystrokeCounter | None = None,
     verbose: bool = False,
     on_status: Callable[[str, str], None] | None = None,
-    retry_delay: float = 0.5,
     sse_connected: threading.Event | None = None,
 ) -> None:
     """Connect to engine SSE and receive OpenVIP messages.
 
-    Opens an HTTP connection to GET /agents/{agent_id}/messages which
-    registers the agent and streams messages via Server-Sent Events.
+    Uses the OpenVIP SDK's subscribe() with automatic reconnection.
 
     Args:
         agent_id: Agent identifier.
@@ -213,8 +208,9 @@ def _read_from_sse(
         verbose: Log full text in session file.
         on_status: Optional callback(text, style) for status changes.
     """
-    import urllib.request
+    from openvip import Client, DuplicateAgentError
 
+    client = Client(base_url)
     msg_count = 0
     url = f"{base_url}/agents/{agent_id}/messages"
 
@@ -230,113 +226,79 @@ def _read_from_sse(
 
     input_executor = InputExecutor(write_fn=_enqueue_input)
 
-    # Retry connection with backoff
-    max_retry_delay = 5.0
+    def _on_connect() -> None:
+        if sse_connected:
+            sse_connected.set()  # Signal poll thread to refresh status
+        if session_path:
+            _log_event(session_path, "sse_connected", {"url": url})
 
-    while not stop_event.is_set():
-        try:
-            req = urllib.request.Request(
-                url, headers={"Accept": "text/event-stream"}
-            )
-            with urllib.request.urlopen(req, timeout=60) as response:
-                if sse_connected:
-                    sse_connected.set()  # Signal poll thread to refresh status
-                if session_path:
-                    _log_event(session_path, "sse_connected", {"url": url})
-                retry_delay = 0.5  # Reset backoff on successful connection
-                for line_bytes in response:
-                    if stop_event.is_set():
-                        break
-
-                    line = line_bytes.decode("utf-8").strip()
-
-                    # SSE format: "data: {...json...}"
-                    if not line.startswith("data: "):
-                        continue
-
-                    data = line[6:]
-                    try:
-                        openvip_msg = json.loads(data)
-                    except json.JSONDecodeError:
-                        if session_path:
-                            _log_event(session_path, "parse_error", {"line": data[:100]})
-                        continue
-
-                    # Skip non-transcription types
-                    if openvip_msg.get("type") != "transcription":
-                        continue
-
-                    # Skip partial transcriptions
-                    if openvip_msg.get("partial"):
-                        continue
-
-                    # Set openvip metadata for the executor's write_fn
-                    _openvip_meta.clear()
-                    _openvip_meta["openvip_id"] = openvip_msg.get("id")
-                    _openvip_meta["openvip_ts"] = openvip_msg.get("timestamp")
-
-                    msg_count += 1
-                    if session_path:
-                        text = openvip_msg.get("text", "")
-                        _log_event(session_path, "msg_read", {
-                            "seq": msg_count,
-                            "text": text if verbose else text[:50],
-                            "openvip_id": openvip_msg.get("id"),
-                            "keystrokes": keystroke_counter.count if keystroke_counter else 0,
-                        })
-
-                    # Process through executor pipeline
-                    result = input_executor.process(openvip_msg)
-                    if result.action == PipelineAction.PASS:
-                        # No x_input — enqueue as plain text
-                        write_queue.put(("msg", {
-                            "text": openvip_msg.get("text", ""),
-                            "openvip_id": openvip_msg.get("id"),
-                            "openvip_ts": openvip_msg.get("timestamp"),
-                        }))
-
-        except urllib.error.HTTPError as e:
-            # Permanent application errors — don't retry
-            if e.code == 409:
-                err_msg = f"Agent '{agent_id}' already connected"
-                if on_status:
-                    on_status(f"\u2716 {err_msg}", "error")
-                if session_path:
-                    _log_event(session_path, "sse_duplicate", {"agent_id": agent_id})
-                write_queue.put(("error", err_msg))  # type: ignore[arg-type]
-                break
-            # Other HTTP errors: log and retry
-            if stop_event.is_set():
-                break
-            if on_status:
-                on_status(f"\u26a0 {agent_id} \u00b7 HTTP {e.code}, reconnecting...", "error")
-            if session_path:
-                _log_event(session_path, "sse_http_error", {
-                    "code": e.code, "error": str(e), "retry_delay": retry_delay,
-                })
-            stop_event.wait(retry_delay)
-            retry_delay = min(retry_delay * 2, max_retry_delay)
-        except (ConnectionRefusedError, urllib.error.URLError, OSError) as e:
-            if stop_event.is_set():
-                break
-            if on_status:
+    def _on_disconnect(exc: Exception | None) -> None:
+        if not exc:
+            return
+        http_code = getattr(exc, "code", None)
+        if on_status:
+            if http_code:
+                on_status(f"\u26a0 {agent_id} \u00b7 HTTP {http_code}, reconnecting...", "error")
+            else:
                 on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...", "error")
-            if session_path:
-                _log_event(session_path, "sse_connect_error", {
-                    "error": str(e), "retry_delay": retry_delay,
-                })
-            # Wait before retry with exponential backoff
-            stop_event.wait(retry_delay)
-            retry_delay = min(retry_delay * 2, max_retry_delay)
-        except Exception as e:
-            if session_path:
-                _log_event(session_path, "sse_error", {"error": str(e)})
+        if session_path:
+            event = "sse_http_error" if http_code else "sse_connect_error"
+            log_data: dict[str, Any] = {"error": str(exc)}
+            if http_code:
+                log_data["code"] = http_code
+            _log_event(session_path, event, log_data)
+
+    try:
+        for msg in client.subscribe(
+            agent_id,
+            reconnect=True,
+            stop=stop_event.is_set,
+            on_connect=_on_connect,
+            on_disconnect=_on_disconnect,
+        ):
             if stop_event.is_set():
                 break
-            if on_status:
-                on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...", "error")
-            stop_event.wait(retry_delay)
-            retry_delay = min(retry_delay * 2, max_retry_delay)
+
+            # Skip partial transcriptions
+            if msg.partial:
+                continue
+
+            msg_id = str(msg.id) if msg.id else None
+            msg_ts = msg.timestamp.isoformat() if msg.timestamp else None
+
+            # Set openvip metadata for the executor's write_fn
+            _openvip_meta.clear()
+            _openvip_meta["openvip_id"] = msg_id
+            _openvip_meta["openvip_ts"] = msg_ts
+
+            msg_count += 1
+            if session_path:
+                text = msg.text or ""
+                _log_event(session_path, "msg_read", {
+                    "seq": msg_count,
+                    "text": text if verbose else text[:50],
+                    "openvip_id": msg_id,
+                    "keystrokes": keystroke_counter.count if keystroke_counter else 0,
+                })
+
+            # Process through executor pipeline (needs raw dict for x_input access)
+            msg_dict = msg.to_dict()
+            result = input_executor.process(msg_dict)
+            if result.action == PipelineAction.PASS:
+                # No x_input — enqueue as plain text
+                write_queue.put(("msg", {
+                    "text": msg.text or "",
+                    "openvip_id": msg_id,
+                    "openvip_ts": msg_ts,
+                }))
+
+    except DuplicateAgentError:
+        err_msg = f"Agent '{agent_id}' already connected"
+        if on_status:
+            on_status(f"\u2716 {err_msg}", "error")
+        if session_path:
+            _log_event(session_path, "sse_duplicate", {"agent_id": agent_id})
+        write_queue.put(("error", err_msg))  # type: ignore[arg-type]
 
     if session_path:
         _log_event(session_path, "sse_disconnected", {"total_messages": msg_count})
