@@ -122,6 +122,12 @@ def _run_daemon(controller, config, os) -> None:
     """Run engine in daemon mode (headless)."""
     import signal
 
+    from voxtype.utils.paths import get_pid_path
+
+    pid_path = get_pid_path()
+    pid_path.parent.mkdir(parents=True, exist_ok=True)
+    pid_path.write_text(str(os.getpid()))
+
     console.print(f"[dim]Starting engine in daemon mode (PID: {os.getpid()})...[/]")
     console.print(f"[dim]HTTP: http://{config.server.host}:{config.server.port}[/]")
 
@@ -132,6 +138,7 @@ def _run_daemon(controller, config, os) -> None:
             with_bindings=False,  # No keyboard bindings in daemon mode
         )
     except Exception as e:
+        pid_path.unlink(missing_ok=True)
         console.print(f"[red]Failed to start engine: {e}[/]")
         raise typer.Exit(1)
 
@@ -151,6 +158,7 @@ def _run_daemon(controller, config, os) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        pid_path.unlink(missing_ok=True)
         controller.stop()
         console.print("[dim]Engine stopped[/]")
         _kill_resource_tracker(os)

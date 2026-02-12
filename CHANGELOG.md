@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.112] - 2026-02-12
+
+### Added
+
+- `voxtype service` subcommand: install/uninstall/start/stop/status/logs for system service management.
+- `voxtype.service.launchd` — macOS LaunchAgent plist generation and management.
+- `voxtype.service.systemd` — Linux systemd user service unit generation and management.
+
+### Fixed
+
+- `_run_daemon()` now writes PID file at startup and cleans it up on exit; `engine stop`/`engine status` work correctly.
+
 ## [3.0.0-alpha.111] - 2026-02-12
 
 ### Added
