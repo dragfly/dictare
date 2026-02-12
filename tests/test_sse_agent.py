@@ -262,6 +262,107 @@ class _FakeSSEResponse:
         self._stop.wait(timeout=1)
 
 
+class TestSSEInputExecutorIntegration:
+    """Test _read_from_sse processes x_input via InputExecutor."""
+
+    def test_submit_via_executor(self) -> None:
+        """x_input with submit=True is processed by InputExecutor."""
+        stop = threading.Event()
+        wq: queue.Queue = queue.Queue()
+
+        msg = json.dumps({
+            "type": "transcription",
+            "id": "msg-1",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "text": "hello",
+            "x_input": {"submit": True},
+        })
+        fake_resp = _FakeSSEResponse([f"data: {msg}\n"], stop)
+
+        def fake_urlopen(req, **kw):
+            return fake_resp
+
+        def stop_after_msg():
+            while wq.empty():
+                pass
+            stop.set()
+
+        threading.Thread(target=stop_after_msg, daemon=True).start()
+
+        import unittest.mock as _mock
+        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+            _read_from_sse("test", "http://127.0.0.1:9999", wq, stop)
+
+        item = wq.get_nowait()
+        assert item[0] == "msg"
+        assert item[1]["text"] == "hello"
+        assert item[1]["submit"] is True
+        assert item[1]["openvip_id"] == "msg-1"
+
+    def test_newline_via_executor(self) -> None:
+        """x_input with newline=True appends \\n to text."""
+        stop = threading.Event()
+        wq: queue.Queue = queue.Queue()
+
+        msg = json.dumps({
+            "type": "transcription",
+            "text": "line one",
+            "x_input": {"newline": True},
+        })
+        fake_resp = _FakeSSEResponse([f"data: {msg}\n"], stop)
+
+        def fake_urlopen(req, **kw):
+            return fake_resp
+
+        def stop_after_msg():
+            while wq.empty():
+                pass
+            stop.set()
+
+        threading.Thread(target=stop_after_msg, daemon=True).start()
+
+        import unittest.mock as _mock
+        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+            _read_from_sse("test", "http://127.0.0.1:9999", wq, stop)
+
+        item = wq.get_nowait()
+        assert item[0] == "msg"
+        assert item[1]["text"] == "line one\n"
+
+    def test_plain_text_no_executor(self) -> None:
+        """Message without x_input passes through as plain text."""
+        stop = threading.Event()
+        wq: queue.Queue = queue.Queue()
+
+        msg = json.dumps({
+            "type": "transcription",
+            "id": "msg-2",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "text": "plain text",
+        })
+        fake_resp = _FakeSSEResponse([f"data: {msg}\n"], stop)
+
+        def fake_urlopen(req, **kw):
+            return fake_resp
+
+        def stop_after_msg():
+            while wq.empty():
+                pass
+            stop.set()
+
+        threading.Thread(target=stop_after_msg, daemon=True).start()
+
+        import unittest.mock as _mock
+        with _mock.patch("urllib.request.urlopen", fake_urlopen):
+            _read_from_sse("test", "http://127.0.0.1:9999", wq, stop)
+
+        item = wq.get_nowait()
+        assert item[0] == "msg"
+        assert item[1]["text"] == "plain text"
+        assert item[1]["openvip_id"] == "msg-2"
+        assert "submit" not in item[1]
+
+
 class TestSSEConnectedEvent:
     """Test _read_from_sse signals sse_connected event (no direct status emit)."""
 

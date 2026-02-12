@@ -54,6 +54,10 @@ class InputExecutor:
         submit = x_input.get("submit", False) if isinstance(x_input, dict) else bool(x_input)
         text = message.get("text", "")
 
+        # Append visual newline if requested by x_input
+        if isinstance(x_input, dict) and x_input.get("newline"):
+            text = text + "\n" if text else "\n"
+
         self.write_fn(text, submit)
 
         logger.debug(

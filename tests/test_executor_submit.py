@@ -58,3 +58,30 @@ class TestInputExecutor:
         result = ex.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert calls == [("", True)]
+
+    def test_newline_appends_to_text(self) -> None:
+        """x_input with newline=True appends \\n to text."""
+        calls = []
+        ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
+        msg = {"text": "hello", "x_input": {"newline": True}}
+        result = ex.process(msg)
+        assert result.action == PipelineAction.CONSUME
+        assert calls == [("hello\n", False)]
+
+    def test_newline_empty_text(self) -> None:
+        """x_input with newline=True on empty text produces just \\n."""
+        calls = []
+        ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
+        msg = {"text": "", "x_input": {"newline": True}}
+        result = ex.process(msg)
+        assert result.action == PipelineAction.CONSUME
+        assert calls == [("\n", False)]
+
+    def test_newline_and_submit(self) -> None:
+        """x_input with both newline and submit."""
+        calls = []
+        ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
+        msg = {"text": "line", "x_input": {"newline": True, "submit": True}}
+        result = ex.process(msg)
+        assert result.action == PipelineAction.CONSUME
+        assert calls == [("line\n", True)]
