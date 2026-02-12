@@ -305,6 +305,14 @@ class AgentFilterConfig(BaseModel):
     )
 
 
+class AgentTemplateConfig(BaseModel):
+    """Agent template configuration (defines a named agent command)."""
+
+    command: list[str] = Field(
+        description="Command and arguments to launch the agent",
+    )
+
+
 class PipelineConfig(BaseModel):
     """Pipeline filter configuration."""
 
@@ -384,6 +392,10 @@ class Config(BaseModel):
     stats: StatsConfig = Field(default_factory=StatsConfig)
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+    agents: dict[str, AgentTemplateConfig] = Field(
+        default_factory=dict,
+        description="Agent templates: [agents.claude], [agents.cursor], etc.",
+    )
 
     editor: str = Field(
         default="",
@@ -643,8 +655,8 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "logging", "stats", "daemon", "pipeline"):
-            # These are sections, handle below
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "logging", "stats", "daemon", "pipeline", "agents"):
+            # These are sections, handle below (agents is dynamic, skip)
             continue
         value = getattr(config, field_name)
         env_var = _key_to_env_var(field_name)
@@ -779,6 +791,16 @@ auto_enter = false               # Visual newline only
 # url = "http://127.0.0.1:8770"  # Default engine URL for 'voxtype agent'
 # status_bar = true               # Show persistent status bar in voxtype agent
 # clear_on_start = true            # Clear terminal before launching child process
+
+# Agent templates — define named agents for single-command launch
+# Usage: voxtype agent claude          (uses template below)
+#        voxtype agent claude -- claude --model opus   (override command)
+#
+# [agents.claude]
+# command = ["claude"]
+#
+# [agents.aider]
+# command = ["aider", "--model", "claude-3-opus"]
 
 [logging]
 log_file = ""
