@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0-alpha.113] - 2026-02-12
+
+### Added
+
+- **Single-command agent launch**: `voxtype agent claude` uses config templates — no `-- command` needed.
+- `AgentTemplateConfig` in config: `[agents.claude] command = ["claude"]`.
+- Engine health check on `voxtype agent` — auto-starts service if installed and engine is down.
+
 ## [3.0.0-alpha.112] - 2026-02-12
 
 ### Added
