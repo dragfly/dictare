@@ -18,6 +18,18 @@ from voxtype.pipeline.base import (
     derive_message,
 )
 from voxtype.pipeline.filters import AgentFilter, InputFilter
+from voxtype.pipeline.loader import PipelineLoader, register_step
+
+# Register built-in steps
+register_step("agent_filter", AgentFilter)
+register_step("input_filter", InputFilter)
+
+# Executors — imported here to register, but not re-exported
+# (use voxtype.pipeline.executors for direct access)
+from voxtype.pipeline.executors import AgentSwitchExecutor, InputExecutor  # noqa: E402
+
+register_step("agent_switch", AgentSwitchExecutor)
+register_step("input", InputExecutor)
 
 __all__ = [
     "AgentFilter",
@@ -26,6 +38,8 @@ __all__ = [
     "InputFilter",
     "Pipeline",
     "PipelineAction",
+    "PipelineLoader",
     "PipelineResult",
     "derive_message",
+    "register_step",
 ]
