@@ -31,8 +31,7 @@ from voxtype.core.state import AppState, StateManager
 from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
-from voxtype.pipeline import AgentFilter, InputFilter, Pipeline
-from voxtype.pipeline.executors import AgentSwitchExecutor
+from voxtype.pipeline import Pipeline, PipelineLoader
 from voxtype.stt.base import STTEngine
 
 logger = logging.getLogger(__name__)
@@ -372,34 +371,10 @@ class VoxtypeEngine:
         Returns:
             Pipeline if enabled, None otherwise.
         """
-        if not self.config.pipeline.enabled:
-            return None
-
-        pipeline = Pipeline()
-
-        # Add agent filter if enabled (runs first to set x_agent_switch)
-        agent_cfg = self.config.pipeline.agent_filter
-        if agent_cfg.enabled:
-            agent_filter = AgentFilter(
-                agent_ids=self.agents,  # Initial list, will update via events
-                triggers=agent_cfg.triggers,
-                match_threshold=agent_cfg.match_threshold,
-                subscribe_to_events=True,  # Auto-update when agents change
-            )
-            pipeline.add_step(agent_filter)
-
-        # Add input filter if enabled
-        input_cfg = self.config.pipeline.submit_filter
-        if input_cfg.enabled:
-            input_filter = InputFilter(
-                triggers=input_cfg.triggers,
-                confidence_threshold=input_cfg.confidence_threshold,
-                max_scan_words=input_cfg.max_scan_words,
-                decay_rate=input_cfg.decay_rate,
-            )
-            pipeline.add_step(input_filter)
-
-        return pipeline if len(pipeline) > 0 else None
+        services = {"agent_ids": self.agents, "subscribe_to_events": True}
+        return PipelineLoader().build_filter_pipeline(
+            self.config.pipeline, services,
+        )
 
     def _create_executor_pipeline(self) -> Pipeline:
         """Create executor pipeline for acting on extension fields.
@@ -410,11 +385,10 @@ class VoxtypeEngine:
         Returns:
             Pipeline with executors (always created, may be empty).
         """
-        pipeline = Pipeline()
-        pipeline.add_step(AgentSwitchExecutor(
-            switch_fn=self._switch_to_agent_by_name_internal,
-        ))
-        return pipeline
+        services = {"switch_fn": self._switch_to_agent_by_name_internal}
+        return PipelineLoader().build_executor_pipeline(
+            self.config.pipeline, services,
+        )
 
     # -------------------------------------------------------------------------
     # Initialization
