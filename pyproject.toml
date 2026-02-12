@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "voxtype"
 dynamic = ["version"]
-description = "Voice-to-text for your terminal"
+description = "Voice-first control for AI coding agents"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11,<3.12"
 authors = [
     { name = "dragfly" }
 ]
-keywords = ["voice", "speech-to-text", "dictation", "cli", "whisper", "linux", "wayland"]
+keywords = ["voice", "speech-to-text", "ai-agent", "voice-coding", "claude", "cursor", "dictation", "cli", "whisper", "openvip", "voice-control", "coding-assistant", "tts"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",

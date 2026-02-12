@@ -34,7 +34,7 @@ from voxtype.config import ConfigError
 
 app = typer.Typer(
     name="voxtype",
-    help="Voice-to-text for your terminal",
+    help="Voice-first control for AI coding agents",
     add_completion=True,  # Required for shell completion to work at runtime
     no_args_is_help=True,
     pretty_exceptions_enable=False,
@@ -73,7 +73,7 @@ def main_callback(
         typer.Option("--version", "-V", callback=version_callback, is_eager=True),
     ] = None,
 ) -> None:
-    """voxtype: Voice-to-text for your terminal."""
+    """voxtype: Voice-first control for AI coding agents."""
     pass
 
 def _register_plugins() -> None:
