@@ -1827,12 +1827,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b4/84/e97abf10e4a699194ff07fd586ec7f4cf867d9d04bead559a65f9e7aff84/typer_slim-0.21.0-py3-none-any.whl", hash = "sha256:92aee2188ac6fc2b2924bd75bb61a340b78bd8cd51fd9735533ce5a856812c8e", size = 47174, upload-time = "2025-12-25T09:54:54.609Z" },
 ]
 
-[package.optional-dependencies]
-standard = [
-    { name = "rich" },
-    { name = "shellingham" },
-]
-
 [[package]]
 name = "typing-extensions"
 version = "4.15.0"
@@ -1922,7 +1916,7 @@ dependencies = [
     { name = "sounddevice" },
     { name = "sse-starlette" },
     { name = "toml" },
-    { name = "typer-slim", extra = ["standard"] },
+    { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1988,8 +1982,8 @@ requires-dist = [
     { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.5.0" },
     { name = "toml", specifier = ">=0.10.0" },
     { name = "tqdm", marker = "extra == 'mlx'", specifier = ">=4.60.0" },
+    { name = "typer", specifier = ">=0.12.0" },
     { name = "typer", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "typer-slim", extras = ["standard"], specifier = ">=0.12.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
 provides-extras = ["dev", "gpu", "mlx", "tts"]
