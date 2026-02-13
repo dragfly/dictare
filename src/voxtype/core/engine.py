@@ -1263,19 +1263,16 @@ class VoxtypeEngine:
         if sys.platform != "darwin":
             return {"accessibility": True, "microphone": True}
 
-        from voxtype.platform.accessibility import (
+        from voxtype.platform.permissions import (
             ACCESSIBILITY_SETTINGS_URL,
-            is_accessibility_granted,
-        )
-        from voxtype.platform.microphone import (
             MICROPHONE_SETTINGS_URL,
-            is_microphone_granted,
+            get_permissions,
         )
 
+        perms = get_permissions()
         return {
-            "accessibility": is_accessibility_granted(),
+            **perms,
             "accessibility_url": ACCESSIBILITY_SETTINGS_URL,
-            "microphone": is_microphone_granted(),
             "microphone_url": MICROPHONE_SETTINGS_URL,
         }
 

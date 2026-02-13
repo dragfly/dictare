@@ -340,7 +340,7 @@ class TrayApp:
         self, icon: pystray.Icon, item: pystray.MenuItem
     ) -> None:
         """Open macOS Accessibility settings."""
-        from voxtype.platform.accessibility import open_accessibility_settings
+        from voxtype.platform.permissions import open_accessibility_settings
 
         open_accessibility_settings()
 
@@ -348,7 +348,7 @@ class TrayApp:
         self, icon: pystray.Icon, item: pystray.MenuItem
     ) -> None:
         """Open macOS Microphone settings."""
-        from voxtype.platform.microphone import open_microphone_settings
+        from voxtype.platform.permissions import open_microphone_settings
 
         open_microphone_settings()
 
