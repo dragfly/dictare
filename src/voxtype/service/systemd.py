@@ -58,6 +58,16 @@ def is_installed() -> bool:
     return get_unit_path().exists()
 
 
+def is_loaded() -> bool:
+    """Check whether the service is currently active."""
+    result = subprocess.run(
+        ["systemctl", "--user", "is-active", UNIT_NAME],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() == "active"
+
+
 def start() -> None:
     """Start the service."""
     subprocess.run(["systemctl", "--user", "start", UNIT_NAME], check=True)

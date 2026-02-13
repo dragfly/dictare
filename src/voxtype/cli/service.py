@@ -37,7 +37,10 @@ def service_install() -> None:
     console.print("[dim]Installing service...[/]")
     try:
         backend.install()
-        backend.start()
+        # On macOS, install() already loads the agent (= starts it).
+        # On Linux, we need an explicit start after install.
+        if sys.platform == "linux":
+            backend.start()
     except Exception as e:
         console.print(f"[red]Failed to install service: {e}[/]")
         raise typer.Exit(1)
@@ -103,7 +106,13 @@ def service_status() -> None:
 
     console.print("[green]Service is installed[/]")
 
-    # Also check engine HTTP status
+    # Check if service is loaded (macOS: launchd, Linux: systemd active)
+    loaded = backend.is_loaded() if hasattr(backend, "is_loaded") else True
+    if not loaded:
+        console.print("  Engine: [dim]stopped[/] (service not loaded)")
+        return
+
+    # Service is loaded — check engine HTTP status
     from openvip import Client
 
     from voxtype.config import load_config

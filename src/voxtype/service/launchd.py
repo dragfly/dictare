@@ -71,11 +71,29 @@ def is_installed() -> bool:
     return get_plist_path().exists()
 
 
+def is_loaded() -> bool:
+    """Check whether the LaunchAgent is currently loaded in launchd."""
+    result = subprocess.run(
+        ["launchctl", "list", LABEL],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
 def start() -> None:
-    """Start the LaunchAgent."""
-    subprocess.run(["launchctl", "start", LABEL], check=True)
+    """Load the LaunchAgent (starts the process and enables KeepAlive)."""
+    plist_path = get_plist_path()
+    if not plist_path.exists():
+        raise RuntimeError("Service not installed. Run 'voxtype service install' first.")
+    if is_loaded():
+        return  # Already loaded
+    subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
 
 def stop() -> None:
-    """Stop the LaunchAgent."""
-    subprocess.run(["launchctl", "stop", LABEL], check=True)
+    """Unload the LaunchAgent (stops the process and disables KeepAlive)."""
+    plist_path = get_plist_path()
+    if not is_loaded():
+        return  # Already unloaded
+    subprocess.run(["launchctl", "unload", str(plist_path)], check=True)
