@@ -35,7 +35,7 @@ def engine_start(
         voxtype engine start        # Starts with mode from config (default: keyboard)
 
     Daemon mode (background):
-        voxtype engine start -d     # Background, always agents mode, waiting for trigger
+        voxtype engine start -d     # Background, uses mode from config, waiting for trigger
 
     In daemon mode, the engine preloads models but stays IDLE until activated
     via tray click, hotkey, or API call.
@@ -63,10 +63,6 @@ def engine_start(
     config = load_config(config_file)
     if verbose:
         config.verbose = True
-
-    # Daemon mode always uses agents (headless = serve HTTP API)
-    if daemon:
-        config.output.mode = "agents"
 
     # Ensure required models are cached (auto-downloads if missing)
     if not ensure_required_models(config):

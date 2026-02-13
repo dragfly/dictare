@@ -262,6 +262,14 @@ class TrayApp:
 
         items.append(pystray.Menu.SEPARATOR)
 
+        # Advanced submenu
+        advanced_items = [
+            pystray.MenuItem("Restart Engine", self._on_restart_engine),
+        ]
+        items.append(pystray.MenuItem("Advanced", pystray.Menu(*advanced_items)))
+
+        items.append(pystray.Menu.SEPARATOR)
+
         # About (shows version)
         from voxtype import __version__
         items.append(pystray.MenuItem(f"voxtype v{__version__}", None, enabled=False))
@@ -306,6 +314,27 @@ class TrayApp:
         """Toggle listening state (OFF <-> LISTENING)."""
         if self._on_toggle_listening_cb:
             self._on_toggle_listening_cb()
+
+    def _on_restart_engine(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """Restart the engine service (launchd/systemd)."""
+        import sys
+        import threading
+
+        def do_restart() -> None:
+            try:
+                if sys.platform == "darwin":
+                    from voxtype.service import launchd as backend
+                elif sys.platform == "linux":
+                    from voxtype.service import systemd as backend
+                else:
+                    return
+                backend.stop()
+                backend.start()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Restart failed: {e}")
+
+        threading.Thread(target=do_restart, daemon=True).start()
 
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Quit the application."""
