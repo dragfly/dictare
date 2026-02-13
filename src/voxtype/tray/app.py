@@ -20,8 +20,16 @@ ICONS_DIR = Path(__file__).parent / "icons"
 
 
 def _load_icon(name: str) -> Image.Image:
-    """Load an icon from the icons directory."""
+    """Load an icon from the icons directory.
+
+    Prefers @2x variant for crisp rendering on Retina displays.
+    """
     from PIL import Image
+
+    # Prefer @2x for Retina (macOS menu bar icons are 22pt → 44px @2x)
+    retina_path = ICONS_DIR / f"{name}@2x.png"
+    if retina_path.exists():
+        return Image.open(retina_path)
 
     icon_path = ICONS_DIR / f"{name}.png"
     if icon_path.exists():
