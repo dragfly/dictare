@@ -20,69 +20,23 @@ ICONS_DIR = Path(__file__).parent / "icons"
 
 
 def _load_icon(name: str) -> Image.Image:
-    """Load an icon from the icons directory."""
+    """Load an icon from the icons directory.
+
+    Prefers @2x variant — the Retina patch will set NSImage point-size
+    so macOS renders full resolution on HiDPI displays.
+    """
     from PIL import Image
+
+    retina_path = ICONS_DIR / f"{name}@2x.png"
+    if retina_path.exists():
+        return Image.open(retina_path)
 
     icon_path = ICONS_DIR / f"{name}.png"
     if icon_path.exists():
         return Image.open(icon_path)
 
-    # Fallback: create a simple colored icon
-    return _create_fallback_icon(name)
-
-
-def _create_fallback_icon(name: str) -> Image.Image:
-    """Create a simple fallback icon if PNG not found."""
-    from PIL import Image, ImageDraw
-
-    # Colors for different states
-    colors = {
-        "voxtype": "#4A90D9",  # Blue - idle
-        "voxtype_active": "#5CB85C",  # Green - listening
-        "voxtype_muted": "#D9534F",  # Red - muted
-        "voxtype_loading": "#FFA500",  # Orange - loading
-    }
-    color = colors.get(name, "#4A90D9")
-
-    # Create a 64x64 icon
-    size = 64
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # Draw a circle
-    margin = 4
-    draw.ellipse([margin, margin, size - margin, size - margin], fill=color)
-
-    # Draw a microphone shape (simplified)
-    mic_color = "#FFFFFF"
-    center_x = size // 2
-    mic_width = 12
-    mic_height = 24
-    mic_top = size // 2 - mic_height // 2 - 4
-
-    # Microphone body
-    draw.rounded_rectangle(
-        [center_x - mic_width // 2, mic_top, center_x + mic_width // 2, mic_top + mic_height],
-        radius=mic_width // 2,
-        fill=mic_color,
-    )
-
-    # Microphone stand
-    stand_top = mic_top + mic_height - 4
-    draw.arc(
-        [center_x - mic_width, stand_top, center_x + mic_width, stand_top + 12],
-        start=0,
-        end=180,
-        fill=mic_color,
-        width=3,
-    )
-    draw.line(
-        [center_x, stand_top + 12, center_x, stand_top + 18],
-        fill=mic_color,
-        width=3,
-    )
-
-    return img
+    # Fallback: 22x22 transparent
+    return Image.new("RGBA", (22, 22), (0, 0, 0, 0))
 
 
 def _hide_dock_icon() -> None:
@@ -161,29 +115,46 @@ def _ensure_accessibility(prompt: bool = True) -> bool:
         return False
 
 
-def _patch_pystray_template() -> None:
-    """Monkey-patch pystray to call setTemplate_(True) on every icon update.
+def _patch_pystray_retina() -> None:
+    """Monkey-patch pystray to render icons at full Retina resolution.
 
-    pystray ignores the ``template`` kwarg — it never calls
-    ``NSImage.setTemplate_(True)``.  We wrap ``_assert_image`` so that
-    the NSImage is marked as template after every creation, which tells
-    macOS to render it as a shape mask that adapts to dark/light.
+    pystray resizes every icon to ``thickness`` pixels (22 on macOS),
+    which becomes blurry on Retina (44 physical pixels).  We override
+    ``_assert_image`` to:
+
+    1. Convert the PIL image to NSImage at **full pixel resolution**
+    2. Set the NSImage *point* size to ``thickness`` so macOS knows
+       the image is @2x and renders it pixel-perfect.
     """
     if sys.platform != "darwin":
         return
     try:
+        import io
+
+        import AppKit
+        import Foundation
         import pystray._darwin as _darwin  # type: ignore[import-untyped]
 
-        _orig = _darwin.Icon._assert_image
+        def _assert_image_retina(self: _darwin.Icon) -> None:  # type: ignore[override]
+            thickness = self._status_bar.thickness()
+            pil_img = self._icon
 
-        def _assert_image_template(self: _darwin.Icon) -> None:
-            _orig(self)
-            if self._icon_image is not None:
-                self._icon_image.setTemplate_(True)
+            # Convert PIL → PNG bytes → NSImage
+            buf = io.BytesIO()
+            pil_img.save(buf, "png")
+            ns_data = Foundation.NSData(buf.getvalue())
+            ns_image = AppKit.NSImage.alloc().initWithData_(ns_data)
 
-        _darwin.Icon._assert_image = _assert_image_template
+            # Declare point size = menu bar thickness (22pt).
+            # If the pixel data is 44px, macOS treats it as @2x automatically.
+            ns_image.setSize_((thickness, thickness))
+
+            self._icon_image = ns_image
+            self._status_item.button().setImage_(ns_image)
+
+        _darwin.Icon._assert_image = _assert_image_retina
     except Exception:
-        logger.warning("Could not patch pystray for template icons", exc_info=True)
+        logger.warning("Could not patch pystray for Retina icons", exc_info=True)
 
 
 class TrayApp:
@@ -460,8 +431,8 @@ class TrayApp:
         """Run the tray application (blocking)."""
         import pystray
 
-        # Patch pystray to call setTemplate_(True) — it doesn't do it itself
-        _patch_pystray_template()
+        # Patch pystray for crisp Retina rendering
+        _patch_pystray_retina()
 
         self._icon = pystray.Icon(
             name="voxtype",
