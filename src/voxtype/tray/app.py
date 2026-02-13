@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import pystray
@@ -78,6 +81,65 @@ def _create_fallback_icon(name: str) -> Image.Image:
     )
 
     return img
+
+def _ensure_accessibility(prompt: bool = True) -> bool:
+    """Check macOS Accessibility permission, optionally prompting the user.
+
+    On macOS, calls AXIsProcessTrustedWithOptions to check (and optionally
+    trigger the system dialog for) Accessibility permission.  This is required
+    for pynput to monitor global key events.
+
+    Returns True if the process is trusted, False otherwise.
+    No-op (returns True) on non-macOS platforms.
+    """
+    if sys.platform != "darwin":
+        return True
+
+    try:
+        import ctypes
+        import ctypes.util
+
+        as_path = "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices"
+        cf_path = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
+
+        appserv = ctypes.cdll.LoadLibrary(as_path)
+        cf = ctypes.cdll.LoadLibrary(cf_path)
+
+        # Symbols (Apple API names — noqa N806)
+        prompt_key = ctypes.c_void_p.in_dll(  # kAXTrustedCheckOptionPrompt
+            appserv, "kAXTrustedCheckOptionPrompt"
+        )
+        cf_true = ctypes.c_void_p.in_dll(cf, "kCFBooleanTrue")
+
+        # Build options dict: {kAXTrustedCheckOptionPrompt: kCFBooleanTrue}
+        cf.CFDictionaryCreateMutable.restype = ctypes.c_void_p
+        cf.CFDictionaryCreateMutable.argtypes = [
+            ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p,
+        ]
+        options = cf.CFDictionaryCreateMutable(None, 1, None, None)
+
+        cf.CFDictionarySetValue.argtypes = [
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+        ]
+        cf.CFDictionarySetValue(options, prompt_key, cf_true)
+
+        appserv.AXIsProcessTrustedWithOptions.restype = ctypes.c_bool
+        appserv.AXIsProcessTrustedWithOptions.argtypes = [ctypes.c_void_p]
+        trusted = appserv.AXIsProcessTrustedWithOptions(options)
+
+        cf.CFRelease.argtypes = [ctypes.c_void_p]
+        cf.CFRelease(options)
+
+        if not trusted:
+            logger.warning(
+                "Accessibility permission not granted — "
+                "hotkey monitoring will not work until enabled in "
+                "System Settings → Privacy & Security → Accessibility"
+            )
+        return trusted
+    except Exception:
+        logger.warning("Could not check Accessibility permission", exc_info=True)
+        return False
 
 class TrayApp:
     """System tray application for VoxType.
@@ -419,6 +481,9 @@ def main() -> None:
 
     app.on_toggle_listening(on_toggle_listening)
     app.on_output_mode_change(on_output_mode_change)
+
+    # Check Accessibility permission (triggers macOS dialog if needed)
+    _ensure_accessibility(prompt=True)
 
     # Start global hotkey listener
     def start_hotkey_listener() -> None:
