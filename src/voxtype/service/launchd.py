@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 LABEL = "com.dragfly.voxtype"
+TRAY_LABEL = "com.dragfly.voxtype.tray"
 LOG_DIR = Path.home() / "Library" / "Logs" / "voxtype"
 
 def get_plist_path() -> Path:
@@ -40,7 +41,10 @@ def generate_plist(python_path: str) -> str:
     return plistlib.dumps(plist).decode()
 
 def install() -> None:
-    """Create .app bundle, write plist, and load the LaunchAgent."""
+    """Create .app bundle, write plist, and load the LaunchAgent.
+
+    Also installs and starts the tray LaunchAgent.
+    """
     import sys
 
     from voxtype.service.app_bundle import create_app_bundle
@@ -51,9 +55,16 @@ def install() -> None:
     plist_path.write_text(generate_plist(sys.executable))
     subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
+    # Also install tray auto-start
+    if not is_tray_installed():
+        install_tray()
+
 def uninstall() -> None:
-    """Unload and remove the LaunchAgent, then remove .app bundle."""
+    """Unload and remove all LaunchAgents, then remove .app bundle."""
     from voxtype.service.app_bundle import remove_app_bundle
+
+    # Uninstall tray first
+    uninstall_tray()
 
     plist_path = get_plist_path()
     if plist_path.exists():
@@ -89,3 +100,43 @@ def stop() -> None:
     if not is_loaded():
         return  # Already unloaded
     subprocess.run(["launchctl", "unload", str(plist_path)], check=True)
+
+# --------------------------------------------------------------------------
+# Tray LaunchAgent
+# --------------------------------------------------------------------------
+
+def get_tray_plist_path() -> Path:
+    """Return the tray LaunchAgent plist path."""
+    return Path.home() / "Library" / "LaunchAgents" / f"{TRAY_LABEL}.plist"
+
+def install_tray() -> None:
+    """Create and load a LaunchAgent for the tray app (auto-start at login)."""
+    import sys
+
+    python_path = sys.executable
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    plist: dict = {
+        "Label": TRAY_LABEL,
+        "ProgramArguments": [python_path, "-m", "voxtype", "tray", "start", "--foreground"],
+        "RunAtLoad": True,
+        "KeepAlive": False,  # don't restart if user quits tray
+        "StandardOutPath": str(LOG_DIR / "tray-stdout.log"),
+        "StandardErrorPath": str(LOG_DIR / "tray-stderr.log"),
+    }
+
+    plist_path = get_tray_plist_path()
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_text(plistlib.dumps(plist).decode())
+    subprocess.run(["launchctl", "load", str(plist_path)], check=True)
+
+def uninstall_tray() -> None:
+    """Unload and remove the tray LaunchAgent."""
+    plist_path = get_tray_plist_path()
+    if plist_path.exists():
+        subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
+        plist_path.unlink(missing_ok=True)
+
+def is_tray_installed() -> bool:
+    """Check whether the tray plist exists."""
+    return get_tray_plist_path().exists()
