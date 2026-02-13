@@ -1,9 +1,11 @@
-"""Tests for voxtype.tray.app — _ensure_accessibility()."""
+"""Tests for voxtype.tray.app."""
 
 from __future__ import annotations
 
 import sys
 from unittest.mock import MagicMock, patch
+
+from voxtype.tray.app import TrayApp
 
 def test_ensure_accessibility_noop_on_linux(monkeypatch: object) -> None:
     """On non-macOS, _ensure_accessibility always returns True."""
@@ -73,3 +75,35 @@ def test_ensure_accessibility_calls_ax_api(monkeypatch: object) -> None:
     mock_appserv.AXIsProcessTrustedWithOptions.assert_called_once()
     mock_cf.CFDictionarySetValue.assert_called_once()
     mock_cf.CFRelease.assert_called_once()
+
+class TestSetTargets:
+    """Tests for TrayApp.set_targets — agent list management."""
+
+    def test_set_targets_populates_list(self) -> None:
+        app = TrayApp()
+        app.set_targets(["alice", "bob"], current="bob")
+        assert app._targets == ["alice", "bob"]
+        assert app._current_target == "bob"
+
+    def test_set_targets_empty_clears_current(self) -> None:
+        """When last agent disconnects, targets AND current_target are cleared."""
+        app = TrayApp()
+        app.set_targets(["voce"], current="voce")
+        assert app._current_target == "voce"
+
+        # Last agent disconnects
+        app.set_targets([], current="")
+        assert app._targets == []
+        assert app._current_target == ""
+
+    def test_set_targets_picks_first_when_no_current(self) -> None:
+        app = TrayApp()
+        app.set_targets(["alice", "bob"])
+        assert app._current_target == "alice"
+
+    def test_set_targets_keeps_current_if_still_valid(self) -> None:
+        app = TrayApp()
+        app.set_targets(["alice", "bob"], current="bob")
+        # New poll with same agents, no current specified
+        app.set_targets(["alice", "bob"])
+        assert app._current_target == "bob"
