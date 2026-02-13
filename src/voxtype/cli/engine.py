@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 
 from voxtype.cli._helpers import auto_detect_acceleration, console
-from voxtype.cli.models import check_required_models
+from voxtype.cli.models import ensure_required_models
 from voxtype.config import load_config
 
 app = typer.Typer(help="Manage the engine.", no_args_is_help=True)
@@ -25,24 +24,6 @@ def engine_start(
         Path | None,
         typer.Option("--config", "-c", help="Path to config file"),
     ] = None,
-    # STT options
-    model: Annotated[
-        str | None,
-        typer.Option("--model", "-m", help="Whisper model (tiny/base/small/medium/large-v3)"),
-    ] = None,
-    language: Annotated[
-        str | None,
-        typer.Option("--language", "-l", help="Language code or 'auto'"),
-    ] = None,
-    # Output mode
-    keyboard: Annotated[
-        bool,
-        typer.Option("--keyboard", "-K", help="Keyboard mode - types what you say"),
-    ] = False,
-    agents: Annotated[
-        bool,
-        typer.Option("--agents", "-A", help="Agent mode - starts HTTP server for SSE agents"),
-    ] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Show debug logs (disables loading panel)"),
@@ -51,30 +32,22 @@ def engine_start(
     """Start the voxtype engine.
 
     Foreground mode (default):
-        voxtype engine start --keyboard    # Types what you say, listening immediately
-        voxtype engine start --agents      # Agent mode, listening immediately
+        voxtype engine start        # Starts with mode from config (default: keyboard)
 
     Daemon mode (background):
-        voxtype engine start -d --agents   # Background, models loaded, waiting for trigger
+        voxtype engine start -d     # Background, always agents mode, waiting for trigger
 
     In daemon mode, the engine preloads models but stays IDLE until activated
     via tray click, hotkey, or API call.
+
+    Output mode (keyboard vs agents) is configured in ~/.config/voxtype/config.toml:
+        [output]
+        mode = "agents"   # or "keyboard"
     """
     import os
 
     from voxtype.app import AppController
     from voxtype.utils.paths import get_pid_path
-
-    # Validate: require --keyboard or --agents
-    if not keyboard and not agents:
-        console.print("[red]Error: Must specify --keyboard or --agents[/]")
-        console.print("[dim]Examples:[/]")
-        console.print("[dim]  voxtype engine start --keyboard    # Types what you say[/]")
-        console.print("[dim]  voxtype engine start --agents      # Starts HTTP server for agents[/]")
-        raise typer.Exit(1)
-    if keyboard and agents:
-        console.print("[red]Error: Cannot use --keyboard with --agents[/]")
-        raise typer.Exit(1)
 
     # Check if engine already running
     pid_path = get_pid_path()
@@ -91,23 +64,16 @@ def engine_start(
     if verbose:
         config.verbose = True
 
-    # Apply CLI overrides
-    if model:
-        config.stt.model = model
-    if language:
-        config.stt.language = language
-    config.output.mode = "agents" if agents else "keyboard"
+    # Daemon mode always uses agents (headless = serve HTTP API)
+    if daemon:
+        config.output.mode = "agents"
 
-    # Quick check: verify required models are cached
-    if not check_required_models(config, for_command="engine"):
+    # Ensure required models are cached (auto-downloads if missing)
+    if not ensure_required_models(config):
         raise typer.Exit(1)
 
     # Auto-detect hardware acceleration
     auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)
-
-    # Auto-detect hotkey based on platform
-    if config.hotkey.key == "KEY_SCROLLLOCK" and sys.platform == "darwin":
-        config.hotkey.key = "KEY_RIGHTMETA"
 
     # Create AppController
     controller = AppController(config)

@@ -57,7 +57,7 @@ class TestAppBundleCreate:
         assert launcher.stat().st_mode & stat.S_IEXEC
         content = launcher.read_text()
         assert "/opt/brew/bin/python3.11" in content
-        assert "-m voxtype engine start -d --agents" in content
+        assert "-m voxtype engine start -d" in content
 
     def test_replaces_existing_bundle(self, tmp_path, monkeypatch):
         monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
@@ -177,7 +177,7 @@ class TestLaunchdIsInstalled:
 class TestSystemdGenerateUnit:
     def test_contains_exec_start(self):
         unit = generate_unit("/usr/bin/python3")
-        assert "ExecStart=/usr/bin/python3 -m voxtype engine start -d --agents" in unit
+        assert "ExecStart=/usr/bin/python3 -m voxtype engine start -d" in unit
 
     def test_contains_service_section(self):
         unit = generate_unit("/usr/bin/python3")

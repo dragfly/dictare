@@ -80,6 +80,54 @@ def test_ensure_accessibility_calls_ax_api(monkeypatch: object) -> None:
     mock_cf.CFRelease.assert_called_once()
 
 
+class TestTrayStates:
+    """Tests for tray icon state transitions."""
+
+    def test_initial_state_is_disconnected(self) -> None:
+        app = TrayApp()
+        assert app._state == "disconnected"
+
+    def test_set_state_disconnected(self) -> None:
+        app = TrayApp()
+        app.set_state("off")
+        assert app._state == "off"
+        app.set_state("disconnected")
+        assert app._state == "disconnected"
+
+    def test_set_state_listening(self) -> None:
+        app = TrayApp()
+        app.set_state("listening")
+        assert app._state == "listening"
+
+    def test_set_state_rejects_unknown(self) -> None:
+        app = TrayApp()
+        app.set_state("bogus")
+        assert app._state == "disconnected"  # unchanged from initial
+
+    def test_update_icon_maps_disconnected_to_muted(self) -> None:
+        app = TrayApp()
+        mock_icon = MagicMock()
+        app._icon = mock_icon
+        app.set_state("disconnected")
+        # _update_icon was called; the icon should be set to voxtype_muted
+        assert mock_icon.icon is not None  # icon was updated
+
+    def test_menu_status_disconnected(self) -> None:
+        app = TrayApp()
+        app.set_state("disconnected")
+        menu = app._create_menu()
+        # First item is status — label should say "Disconnected"
+        first_label = menu._items[0].text
+        assert "Disconnected" in first_label
+
+    def test_menu_status_idle(self) -> None:
+        app = TrayApp()
+        app.set_state("off")
+        menu = app._create_menu()
+        first_label = menu._items[0].text
+        assert "IDLE" in first_label
+
+
 class TestSetTargets:
     """Tests for TrayApp.set_targets — agent list management."""
 

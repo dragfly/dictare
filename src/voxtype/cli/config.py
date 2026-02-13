@@ -62,7 +62,7 @@ def _show_config_list() -> None:
         console.print(f"[dim]Config file: {config_path}[/]")
     else:
         console.print(f"[dim]Config file: {config_path} (not created, using defaults)[/]")
-        console.print("[dim]Run 'voxtype init' to create config file[/]")
+        console.print("[dim]Run 'voxtype config edit' to create config file[/]")
 
 
 @app.command("get")
@@ -155,19 +155,3 @@ def config_edit() -> None:
                 continue
 
 
-@app.command("path")
-def config_path_cmd() -> None:
-    """Show config file path."""
-    console.print(get_config_path())
-
-
-@app.command("shortcuts")
-def config_shortcuts() -> None:
-    """Configure keyboard shortcuts interactively.
-
-    Opens an interactive UI to set global keyboard shortcuts for voxtype commands.
-    Shortcuts work system-wide while voxtype is running.
-    """
-    from voxtype.ui import configure_shortcuts
-
-    configure_shortcuts()

@@ -48,19 +48,16 @@ def register(app: typer.Typer) -> None:
             bool,
             typer.Option("--list-engines", help="List available TTS engines and exit"),
         ] = False,
-        no_engine: Annotated[
-            bool,
-            typer.Option("--no-engine", help="Force in-process TTS (skip running engine even if available)"),
-        ] = False,
     ) -> None:
         """Speak text using text-to-speech.
+
+        Uses the running engine if available, falls back to in-process TTS.
 
         Examples:
             voxtype speak "Hello world"
             echo "Hello world" | voxtype speak
             llm "Tell me a joke" | voxtype speak --engine say
             voxtype speak --list-engines
-            voxtype speak "Hello" --no-engine  # Force in-process
         """
         import sys
 
@@ -118,33 +115,32 @@ def register(app: typer.Typer) -> None:
         )
 
         # Try to use running engine via HTTP /speech if available
-        if not no_engine:
-            import urllib.error
+        import urllib.error
 
-            from openvip import Client
+        from openvip import Client
 
-            try:
-                client = Client(
-                    f"http://{config.server.host}:{config.server.port}",
-                    timeout=30.0,
-                )
-                response = client.speak(
-                    text,
-                    language=tts_config.language,
-                    engine=tts_config.engine,
-                    voice=tts_config.voice or None,
-                    speed=tts_config.speed,
-                )
-                if not quiet:
-                    duration = response.duration_ms or "?"
-                    console.print(f"[dim]Spoken via engine ({duration}ms)[/]")
-                return
-            except (urllib.error.URLError, ConnectionRefusedError, OSError):
-                pass  # Engine not running, fall through to in-process
-            except Exception as e:
-                if not quiet:
-                    console.print(f"[yellow]Engine unavailable: {e}[/]")
-                # Fall through to in-process TTS
+        try:
+            client = Client(
+                f"http://{config.server.host}:{config.server.port}",
+                timeout=30.0,
+            )
+            response = client.speak(
+                text,
+                language=tts_config.language,
+                engine=tts_config.engine,
+                voice=tts_config.voice or None,
+                speed=tts_config.speed,
+            )
+            if not quiet:
+                duration = response.duration_ms or "?"
+                console.print(f"[dim]Spoken via engine ({duration}ms)[/]")
+            return
+        except (urllib.error.URLError, ConnectionRefusedError, OSError):
+            pass  # Engine not running, fall through to in-process
+        except Exception as e:
+            if not quiet:
+                console.print(f"[yellow]Engine unavailable: {e}[/]")
+            # Fall through to in-process TTS
 
         # Fallback: in-process TTS
         try:

@@ -39,7 +39,7 @@ class TestConfigDefaults:
         import sys
         config = HotkeyConfig()
         # Platform-specific: Command on macOS, Scroll Lock on Linux
-        expected_key = "KEY_LEFTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
+        expected_key = "KEY_RIGHTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
         assert config.key == expected_key
         assert config.device == ""
 

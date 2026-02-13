@@ -23,13 +23,6 @@ class TestCLIBasics:
         assert result.exit_code == 0
         assert "voxtype" in result.stdout.lower()
 
-    def test_listen_help(self) -> None:
-        """Test 'listen --help' shows listen command help."""
-        result = runner.invoke(app, ["listen", "--help"])
-        assert result.exit_code == 0
-        assert "--model" in result.stdout
-        assert "--language" in result.stdout
-
     def test_config_help(self) -> None:
         """Test 'config --help' shows config command help."""
         result = runner.invoke(app, ["config", "--help"])
@@ -43,12 +36,6 @@ class TestCLIBasics:
 
 class TestCLIConfigCommands:
     """Test config-related CLI commands."""
-
-    def test_config_path(self) -> None:
-        """Test 'config path' shows config path."""
-        result = runner.invoke(app, ["config", "path"])
-        assert result.exit_code == 0
-        assert "voxtype" in result.stdout.lower()
 
     def test_config_list(self) -> None:
         """Test 'config list' shows available config keys."""

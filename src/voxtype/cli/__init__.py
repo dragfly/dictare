@@ -14,19 +14,14 @@ import typer
 from voxtype import __version__
 from voxtype.cli import (
     agent,
-    completion,
     config,
     dependencies,
-    devices,
     engine,
-    execute,
-    listen,
-    logs,
     misc,
     models,
     service,
+    setup,
     speak,
-    transcribe,
     tray,
 )
 from voxtype.cli._helpers import console
@@ -42,7 +37,6 @@ app = typer.Typer(
 )
 
 # Sub-app groups
-app.add_typer(completion.app, name="completion")
 app.add_typer(models.app, name="models")
 app.add_typer(dependencies.app, name="dependencies")
 app.add_typer(tray.app, name="tray")
@@ -51,14 +45,9 @@ app.add_typer(config.app, name="config")
 app.add_typer(service.app, name="service")
 
 # Top-level commands (register pattern)
-listen.register(app)
 speak.register(app)
-transcribe.register(app)
-execute.register(app)
 agent.register(app)
-devices.register(app)
-logs.register(app)
-misc.register(app)
+setup.register(app)
 
 
 def version_callback(value: bool) -> None:
