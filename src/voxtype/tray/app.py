@@ -441,6 +441,11 @@ class TrayApp:
             title="VoxType",
             menu=self._create_menu(),
         )
+
+        # macOS: mark as template image so it adapts to dark/light menu bar
+        if sys.platform == "darwin":
+            self._icon.template = True
+
         self._icon.run()
 
     def run_detached(self) -> threading.Thread:
