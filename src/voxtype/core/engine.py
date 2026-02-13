@@ -1257,20 +1257,26 @@ class VoxtypeEngine:
 
     @staticmethod
     def _get_permissions() -> dict:
-        """Check platform permissions required for keyboard injection."""
+        """Check platform permissions (Accessibility + Microphone)."""
         import sys
 
         if sys.platform != "darwin":
-            return {"accessibility": True}
+            return {"accessibility": True, "microphone": True}
 
         from voxtype.platform.accessibility import (
             ACCESSIBILITY_SETTINGS_URL,
             is_accessibility_granted,
         )
+        from voxtype.platform.microphone import (
+            MICROPHONE_SETTINGS_URL,
+            is_microphone_granted,
+        )
 
         return {
             "accessibility": is_accessibility_granted(),
-            "settings_url": ACCESSIBILITY_SETTINGS_URL,
+            "accessibility_url": ACCESSIBILITY_SETTINGS_URL,
+            "microphone": is_microphone_granted(),
+            "microphone_url": MICROPHONE_SETTINGS_URL,
         }
 
     def _handle_tts_request(self, body: dict) -> dict:

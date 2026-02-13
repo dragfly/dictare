@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b20] - 2026-02-13
+
+### Added
+
+- **Microphone permission support** — Swift launcher now requests mic permission (shows "Voxtype" in dialog). `NSMicrophoneUsageDescription` added to Info.plist. Without this, macOS silently feeds zeros to the audio stream.
+- **Microphone permission in `/status`** — new `platform.permissions.microphone` field. Tray shows "Grant Microphone Permission" menu item when not granted, clicking opens System Settings → Microphone directly.
+- **`voxtype.platform.microphone` module** — `is_microphone_granted()` (cached 5s) and `open_microphone_settings()`.
+
+### Fixed
+
+- **Brew `post_uninstall` cleanup** — now removes Accessibility TCC entry via `tccutil reset`.
+
 ## [0.1.0b19] - 2026-02-13
 
 ### Added

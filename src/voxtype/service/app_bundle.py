@@ -87,6 +87,7 @@ def create_app_bundle(
         "CFBundleExecutable": APP_NAME,
         "CFBundleIconFile": APP_NAME,
         "LSUIElement": True,  # No Dock icon
+        "NSMicrophoneUsageDescription": "Voxtype needs microphone access for voice-to-text.",
     }
     plist_path = contents / "Info.plist"
     with open(plist_path, "wb") as f:
