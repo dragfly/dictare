@@ -142,7 +142,7 @@ class TrayApp:
 
         # Permissions state (from engine /status polling)
         self._accessibility_granted = True
-        self._accessibility_settings_url = ""
+        self._microphone_granted = True
 
         # Status polling
         self._polling = False
@@ -176,14 +176,22 @@ class TrayApp:
             pystray.MenuItem(f"Status: {status_text}", None, enabled=False),
         ]
 
-        # Accessibility warning (shown when permission not granted)
-        if not self._accessibility_granted and sys.platform == "darwin":
-            items.append(
-                pystray.MenuItem(
-                    "Grant Accessibility Permission",
-                    self._on_open_accessibility_settings,
-                ),
-            )
+        # Permission warnings (shown when not granted)
+        if sys.platform == "darwin":
+            if not self._microphone_granted:
+                items.append(
+                    pystray.MenuItem(
+                        "Grant Microphone Permission",
+                        self._on_open_microphone_settings,
+                    ),
+                )
+            if not self._accessibility_granted:
+                items.append(
+                    pystray.MenuItem(
+                        "Grant Accessibility Permission",
+                        self._on_open_accessibility_settings,
+                    ),
+                )
 
         items.append(pystray.Menu.SEPARATOR)
 
@@ -331,6 +339,14 @@ class TrayApp:
 
         open_accessibility_settings()
 
+    def _on_open_microphone_settings(
+        self, icon: pystray.Icon, item: pystray.MenuItem
+    ) -> None:
+        """Open macOS Microphone settings."""
+        from voxtype.platform.microphone import open_microphone_settings
+
+        open_microphone_settings()
+
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Quit the application."""
         if self._icon:
@@ -348,8 +364,8 @@ class TrayApp:
             "loading": "voxtype_loading",
         }.get(self._state, "voxtype_muted")
 
-        # Override to muted if accessibility not granted (keyboard won't work)
-        if not self._accessibility_granted and self._state not in ("disconnected", "loading"):
+        # Override to muted if permissions not granted
+        if (not self._accessibility_granted or not self._microphone_granted) and self._state not in ("disconnected", "loading"):
             icon_name = "voxtype_muted"
 
         self._icon.icon = _load_icon(icon_name)
@@ -440,11 +456,13 @@ class TrayApp:
 
                     # Update permissions state
                     perms = platform.get("permissions", {})
-                    granted = perms.get("accessibility", True)
-                    if granted != self._accessibility_granted:
-                        self._accessibility_granted = granted
-                        self._accessibility_settings_url = perms.get("settings_url", "")
+                    ax_granted = perms.get("accessibility", True)
+                    mic_granted = perms.get("microphone", True)
+                    if ax_granted != self._accessibility_granted or mic_granted != self._microphone_granted:
+                        self._accessibility_granted = ax_granted
+                        self._microphone_granted = mic_granted
                         self._update_menu()
+                        self._update_icon()
                 except (urllib.error.URLError, ConnectionRefusedError, OSError):
                     self.set_state("disconnected")
                 except Exception as e:
