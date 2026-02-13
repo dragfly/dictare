@@ -38,8 +38,8 @@ sed -i '' \
 
 # ---------- 5. Stop running services ----------
 echo "==> Stopping services..."
+brew services stop voxtype 2>/dev/null || true
 /opt/homebrew/bin/voxtype tray stop 2>/dev/null || true
-/opt/homebrew/bin/voxtype service uninstall 2>/dev/null || true
 
 # ---------- 6. Reinstall ----------
 echo "==> brew reinstall voxtype..."
@@ -49,10 +49,8 @@ brew reinstall voxtype 2>&1 | tail -3
 INSTALLED=$(/opt/homebrew/bin/voxtype --version 2>&1)
 echo "==> Installed: ${INSTALLED}"
 
-# ---------- 8. Restart services ----------
-echo "==> Restarting service + tray..."
-/opt/homebrew/bin/voxtype service install 2>&1
-sleep 2
-/opt/homebrew/bin/voxtype tray start 2>&1
+# ---------- 8. Restart service ----------
+echo "==> Starting service..."
+brew services start voxtype 2>&1
 
-echo "==> Done."
+echo "==> Done. Use 'voxtype tray start' for the tray icon."
