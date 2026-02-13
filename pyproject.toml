@@ -89,7 +89,7 @@ Repository = "https://github.com/dragfly/voxtype"
 Issues = "https://github.com/dragfly/voxtype/issues"
 
 [tool.uv.sources]
-openvip = { path = "../../nottoplay/openvip-sdks/python", editable = true }
+openvip = { path = "../../openvip-dev/sdks/python", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/voxtype"]
