@@ -1,17 +1,10 @@
 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="50" cy="50" r="48" fill="#4A90D9"/>
-  <rect x="32.0" y="14.0" width="36.0" height="56.8"
-        rx="18.0" fill="#FFFFFF"/>
-  <path d="M 79.4 61.9
-           A 29.4 24.1 0 0 1 20.6 61.9"
-        stroke="#FFFFFF" stroke-width="5.3" fill="none" stroke-linecap="round"/>
-  <path d="M 29.3 79.0
-           L 70.7 79.0
-           A 29.4 24.1 0 0 1 29.3 79.0 Z"
-        fill="#FFFFFF"/>
-  <line x1="50.0" y1="61.9" x2="50.0" y2="79.0"
-        stroke="#FFFFFF" stroke-width="5.3" stroke-linecap="round"/>
-  <line x1="34.8" y1="79.0"
-        x2="65.2" y2="79.0"
-        stroke="#FFFFFF" stroke-width="5.3" stroke-linecap="round"/>
+  <rect x="35" y="12" width="30" height="48" rx="15"
+        fill="none" stroke="#000000" stroke-width="6"/>
+  <path d="M 30 46 A 20 26 0 0 0 70 46"
+        stroke="#000000" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <line x1="50" y1="72" x2="50" y2="82"
+        stroke="#000000" stroke-width="6" stroke-linecap="round"/>
+  <line x1="38" y1="82" x2="62" y2="82"
+        stroke="#000000" stroke-width="6" stroke-linecap="round"/>
 </svg>
