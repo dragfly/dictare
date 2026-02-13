@@ -75,7 +75,7 @@ def create_app_bundle(python_path: str | None = None) -> Path:
     launcher_path = macos_dir / APP_NAME
     launcher_script = (
         f"#!/bin/bash\n"
-        f'{python_path} -m voxtype engine start -d --agents &\n'
+        f'{python_path} -m voxtype engine start -d &\n'
         f'CHILD=$!\n'
         f'trap "kill $CHILD 2>/dev/null" SIGTERM SIGINT\n'
         f'wait $CHILD\n'

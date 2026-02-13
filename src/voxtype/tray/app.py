@@ -161,7 +161,7 @@ class TrayApp:
 
     def __init__(self) -> None:
         self._icon: pystray.Icon | None = None
-        self._state = "off"  # off, listening, loading
+        self._state = "disconnected"  # disconnected, off, listening, loading
         self._progress: int = 0  # 0-100, for loading state
         self._loading_stage: str = ""  # "STT" | "VAD" | ""
         self._targets: list[str] = []
@@ -198,8 +198,10 @@ class TrayApp:
         if self._state == "loading":
             stage_text = f" {self._loading_stage}..." if self._loading_stage else ""
             status_text = f"Loading{stage_text}"
+        elif self._state == "disconnected":
+            status_text = "Disconnected"
         else:
-            state_display = self._state.upper()  # OFF or LISTENING
+            state_display = "IDLE" if self._state == "off" else self._state.upper()
             status_text = state_display
 
         items = [
@@ -311,10 +313,11 @@ class TrayApp:
             return
 
         icon_name = {
+            "disconnected": "voxtype_muted",
             "off": "voxtype",
             "listening": "voxtype_active",
             "loading": "voxtype_loading",
-        }.get(self._state, "voxtype")
+        }.get(self._state, "voxtype_muted")
 
         self._icon.icon = _load_icon(icon_name)
 
@@ -336,7 +339,7 @@ class TrayApp:
             progress: Loading progress 0-100 (only for loading state)
             loading_stage: What's loading ("STT", "VAD", "")
         """
-        if state in ("off", "listening", "loading"):
+        if state in ("disconnected", "off", "listening", "loading"):
             self._state = state
             self._progress = progress
             self._loading_stage = loading_stage
@@ -405,7 +408,7 @@ class TrayApp:
                     agents = output.get("available_agents", [])
                     self.set_targets(agents, output.get("current_agent", ""))
                 except (urllib.error.URLError, ConnectionRefusedError, OSError):
-                    pass  # Engine not running
+                    self.set_state("disconnected")
                 except Exception as e:
                     import sys
                     print(f"Tray poll error: {e}", file=sys.stderr)
@@ -431,7 +434,7 @@ class TrayApp:
 
         self._icon = pystray.Icon(
             name="voxtype",
-            icon=_load_icon("voxtype"),
+            icon=_load_icon("voxtype_muted"),
             title="VoxType",
             menu=self._create_menu(),
         )

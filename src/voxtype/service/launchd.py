@@ -27,7 +27,7 @@ def generate_plist(python_path: str) -> str:
     if app_path.exists():
         program_args = [get_executable_path()]
     else:
-        program_args = [python_path, "-m", "voxtype", "engine", "start", "-d", "--agents"]
+        program_args = [python_path, "-m", "voxtype", "engine", "start", "-d"]
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     plist: dict = {

@@ -21,7 +21,7 @@ def generate_unit(python_path: str) -> str:
 
         [Service]
         Type=simple
-        ExecStart={python_path} -m voxtype engine start -d --agents
+        ExecStart={python_path} -m voxtype engine start -d
         Restart=on-failure
         RestartSec=5
 

@@ -110,8 +110,8 @@ class STTConfig(BaseModel):
 def _default_hotkey() -> str:
     """Return platform-specific default hotkey."""
     import sys
-    # macOS: Command key, Linux: Scroll Lock
-    return "KEY_LEFTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
+    # macOS: Right Command key, Linux: Scroll Lock
+    return "KEY_RIGHTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
 
 class HotkeyConfig(BaseModel):
     """Hotkey configuration."""
@@ -681,8 +681,8 @@ def create_default_config() -> Path:
     config_path = config_dir / "config.toml"
 
     # Platform-specific defaults
-    hotkey = "KEY_LEFTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
-    hotkey_comment = "Command key" if sys.platform == "darwin" else "Scroll Lock"
+    hotkey = "KEY_RIGHTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
+    hotkey_comment = "Right Command key" if sys.platform == "darwin" else "Scroll Lock"
     newline_keys = "shift+enter" if sys.platform == "darwin" else "alt+enter"
 
     default_config = f"""\
