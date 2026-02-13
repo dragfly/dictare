@@ -20,16 +20,8 @@ ICONS_DIR = Path(__file__).parent / "icons"
 
 
 def _load_icon(name: str) -> Image.Image:
-    """Load an icon from the icons directory.
-
-    Prefers @2x variant for crisp rendering on Retina displays.
-    """
+    """Load an icon from the icons directory."""
     from PIL import Image
-
-    # Prefer @2x for Retina (macOS menu bar icons are 22pt → 44px @2x)
-    retina_path = ICONS_DIR / f"{name}@2x.png"
-    if retina_path.exists():
-        return Image.open(retina_path)
 
     icon_path = ICONS_DIR / f"{name}.png"
     if icon_path.exists():
@@ -167,6 +159,31 @@ def _ensure_accessibility(prompt: bool = True) -> bool:
     except Exception:
         logger.warning("Could not check Accessibility permission", exc_info=True)
         return False
+
+
+def _patch_pystray_template() -> None:
+    """Monkey-patch pystray to call setTemplate_(True) on every icon update.
+
+    pystray ignores the ``template`` kwarg — it never calls
+    ``NSImage.setTemplate_(True)``.  We wrap ``_assert_image`` so that
+    the NSImage is marked as template after every creation, which tells
+    macOS to render it as a shape mask that adapts to dark/light.
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        import pystray._darwin as _darwin  # type: ignore[import-untyped]
+
+        _orig = _darwin.Icon._assert_image
+
+        def _assert_image_template(self: _darwin.Icon) -> None:
+            _orig(self)
+            if self._icon_image is not None:
+                self._icon_image.setTemplate_(True)
+
+        _darwin.Icon._assert_image = _assert_image_template
+    except Exception:
+        logger.warning("Could not patch pystray for template icons", exc_info=True)
 
 
 class TrayApp:
@@ -443,17 +460,15 @@ class TrayApp:
         """Run the tray application (blocking)."""
         import pystray
 
-        kwargs = dict(
+        # Patch pystray to call setTemplate_(True) — it doesn't do it itself
+        _patch_pystray_template()
+
+        self._icon = pystray.Icon(
             name="voxtype",
             icon=_load_icon("voxtype"),
             title="VoxType",
             menu=self._create_menu(),
         )
-        # macOS: template images adapt to dark/light menu bar
-        if sys.platform == "darwin":
-            kwargs["template"] = True
-
-        self._icon = pystray.Icon(**kwargs)
         self._icon.run()
 
     def run_detached(self) -> threading.Thread:
