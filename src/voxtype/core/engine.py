@@ -220,14 +220,29 @@ class VoxtypeEngine:
         """Check if in OFF state (mic disabled)."""
         return self._state_manager.is_off
 
+    # Agent IDs reserved for internal use — hidden from API, rejected by HTTP
+    RESERVED_AGENT_IDS = frozenset({"__keyboard__"})
+
     @property
     def agents(self) -> list[str]:
-        """Get list of registered agent IDs (for backward compatibility)."""
+        """Get list of ALL registered agent IDs (including internal)."""
         return self._agent_order.copy()
+
+    @property
+    def visible_agents(self) -> list[str]:
+        """Get list of user-visible agent IDs (excludes internal agents)."""
+        return [a for a in self._agent_order if a not in self.RESERVED_AGENT_IDS]
 
     @property
     def current_agent(self) -> str | None:
         """Get the ID of the current agent, or None if no agents."""
+        return self._current_agent_id
+
+    @property
+    def visible_current_agent(self) -> str | None:
+        """Get current agent ID, or None if it's an internal agent."""
+        if self._current_agent_id in self.RESERVED_AGENT_IDS:
+            return None
         return self._current_agent_id
 
     @property
@@ -923,7 +938,7 @@ class VoxtypeEngine:
         if self._current_agent_id is None:
             self._current_agent_id = agent.id
 
-        self._emit("on_agents_changed", self.agents)
+        self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.registered", agent_id=agent.id)
         return True
 
@@ -956,7 +971,7 @@ class VoxtypeEngine:
         else:
             self._current_agent_id = None
 
-        self._emit("on_agents_changed", self.agents)
+        self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.unregistered", agent_id=agent_id)
         return True
 
@@ -1185,8 +1200,6 @@ class VoxtypeEngine:
         }
         stt_state = state_map.get(self.state, "idle")
 
-        # Connected agents list
-        connected_agents = self.agents
         uptime = (
             time.time() - self._stats_start_time
             if self._stats_start_time
@@ -1197,7 +1210,7 @@ class VoxtypeEngine:
             # OpenVIP protocol-level fields
             "protocol_version": "1.0",
             "state": stt_state,
-            "connected_agents": connected_agents,
+            "connected_agents": self.visible_agents,
             "uptime_seconds": uptime,
             # Implementation-specific details (StatusPanel)
             "platform": {
@@ -1213,8 +1226,8 @@ class VoxtypeEngine:
                 },
                 "output": {
                     "mode": "agents" if self.agent_mode else "keyboard",
-                    "current_agent": self.current_agent,
-                    "available_agents": connected_agents,
+                    "current_agent": self.visible_current_agent,
+                    "available_agents": self.visible_agents,
                 },
                 "hotkey": {
                     "key": self.config.hotkey.key,
