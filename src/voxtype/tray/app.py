@@ -343,6 +343,8 @@ class TrayApp:
             self._current_target = current
         elif targets and not self._current_target:
             self._current_target = targets[0]
+        elif not targets:
+            self._current_target = ""
         self._update_menu()
 
     def set_output_mode(self, mode: str) -> None:
@@ -394,8 +396,7 @@ class TrayApp:
 
                     output = platform.get("output", {})
                     agents = output.get("available_agents", [])
-                    if agents:
-                        self.set_targets(agents, output.get("current_agent", ""))
+                    self.set_targets(agents, output.get("current_agent", ""))
                 except (urllib.error.URLError, ConnectionRefusedError, OSError):
                     pass  # Engine not running
                 except Exception as e:
