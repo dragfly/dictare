@@ -82,6 +82,21 @@ def _create_fallback_icon(name: str) -> Image.Image:
 
     return img
 
+def _hide_dock_icon() -> None:
+    """Hide this process from the macOS Dock.
+
+    Sets NSApplicationActivationPolicyAccessory so only the tray icon shows,
+    not a Dock tile with the Python icon.
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        from AppKit import NSApplication
+
+        NSApplication.sharedApplication().setActivationPolicy_(1)  # Accessory
+    except Exception:
+        pass
+
 def _ensure_accessibility(prompt: bool = True) -> bool:
     """Check macOS Accessibility permission, optionally prompting the user.
 
@@ -482,6 +497,9 @@ def main() -> None:
 
     app.on_toggle_listening(on_toggle_listening)
     app.on_output_mode_change(on_output_mode_change)
+
+    # Hide from Dock (tray apps shouldn't show a Dock tile)
+    _hide_dock_icon()
 
     # Check Accessibility permission (triggers macOS dialog if needed)
     _ensure_accessibility(prompt=True)
