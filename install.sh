@@ -1,521 +1,140 @@
-#!/bin/bash
-#
-# voxtype installer
+#!/usr/bin/env bash
+# Voxtype installer — voice-first control for AI coding agents
 #
 # Usage:
-#   Local:   ./install.sh [--dev]           # Lite: only voxtype (default)
-#   Local:   ./install.sh [--dev] full      # Full: voxtype + all dependencies
-#   Remote:  curl -fsSL https://raw.githubusercontent.com/dragfly/voxtype/main/install.sh | sh
-#   Uninstall: ./install.sh uninstall
+#   curl -fsSL https://raw.githubusercontent.com/dragfly/voxtype/main/install.sh | bash
+#   bash install.sh [OPTIONS]
 #
-set -e
+# Modelled after: https://ollama.com/install.sh
+set -euo pipefail
 
-VERSION="3.0.0a62"
 REPO_URL="https://github.com/dragfly/voxtype"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+# ─── Helpers ───────────────────────────────────────────────────────────
 BOLD='\033[1m'
-NC='\033[0m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+RESET='\033[0m'
 
-info()    { echo -e "${GREEN}✓${NC} $1"; }
-warn()    { echo -e "${YELLOW}!${NC} $1"; }
-error()   { echo -e "${RED}✗${NC} $1"; exit 1; }
-step()    { echo -e "\n${BLUE}→${NC} ${BOLD}$1${NC}"; }
-banner()  { echo -e "\n${BOLD}$1${NC}\n$2"; }
+info()  { printf "${GREEN}==>${RESET} ${BOLD}%s${RESET}\n" "$*"; }
+ok()    { printf "${GREEN}==>${RESET} %s\n" "$*"; }
+warn()  { printf "${YELLOW}==>${RESET} %s\n" "$*"; }
+error() { printf "${RED}ERROR:${RESET} %s\n" "$*" >&2; exit 1; }
 
-# Detect environment
-OS="$(uname -s)"
-ARCH="$(uname -m)"
-IS_LOCAL=0
-DEV_MODE=0
-
-# Detect if running from local repo
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null)" && pwd 2>/dev/null || echo "")"
-if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
-    IS_LOCAL=1
-fi
-
-# Parse arguments
-ACTION="install"
-FORCE_MODE=0
-GPU_MODE=0
-FULL_MODE=0
+# ─── Parse flags ───────────────────────────────────────────────────────
+SKIP_SETUP=false
+UNINSTALL=false
 for arg in "$@"; do
-    case $arg in
-        uninstall|remove) ACTION="uninstall" ;;
-        full) FULL_MODE=1 ;;
-        --dev) DEV_MODE=1 ;;
-        --force) FORCE_MODE=1 ;;
-        --gpu) GPU_MODE=1 ;;
-        --help|-h) ACTION="help" ;;
+    case "$arg" in
+        --help|-h)
+            cat <<'EOF'
+Voxtype installer — voice-first control for AI coding agents
+
+Usage:
+  curl -fsSL https://raw.githubusercontent.com/dragfly/voxtype/main/install.sh | bash
+  bash install.sh [OPTIONS]
+
+Options:
+  --skip-setup   Install voxtype only, skip the 'voxtype setup' wizard
+  --uninstall    Remove voxtype
+  --help, -h     Show this help
+
+What happens:
+  1. Detects your OS (macOS / Linux)
+  2. Installs uv (Python package manager) if missing
+  3. Installs voxtype via 'uv tool install'
+  4. Runs 'voxtype setup' (downloads models, installs service, configures permissions)
+EOF
+            exit 0
+            ;;
+        --skip-setup) SKIP_SETUP=true ;;
+        --uninstall)  UNINSTALL=true ;;
+        *) error "Unknown option: $arg. Use --help for usage." ;;
     esac
 done
 
-#####################################################################
-# HELP
-#####################################################################
-show_help() {
-    cat << EOF
-voxtype installer v${VERSION}
+# ─── Detect OS ─────────────────────────────────────────────────────────
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+case "$OS" in
+    Darwin) PLATFORM="macOS" ;;
+    Linux)  PLATFORM="Linux" ;;
+    *)      error "Unsupported OS: $OS (only macOS and Linux are supported)" ;;
+esac
 
-Usage:
-  ./install.sh              Lite install: only reinstalls voxtype (fast)
-  ./install.sh full         Full install: reinstalls voxtype + all dependencies
-  ./install.sh --dev        Lite install in development mode (editable)
-  ./install.sh --dev full   Full install in development mode
-  ./install.sh --gpu        Install with GPU support (Linux: CUDA, macOS: MLX)
-  ./install.sh --force      Force rebuild from source (ignore cache)
-  ./install.sh uninstall    Remove voxtype and dependencies
-  curl ... | sh             Install from remote (always full)
-
-Install modes:
-  (default)   Lite: reinstalls only voxtype, leaves dependencies untouched.
-              Fast, does not invalidate MLX kernel cache.
-  full        Full: reinstalls voxtype and all dependencies.
-              Use after changing dependencies in pyproject.toml.
-
-Options:
-  --gpu       Install with GPU acceleration (cuDNN on Linux, MLX on macOS)
-  --force     Force rebuild from source, even if same version (for developers)
-  --dev       Development mode: creates .venv with editable install
-  uninstall   Remove voxtype, ydotool service, and cleanup
-
-What gets installed:
-  - voxtype command (via uv tool or .venv)
-  - ydotool + ydotoold (Linux only, for keyboard simulation)
-  - System dependencies (portaudio, etc.)
-
-GPU support:
-  Linux:  --gpu installs nvidia-cudnn-cu12 (requires CUDA 12 drivers)
-  macOS:  --gpu installs mlx-whisper (Apple Silicon only, auto-enabled)
-EOF
-    exit 0
-}
-
-#####################################################################
-# UNINSTALL
-#####################################################################
-do_uninstall() {
-    banner "voxtype uninstaller" "========================"
-
-    step "Removing voxtype..."
-
-    # Remove uv tool installation
-    if command -v uv &>/dev/null && uv tool list 2>/dev/null | grep -q voxtype; then
-        uv tool uninstall voxtype 2>/dev/null || true
-        info "Removed voxtype (uv tool)"
+# ─── Uninstall ─────────────────────────────────────────────────────────
+if [[ "$UNINSTALL" == true ]]; then
+    info "Uninstalling voxtype..."
+    if command -v voxtype &>/dev/null; then
+        voxtype service stop 2>/dev/null || true
+        voxtype tray stop 2>/dev/null || true
     fi
-
-    # Remove pipx installation
-    if command -v pipx &>/dev/null && pipx list 2>/dev/null | grep -q voxtype; then
-        pipx uninstall voxtype 2>/dev/null || true
-        info "Removed voxtype (pipx)"
-    fi
-
-    # Remove local .venv if in repo
-    if [ $IS_LOCAL -eq 1 ] && [ -d "$SCRIPT_DIR/.venv" ]; then
-        rm -rf "$SCRIPT_DIR/.venv"
-        info "Removed .venv"
-    fi
-
-    # Linux: remove ydotoold service
-    if [ "$OS" = "Linux" ]; then
-        step "Removing ydotoold service..."
-
-        if systemctl --user is-active --quiet ydotoold 2>/dev/null; then
-            systemctl --user stop ydotoold 2>/dev/null || true
-            info "Stopped ydotoold"
-        fi
-
-        if [ -f "$HOME/.config/systemd/user/ydotoold.service" ]; then
-            systemctl --user disable ydotoold 2>/dev/null || true
-            rm -f "$HOME/.config/systemd/user/ydotoold.service"
-            systemctl --user daemon-reload 2>/dev/null || true
-            info "Removed ydotoold service"
-        fi
-
-        # Remove ydotool binaries
-        if [ -f "$HOME/.local/bin/ydotool" ]; then
-            rm -f "$HOME/.local/bin/ydotool" "$HOME/.local/bin/ydotoold"
-            info "Removed ydotool binaries"
-        fi
-    fi
-
-    # Remove build artifacts if in repo
-    if [ $IS_LOCAL -eq 1 ]; then
-        step "Cleaning build artifacts..."
-        rm -f "$SCRIPT_DIR/build/ydotool" "$SCRIPT_DIR/build/ydotoold" 2>/dev/null || true
-        rm -f "$SCRIPT_DIR/build/evdev-"*.whl 2>/dev/null || true
-        info "Cleaned build artifacts"
-    fi
-
-    echo ""
-    info "Uninstall complete!"
-    echo ""
-    echo "Note: System packages (portaudio, etc.) were not removed."
-    echo "      User permissions (input group) were not changed."
-}
-
-#####################################################################
-# INSTALL UV
-#####################################################################
-ensure_uv() {
     if command -v uv &>/dev/null; then
-        return 0
+        uv tool uninstall voxtype 2>/dev/null || true
     fi
+    ok "voxtype uninstalled."
+    exit 0
+fi
 
-    step "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+# ─── Install ───────────────────────────────────────────────────────────
+printf "\n"
+info "Installing voxtype for $PLATFORM ($ARCH)"
+printf "\n"
 
-    # Add to PATH for this session
-    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-
-    if ! command -v uv &>/dev/null; then
-        error "Failed to install uv. Please install manually: https://docs.astral.sh/uv/"
-    fi
-    info "Installed uv"
-}
-
-#####################################################################
-# macOS INSTALL
-#####################################################################
-install_macos() {
-    banner "voxtype installer" "macOS $([ "$ARCH" = "arm64" ] && echo "(Apple Silicon)" || echo "(Intel)")"
-
-    # 1. Install uv
-    ensure_uv
-
-    # 2. Install system deps
-    step "Installing system dependencies..."
-    if command -v brew &>/dev/null; then
-        brew list portaudio &>/dev/null || brew install portaudio
-        info "portaudio ready"
-    else
-        warn "Homebrew not found. Install portaudio manually if audio fails."
-    fi
-
-    # 3. Install voxtype
-    if [ $DEV_MODE -eq 1 ]; then
-        if [ $FULL_MODE -eq 1 ]; then
-            # Full: sync everything (voxtype + all dependencies)
-            step "Installing voxtype (dev, full)..."
-            cd "$SCRIPT_DIR"
-
-            if [ "$ARCH" = "arm64" ]; then
-                uv sync --python 3.11 --extra mlx
-            else
-                uv sync --python 3.11
-            fi
-            info "Synced .venv with all dependencies"
-        else
-            # Lite: only reinstall voxtype package, leave deps untouched
-            step "Installing voxtype (dev, lite)..."
-            cd "$SCRIPT_DIR"
-
-            if [ ! -d "$SCRIPT_DIR/.venv" ]; then
-                # No .venv yet — need full install first
-                warn "No .venv found, running full install..."
-                if [ "$ARCH" = "arm64" ]; then
-                    uv sync --python 3.11 --extra mlx
-                else
-                    uv sync --python 3.11
-                fi
-            else
-                # .venv exists — only reinstall voxtype
-                uv pip install --no-deps --reinstall -e .
-            fi
-            info "Reinstalled voxtype (dependencies unchanged)"
-        fi
-
-        echo ""
-        echo "Development mode active. Run with:"
-        echo -e "  ${BOLD}source .venv/bin/activate${NC}"
-        echo -e "  ${BOLD}voxtype listen${NC}"
-        echo ""
-        echo "Or without activating:"
-        echo -e "  ${BOLD}uv run voxtype listen${NC}"
-    else
-        step "Installing voxtype..."
-
-        # Determine package spec (with or without mlx extra)
-        if [ $IS_LOCAL -eq 1 ]; then
-            if [ "$ARCH" = "arm64" ]; then
-                PKG_SPEC="$SCRIPT_DIR[mlx]"
-            else
-                PKG_SPEC="$SCRIPT_DIR"
-            fi
-        else
-            if [ "$ARCH" = "arm64" ]; then
-                PKG_SPEC="voxtype[mlx]"
-            else
-                PKG_SPEC="voxtype"
-            fi
-        fi
-
-        # Build install flags
-        # --prerelease=allow: needed for mlx-audio 0.3.0 which requires transformers==5.0.0rc3
-        INSTALL_FLAGS="--python 3.11 --prerelease=allow"
-
-        if [ $FULL_MODE -eq 1 ]; then
-            # Full: reinstall everything
-            INSTALL_FLAGS="$INSTALL_FLAGS --reinstall"
-        else
-            # Lite: only reinstall voxtype package
-            INSTALL_FLAGS="$INSTALL_FLAGS --reinstall-package voxtype"
-        fi
-
-        if [ $FORCE_MODE -eq 1 ]; then
-            INSTALL_FLAGS="$INSTALL_FLAGS --force"
-        fi
-
-        uv tool install $INSTALL_FLAGS "$PKG_SPEC"
-        info "Installed voxtype"
-
-        echo ""
-        echo -e "Run: ${BOLD}voxtype listen${NC}"
-    fi
-
-    # 4. Permissions reminder
-    step "Permissions required"
-    echo ""
-    warn "macOS requires Accessibility permission for keyboard simulation."
-    echo ""
-    echo -e "  1. Open ${BOLD}System Settings → Privacy & Security → Accessibility${NC}"
-    echo "  2. Click '+' and add your terminal app"
-    echo "  3. Enable the toggle"
-    echo -e "  4. ${BOLD}Restart your terminal${NC}"
-    echo ""
-}
-
-#####################################################################
-# LINUX INSTALL
-#####################################################################
-install_linux() {
-    banner "voxtype installer" "Linux ($ARCH)"
-
-    # 1. Install uv
-    ensure_uv
-
-    # 2. Install system deps
-    step "Checking system dependencies..."
-
-    MISSING_DEPS=""
-
-    # Check for portaudio
+# 1. Check system audio library
+if [[ "$PLATFORM" == "Linux" ]]; then
     if ! ldconfig -p 2>/dev/null | grep -q libportaudio; then
-        MISSING_DEPS="portaudio"
+        warn "portaudio not found — audio may not work."
+        printf "  Install with: sudo apt install libportaudio2 portaudio19-dev\n\n"
     fi
+fi
 
-    # Check for input group
-    if ! groups | grep -q '\binput\b'; then
-        MISSING_DEPS="$MISSING_DEPS input-group"
+# 3. Install uv if missing
+if command -v uv &>/dev/null; then
+    ok "uv found"
+else
+    info "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+    if ! command -v uv &>/dev/null; then
+        error "uv installation failed. Install manually: https://docs.astral.sh/uv/"
     fi
+    ok "uv installed"
+fi
 
-    if [ -n "$MISSING_DEPS" ]; then
-        warn "Some system dependencies may be missing: $MISSING_DEPS"
-        echo ""
-        echo "  Install with:"
-        if command -v apt &>/dev/null; then
-            echo "    sudo apt install libportaudio2 portaudio19-dev"
-            echo "    sudo usermod -aG input \$USER"
-        elif command -v pacman &>/dev/null; then
-            echo "    sudo pacman -S portaudio"
-            echo "    sudo usermod -aG input \$USER"
-        elif command -v dnf &>/dev/null; then
-            echo "    sudo dnf install portaudio portaudio-devel"
-            echo "    sudo usermod -aG input \$USER"
-        fi
-        echo ""
-        echo "  Then log out and back in."
-        echo ""
-    else
-        info "System dependencies OK"
-    fi
+# 4. Install voxtype
+info "Installing voxtype..."
 
-    # 3. Install/build ydotool
-    step "Setting up ydotool..."
+# On Apple Silicon, include mlx extra for hardware-accelerated inference
+EXTRAS=""
+if [[ "$PLATFORM" == "macOS" && "$ARCH" == "arm64" ]]; then
+    EXTRAS="[mlx]"
+fi
 
-    BIN_DIR="$HOME/.local/bin"
-    mkdir -p "$BIN_DIR"
+uv tool install --python 3.11 --prerelease=allow "voxtype${EXTRAS}"
+ok "voxtype installed: $(voxtype --version 2>&1 || echo '(version check failed)')"
 
-    # Check if ydotool already installed
-    if command -v ydotool &>/dev/null; then
-        info "ydotool already installed"
-    else
-        # Try to install from package manager
-        if command -v apt &>/dev/null; then
-            if apt-cache show ydotool &>/dev/null; then
-                echo "  Installing ydotool via apt..."
-                sudo apt install -y ydotool
-                info "Installed ydotool from apt"
-            fi
-        elif command -v pacman &>/dev/null; then
-            echo "  Installing ydotool via pacman..."
-            sudo pacman -S --noconfirm ydotool
-            info "Installed ydotool from pacman"
-        fi
+# 5. macOS: suggest Homebrew alternative
+if [[ "$PLATFORM" == "macOS" ]]; then
+    printf "\n"
+    warn "Tip: on macOS you can also install via Homebrew:"
+    printf "  brew install dragfly/voxtype/voxtype\n\n"
+fi
 
-        # Fallback: build from source if Docker available
-        if ! command -v ydotool &>/dev/null && [ $IS_LOCAL -eq 1 ]; then
-            if command -v docker &>/dev/null && [ -f "$SCRIPT_DIR/build/Dockerfile.ydotool" ]; then
-                echo "  Building ydotool from source..."
-                docker build -q -f "$SCRIPT_DIR/build/Dockerfile.ydotool" -t ydotool-builder "$SCRIPT_DIR/build/" >/dev/null
-                docker run --rm ydotool-builder cat /ydotool > "$BIN_DIR/ydotool"
-                docker run --rm ydotool-builder cat /ydotoold > "$BIN_DIR/ydotoold"
-                chmod +x "$BIN_DIR/ydotool" "$BIN_DIR/ydotoold"
-                info "Built ydotool from source"
-            else
-                warn "ydotool not found. Install manually: sudo apt install ydotool"
-            fi
-        fi
-    fi
+# 6. Run setup wizard
+if [[ "$SKIP_SETUP" == true ]]; then
+    warn "Skipping setup (--skip-setup). Run 'voxtype setup' when ready."
+else
+    printf "\n"
+    info "Running first-time setup..."
+    voxtype setup
+fi
 
-    # 4. Setup ydotoold service
-    if command -v ydotool &>/dev/null || [ -f "$BIN_DIR/ydotoold" ]; then
-        step "Setting up ydotoold service..."
-
-        YDOTOOLD_PATH="$(command -v ydotoold 2>/dev/null || echo "$BIN_DIR/ydotoold")"
-
-        mkdir -p "$HOME/.config/systemd/user"
-        cat > "$HOME/.config/systemd/user/ydotoold.service" << EOF
-[Unit]
-Description=ydotool daemon
-
-[Service]
-ExecStart=$YDOTOOLD_PATH
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-EOF
-
-        systemctl --user daemon-reload
-        systemctl --user enable ydotoold &>/dev/null || true
-        systemctl --user start ydotoold &>/dev/null || true
-
-        if systemctl --user is-active --quiet ydotoold; then
-            info "ydotoold service running"
-        else
-            warn "ydotoold service created but not running. Start with: systemctl --user start ydotoold"
-        fi
-    fi
-
-    # 5. Install voxtype
-    if [ $DEV_MODE -eq 1 ]; then
-        if [ $FULL_MODE -eq 1 ]; then
-            # Full: sync everything
-            step "Installing voxtype (dev, full)..."
-            cd "$SCRIPT_DIR"
-
-            if [ $GPU_MODE -eq 1 ]; then
-                uv sync --python 3.11 --extra gpu
-            else
-                uv sync --python 3.11
-            fi
-        else
-            # Lite: only reinstall voxtype
-            step "Installing voxtype (dev, lite)..."
-            cd "$SCRIPT_DIR"
-
-            if [ ! -d "$SCRIPT_DIR/.venv" ]; then
-                warn "No .venv found, running full install..."
-                if [ $GPU_MODE -eq 1 ]; then
-                    uv sync --python 3.11 --extra gpu
-                else
-                    uv sync --python 3.11
-                fi
-            else
-                uv pip install --no-deps --reinstall -e .
-            fi
-        fi
-
-        # Install pre-built evdev if available
-        if ls "$SCRIPT_DIR/build/evdev-"*.whl &>/dev/null; then
-            uv pip install --reinstall "$SCRIPT_DIR/build/evdev-"*.whl 2>/dev/null || true
-        fi
-
-        info "Installed voxtype (dev)"
-
-        echo ""
-        echo "Development mode active. Run with:"
-        echo -e "  ${BOLD}source .venv/bin/activate${NC}"
-        echo -e "  ${BOLD}voxtype listen${NC}"
-        echo ""
-        echo "Or without activating:"
-        echo -e "  ${BOLD}uv run voxtype listen${NC}"
-    else
-        step "Installing voxtype..."
-
-        # Determine package spec (with or without gpu extra)
-        if [ $IS_LOCAL -eq 1 ]; then
-            if [ $GPU_MODE -eq 1 ]; then
-                PKG_SPEC="$SCRIPT_DIR[gpu]"
-            else
-                PKG_SPEC="$SCRIPT_DIR"
-            fi
-        else
-            if [ $GPU_MODE -eq 1 ]; then
-                PKG_SPEC="voxtype[gpu]"
-            else
-                PKG_SPEC="voxtype"
-            fi
-        fi
-
-        # Build install flags
-        # --prerelease=allow: needed for mlx-audio 0.3.0 which requires transformers==5.0.0rc3
-        INSTALL_FLAGS="--python 3.11 --prerelease=allow"
-
-        if [ $FULL_MODE -eq 1 ]; then
-            INSTALL_FLAGS="$INSTALL_FLAGS --reinstall"
-        else
-            INSTALL_FLAGS="$INSTALL_FLAGS --reinstall-package voxtype"
-        fi
-
-        if [ $FORCE_MODE -eq 1 ]; then
-            INSTALL_FLAGS="$INSTALL_FLAGS --force"
-        fi
-
-        uv tool install $INSTALL_FLAGS "$PKG_SPEC"
-        info "Installed voxtype"
-
-        echo ""
-        echo -e "Run: ${BOLD}voxtype listen${NC}"
-    fi
-
-    echo ""
-}
-
-#####################################################################
-# MAIN
-#####################################################################
-main() {
-    case $ACTION in
-        help) show_help ;;
-        uninstall) do_uninstall ;;
-        install)
-            case $OS in
-                Darwin) install_macos ;;
-                Linux)  install_linux ;;
-                *) error "Unsupported OS: $OS" ;;
-            esac
-
-            # Resolve optional dependencies (TTS engine, etc.)
-            # uv tool install removes extras not in pyproject.toml,
-            # so we re-install them based on user config
-            if [ $DEV_MODE -eq 0 ] && command -v voxtype &>/dev/null; then
-                step "Resolving optional dependencies..."
-                voxtype dependencies resolve 2>/dev/null && info "Dependencies resolved" || true
-            fi
-
-            echo ""
-            info "Installation complete!"
-            echo ""
-            ;;
-    esac
-}
-
-main
+printf "\n"
+ok "Done! Start with:"
+printf "  ${BOLD}voxtype agent claude${RESET}    # voice-control Claude Code\n"
+printf "  ${BOLD}voxtype agent cursor${RESET}    # voice-control Cursor\n"
+printf "\n"
+printf "Docs: ${REPO_URL}\n"
+printf "\n"
