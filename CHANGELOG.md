@@ -5,11 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0b9] - 2026-02-13
+## [0.1.0b10] - 2026-02-13
 
 ### Fixed
 
-- **Tray icon crisp on Retina** — load @2x icon variant (44px) instead of upscaling 22px on HiDPI displays. Template mode already handles dark/light contrast.
+- **Tray icon adapts to dark/light menu bar** — pystray ignores `template=True`, so the NSImage was never marked as template. Monkey-patched `_assert_image` to call `setTemplate_(True)`. Icons regenerated at correct 18x18 @1x / 36x36 @2x size per Apple HIG.
 
 ## [0.1.0b8] - 2026-02-13
 
