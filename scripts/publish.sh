@@ -14,7 +14,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VOXTYPE_DIR="$(dirname "$SCRIPT_DIR")"
-OPENVIP_DIR="/home/user/repos/nottoplay/openvip-sdks/python"
+OPENVIP_DIR="${VOXTYPE_DIR}/../../openvip-dev/sdks/python"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
 BOLD='\033[1m'
