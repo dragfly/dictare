@@ -449,9 +449,6 @@ class TrayApp:
                     tray_state = "listening" if state in ("listening", "recording", "transcribing") else "off"
                     self.set_state(state=tray_state)
 
-                    mode = platform.get("mode", "keyboard")
-                    self.set_output_mode(mode)
-
                     output = platform.get("output", {})
                     agents = output.get("available_agents", [])
                     self.set_targets(agents, output.get("current_agent", ""))
