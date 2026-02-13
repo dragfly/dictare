@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from voxtype.cli.agent import _check_engine, _try_start_service
 from voxtype.config import AgentTemplateConfig, Config, load_config
@@ -82,34 +82,29 @@ class TestCheckEngine:
 # ---------------------------------------------------------------------------
 
 class TestTryStartService:
-    def test_service_not_installed(self, monkeypatch):
+    def test_service_not_installed_does_not_call_start(self, monkeypatch):
         monkeypatch.setattr("sys.platform", "darwin")
-        with patch("voxtype.service.launchd.is_installed", return_value=False):
-            assert _try_start_service() is False
+        mock_start = MagicMock()
+        with (
+            patch("voxtype.service.launchd.is_installed", return_value=False),
+            patch("voxtype.service.launchd.start", mock_start),
+        ):
+            _try_start_service()  # fire-and-forget, no return value
+            mock_start.assert_not_called()
 
-    def test_service_start_success(self, monkeypatch):
+    def test_service_installed_calls_start(self, monkeypatch):
         monkeypatch.setattr("sys.platform", "darwin")
+        mock_start = MagicMock()
         with (
             patch("voxtype.service.launchd.is_installed", return_value=True),
-            patch("voxtype.service.launchd.start"),
-            patch("openvip.Client.is_available", return_value=True),
-            patch("time.sleep"),
+            patch("voxtype.service.launchd.start", mock_start),
         ):
-            assert _try_start_service() is True
+            _try_start_service()
+            mock_start.assert_called_once()
 
-    def test_service_start_engine_never_ready(self, monkeypatch):
-        monkeypatch.setattr("sys.platform", "darwin")
-        with (
-            patch("voxtype.service.launchd.is_installed", return_value=True),
-            patch("voxtype.service.launchd.start"),
-            patch("openvip.Client.is_available", return_value=False),
-            patch("time.sleep"),
-        ):
-            assert _try_start_service() is False
-
-    def test_unsupported_platform(self, monkeypatch):
+    def test_unsupported_platform_noop(self, monkeypatch):
         monkeypatch.setattr("sys.platform", "win32")
-        assert _try_start_service() is False
+        _try_start_service()  # should not raise
 
 # ---------------------------------------------------------------------------
 # Command resolution logic (template vs override vs error)
