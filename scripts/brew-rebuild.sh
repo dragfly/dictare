@@ -43,11 +43,16 @@ brew services stop voxtype 2>/dev/null || true
 
 # ---------- 6. Reinstall ----------
 echo "==> brew reinstall voxtype..."
-brew reinstall voxtype 2>&1 | tail -3
+# Note: brew may exit 1 due to dylib linkage warnings (e.g. PyAV) — not fatal
+brew reinstall voxtype 2>&1 || true
 
 # ---------- 7. Verify ----------
 INSTALLED=$(/opt/homebrew/bin/voxtype --version 2>&1)
 echo "==> Installed: ${INSTALLED}"
+if [[ "$INSTALLED" != *"$VERSION"* ]]; then
+    echo "ERROR: installed version does not match expected ${VERSION}" >&2
+    exit 1
+fi
 
 # ---------- 8. Restart service ----------
 echo "==> Starting service..."
