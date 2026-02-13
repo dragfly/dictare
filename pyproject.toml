@@ -93,7 +93,7 @@ openvip = { path = "../../openvip-dev/sdks/python", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/voxtype"]
-artifacts = ["*.mp3", "*.icns", "*.png"]
+artifacts = ["*.mp3", "*.icns", "*.png", "*.swift"]
 
 [tool.hatch.version]
 path = "src/voxtype/__init__.py"
