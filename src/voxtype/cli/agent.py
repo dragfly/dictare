@@ -16,10 +16,13 @@ def _check_engine(url: str) -> bool:
     return Client(url, timeout=2).is_available()
 
 
-def _try_start_service() -> bool:
-    """Attempt to start the voxtype service. Return True on success."""
+def _try_start_service() -> None:
+    """Best-effort: ask launchd/systemd to start the engine service.
+
+    Does NOT wait for the engine to become reachable — the SSE reconnect
+    loop handles that.
+    """
     import sys
-    import time
 
     try:
         if sys.platform == "darwin":
@@ -27,23 +30,12 @@ def _try_start_service() -> bool:
         elif sys.platform == "linux":
             from voxtype.service.systemd import is_installed, start
         else:
-            return False
+            return
 
-        if not is_installed():
-            return False
-
-        start()
-        # Give the engine a moment to bind the HTTP port
-        from openvip import Client
-
-        client = Client("http://127.0.0.1:8770", timeout=1)
-        for _ in range(20):
-            time.sleep(0.5)
-            if client.is_available():
-                return True
-        return False
+        if is_installed():
+            start()
     except Exception:
-        return False
+        pass
 
 
 def register(app: typer.Typer) -> None:
@@ -135,22 +127,12 @@ def register(app: typer.Typer) -> None:
             console.print(f"[dim]  voxtype agent {agent_id} -- {agent_id}[/]")
             raise typer.Exit(1)
 
-        # Health check: is the engine running?
+        # Best-effort: try to start the engine if it's not reachable.
+        # Never block — the SSE layer has its own reconnect loop.
         if not _check_engine(server):
             if not quiet:
                 console.print("[dim]Engine not running, starting service...[/]")
-            if _try_start_service():
-                if not quiet:
-                    console.print("[green]Engine started[/]")
-            else:
-                console.print("[red]Error: Engine is not running[/]")
-                console.print()
-                console.print("[dim]Start it manually:[/]")
-                console.print("[dim]  voxtype engine start -d --agents[/]")
-                console.print()
-                console.print("[dim]Or install as a service:[/]")
-                console.print("[dim]  voxtype service install[/]")
-                raise typer.Exit(1)
+            _try_start_service()  # fire-and-forget, don't gate on result
 
         # CLI flags override config
         if show_status_bar is None:
