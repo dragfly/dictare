@@ -41,10 +41,10 @@ Options:
   --help, -h     Show this help
 
 What happens:
-  1. Detects your OS (macOS / Linux)
-  2. Installs uv (Python package manager) if missing
-  3. Installs voxtype via 'uv tool install'
-  4. Runs 'voxtype setup' (downloads models, installs service, configures permissions)
+  1. Installs uv (Python package manager) if missing
+  2. Installs voxtype via 'uv tool install'
+  3. Downloads models, installs background service, configures permissions
+  4. Ready — run 'voxtype agent claude'
 EOF
             exit 0
             ;;
@@ -115,14 +115,7 @@ fi
 uv tool install --python 3.11 --prerelease=allow "voxtype${EXTRAS}"
 ok "voxtype installed: $(voxtype --version 2>&1 || echo '(version check failed)')"
 
-# 5. macOS: suggest Homebrew alternative
-if [[ "$PLATFORM" == "macOS" ]]; then
-    printf "\n"
-    warn "Tip: on macOS you can also install via Homebrew:"
-    printf "  brew install dragfly/voxtype/voxtype\n\n"
-fi
-
-# 6. Run setup wizard
+# 5. Run setup wizard
 if [[ "$SKIP_SETUP" == true ]]; then
     warn "Skipping setup (--skip-setup). Run 'voxtype setup' when ready."
 else
@@ -132,9 +125,10 @@ else
 fi
 
 printf "\n"
-ok "Done! Start with:"
+ok "Done! Launch an agent:"
 printf "  ${BOLD}voxtype agent claude${RESET}    # voice-control Claude Code\n"
 printf "  ${BOLD}voxtype agent cursor${RESET}    # voice-control Cursor\n"
 printf "\n"
-printf "Docs: ${REPO_URL}\n"
+printf "Optional — monitor engine from the menu bar:\n"
+printf "  ${BOLD}voxtype tray start${RESET}\n"
 printf "\n"
