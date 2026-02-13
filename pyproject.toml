@@ -43,8 +43,6 @@ dependencies = [
     "Pillow>=10.0.0",
     # Structured JSON logging (standard Python approach)
     "python-json-logger>=2.0.0",
-    # Phonetic matching for agent name recognition
-    "jellyfish>=1.0.0",
     # FastAPI HTTP server for OpenVIP protocol
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
