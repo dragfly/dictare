@@ -23,8 +23,6 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
-import jellyfish
-
 from voxtype.events import bus
 from voxtype.pipeline.base import PipelineResult, derive_message
 
@@ -51,16 +49,231 @@ def _tokenize(text: str) -> list[str]:
     return [w for w in re.split(r"[^a-zA-Z0-9]+", _normalize(text)) if w]
 
 
+def _metaphone(word: str) -> str:
+    """Compute the Metaphone phonetic code for a word.
+
+    Pure Python implementation of Lawrence Philips' Metaphone algorithm.
+
+    We avoid the ``jellyfish`` library because its Rust native extension
+    (``_rustyfish.so``) causes Homebrew's ``install_name_tool`` to fail with
+    "header too small" during ``brew install``.  Since we only call this on
+    short agent names during occasional voice commands (not a hot path), the
+    pure Python version has negligible performance difference.
+    """
+    if not word:
+        return ""
+
+    word = word.upper()
+    word = "".join(c for c in word if c.isalpha())
+    if not word:
+        return ""
+
+    # Drop first letter for silent-initial pairs
+    if word[:2] in ("AE", "GN", "KN", "PN", "WR"):
+        word = word[1:]
+    if not word:
+        return ""
+
+    vowels = set("AEIOU")
+    length = len(word)
+
+    def _at(pos: int) -> str:
+        return word[pos] if 0 <= pos < length else ""
+
+    result: list[str] = []
+    i = 0
+
+    while i < length:
+        c = word[i]
+
+        # Skip duplicate adjacent letters (except C)
+        if i > 0 and c == word[i - 1] and c != "C":
+            i += 1
+            continue
+
+        if c in vowels:
+            # Keep vowels only at the start of the word
+            if i == 0:
+                result.append(c)
+            i += 1
+
+        elif c == "B":
+            # Silent B after M at end of word (DUMB → DM)
+            if not (i == length - 1 and _at(i - 1) == "M"):
+                result.append("B")
+            i += 1
+
+        elif c == "C":
+            if _at(i + 1) == "I" and _at(i + 2) == "A":
+                result.append("X")
+                i += 3
+            elif _at(i + 1) in ("E", "I", "Y"):
+                result.append("S")
+                i += 2
+            elif _at(i + 1) == "H":
+                # SCH → SK, otherwise CH → X
+                result.append("K" if i > 0 and _at(i - 1) == "S" else "X")
+                i += 2
+            else:
+                result.append("K")
+                i += 1
+
+        elif c == "D":
+            if _at(i + 1) == "G" and _at(i + 2) in ("E", "I", "Y"):
+                result.append("J")
+                i += 3
+            else:
+                result.append("T")
+                i += 1
+
+        elif c == "F":
+            result.append("F")
+            i += 1
+
+        elif c == "G":
+            if _at(i + 1) == "H":
+                if i + 2 < length and _at(i + 2) not in vowels:
+                    i += 2  # GH before consonant → silent
+                else:
+                    result.append("K")
+                    i += 2
+            elif _at(i + 1) == "N":
+                i += 1  # G before N → silent
+            elif _at(i + 1) in ("E", "I", "Y"):
+                result.append("J")
+                i += 1
+            else:
+                result.append("K")
+                i += 1
+
+        elif c == "H":
+            # Keep H only if before a vowel and not after a vowel
+            if _at(i + 1) in vowels and _at(i - 1) not in vowels:
+                result.append("H")
+            i += 1
+
+        elif c == "J":
+            result.append("J")
+            i += 1
+
+        elif c == "K":
+            # Silent K after C (already encoded by C → K)
+            if i == 0 or _at(i - 1) != "C":
+                result.append("K")
+            i += 1
+
+        elif c == "L":
+            result.append("L")
+            i += 1
+
+        elif c == "M":
+            result.append("M")
+            i += 1
+
+        elif c == "N":
+            result.append("N")
+            i += 1
+
+        elif c == "P":
+            if _at(i + 1) == "H":
+                result.append("F")
+                i += 2
+            else:
+                result.append("P")
+                i += 1
+
+        elif c == "Q":
+            result.append("K")
+            i += 1
+
+        elif c == "R":
+            result.append("R")
+            i += 1
+
+        elif c == "S":
+            if _at(i + 1) == "H":
+                result.append("X")
+                i += 2
+            elif _at(i + 1) == "I" and _at(i + 2) in ("A", "O"):
+                result.append("X")
+                i += 3
+            else:
+                result.append("S")
+                i += 1
+
+        elif c == "T":
+            if _at(i + 1) == "H":
+                result.append("0")  # θ
+                i += 2
+            elif _at(i + 1) == "I" and _at(i + 2) in ("A", "O"):
+                result.append("X")
+                i += 3
+            else:
+                result.append("T")
+                i += 1
+
+        elif c == "V":
+            result.append("F")
+            i += 1
+
+        elif c == "W":
+            if _at(i + 1) in vowels:
+                result.append("W")
+            i += 1
+
+        elif c == "X":
+            result.append("KS")
+            i += 1
+
+        elif c == "Y":
+            if _at(i + 1) in vowels:
+                result.append("Y")
+            i += 1
+
+        elif c == "Z":
+            result.append("S")
+            i += 1
+
+        else:
+            i += 1
+
+    return "".join(result)
+
+
+def _levenshtein_distance(s1: str, s2: str) -> int:
+    """Compute the Levenshtein (edit) distance between two strings.
+
+    Pure Python implementation — see ``_metaphone`` docstring for why we
+    avoid the ``jellyfish`` Rust extension.
+    """
+    if len(s1) < len(s2):
+        return _levenshtein_distance(s2, s1)
+    if not s2:
+        return len(s1)
+
+    prev = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            curr.append(min(
+                prev[j + 1] + 1,       # deletion
+                curr[j] + 1,            # insertion
+                prev[j] + (c1 != c2),   # substitution
+            ))
+        prev = curr
+    return prev[-1]
+
+
 def phonetic_score(word1: str, word2: str) -> float:
     """Calculate phonetic similarity score between two words.
 
-    Uses Double Metaphone for phonetic comparison.
+    Uses Metaphone for phonetic comparison.
 
     Returns:
         Score between 0.0 and 1.0, where 1.0 means identical phonetic representation.
     """
-    m1 = jellyfish.metaphone(word1)
-    m2 = jellyfish.metaphone(word2)
+    m1 = _metaphone(word1)
+    m2 = _metaphone(word2)
 
     if m1 == m2:
         return 1.0
@@ -81,7 +294,7 @@ def edit_score(word1: str, word2: str) -> float:
     if not word1 or not word2:
         return 0.0
 
-    distance = jellyfish.levenshtein_distance(word1, word2)
+    distance = _levenshtein_distance(word1, word2)
     max_len = max(len(word1), len(word2))
     return 1.0 - (distance / max_len)
 

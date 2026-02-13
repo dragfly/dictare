@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b23] - 2026-02-13
+
+### Removed
+
+- **jellyfish dependency** — replaced with pure Python `_metaphone()` and `_levenshtein_distance()` in `agent_filter.py`. The jellyfish Rust extension (`_rustyfish.so`) caused Homebrew's `install_name_tool` to fail with "header too small" during `brew install`. Since these functions are only called on short agent names during occasional voice commands (not a hot path), the pure Python implementation has no meaningful performance impact.
+
 ## [0.1.0b20] - 2026-02-13
 
 ### Added
