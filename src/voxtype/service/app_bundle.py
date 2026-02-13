@@ -67,11 +67,20 @@ def create_app_bundle(python_path: str | None = None) -> Path:
     with open(plist_path, "wb") as f:
         plistlib.dump(info_plist, f)
 
-    # Write launcher script
+    # Write launcher script.
+    # Do NOT use exec — it replaces the bash process with python, and macOS
+    # attributes mic/accessibility permissions to the actual binary. With exec,
+    # the process becomes "Python" in the mic indicator. Without exec, bash
+    # stays alive inside the .app bundle and macOS shows "Voxtype".
     launcher_path = macos_dir / APP_NAME
-    launcher_path.write_text(
-        f"#!/bin/bash\nexec {python_path} -m voxtype engine start -d --agents\n"
+    launcher_script = (
+        f"#!/bin/bash\n"
+        f'{python_path} -m voxtype engine start -d --agents &\n'
+        f'CHILD=$!\n'
+        f'trap "kill $CHILD 2>/dev/null" SIGTERM SIGINT\n'
+        f'wait $CHILD\n'
     )
+    launcher_path.write_text(launcher_script)
     launcher_path.chmod(launcher_path.stat().st_mode | stat.S_IEXEC)
 
     # Copy icns icon
