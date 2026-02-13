@@ -1,12 +1,13 @@
 /// Voxtype native launcher for macOS .app bundle.
 ///
 /// This compiled binary is the CFBundleExecutable of Voxtype.app.
-/// It requests Accessibility permission (showing "Voxtype" in the dialog,
-/// not "Python"), then spawns the Python engine as a child process.
+/// It requests Accessibility and Microphone permissions (showing "Voxtype"
+/// in dialogs, not "Python"), then spawns the Python engine as a child process.
 ///
 /// Build: swiftc -O -o Voxtype launcher.swift
 
 import ApplicationServices
+import AVFoundation
 import Foundation
 
 // --- Request Accessibility permission ---
@@ -14,6 +15,19 @@ import Foundation
 let key = kAXTrustedCheckOptionPrompt.takeRetainedValue() as String
 let options = [key: true] as CFDictionary
 AXIsProcessTrustedWithOptions(options)
+
+// --- Request Microphone permission ---
+// This makes macOS show "Voxtype" in the Microphone dialog and list.
+// Without this + NSMicrophoneUsageDescription in Info.plist, the mic
+// silently returns zeros.
+let micSemaphore = DispatchSemaphore(value: 0)
+AVCaptureDevice.requestAccess(for: .audio) { granted in
+    if !granted {
+        fputs("Warning: Microphone access not granted\n", stderr)
+    }
+    micSemaphore.signal()
+}
+micSemaphore.wait()
 
 // --- Resolve Python path ---
 // Read from companion file "python_path" next to this binary.
