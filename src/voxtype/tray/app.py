@@ -316,12 +316,26 @@ class TrayApp:
             self._on_toggle_listening_cb()
 
     def _on_restart_engine(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
-        """Restart the engine service (launchd/systemd)."""
+        """Restart the engine service (launchd/systemd or brew services)."""
+        import subprocess
         import sys
         import threading
 
         def do_restart() -> None:
             try:
+                # Try brew services first (if brew is managing the service)
+                try:
+                    result = subprocess.run(
+                        ["brew", "services", "list"],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if any(line.startswith("voxtype") and "started" in line for line in result.stdout.splitlines()):
+                        subprocess.run(["brew", "services", "restart", "voxtype"], timeout=15)
+                        return
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    pass
+
+                # Fall back to native service backend
                 if sys.platform == "darwin":
                     from voxtype.service import launchd as backend
                 elif sys.platform == "linux":
