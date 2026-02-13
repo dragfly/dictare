@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b12] - 2026-02-13
+
+### Removed
+
+- **Dead CLI commands** — removed `listen`, `execute`, `transcribe`, `devices`, `logs`, `completion`, `init`, `cmd`, `backends` (18 → 9 commands).
+- **Engine start flags** — removed `--keyboard/-K`, `--agents/-A`, `--model/-m`, `--language/-l`. Mode comes from config; daemon always uses agents mode.
+- **Models subcommands** — removed `use` (use `config set stt.model X`) and `resolve` (auto-pull at engine start).
+- **Config subcommands** — removed `path` and `shortcuts`.
+- **speak `--no-engine`** — engine is now auto-detected; falls back to in-process TTS automatically.
+
+### Changed
+
+- **`models download` → `pull`**, **`models clear` → `rm`** — aligned with Ollama/Docker conventions.
+- **Default hotkey → Right Command** on macOS (`KEY_RIGHTMETA` instead of `KEY_LEFTMETA`).
+- **Service plist/unit simplified** — `engine start -d` without `--agents` (daemon always implies agents mode).
+- **Tray starts in "disconnected" state** — red icon until engine responds, instead of silent yellow.
+
+### Added
+
+- **`voxtype setup`** — first-time wizard: creates config, downloads models, installs service, prompts Accessibility permission.
+- **Auto-pull models at engine start** — missing models are downloaded automatically instead of exiting with an error.
+
 ## [0.1.0b11] - 2026-02-13
 
 ### Changed

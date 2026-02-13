@@ -8,7 +8,7 @@ import typer
 from rich.table import Table
 
 from voxtype.cli._helpers import console
-from voxtype.config import load_config, set_config_value
+from voxtype.config import load_config
 
 app = typer.Typer(help="Manage TTS/STT models.", no_args_is_help=True)
 
@@ -82,15 +82,14 @@ def _get_configured_models(config=None) -> dict[str, str]:
 
     return configured
 
-def check_required_models(config=None, for_command: str = "listen") -> bool:
-    """Check if required models are cached.
+def ensure_required_models(config=None) -> bool:
+    """Ensure required models are cached, auto-downloading if missing.
 
     Args:
         config: Config object (loaded if None)
-        for_command: Command name for error message
 
     Returns:
-        True if all required models are cached, False otherwise.
+        True if all required models are available, False if download failed.
     """
     from voxtype.utils.hf_download import is_repo_cached
 
@@ -108,16 +107,37 @@ def check_required_models(config=None, for_command: str = "listen") -> bool:
             if not is_repo_cached(info["repo"], check_file):
                 missing.append(name)
 
-    if missing:
-        console.print(f"[red]Missing required models for '{for_command}':[/]")
-        for name in missing:
-            console.print(f"  [red]{name}[/]")
-        console.print()
-        _show_models_list(config)
-        console.print()
-        console.print("[bold]Download missing models:[/]")
-        console.print("  [cyan]voxtype models resolve[/]")
-        return False
+    if not missing:
+        return True
+
+    # Auto-download missing models
+    from huggingface_hub import snapshot_download
+
+    from voxtype.utils.hf_download import download_with_progress
+
+    console.print(f"[bold]Downloading {len(missing)} missing model(s)...[/]\n")
+
+    for name in missing:
+        info = registry[name]
+        repo: str = info["repo"]
+
+        console.print(f"[bold]{name}[/] ({info['description']})")
+
+        def _download(r: str = repo) -> str:
+            return snapshot_download(r)
+
+        try:
+            download_with_progress(
+                repo,
+                _download,
+                fallback_size_gb=info["size_gb"],
+            )
+            console.print(f"[green]✓ {name} downloaded[/]\n")
+        except Exception as e:
+            console.print(f"[red]✗ {name} failed: {e}[/]\n")
+            console.print("[bold]You can retry with:[/]")
+            console.print(f"  [cyan]voxtype models pull {name}[/]")
+            return False
 
     return True
 
@@ -200,137 +220,19 @@ def models_list() -> None:
     """
     _show_models_list()
     console.print()
-    console.print("[dim]Use:      voxtype models use <model> [--realtime|--tts][/]")
-    console.print("[dim]Resolve:  voxtype models resolve[/]")
-    console.print("[dim]Download: voxtype models download <model>[/]")
+    console.print("[dim]Pull:   voxtype models pull <model>[/]")
+    console.print("[dim]Remove: voxtype models rm <model>[/]")
 
-@app.command("use")
-def models_use(
-    ctx: typer.Context,
-    model: Annotated[str | None, typer.Argument(help="Model name to use")] = None,
-    realtime: Annotated[
-        bool,
-        typer.Option("--realtime", "-r", help="Set as realtime STT model"),
-    ] = False,
-    tts: Annotated[
-        bool,
-        typer.Option("--tts", "-t", help="Set as TTS model"),
-    ] = False,
-) -> None:
-    """Set which model to use for STT or TTS.
-
-    By default sets the STT model. Use flags for other types.
-
-    Examples:
-        voxtype models use large-v3-turbo           # Set STT model
-        voxtype models use tiny --realtime          # Set realtime STT model
-        voxtype models use vyvotts-4bit --tts       # Set TTS model
-    """
-    if model is None:
-        import click
-
-        click.echo(ctx.get_help())
-        raise typer.Exit(0)
-
-    registry = _get_model_registry()
-
-    if tts:
-        # TTS: find by model name or engine
-        if model in registry and registry[model]["type"] == "tts":
-            engine = registry[model].get("engine", model)
-            set_config_value("tts.engine", engine)
-            console.print(f"[green]✓[/] TTS set to [cyan]{engine}[/] (model: {model})")
-        elif model in ("espeak", "say", "piper", "coqui", "qwen3", "outetts"):
-            set_config_value("tts.engine", model)
-            console.print(f"[green]✓[/] TTS engine set to [cyan]{model}[/]")
-        else:
-            console.print(f"[red]Unknown TTS model or engine: {model}[/]")
-            console.print("[dim]Available: espeak, say, piper, coqui, qwen3, outetts[/]")
-            raise typer.Exit(1)
-        return
-
-    # STT model (default or --realtime)
-    # Accept both "large-v3-turbo" and "whisper-large-v3-turbo"
-    stt_model = model.replace("whisper-", "") if model.startswith("whisper-") else model
-    stt_key = f"whisper-{stt_model}"
-
-    if stt_key not in registry:
-        console.print(f"[red]Unknown STT model: {model}[/]")
-        console.print("[dim]Available: tiny, base, small, medium, large-v3, large-v3-turbo[/]")
-        raise typer.Exit(1)
-
-    if realtime:
-        set_config_value("stt.realtime_model", stt_model)
-        console.print(f"[green]✓[/] Realtime STT set to [cyan]{stt_model}[/]")
-    else:
-        set_config_value("stt.model", stt_model)
-        console.print(f"[green]✓[/] STT set to [cyan]{stt_model}[/]")
-
-@app.command("resolve")
-def models_resolve() -> None:
-    """Download all configured models that are missing.
-
-    Automatically downloads models needed for your current configuration.
-
-    Example:
-        voxtype models resolve
-    """
-    from huggingface_hub import snapshot_download
-
-    from voxtype.utils.hf_download import download_with_progress, is_repo_cached
-
-    config = load_config()
-    configured = _get_configured_models(config)
-    registry = _get_model_registry()
-
-    # Find missing models
-    missing: list[str] = []
-    for name in configured.keys():
-        if name in registry:
-            info = registry[name]
-            check_file = info.get("check_file", "config.json")
-            if not is_repo_cached(info["repo"], check_file):
-                missing.append(name)
-
-    if not missing:
-        console.print("[green]All configured models are already cached![/]")
-        _show_models_list(config)
-        raise typer.Exit(0)
-
-    console.print(f"[bold]Downloading {len(missing)} missing model(s)...[/]\n")
-
-    for name in missing:
-        info = registry[name]
-        repo: str = info["repo"]
-
-        console.print(f"[bold]{name}[/] ({info['description']})")
-
-        def _download(r: str = repo) -> str:
-            return snapshot_download(r)
-
-        try:
-            download_with_progress(
-                repo,
-                _download,
-                fallback_size_gb=info["size_gb"],
-            )
-            console.print(f"[green]✓ {name} downloaded[/]\n")
-        except Exception as e:
-            console.print(f"[red]✗ {name} failed: {e}[/]\n")
-            raise typer.Exit(1)
-
-    console.print("[green]All configured models are ready![/]")
-
-@app.command("download")
-def models_download(
+@app.command("pull")
+def models_pull(
     ctx: typer.Context,
     model: Annotated[str | None, typer.Argument(help="Model name to download")] = None,
 ) -> None:
     """Download a model.
 
     Examples:
-        voxtype models download whisper-large-v3-turbo
-        voxtype models download vyvotts-4bit
+        voxtype models pull whisper-large-v3-turbo
+        voxtype models pull vyvotts-4bit
     """
     if model is None:
         import click
@@ -343,7 +245,7 @@ def models_download(
 
     if model not in _get_model_registry():
         console.print(f"[red]Unknown model: {model}[/]")
-        console.print("[dim]Run 'voxtype models list' to see available models[/]")
+        console.print("[dim]Run 'voxtype models list' to see available models.[/]")
         raise typer.Exit(1)
 
     info = _get_model_registry()[model]
@@ -371,16 +273,16 @@ def models_download(
         console.print(f"[red]Download failed: {e}[/]")
         raise typer.Exit(1)
 
-@app.command("clear")
-def models_clear(
+@app.command("rm")
+def models_rm(
     ctx: typer.Context,
     model: Annotated[str | None, typer.Argument(help="Model name to clear (or 'all')")] = None,
 ) -> None:
-    """Clear cached model(s).
+    """Remove cached model(s).
 
     Examples:
-        voxtype models clear vyvotts-4bit
-        voxtype models clear all
+        voxtype models rm vyvotts-4bit
+        voxtype models rm all
     """
     import shutil
 
@@ -412,7 +314,7 @@ def models_clear(
 
     if model not in _get_model_registry():
         console.print(f"[red]Unknown model: {model}[/]")
-        console.print("[dim]Run 'voxtype models list' to see available models[/]")
+        console.print("[dim]Run 'voxtype models list' to see available models.[/]")
         raise typer.Exit(1)
 
     info = _get_model_registry()[model]
