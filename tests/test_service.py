@@ -54,16 +54,16 @@ class TestAppBundleCreate:
         app_path = create_app_bundle("/opt/brew/bin/python3.11")
         launcher = app_path / "Contents" / "MacOS" / APP_NAME
         assert launcher.stat().st_mode & stat.S_IEXEC
-        content = launcher.read_text()
-        assert "/opt/brew/bin/python3.11" in content
-        assert "-m voxtype engine start -d" in content
+        # python_path config file always written (used by both native and bash)
+        python_path_file = app_path / "Contents" / "MacOS" / "python_path"
+        assert python_path_file.read_text().strip() == "/opt/brew/bin/python3.11"
 
     def test_replaces_existing_bundle(self, tmp_path, monkeypatch):
         monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
         create_app_bundle("/usr/bin/python3")
         create_app_bundle("/other/python")
-        launcher = (tmp_path / "Test.app" / "Contents" / "MacOS" / APP_NAME).read_text()
-        assert "/other/python" in launcher
+        python_path_file = tmp_path / "Test.app" / "Contents" / "MacOS" / "python_path"
+        assert python_path_file.read_text().strip() == "/other/python"
 
 class TestAppBundleRemove:
     def test_removes_bundle(self, tmp_path, monkeypatch):
@@ -81,7 +81,7 @@ class TestAppBundlePaths:
     def test_app_path(self):
         path = get_app_path()
         assert path.name == "Voxtype.app"
-        assert path.parent == Path("/Applications")
+        assert path.parent == Path.home() / "Applications"
 
     def test_executable_path(self):
         exe = get_executable_path()
