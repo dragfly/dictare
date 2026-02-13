@@ -170,3 +170,37 @@ class TestCommandResolution:
             command = None
 
         assert command is None
+
+
+# ---------------------------------------------------------------------------
+# Regression: agent must never hard-exit when engine is unreachable
+# ---------------------------------------------------------------------------
+
+
+class TestAgentNeverBlocksOnEngine:
+    """The agent command must proceed even when the engine is down.
+
+    The SSE reconnect loop handles eventual connectivity — the CLI must
+    never gate on engine availability with a hard exit.
+    """
+
+    def test_try_start_service_never_raises(self, monkeypatch):
+        """_try_start_service is fire-and-forget — exceptions are swallowed."""
+        monkeypatch.setattr("sys.platform", "darwin")
+        with (
+            patch("voxtype.service.launchd.is_installed", side_effect=RuntimeError("boom")),
+        ):
+            _try_start_service()  # must not raise
+
+    def test_try_start_service_returns_none(self, monkeypatch):
+        """_try_start_service must not return a truthy/falsy gate value."""
+        monkeypatch.setattr("sys.platform", "darwin")
+        with (
+            patch("voxtype.service.launchd.is_installed", return_value=False),
+            patch("voxtype.service.launchd.start"),
+        ):
+            result = _try_start_service()
+            assert result is None, (
+                "_try_start_service must return None (fire-and-forget), "
+                "not a bool that gates agent startup"
+            )
