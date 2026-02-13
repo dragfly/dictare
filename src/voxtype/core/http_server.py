@@ -71,6 +71,14 @@ class OpenVIPServer:
         @app.get("/agents/{agent_id}/messages")
         async def sse_agent_messages(agent_id: str, request: Request):
             """SSE endpoint - connection IS the agent registration."""
+            from voxtype.core.engine import VoxtypeEngine
+
+            # Reject reserved agent IDs
+            if agent_id in VoxtypeEngine.RESERVED_AGENT_IDS:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Reserved agent ID",
+                )
             # Check for duplicate connection
             with self._agent_queues_lock:
                 if agent_id in self._agent_queues:
