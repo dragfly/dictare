@@ -430,17 +430,17 @@ class TrayApp:
         """Run the tray application (blocking)."""
         import pystray
 
-        self._icon = pystray.Icon(
+        kwargs = dict(
             name="voxtype",
             icon=_load_icon("voxtype"),
             title="VoxType",
             menu=self._create_menu(),
         )
-
-        # macOS: mark as template image so it adapts to dark/light menu bar
+        # macOS: template images adapt to dark/light menu bar
         if sys.platform == "darwin":
-            self._icon.template = True
+            kwargs["template"] = True
 
+        self._icon = pystray.Icon(**kwargs)
         self._icon.run()
 
     def run_detached(self) -> threading.Thread:
