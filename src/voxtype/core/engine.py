@@ -1239,6 +1239,7 @@ class VoxtypeEngine:
                     "available": self._tts_engine is not None,
                     "error": self._tts_error or None,
                 },
+                "permissions": self._get_permissions(),
                 "loading": {
                     "active": self._loading_active,
                     "models": [
@@ -1252,6 +1253,24 @@ class VoxtypeEngine:
                     ],
                 },
             },
+        }
+
+    @staticmethod
+    def _get_permissions() -> dict:
+        """Check platform permissions required for keyboard injection."""
+        import sys
+
+        if sys.platform != "darwin":
+            return {"accessibility": True}
+
+        from voxtype.platform.accessibility import (
+            ACCESSIBILITY_SETTINGS_URL,
+            is_accessibility_granted,
+        )
+
+        return {
+            "accessibility": is_accessibility_granted(),
+            "settings_url": ACCESSIBILITY_SETTINGS_URL,
         }
 
     def _handle_tts_request(self, body: dict) -> dict:

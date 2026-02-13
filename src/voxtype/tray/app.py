@@ -58,61 +58,25 @@ def _hide_dock_icon() -> None:
 def _ensure_accessibility(prompt: bool = True) -> bool:
     """Check macOS Accessibility permission, optionally prompting the user.
 
-    On macOS, calls AXIsProcessTrustedWithOptions to check (and optionally
-    trigger the system dialog for) Accessibility permission.  This is required
-    for pynput to monitor global key events.
-
-    Returns True if the process is trusted, False otherwise.
-    No-op (returns True) on non-macOS platforms.
+    Delegates to the shared platform utility.
     """
-    if sys.platform != "darwin":
-        return True
+    from voxtype.platform.accessibility import (
+        is_accessibility_granted,
+        request_accessibility,
+    )
 
-    try:
-        import ctypes
-        import ctypes.util
+    if prompt:
+        trusted = request_accessibility()
+    else:
+        trusted = is_accessibility_granted()
 
-        as_path = "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices"
-        cf_path = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
-
-        appserv = ctypes.cdll.LoadLibrary(as_path)
-        cf = ctypes.cdll.LoadLibrary(cf_path)
-
-        # Symbols (Apple API names — noqa N806)
-        prompt_key = ctypes.c_void_p.in_dll(  # kAXTrustedCheckOptionPrompt
-            appserv, "kAXTrustedCheckOptionPrompt"
+    if not trusted:
+        logger.warning(
+            "Accessibility permission not granted — "
+            "hotkey monitoring will not work until enabled in "
+            "System Settings → Privacy & Security → Accessibility"
         )
-        cf_true = ctypes.c_void_p.in_dll(cf, "kCFBooleanTrue")
-
-        # Build options dict: {kAXTrustedCheckOptionPrompt: kCFBooleanTrue}
-        cf.CFDictionaryCreateMutable.restype = ctypes.c_void_p
-        cf.CFDictionaryCreateMutable.argtypes = [
-            ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p,
-        ]
-        options = cf.CFDictionaryCreateMutable(None, 1, None, None)
-
-        cf.CFDictionarySetValue.argtypes = [
-            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
-        ]
-        cf.CFDictionarySetValue(options, prompt_key, cf_true)
-
-        appserv.AXIsProcessTrustedWithOptions.restype = ctypes.c_bool
-        appserv.AXIsProcessTrustedWithOptions.argtypes = [ctypes.c_void_p]
-        trusted = appserv.AXIsProcessTrustedWithOptions(options)
-
-        cf.CFRelease.argtypes = [ctypes.c_void_p]
-        cf.CFRelease(options)
-
-        if not trusted:
-            logger.warning(
-                "Accessibility permission not granted — "
-                "hotkey monitoring will not work until enabled in "
-                "System Settings → Privacy & Security → Accessibility"
-            )
-        return trusted
-    except Exception:
-        logger.warning("Could not check Accessibility permission", exc_info=True)
-        return False
+    return trusted
 
 
 def _patch_pystray_retina() -> None:
@@ -181,6 +145,10 @@ class TrayApp:
         self._output_mode: str = "keyboard"  # "keyboard" | "agents"
         self._load_output_mode()
 
+        # Permissions state (from engine /status polling)
+        self._accessibility_granted = True
+        self._accessibility_settings_url = ""
+
         # Status polling
         self._polling = False
         self._poll_thread: threading.Thread | None = None
@@ -211,8 +179,18 @@ class TrayApp:
 
         items = [
             pystray.MenuItem(f"Status: {status_text}", None, enabled=False),
-            pystray.Menu.SEPARATOR,
         ]
+
+        # Accessibility warning (shown when permission not granted)
+        if not self._accessibility_granted and sys.platform == "darwin":
+            items.append(
+                pystray.MenuItem(
+                    "Grant Accessibility Permission",
+                    self._on_open_accessibility_settings,
+                ),
+            )
+
+        items.append(pystray.Menu.SEPARATOR)
 
         # Start/Stop listening toggle
         if self._state == "listening":
@@ -350,6 +328,14 @@ class TrayApp:
 
         threading.Thread(target=do_restart, daemon=True).start()
 
+    def _on_open_accessibility_settings(
+        self, icon: pystray.Icon, item: pystray.MenuItem
+    ) -> None:
+        """Open macOS Accessibility settings."""
+        from voxtype.platform.accessibility import open_accessibility_settings
+
+        open_accessibility_settings()
+
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Quit the application."""
         if self._icon:
@@ -366,6 +352,10 @@ class TrayApp:
             "listening": "voxtype_active",
             "loading": "voxtype_loading",
         }.get(self._state, "voxtype_muted")
+
+        # Override to muted if accessibility not granted (keyboard won't work)
+        if not self._accessibility_granted and self._state not in ("disconnected", "loading"):
+            icon_name = "voxtype_muted"
 
         self._icon.icon = _load_icon(icon_name)
 
@@ -452,6 +442,14 @@ class TrayApp:
                     output = platform.get("output", {})
                     agents = output.get("available_agents", [])
                     self.set_targets(agents, output.get("current_agent", ""))
+
+                    # Update permissions state
+                    perms = platform.get("permissions", {})
+                    granted = perms.get("accessibility", True)
+                    if granted != self._accessibility_granted:
+                        self._accessibility_granted = granted
+                        self._accessibility_settings_url = perms.get("settings_url", "")
+                        self._update_menu()
                 except (urllib.error.URLError, ConnectionRefusedError, OSError):
                     self.set_state("disconnected")
                 except Exception as e:
