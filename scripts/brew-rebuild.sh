@@ -10,8 +10,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="${PROJECT_DIR}/dist"
 
-# openvip tarball: relative to project dir (../../nottoplay/openvip-sdks/python)
-OPENVIP_DIR="$(cd "${PROJECT_DIR}/../../nottoplay/openvip-sdks/python" && pwd)"
+# openvip tarball: relative to project dir (../../openvip-dev/sdks/python)
+OPENVIP_DIR="$(cd "${PROJECT_DIR}/../../openvip-dev/sdks/python" && pwd)"
 OPENVIP_TARBALL="${OPENVIP_DIR}/dist/openvip-1.1.0.tar.gz"
 
 # ---------- 1. Read version from source ----------
