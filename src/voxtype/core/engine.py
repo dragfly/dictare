@@ -911,6 +911,42 @@ class VoxtypeEngine:
         self._controller.send(SetListeningEvent(on=on, source="api"))
 
     # -------------------------------------------------------------------------
+    # Output Mode
+    # -------------------------------------------------------------------------
+
+    def _set_output_mode(self, mode: str) -> None:
+        """Switch output mode at runtime (keyboard <-> agents).
+
+        In keyboard mode, a built-in KeyboardAgent injects keystrokes.
+        In agents mode, agents self-register via SSE.
+        """
+        if mode not in ("keyboard", "agents"):
+            return
+
+        want_agent_mode = mode == "agents"
+        if want_agent_mode == self.agent_mode:
+            return  # Already in this mode
+
+        if want_agent_mode:
+            # Switch to agents: stop and unregister keyboard agent
+            if self._keyboard_agent:
+                self._keyboard_agent.stop()
+                self.unregister_agent(self._keyboard_agent.id)
+                self._keyboard_agent = None
+            self.agent_mode = True
+        else:
+            # Switch to keyboard: create and register keyboard agent
+            from voxtype.agent.keyboard import KeyboardAgent
+
+            keyboard_agent = KeyboardAgent(self._config)
+            keyboard_agent.start()
+            self._keyboard_agent = keyboard_agent
+            self.register_agent(keyboard_agent)
+            self.agent_mode = False
+
+        self._emit("on_agents_changed", self.visible_agents)
+
+    # -------------------------------------------------------------------------
     # Agent Control
     # -------------------------------------------------------------------------
 
@@ -1385,6 +1421,10 @@ class VoxtypeEngine:
             agent_name = body.get("agent", "")
             self._switch_to_agent_by_name(agent_name)
             return {"status": "ok"}
+        elif command.startswith("output.set_mode:"):
+            mode = command.split(":", 1)[1]
+            self._set_output_mode(mode)
+            return {"status": "ok", "mode": mode}
         elif command == "engine.shutdown":
             self._running = False
             return {"status": "ok"}
