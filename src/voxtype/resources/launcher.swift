@@ -4,11 +4,29 @@
 /// It requests Accessibility and Microphone permissions (showing "Voxtype"
 /// in dialogs, not "Python"), then spawns the Python engine as a child process.
 ///
+/// Usage:
+///   Voxtype                    — Normal mode: request permissions, launch engine
+///   Voxtype --check-permissions — Print JSON with permission status, then exit
+///
 /// Build: swiftc -O -o Voxtype launcher.swift
 
 import ApplicationServices
 import AVFoundation
 import Foundation
+
+// --- Permission check mode ---
+// Called by the Python engine to check permissions on behalf of the .app bundle.
+// This binary IS the trusted process, so AXIsProcessTrusted() returns the real answer.
+if CommandLine.arguments.contains("--check-permissions") {
+    let accessibility = AXIsProcessTrusted()
+
+    let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+    let microphone = (micStatus == .authorized)
+
+    let json = "{\"accessibility\": \(accessibility), \"microphone\": \(microphone)}"
+    print(json)
+    exit(0)
+}
 
 // --- Request Accessibility permission ---
 // This makes macOS show "Voxtype" in the Accessibility dialog and list.
