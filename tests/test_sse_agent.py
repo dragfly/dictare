@@ -7,6 +7,8 @@ import json
 import queue
 import threading
 
+import pytest
+
 from voxtype.agent.base import BaseAgent, OpenVIPMessage
 from voxtype.agent.mux import _read_from_sse, _stream_active_agent
 from voxtype.agent.sse import SSEAgent
@@ -449,6 +451,7 @@ class TestSSEInputExecutorIntegration:
 class TestSSEDisconnectStatus:
     """Test _read_from_sse reports disconnection errors via on_status."""
 
+    @pytest.mark.slow
     def test_sse_error_reports_reconnecting(self) -> None:
         """SSE connection error triggers 'reconnecting' status."""
         stop = threading.Event()

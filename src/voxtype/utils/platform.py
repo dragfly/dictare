@@ -425,8 +425,24 @@ def _check_tts_deps() -> list[CheckResult]:
 
     engine = config.tts.engine
 
-    # System engines (espeak, say) don't need pip packages
+    # System engines (espeak, say) — check binary is installed
     if engine in ("espeak", "say"):
+        if check_command_exists(engine):
+            results.append(CheckResult(
+                name=f"TTS ({engine})",
+                available=True,
+                message="Available (system)",
+                required=False,
+            ))
+        else:
+            hint = f"brew install {engine}" if is_macos() else f"sudo apt install {engine}"
+            results.append(CheckResult(
+                name=f"TTS ({engine})",
+                available=False,
+                message=f"'{engine}' not found in PATH",
+                required=False,
+                install_hint=hint,
+            ))
         return results
 
     from voxtype.tts import create_tts_engine
