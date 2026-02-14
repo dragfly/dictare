@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b35] - 2026-02-14
+
+### Changed
+
+- **Rename `derive_message()` → `fork_message()`** — clearer name for the message derivation function in pipeline. Pre-release API cleanup.
+- **`PipelineAction(str, Enum)` → `PipelineAction(StrEnum)`** — use Python 3.11 native StrEnum.
+- **Fix mypy errors in `PipelineLoader`** — `_build_step` now returns `Filter | Executor | None` instead of `object`.
+- **Pin ruff `>=0.14.0,<0.15.0`** — prevents version drift between local and CI.
+
 ## [0.1.0b34] - 2026-02-14
 
 ### Changed

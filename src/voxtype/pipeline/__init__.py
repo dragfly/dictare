@@ -15,7 +15,7 @@ from voxtype.pipeline.base import (
     Pipeline,
     PipelineAction,
     PipelineResult,
-    derive_message,
+    fork_message,
 )
 from voxtype.pipeline.filters import AgentFilter, InputFilter
 from voxtype.pipeline.loader import PipelineLoader, register_step
@@ -40,6 +40,6 @@ __all__ = [
     "PipelineAction",
     "PipelineLoader",
     "PipelineResult",
-    "derive_message",
+    "fork_message",
     "register_step",
 ]
