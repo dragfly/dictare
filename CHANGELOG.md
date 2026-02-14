@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b50] - 2026-02-14
+
+### Changed
+
+- **Extract `_set_current_agent()` method** — consolidated the repeated set + emit + notify tripletta into a single method. All agent switch paths (hotkey, voice filter, API, mode switch, unregister fallback) now go through `_set_current_agent(agent_id, idx)`, eliminating the risk of forgetting to notify SSE subscribers.
+
 ## [0.1.0b49] - 2026-02-14
 
 ### Fixed
