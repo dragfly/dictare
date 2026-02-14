@@ -110,7 +110,7 @@ class OpenVIPServer:
                                 "event": message.get("type", "message"),
                                 "data": json.dumps(message, ensure_ascii=False),
                             }
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             # Send keepalive comment
                             yield {"comment": "keepalive"}
                 finally:

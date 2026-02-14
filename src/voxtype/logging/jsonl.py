@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import IntEnum
 from pathlib import Path
 from typing import Any
@@ -96,7 +96,7 @@ class JSONLLogger:
             return
 
         entry = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "level": level.name,
             "event": event,
             **data,

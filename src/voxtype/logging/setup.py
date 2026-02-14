@@ -18,7 +18,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +57,7 @@ class VoxtypeJsonFormatter(JsonFormatter):
         super().add_fields(log_record, record, message_dict)
 
         # Add ISO timestamp
-        log_record["ts"] = datetime.now(timezone.utc).isoformat()
+        log_record["ts"] = datetime.now(UTC).isoformat()
 
         # Add level name
         log_record["level"] = record.levelname

@@ -16,7 +16,7 @@ Extension fields (x_) are added by pipeline filters, not here.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from voxtype import __version__
@@ -34,7 +34,7 @@ def _base_message(msg_type: str) -> dict[str, Any]:
         "openvip": OPENVIP_VERSION,
         "type": msg_type,
         "id": str(uuid.uuid4()),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "origin": f"voxtype/{__version__}",
     }
 
