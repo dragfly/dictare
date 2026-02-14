@@ -152,27 +152,37 @@ def _poll_active_agent(
     from openvip import Client
 
     client = Client(base_url, timeout=5)
-    was_active: bool | None = None
+    last_label: str | None = None
 
     while not stop_event.is_set():
         # SSE reconnected — force status refresh on next successful poll
         if sse_connected and sse_connected.is_set():
             sse_connected.clear()
-            was_active = None
+            last_label = None
 
         try:
             status = client.get_status()
             platform = status.platform or {}
+            engine_state = platform.get("state", "idle")
             current = platform.get("output", {}).get("current_agent")
             is_active = current == agent_id
-            if is_active != was_active:
-                was_active = is_active
-                if is_active:
-                    on_status(f"\u25cf {agent_id} \u00b7 listening", "ok")
-                else:
-                    on_status(f"\u25cb {agent_id} \u00b7 standby", "warn")
+
+            # Determine label based on engine state + active agent
+            if is_active and engine_state == "idle":
+                label = f"\u25cf {agent_id} \u00b7 idle"
+                style = "dim"
+            elif is_active:
+                label = f"\u25cf {agent_id} \u00b7 listening"
+                style = "ok"
+            else:
+                label = f"\u25cb {agent_id} \u00b7 standby"
+                style = "warn"
+
+            if label != last_label:
+                last_label = label
+                on_status(label, style)
         except (ConnectionRefusedError, OSError, ValueError):
-            was_active = None  # Reset so next successful poll forces status update
+            last_label = None  # Reset so next successful poll forces status update
         stop_event.wait(poll_interval)
 
 def _read_from_sse(

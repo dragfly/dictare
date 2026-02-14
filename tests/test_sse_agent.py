@@ -128,14 +128,17 @@ class TestSSEAgentThreadSafety:
         assert len(errors) == 0
         assert len(server.messages) == 250  # 5 threads * 50 messages
 
-def _make_status_handler(agent_id: str, current_agent: str):
+def _make_status_handler(agent_id: str, current_agent: str, state: str = "listening"):
     """Create an HTTP handler that serves /status JSON."""
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/status":
                 body = json.dumps({
-                    "platform": {"output": {"current_agent": current_agent}},
+                    "platform": {
+                        "state": state,
+                        "output": {"current_agent": current_agent},
+                    },
                 }).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -232,6 +235,29 @@ class TestPollActiveAgentStatus:
 
         assert len(statuses) >= 1
         assert "listening" in statuses[0][0]
+
+    def test_poll_shows_idle_when_engine_off(self) -> None:
+        """Active agent shows 'idle' when engine state is idle."""
+        handler = _make_status_handler("myagent", "myagent", state="idle")
+        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        port = server.server_address[1]
+        t = threading.Thread(target=server.handle_request, daemon=True)
+        t.start()
+
+        stop = threading.Event()
+        statuses: list[tuple[str, str]] = []
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            stop.set()
+
+        _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop, on_status,
+                           poll_interval=0.05)
+        server.server_close()
+
+        assert len(statuses) >= 1
+        assert "idle" in statuses[0][0]
+        assert statuses[0][1] == "dim"
 
 class _FakeSSEResponse:
     """Fake HTTP response that yields SSE lines then stops."""
