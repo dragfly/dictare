@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Literal
@@ -309,7 +310,7 @@ class TTSConfig(BaseModel):
     """Text-to-speech configuration."""
 
     engine: Literal["espeak", "say", "piper", "coqui", "qwen3", "outetts"] = Field(
-        default="espeak",
+        default="say" if sys.platform == "darwin" else "espeak",
         description="TTS engine: espeak, say (macOS), piper, coqui, outetts (MLX)",
     )
     language: str = Field(
