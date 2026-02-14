@@ -129,6 +129,11 @@ class StateController:
         """Stop the event processing loop."""
         self._cancel_transcription_watchdog()
         self._running = False
+        # Wake the worker thread immediately (it may be blocked on queue.get)
+        try:
+            self._queue.put_nowait(None)  # type: ignore[arg-type]
+        except Full:
+            pass
         if self._worker:
             self._worker.join(timeout=1.0)
             self._worker = None
@@ -153,6 +158,8 @@ class StateController:
         while self._running:
             try:
                 event = self._queue.get(timeout=0.1)
+                if event is None:
+                    break  # Sentinel from stop()
                 self._handle_event(event)
             except Empty:
                 continue
