@@ -442,12 +442,13 @@ def run_agent(
     )
 
     try:
-        session.start()
-
-        # Clear terminal for clean start
+        # Clear terminal for clean start (before launching child process
+        # so that any immediate errors from the child are visible)
         if clear_on_start:
             sys.stdout.buffer.write(b"\x1b[2J\x1b[H")
             sys.stdout.buffer.flush()
+
+        session.start()
 
         # Init status bar before raw mode
         if sbar:

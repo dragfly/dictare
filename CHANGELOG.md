@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b36] - 2026-02-14
+
+### Fixed
+
+- **Agent launch hides command errors** — clear screen was happening after `session.start()`, wiping any immediate error output from the child process (e.g., "command not found"). Now clears before launching so errors are always visible.
+
 ## [0.1.0b35] - 2026-02-14
 
 ### Changed
