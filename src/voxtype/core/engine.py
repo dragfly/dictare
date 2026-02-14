@@ -611,7 +611,7 @@ class VoxtypeEngine:
                             self._partial_text = text
                             self._emit("on_partial_transcription", text)
             except Exception:
-                pass  # Ignore partial transcription errors
+                logger.debug("partial transcription error", exc_info=True)
 
     def _on_vad_speech_end(self, audio_data: Any) -> None:
         """Handle VAD speech end detection."""
