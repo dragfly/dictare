@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 _SOUNDS_DIR = Path(__file__).parent / "sounds"
 
 # Default bundled sound files
-DEFAULT_SOUND_START = _SOUNDS_DIR / "up-beep.mp3"
-DEFAULT_SOUND_STOP = _SOUNDS_DIR / "down-beep.mp3"
-DEFAULT_SOUND_TRANSCRIBING = _SOUNDS_DIR / "transcribing.mp3"
-DEFAULT_SOUND_READY = _SOUNDS_DIR / "ready.mp3"
+DEFAULT_SOUND_START = _SOUNDS_DIR / "up-beep.wav"
+DEFAULT_SOUND_STOP = _SOUNDS_DIR / "down-beep.wav"
+DEFAULT_SOUND_TRANSCRIBING = _SOUNDS_DIR / "transcribing.wav"
+DEFAULT_SOUND_READY = _SOUNDS_DIR / "ready.wav"
 
 # Map event names to their default bundled sound files
 _DEFAULT_SOUNDS: dict[str, Path] = {
@@ -97,7 +97,7 @@ def get_sound_path(name: str) -> Path:
     """Get path to a bundled sound file.
 
     Args:
-        name: Filename (e.g., 'up-beep.mp3', 'down-beep.mp3')
+        name: Filename (e.g., 'up-beep.wav', 'down-beep.wav')
 
     Returns:
         Path to the sound file.
