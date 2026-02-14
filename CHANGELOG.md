@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b57] - 2026-02-14
+
+### Fixed
+
+- **Loading state stuck after engine init** — `_loading_active = False` at end of `init_components()` didn't push SSE status update, so tray and mux stayed on "loading" until the next state change. Now `_notify_http_status()` is called when loading completes.
+- **Loading color inconsistency** — tray showed blue (dedicated loading icon), mux showed yellow. Both now show yellow (same as "off"/idle) — engine not ready but not disconnected.
+
 ## [0.1.0b56] - 2026-02-14
 
 ### Fixed
