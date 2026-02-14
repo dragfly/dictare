@@ -1040,6 +1040,44 @@ class TestSetOutputMode:
             assert "aider" in engine.agents
             assert "__keyboard__" in engine.agents
 
+    def test_switch_to_keyboard_sets_current_agent(self) -> None:
+        """Switching to keyboard makes __keyboard__ the current agent."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+        register_test_agents(engine, ["claude", "cursor"])
+        assert engine.current_agent == "claude"
+
+        with patch(
+            "voxtype.agent.keyboard.KeyboardAgent", autospec=True
+        ) as mock_kb_cls:
+            mock_kb = mock_kb_cls.return_value
+            mock_kb.id = "__keyboard__"
+
+            engine._set_output_mode("keyboard")
+
+            assert engine.current_agent == "__keyboard__"
+
+    def test_switch_back_to_agents_restores_first_agent(self) -> None:
+        """Switching back to agents restores first SSE agent as current."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+        register_test_agents(engine, ["claude", "cursor"])
+
+        # Switch to keyboard
+        with patch(
+            "voxtype.agent.keyboard.KeyboardAgent", autospec=True
+        ) as mock_kb_cls:
+            mock_kb = mock_kb_cls.return_value
+            mock_kb.id = "__keyboard__"
+            engine._set_output_mode("keyboard")
+
+        # Switch back to agents
+        engine._set_output_mode("agents")
+        assert engine.current_agent == "claude"
+        assert engine.agent_mode is True
+
     def test_switch_invalid_mode_is_noop(self) -> None:
         """Invalid mode string does nothing."""
         config = MockConfig()
