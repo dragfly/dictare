@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b49] - 2026-02-14
+
+### Fixed
+
+- **Agent switch not pushing SSE status update** — switching agents via voice filter, hotkey, or API changed `current_agent_id` internally but didn't notify SSE `/status/stream` subscribers, so mux status bars and tray app didn't update until the next state transition. Now `_notify_http_status()` is called on every agent switch.
+
 ## [0.1.0b48] - 2026-02-14
 
 ### Changed

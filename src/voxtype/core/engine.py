@@ -953,6 +953,7 @@ class VoxtypeEngine:
             self.agent_mode = False
 
         self._emit("on_agents_changed", self.visible_agents)
+        self._notify_http_status()
 
     # -------------------------------------------------------------------------
     # Agent Control
@@ -1045,6 +1046,7 @@ class VoxtypeEngine:
         if new_agent_id in self._agents:
             self._current_agent_id = new_agent_id
             self._emit("on_agent_change", self._current_agent_id, new_idx)
+            self._notify_http_status()
 
     def _switch_to_agent_by_name(self, name: str) -> bool:
         """Switch to a specific agent by name - sends event to controller."""
@@ -1067,6 +1069,7 @@ class VoxtypeEngine:
                 return False
             self._current_agent_id = agent_id
             self._emit("on_agent_change", agent_id, idx)
+            self._notify_http_status()
             return True
 
         # Try exact match first
@@ -1104,6 +1107,7 @@ class VoxtypeEngine:
 
         self._current_agent_id = agent_id
         self._emit("on_agent_change", self._current_agent_id, idx)
+        self._notify_http_status()
         return True
 
     def _send_submit(self) -> None:
