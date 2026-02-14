@@ -168,12 +168,13 @@ def _poll_active_agent(
             is_active = current == agent_id
 
             # Determine label based on engine state + active agent
-            if is_active and engine_state == "idle":
-                label = f"\u25cf {agent_id} \u00b7 idle"
-                style = "dim"
-            elif is_active:
+            _active_states = ("listening", "recording", "transcribing", "playing")
+            if is_active and engine_state in _active_states:
                 label = f"\u25cf {agent_id} \u00b7 listening"
                 style = "ok"
+            elif is_active:
+                label = f"\u25cf {agent_id} \u00b7 idle"
+                style = "dim"
             else:
                 label = f"\u25cb {agent_id} \u00b7 standby"
                 style = "warn"

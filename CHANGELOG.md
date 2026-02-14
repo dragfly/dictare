@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b43] - 2026-02-14
+
+### Fixed
+
+- **PTY status bar not showing idle state** — engine state "off" was not matched by the `== "idle"` check, so the status bar showed "listening" (green) even when idle. Now checks for active states explicitly: "listening", "recording", "transcribing", "playing" → green; everything else → "idle" grey.
+- **Revert tray menu bar text** — removed colored title text from macOS menu bar (tray shows icon only, as intended). Status display belongs in the PTY status bar.
+
 ## [0.1.0b42] - 2026-02-14
 
 ### Fixed
