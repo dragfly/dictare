@@ -34,6 +34,7 @@ class OpenVIPServer:
         POST /agents/{agent_id}/messages  - Send message to agent
         POST /speech                      - Speech (TTS) request
         GET  /status                      - Engine status
+        GET  /status/stream               - SSE stream for status changes
         POST /control                     - Control commands
     """
 
@@ -50,6 +51,10 @@ class OpenVIPServer:
         # Agent queues: agent_id -> asyncio.Queue
         self._agent_queues: dict[str, asyncio.Queue] = {}
         self._agent_queues_lock = threading.Lock()
+
+        # Status stream subscribers: list of asyncio.Queue
+        self._status_queues: list[asyncio.Queue] = []
+        self._status_queues_lock = threading.Lock()
 
         # Server thread and event loop
         self._thread: threading.Thread | None = None
@@ -153,6 +158,46 @@ class OpenVIPServer:
             """Get engine status."""
             return self._engine._get_http_status()
 
+        @app.get("/status/stream")
+        async def sse_status_stream(request: Request):
+            """SSE stream for status changes.
+
+            Pushes a Status object on every state transition.
+            Sends keepalive comments every 30s if no events.
+            """
+            sq: asyncio.Queue = asyncio.Queue()
+            with self._status_queues_lock:
+                self._status_queues.append(sq)
+
+            # Send current status immediately on connect
+            initial = self._engine._get_http_status()
+            await sq.put(initial)
+
+            async def event_generator():
+                try:
+                    while True:
+                        if await request.is_disconnected():
+                            break
+                        try:
+                            status = await asyncio.wait_for(
+                                sq.get(), timeout=30.0
+                            )
+                            yield {
+                                "data": json.dumps(
+                                    status, ensure_ascii=False, default=str
+                                ),
+                            }
+                        except TimeoutError:
+                            yield {"comment": "keepalive"}
+                finally:
+                    with self._status_queues_lock:
+                        try:
+                            self._status_queues.remove(sq)
+                        except ValueError:
+                            pass
+
+            return EventSourceResponse(event_generator())
+
         @app.post("/control")
         async def control_command(request: Request):
             """Handle control commands."""
@@ -245,6 +290,23 @@ class OpenVIPServer:
             return True
 
         return False
+
+    def notify_status_change(self) -> None:
+        """Thread-safe: push current status to all SSE status subscribers.
+
+        Called from engine threads on state transitions and agent changes.
+        """
+        with self._status_queues_lock:
+            if not self._status_queues:
+                return
+            queues = list(self._status_queues)
+
+        if not (self._loop and self._loop.is_running()):
+            return
+
+        status = self._engine._get_http_status()
+        for q in queues:
+            self._loop.call_soon_threadsafe(q.put_nowait, status)
 
     @property
     def connected_agents(self) -> list[str]:

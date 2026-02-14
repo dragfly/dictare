@@ -261,7 +261,7 @@ class AgentFilterConfig(BaseModel):
     """Agent switch filter configuration."""
 
     enabled: bool = Field(
-        default=False,
+        default=True,
         description="Enable voice-controlled agent switching (say 'agent <name>')",
     )
     triggers: list[str] = Field(

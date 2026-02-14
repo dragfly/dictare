@@ -593,8 +593,14 @@ def main() -> None:
             target=lambda: _send_control(f"output.set_mode:{mode}"), daemon=True
         ).start()
 
+    def on_target_change(target: str) -> None:
+        threading.Thread(
+            target=lambda: _send_control(f"output.set_agent:{target}"), daemon=True
+        ).start()
+
     app.on_toggle_listening(on_toggle_listening)
     app.on_output_mode_change(on_output_mode_change)
+    app.on_target_change(on_target_change)
 
     # Hide from Dock (tray apps shouldn't show a Dock tile)
     _hide_dock_icon()
