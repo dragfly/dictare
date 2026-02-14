@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b32] - 2026-02-14
+
+### Fixed
+
+- **Test suite 11.6s → 6.3s** — controller `stop()` now sends a sentinel to wake the worker thread immediately instead of waiting up to 100ms for the `queue.get(timeout=0.1)` to expire. Each of ~30 engine/controller tests was wasting ~100ms on shutdown.
+
 ## [0.1.0b31] - 2026-02-14
 
 ### Fixed
