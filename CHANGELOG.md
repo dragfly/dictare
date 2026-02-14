@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b55] - 2026-02-14
+
+### Changed
+
+- **Unified display state resolution** — new `voxtype.status.resolve_display_state()` function replaces duplicated state logic in tray and mux. Both now show consistent state names ("loading", "listening", "idle", "standby") and styles. Unicode escape sequences replaced with literal characters (`●`, `○`, `·`).
+
 ## [0.1.0b54] - 2026-02-14
 
 ### Added
 
-- **Tray and mux show "loading/starting" during engine startup** — tray shows red loading icon while models are loading (`loading.active=true`). Agent mux status bar shows "starting" (warn). No state machine changes — reads existing `platform.loading.active` field from SSE status stream.
+- **Tray and mux show loading state during engine startup** — tray shows loading icon while models are loading (`loading.active=true`). Agent mux status bar shows "loading" (warn). No state machine changes — reads existing `platform.loading.active` field from SSE status stream.
 
 ## [0.1.0b53] - 2026-02-14
 
