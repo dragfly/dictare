@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b26] - 2026-02-14
+
+### Fixed
+
+- **Hotkey toggle bounces back** — tray and engine both registered a hotkey listener on the same key, causing two toggles per tap (OFF→LISTENING→OFF cancelled out as instant bounce). Removed the tray's listener — hotkey is the engine's responsibility.
+
 ## [0.1.0b25] - 2026-02-14
 
 ### Fixed

@@ -562,30 +562,9 @@ def main() -> None:
     # Check Accessibility permission (triggers macOS dialog if needed)
     _ensure_accessibility(prompt=True)
 
-    # Start global hotkey listener
-    def start_hotkey_listener() -> None:
-        try:
-            from voxtype.hotkey.pynput_listener import PynputHotkeyListener
-            from voxtype.hotkey.tap_detector import TapDetector
-
-            hotkey = PynputHotkeyListener(config.hotkey.key)
-
-            tap_detector = TapDetector(
-                threshold=0.3,
-                on_single_tap=on_toggle_listening,
-                on_double_tap=lambda: None,  # TODO: switch agent
-            )
-
-            hotkey.start(
-                on_press=tap_detector.on_key_down,
-                on_release=tap_detector.on_key_up,
-                on_other_key=tap_detector.on_other_key,
-            )
-            print(f"Hotkey registered: {config.hotkey.key}", file=sys.stderr)
-        except Exception as e:
-            print(f"Warning: Could not register hotkey: {e}", file=sys.stderr)
-
-    threading.Thread(target=start_hotkey_listener, daemon=True).start()
+    # Hotkey is handled by the engine process — the tray does NOT register
+    # its own listener. Having two listeners on the same key causes a double
+    # toggle (OFF→LISTENING) that cancels itself out.
 
     # Start polling engine HTTP status
     app.start_status_polling(host=host, port=port)
