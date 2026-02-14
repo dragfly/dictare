@@ -280,6 +280,40 @@ class TestStreamActiveAgentStatus:
         assert "idle" in statuses[1][0]
 
 
+    def test_stream_shows_starting_when_loading(self) -> None:
+        """Engine loading models shows 'starting' (warn)."""
+        from unittest.mock import patch
+
+        from openvip import Status
+
+        stop = threading.Event()
+        statuses: list[tuple[str, str]] = []
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            stop.set()
+
+        def fake_subscribe(**kwargs):
+            yield Status(
+                protocol_version="1.0",
+                state="idle",
+                connected_agents=[],
+                platform={
+                    "state": "idle",
+                    "output": {"current_agent": None},
+                    "loading": {"active": True},
+                },
+            )
+
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
+            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+
+        assert len(statuses) >= 1
+        assert "starting" in statuses[0][0]
+        assert statuses[0][1] == "warn"
+
+
 class _FakeSSEResponse:
     """Fake HTTP response that yields SSE lines then stops."""
 

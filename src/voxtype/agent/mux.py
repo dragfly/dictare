@@ -173,20 +173,26 @@ def _stream_active_agent(
             break
 
         platform = status.platform or {}
-        engine_state = platform.get("state", "idle")
-        current = platform.get("output", {}).get("current_agent")
-        is_active = current == agent_id
+        loading = platform.get("loading", {})
 
-        _active_states = ("listening", "recording", "transcribing", "playing")
-        if is_active and engine_state in _active_states:
-            label = f"\u25cf {agent_id} \u00b7 listening"
-            style = "ok"
-        elif is_active:
-            label = f"\u25cf {agent_id} \u00b7 idle"
-            style = "dim"
-        else:
-            label = f"\u25cb {agent_id} \u00b7 standby"
+        if loading.get("active", False):
+            label = f"\u25cb {agent_id} \u00b7 starting"
             style = "warn"
+        else:
+            engine_state = platform.get("state", "idle")
+            current = platform.get("output", {}).get("current_agent")
+            is_active = current == agent_id
+
+            _active_states = ("listening", "recording", "transcribing", "playing")
+            if is_active and engine_state in _active_states:
+                label = f"\u25cf {agent_id} \u00b7 listening"
+                style = "ok"
+            elif is_active:
+                label = f"\u25cf {agent_id} \u00b7 idle"
+                style = "dim"
+            else:
+                label = f"\u25cb {agent_id} \u00b7 standby"
+                style = "warn"
 
         if label != last_label:
             last_label = label
