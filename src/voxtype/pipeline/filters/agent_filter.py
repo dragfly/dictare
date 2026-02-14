@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 from voxtype.events import bus
 from voxtype.libs.jellyfish import levenshtein_distance, metaphone
-from voxtype.pipeline.base import PipelineResult, derive_message
+from voxtype.pipeline.base import PipelineResult, fork_message
 from voxtype.pipeline.filters._text import normalize as _normalize
 from voxtype.pipeline.filters._text import tokenize as _tokenize
 
@@ -216,12 +216,12 @@ class AgentFilter:
 
             # Message 1: text before trigger (if any) - sent to CURRENT agent
             if text_before.strip():
-                msg_before = derive_message(message, {"text": text_before})
+                msg_before = fork_message(message, {"text": text_before})
                 # No x_agent_switch - goes to current agent
                 output_messages.append(msg_before)
 
             # Message 2: empty text with switch flag - triggers switch, nothing sent
-            switch_msg = derive_message(message, {
+            switch_msg = fork_message(message, {
                 "text": "",
                 "x_agent_switch": {
                     "target": match.agent_id,

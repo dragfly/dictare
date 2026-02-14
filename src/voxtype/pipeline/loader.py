@@ -14,7 +14,7 @@ import inspect
 import logging
 from dataclasses import dataclass, field
 
-from voxtype.pipeline.base import Pipeline
+from voxtype.pipeline.base import Executor, Filter, Pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ class PipelineLoader:
         name: str,
         step_config: object | None,
         services: dict,
-    ) -> object | None:
+    ) -> Filter | Executor | None:
         """Build a single step by inspecting its constructor.
 
         Resolution order for each parameter:

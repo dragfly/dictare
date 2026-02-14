@@ -495,7 +495,7 @@ class TestEdgeCases:
         f = InputFilter()
         msg = {"text": "hello ok send", "id": "123", "custom": "value"}
         result = f.process(msg)
-        # derive_message() creates new ID, traces back to original
+        # fork_message() creates new ID, traces back to original
         assert result.messages[0]["parent_id"] == "123"
         assert result.messages[0]["trace_id"] == "123"
         assert result.messages[0]["id"] != "123"  # New ID generated

@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol
 
 
-class PipelineAction(str, Enum):
+class PipelineAction(StrEnum):
     """Action taken by a pipeline step on a message."""
 
     PASS = "pass"  # Message continues unchanged
@@ -106,8 +106,8 @@ class Executor(Protocol):
         ...
 
 
-def derive_message(original: dict, changes: dict | None = None) -> dict:
-    """Create a derived message with new ID and tracing fields.
+def fork_message(original: dict, changes: dict | None = None) -> dict:
+    """Create a forked message with new ID and tracing fields.
 
     Handles the ID triad automatically:
     - New unique id
