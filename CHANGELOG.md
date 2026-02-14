@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b30] - 2026-02-14
+
+### Added
+
+- **Tray: Settings menu item** — opens `~/.config/voxtype/config.toml` in the default editor. Uses `open -t` on macOS, `xdg-open` or `$EDITOR` on Linux.
+- **Tray: About submenu** — version info moved from main menu into an About submenu.
+
+### Changed
+
+- **Tray: version removed from main menu** — no longer shows raw version string at the bottom of the dropdown.
+
 ## [0.1.0b29] - 2026-02-14
 
 ### Changed
