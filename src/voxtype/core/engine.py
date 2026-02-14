@@ -1015,11 +1015,12 @@ class VoxtypeEngine:
         self._agent_order = [a for a in self._agent_order if a != agent_id]
 
         # Adjust current agent if needed
-        if self._agent_order:
-            if was_current:
-                self._set_current_agent(self._agent_order[0])
-        else:
-            self._current_agent_id = None
+        if was_current:
+            visible = self.visible_agents
+            if visible:
+                self._set_current_agent(visible[0])
+            else:
+                self._current_agent_id = None
 
         self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.unregistered", agent_id=agent_id)
