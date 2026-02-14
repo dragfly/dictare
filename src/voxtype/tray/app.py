@@ -254,11 +254,18 @@ class TrayApp:
         ]
         items.append(pystray.MenuItem("Advanced", pystray.Menu(*advanced_items)))
 
+        # Settings — opens config file in editor
+        items.append(pystray.MenuItem("Settings...", self._on_open_settings))
+
         items.append(pystray.Menu.SEPARATOR)
 
-        # About (shows version)
+        # About submenu (version info)
         from voxtype import __version__
-        items.append(pystray.MenuItem(f"voxtype v{__version__}", None, enabled=False))
+
+        about_items = [
+            pystray.MenuItem(f"Voxtype v{__version__}", None, enabled=False),
+        ]
+        items.append(pystray.MenuItem("About", pystray.Menu(*about_items)))
 
         # Quit
         items.append(pystray.MenuItem("Quit", self._on_quit))
@@ -351,6 +358,33 @@ class TrayApp:
         from voxtype.platform.permissions import open_microphone_settings
 
         open_microphone_settings()
+
+    def _on_open_settings(
+        self, icon: pystray.Icon, item: pystray.MenuItem
+    ) -> None:
+        """Open the config file in the default editor."""
+        import subprocess
+
+        from voxtype.config import get_config_path
+
+        config_file = get_config_path()
+        if not config_file.exists():
+            # Create default config if it doesn't exist
+            from voxtype.config import create_default_config
+
+            config_file = create_default_config()
+
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", "-t", str(config_file)])
+        else:
+            import os
+            import shutil
+
+            editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+            if editor:
+                subprocess.Popen([editor, str(config_file)])
+            elif shutil.which("xdg-open"):
+                subprocess.Popen(["xdg-open", str(config_file)])
 
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Quit the application."""
