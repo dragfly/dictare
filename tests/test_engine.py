@@ -967,46 +967,47 @@ class TestTTSIntegration:
 class TestSetOutputMode:
     """Test runtime output mode switching (keyboard <-> agents)."""
 
-    def test_switch_to_keyboard_creates_keyboard_agent(self) -> None:
-        """Switching to keyboard mode creates and registers a KeyboardAgent."""
+    def test_switch_to_keyboard_sets_mode(self) -> None:
+        """Switching to keyboard mode sets agent_mode=False and current to __keyboard__."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
         engine.agent_mode = True
+        # Register keyboard agent (as create_engine does)
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine._agents["__keyboard__"] = mock_kb
+        engine._agent_order.append("__keyboard__")
+        register_test_agents(engine, ["claude"])
 
-        with patch(
-            "voxtype.agent.keyboard.KeyboardAgent", autospec=True
-        ) as mock_kb_cls:
-            mock_kb = mock_kb_cls.return_value
-            mock_kb.id = "__keyboard__"
+        engine._set_output_mode("keyboard")
 
-            engine._set_output_mode("keyboard")
+        assert engine.agent_mode is False
+        assert engine.current_agent == "__keyboard__"
+        # Keyboard agent stays registered — not created/destroyed on switch
+        assert "__keyboard__" in engine.agents
 
-            mock_kb_cls.assert_called_once_with(config)
-            mock_kb.start.assert_called_once()
-            assert engine.agent_mode is False
-            assert engine._keyboard_agent is mock_kb
-            assert "__keyboard__" in engine.agents
-
-    def test_switch_to_agents_removes_keyboard_agent(self) -> None:
-        """Switching to agents mode stops and unregisters the keyboard agent."""
+    def test_switch_to_agents_restores_mode(self) -> None:
+        """Switching to agents mode sets agent_mode=True and keeps keyboard registered."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
         engine.agent_mode = False
-
-        # Set up a fake keyboard agent
+        # Register keyboard agent (as create_engine does)
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
         engine._agents["__keyboard__"] = mock_kb
         engine._agent_order.append("__keyboard__")
         engine._current_agent_id = "__keyboard__"
+        register_test_agents(engine, ["claude"])
 
         engine._set_output_mode("agents")
 
-        mock_kb.stop.assert_called_once()
         assert engine.agent_mode is True
-        assert engine._keyboard_agent is None
-        assert "__keyboard__" not in engine.agents
+        # KeyboardAgent stays registered, just not current
+        assert "__keyboard__" in engine.agents
+        assert engine._keyboard_agent is mock_kb
+        assert engine.current_agent == "claude"
 
     def test_switch_same_mode_is_noop(self) -> None:
         """Switching to the already-active mode does nothing."""
@@ -1024,59 +1025,78 @@ class TestSetOutputMode:
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
         engine.agent_mode = True
-
+        # Register keyboard agent (as create_engine does)
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine._agents["__keyboard__"] = mock_kb
+        engine._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude", "aider"])
 
-        with patch(
-            "voxtype.agent.keyboard.KeyboardAgent", autospec=True
-        ) as mock_kb_cls:
-            mock_kb = mock_kb_cls.return_value
-            mock_kb.id = "__keyboard__"
+        engine._set_output_mode("keyboard")
 
-            engine._set_output_mode("keyboard")
+        # SSE agents are still registered
+        assert "claude" in engine.agents
+        assert "aider" in engine.agents
+        assert "__keyboard__" in engine.agents
 
-            # SSE agents are still registered
-            assert "claude" in engine.agents
-            assert "aider" in engine.agents
-            assert "__keyboard__" in engine.agents
-
-    def test_switch_to_keyboard_sets_current_agent(self) -> None:
-        """Switching to keyboard makes __keyboard__ the current agent."""
+    def test_switch_to_keyboard_saves_last_agent(self) -> None:
+        """Switching to keyboard saves the current SSE agent for later restore."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
         engine.agent_mode = True
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine._agents["__keyboard__"] = mock_kb
+        engine._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude", "cursor"])
-        assert engine.current_agent == "claude"
+        # Select cursor as current
+        engine._current_agent_id = "cursor"
 
-        with patch(
-            "voxtype.agent.keyboard.KeyboardAgent", autospec=True
-        ) as mock_kb_cls:
-            mock_kb = mock_kb_cls.return_value
-            mock_kb.id = "__keyboard__"
+        engine._set_output_mode("keyboard")
 
-            engine._set_output_mode("keyboard")
+        assert engine.current_agent == "__keyboard__"
+        assert engine._last_sse_agent_id == "cursor"
 
-            assert engine.current_agent == "__keyboard__"
-
-    def test_switch_back_to_agents_restores_first_agent(self) -> None:
-        """Switching back to agents restores first SSE agent as current."""
+    def test_switch_back_to_agents_restores_last_selected(self) -> None:
+        """Switching back to agents restores the last selected SSE agent, not first."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
         engine.agent_mode = True
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine._agents["__keyboard__"] = mock_kb
+        engine._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude", "cursor"])
+        # Select cursor, then switch to keyboard, then back
+        engine._current_agent_id = "cursor"
 
-        # Switch to keyboard
-        with patch(
-            "voxtype.agent.keyboard.KeyboardAgent", autospec=True
-        ) as mock_kb_cls:
-            mock_kb = mock_kb_cls.return_value
-            mock_kb.id = "__keyboard__"
-            engine._set_output_mode("keyboard")
+        engine._set_output_mode("keyboard")
+        assert engine.current_agent == "__keyboard__"
 
-        # Switch back to agents
+        engine._set_output_mode("agents")
+        assert engine.current_agent == "cursor"
+        assert engine.agent_mode is True
+
+    def test_switch_back_to_agents_fallback_first(self) -> None:
+        """If last agent was unregistered, fall back to first available."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = False
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine._agents["__keyboard__"] = mock_kb
+        engine._agent_order.append("__keyboard__")
+        engine._current_agent_id = "__keyboard__"
+        register_test_agents(engine, ["claude", "cursor"])
+        # Set a last_sse_agent that no longer exists
+        engine._last_sse_agent_id = "aider"
+
         engine._set_output_mode("agents")
         assert engine.current_agent == "claude"
-        assert engine.agent_mode is True
 
     def test_switch_invalid_mode_is_noop(self) -> None:
         """Invalid mode string does nothing."""
