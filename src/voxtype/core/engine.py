@@ -940,7 +940,7 @@ class VoxtypeEngine:
             # Switch to keyboard: create and register keyboard agent
             from voxtype.agent.keyboard import KeyboardAgent
 
-            keyboard_agent = KeyboardAgent(self._config)
+            keyboard_agent = KeyboardAgent(self.config)
             keyboard_agent.start()
             self._keyboard_agent = keyboard_agent
             self.register_agent(keyboard_agent)
