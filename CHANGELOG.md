@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b31] - 2026-02-14
+
+### Fixed
+
+- **Output mode switch crash** — switching from agents to keyboard via tray crashed with `AttributeError: '_config'`. Typo: `self._config` → `self.config`. Added 5 tests covering mode switching (keyboard→agents, agents→keyboard, noop, preservation of existing agents, invalid mode).
+
 ## [0.1.0b30] - 2026-02-14
 
 ### Added
