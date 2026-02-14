@@ -4,16 +4,23 @@ Provides bundled sound file paths and in-process audio playback.
 Playback via sounddevice + soundfile (no external processes).
 Bundled sounds are pre-loaded into memory at import time for zero-latency playback.
 
+Thread safety: all sounddevice output calls are serialized through a single
+worker thread via a queue.  PortAudio's global session is NOT thread-safe,
+so concurrent sd.play() from multiple threads causes heap corruption.
+The queue is for serialization only — sounds are fire-and-forget; one play
+does NOT block the next unless an on_complete callback requires sd.wait().
+
 Key function:
     play_audio(source, pause_mic, controller) - shared entry point for all playback.
-    - pause_mic=False: fire-and-forget on background thread.
+    - pause_mic=False: fire-and-forget via queue.
     - pause_mic=True: registers play_id, transitions to PLAYING state (mic muted),
-      plays audio, then sends PlayCompleteEvent to resume listening.
+      plays audio, waits for completion, then sends PlayCompleteEvent to resume.
 """
 
 from __future__ import annotations
 
 import logging
+import queue
 import subprocess
 import sys
 import threading
@@ -62,6 +69,68 @@ def _preload_sounds() -> None:
 
 _preload_sounds()
 
+# ---------------------------------------------------------------------------
+# Audio playback queue — serializes all sounddevice output on one thread
+# ---------------------------------------------------------------------------
+
+_play_queue: queue.Queue[tuple[str, Callable[[], None] | None] | None] = queue.Queue()
+_worker_started = False
+_worker_lock = threading.Lock()
+
+def _ensure_worker() -> None:
+    """Start the audio playback worker if not already running."""
+    global _worker_started
+    if _worker_started:
+        return
+    with _worker_lock:
+        if _worker_started:
+            return
+        t = threading.Thread(target=_audio_worker, daemon=True, name="voxtype-audio-out")
+        t.start()
+        _worker_started = True
+
+def _audio_worker() -> None:
+    """Single worker thread for all sounddevice output.
+
+    Serializes sd.play()/sd.wait() calls to prevent concurrent access
+    to PortAudio's global session (which is not thread-safe).
+
+    Items are ``(path_str, on_complete | None)`` or ``None`` (shutdown).
+    When *on_complete* is set the worker blocks with ``sd.wait()`` until
+    playback finishes, then invokes the callback.  Otherwise it fires
+    ``sd.play()`` and immediately processes the next item (fire-and-forget).
+    """
+    while True:
+        item = _play_queue.get()
+        if item is None:
+            break
+
+        path_str, on_complete = item
+        try:
+            cached = _sound_cache.get(path_str)
+            if cached is not None:
+                data, sr = cached
+            else:
+                import soundfile as sf
+
+                data, sr = sf.read(path_str)
+                _sound_cache[path_str] = (data, sr)
+
+            import sounddevice as sd
+
+            sd.play(data, sr)
+            if on_complete:
+                sd.wait()
+        except Exception:
+            logger.debug("Audio playback failed for %s", path_str, exc_info=True)
+            _play_sound_file_fallback(path_str)
+        finally:
+            if on_complete:
+                try:
+                    on_complete()
+                except Exception:
+                    pass
+
 def get_sound_for_event(audio_config: Any, name: str) -> tuple[bool, str]:
     """Check if a sound event is enabled and return its file path.
 
@@ -104,39 +173,21 @@ def get_sound_path(name: str) -> Path:
     """
     return _SOUNDS_DIR / name
 
-def play_sound_file(path: str | Path) -> None:
-    """Play a sound file (blocking).
+def play_sound_file(
+    path: str | Path, *, on_complete: Callable[[], None] | None = None
+) -> None:
+    """Enqueue a sound file for playback on the audio worker thread.
 
-    Uses sounddevice for in-process playback. Falls back to system commands
-    if sounddevice/soundfile are unavailable.
-
-    Call this from a background thread. For non-blocking playback,
-    use play_sound_file_async().
+    Non-blocking: returns immediately after enqueueing.
+    Thread-safe: all sounddevice calls happen on a single worker thread.
 
     Args:
-        path: Path to sound file (mp3, wav, etc.)
+        path: Path to sound file (wav, etc.)
+        on_complete: Optional callback invoked after playback finishes.
+            When set, the worker blocks (sd.wait) until done, then calls it.
     """
-    path_str = str(path)
-    try:
-        # Check cache first (bundled sounds are pre-loaded)
-        cached = _sound_cache.get(path_str)
-        if cached is not None:
-            import sounddevice as sd
-            sd.play(cached[0], cached[1])
-            sd.wait()
-            return
-
-        # Not cached — try loading and playing via sounddevice
-        import sounddevice as sd
-        import soundfile as sf
-        data, sr = sf.read(path_str)
-        # Cache for future use
-        _sound_cache[path_str] = (data, sr)
-        sd.play(data, sr)
-        sd.wait()
-    except Exception:
-        # Fallback to system commands
-        _play_sound_file_fallback(path_str)
+    _ensure_worker()
+    _play_queue.put((str(path), on_complete))
 
 def _play_sound_file_fallback(path_str: str) -> None:
     """Fallback: play via system commands when sounddevice is unavailable."""
@@ -154,15 +205,15 @@ def _play_sound_file_fallback(path_str: str) -> None:
         pass
 
 def play_sound_file_async(path: str | Path) -> None:
-    """Play a sound file in a background thread (non-blocking, no mic muting).
+    """Play a sound file asynchronously (non-blocking, fire-and-forget).
 
-    Use this for simple fire-and-forget playback when mic muting is not needed
-    (e.g., when mic is already off).
+    Alias for play_sound_file() — kept for backward compatibility.
+    play_sound_file() is already non-blocking (queue-based).
 
     Args:
-        path: Path to sound file (mp3, wav, etc.)
+        path: Path to sound file (wav, etc.)
     """
-    threading.Thread(target=play_sound_file, args=(path,), daemon=True).start()
+    play_sound_file(path)
 
 def play_audio(
     source: str | Path | Callable[[], None],
@@ -173,7 +224,10 @@ def play_audio(
     """Play audio, optionally pausing the microphone during playback.
 
     This is the shared entry point for all audio playback in voxtype.
-    Handles both file paths and arbitrary blocking callables (e.g., TTS).
+
+    File paths are dispatched through the audio worker queue (thread-safe).
+    Callable sources (e.g., TTS via subprocess) run on their own thread
+    because they don't use sounddevice.
 
     Args:
         source: Path to audio file, or blocking callable that produces audio.
@@ -181,29 +235,59 @@ def play_audio(
             via the PLAYING state transition. If False, fire-and-forget.
         controller: StateController instance. Required for pause_mic=True.
     """
-    # Determine the blocking play function
-    fn: Callable[[], None]
-    if callable(source):
-        fn = source
-    else:
-        _path = source
+    is_callable = callable(source)
 
-        def fn() -> None:  # type: ignore[misc]
-            play_sound_file(_path)
+    # --- Callable source (TTS) — runs on its own thread ---
+    if is_callable:
+        fn: Callable[[], None] = source  # type: ignore[assignment]
 
-    # Fire-and-forget if no mic pausing needed
-    if not pause_mic or controller is None:
-        threading.Thread(target=fn, daemon=True).start()
+        if not pause_mic or controller is None:
+            threading.Thread(target=fn, daemon=True).start()
+            return
+
+        from voxtype.core.state import AppState
+
+        if controller.state == AppState.OFF:
+            threading.Thread(target=fn, daemon=True).start()
+            return
+
+        from voxtype.core.events import PlayCompleteEvent, PlayStartEvent
+
+        try:
+            play_id = controller.get_next_play_id()
+            controller.send(PlayStartEvent(text="", source="audio"))
+        except Exception:
+            logger.debug("Failed to register play_id, playing without mic pause")
+            threading.Thread(target=fn, daemon=True).start()
+            return
+
+        def _play_with_events() -> None:
+            try:
+                fn()
+            finally:
+                try:
+                    controller.send(
+                        PlayCompleteEvent(play_id=play_id, source="audio")
+                    )
+                except Exception:
+                    pass
+
+        threading.Thread(target=_play_with_events, daemon=True).start()
         return
 
-    # Check if mic is already off (no need to pause)
+    # --- File source — dispatched through the audio queue ---
+    _path = source
+
+    if not pause_mic or controller is None:
+        play_sound_file(_path)
+        return
+
     from voxtype.core.state import AppState
 
     if controller.state == AppState.OFF:
-        threading.Thread(target=fn, daemon=True).start()
+        play_sound_file(_path)
         return
 
-    # Pause mic: register play_id, transition to PLAYING, play, then complete
     from voxtype.core.events import PlayCompleteEvent, PlayStartEvent
 
     try:
@@ -211,21 +295,18 @@ def play_audio(
         controller.send(PlayStartEvent(text="", source="audio"))
     except Exception:
         logger.debug("Failed to register play_id, playing without mic pause")
-        threading.Thread(target=fn, daemon=True).start()
+        play_sound_file(_path)
         return
 
-    def _play_with_events() -> None:
+    def on_complete() -> None:
         try:
-            fn()
-        finally:
-            try:
-                controller.send(
-                    PlayCompleteEvent(play_id=play_id, source="audio")
-                )
-            except Exception:
-                pass
+            controller.send(
+                PlayCompleteEvent(play_id=play_id, source="audio")
+            )
+        except Exception:
+            pass
 
-    threading.Thread(target=_play_with_events, daemon=True).start()
+    play_sound_file(_path, on_complete=on_complete)
 
 def warmup_audio() -> None:
     """No-op, kept for API compatibility."""

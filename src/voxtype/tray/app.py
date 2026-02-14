@@ -116,6 +116,54 @@ def _patch_pystray_retina() -> None:
     except Exception:
         logger.warning("Could not patch pystray for Retina icons", exc_info=True)
 
+def _patch_pystray_colored_title() -> None:
+    """Monkey-patch pystray to show colored text in the macOS menu bar.
+
+    Default pystray ``_update_title`` only sets the tooltip.  We replace it
+    with ``setAttributedTitle_`` so the status item button shows visible text
+    next to the icon, with color derived from the ``_title_color`` attribute
+    stored on the Icon instance by TrayApp._update_title().
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        import AppKit
+        import Foundation
+        import pystray._darwin as _darwin  # type: ignore[import-untyped]
+
+        def _update_title_colored(self: _darwin.Icon) -> None:  # type: ignore[override]
+            title = self.title or ""
+            if not hasattr(self, "_status_item") or not self._status_item:
+                return
+
+            button = self._status_item.button()
+            if not title:
+                button.setTitle_("")
+                return
+
+            color_name = getattr(self, "_title_color", None)
+            if color_name == "green":
+                color = AppKit.NSColor.systemGreenColor()
+            elif color_name == "grey":
+                color = AppKit.NSColor.secondaryLabelColor()
+            else:
+                color = AppKit.NSColor.labelColor()
+
+            font = AppKit.NSFont.menuBarFontOfSize_(0)
+            attrs = {
+                AppKit.NSFontAttributeName: font,
+                AppKit.NSForegroundColorAttributeName: color,
+            }
+            attributed = (
+                Foundation.NSAttributedString.alloc()
+                .initWithString_attributes_(title, attrs)
+            )
+            button.setAttributedTitle_(attributed)
+
+        _darwin.Icon._update_title = _update_title_colored
+    except Exception:
+        logger.warning("Could not patch pystray for colored titles", exc_info=True)
+
 class TrayApp:
     """System tray application for VoxType.
 
@@ -258,7 +306,7 @@ class TrayApp:
         from voxtype import __version__
 
         about_items = [
-            pystray.MenuItem(f"Voxtype v{__version__}", None),
+            pystray.MenuItem(f"VoxType v{__version__}", None),
         ]
         items.append(pystray.MenuItem("About", pystray.Menu(*about_items)))
 
@@ -404,6 +452,36 @@ class TrayApp:
 
         self._icon.icon = _load_icon(icon_name)
 
+    def _update_title(self) -> None:
+        """Update the menu bar title text next to the icon.
+
+        Shows agent name + state with color:
+        - Idle → grey text
+        - Listening → green text
+        - Disconnected / Loading → no text
+        """
+        if not self._icon:
+            return
+
+        if self._state in ("disconnected", "loading"):
+            title = ""
+            color = "grey"
+        elif self._state == "off":
+            label = self._current_target or "VoxType"
+            title = f"{label} — Idle"
+            color = "grey"
+        elif self._state == "listening":
+            label = self._current_target or "VoxType"
+            title = f"{label} — Listening"
+            color = "green"
+        else:
+            title = ""
+            color = "grey"
+
+        # Store color hint for the monkey-patched _update_title
+        self._icon._title_color = color  # type: ignore[attr-defined]
+        self._icon.title = title
+
     def _update_menu(self) -> None:
         """Update the tray menu."""
         if self._icon:
@@ -427,6 +505,7 @@ class TrayApp:
             self._progress = progress
             self._loading_stage = loading_stage
             self._update_icon()
+            self._update_title()
             self._update_menu()
 
     def set_targets(self, targets: list[str], current: str = "") -> None:
@@ -438,6 +517,7 @@ class TrayApp:
             self._current_target = targets[0]
         elif not targets:
             self._current_target = ""
+        self._update_title()
         self._update_menu()
 
     def set_output_mode(self, mode: str) -> None:
@@ -519,8 +599,9 @@ class TrayApp:
         """Run the tray application (blocking)."""
         import pystray
 
-        # Patch pystray for crisp Retina rendering
+        # Patch pystray for crisp Retina rendering + colored title text
         _patch_pystray_retina()
+        _patch_pystray_colored_title()
 
         self._icon = pystray.Icon(
             name="voxtype",
