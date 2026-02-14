@@ -500,6 +500,25 @@ class TestAgentSwitch:
             engine._controller.stop()
 
 
+    def test_switch_agent_notifies_http_status(self) -> None:
+        """Agent switch pushes SSE status update to subscribers."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor"])
+
+        mock_server = MagicMock()
+        engine._http_server = mock_server
+        engine._controller.start()
+
+        try:
+            engine._switch_to_agent_by_name("cursor")
+            _wait_for_controller(engine)
+            assert engine.current_agent == "cursor"
+            mock_server.notify_status_change.assert_called()
+        finally:
+            engine._controller.stop()
+
     def test_handle_control_set_agent_colon_format(self) -> None:
         """_handle_control with output.set_agent:NAME switches agent."""
         config = MockConfig()
