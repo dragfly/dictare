@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b48] - 2026-02-14
+
+### Changed
+
+- **KeyboardAgent always registered at startup** — KeyboardAgent is now created and registered regardless of initial output mode. Mode switch (`keyboard` ↔ `agents`) only changes `current_agent_id` without creating/destroying the agent. Saves and restores the last selected SSE agent when switching back from keyboard mode.
+
 ## [0.1.0b47] - 2026-02-14
 
 ### Fixed
