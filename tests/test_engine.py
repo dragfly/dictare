@@ -520,12 +520,23 @@ class TestAgentSwitch:
             engine._controller.stop()
 
     def test_handle_control_set_agent_colon_format(self) -> None:
-        """_handle_control with output.set_agent:NAME switches agent."""
+        """_handle_control delegates output.set_agent:NAME to app handler."""
         config = MockConfig()
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
+
+        # Register an app handler that routes to engine methods
+        def app_handler(body: dict) -> dict:
+            cmd = body.get("command", "")
+            if cmd.startswith("output.set_agent:"):
+                name = cmd.split(":", 1)[1]
+                engine._switch_to_agent_by_name(name)
+                return {"status": "ok"}
+            return {"status": "error"}
+
+        engine.set_app_command_handler(app_handler)
 
         try:
             result = engine._handle_control({"command": "output.set_agent:cursor"})
@@ -534,6 +545,85 @@ class TestAgentSwitch:
             assert engine.current_agent == "cursor"
         finally:
             engine._controller.stop()
+
+
+class TestControlCommandRouting:
+    """Test protocol vs. application command routing."""
+
+    def test_protocol_commands_work_without_app_handler(self) -> None:
+        """Protocol commands (stt.*, ping, engine.shutdown) work without app handler."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+
+        # No app handler registered
+        assert engine._app_command_handler is None
+
+        result = engine._handle_control({"command": "ping"})
+        assert result["status"] == "ok"
+        assert result["pong"] is True
+
+        result = engine._handle_control({"command": "stt.start"})
+        assert result["status"] == "ok"
+
+        result = engine._handle_control({"command": "engine.shutdown"})
+        assert result["status"] == "ok"
+        assert engine._running is False
+
+    def test_app_commands_error_without_handler(self) -> None:
+        """Application commands return error when no app handler is registered."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+
+        result = engine._handle_control({"command": "output.set_agent:cursor"})
+        assert result["status"] == "error"
+        assert "Unknown command" in result["error"]
+
+        result = engine._handle_control({"command": "output.set_mode:keyboard"})
+        assert result["status"] == "error"
+
+    def test_app_commands_delegated_to_handler(self) -> None:
+        """Application commands are delegated to registered handler."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+
+        received: list[dict] = []
+
+        def handler(body: dict) -> dict:
+            received.append(body)
+            return {"status": "ok", "handled": True}
+
+        engine.set_app_command_handler(handler)
+
+        result = engine._handle_control({"command": "output.set_agent:cursor"})
+        assert result["status"] == "ok"
+        assert result["handled"] is True
+        assert received[-1]["command"] == "output.set_agent:cursor"
+
+        result = engine._handle_control({"command": "output.set_mode:agents"})
+        assert result["handled"] is True
+        assert len(received) == 2
+
+    def test_protocol_commands_not_delegated(self) -> None:
+        """Protocol commands are never sent to the app handler."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+
+        received: list[dict] = []
+
+        def handler(body: dict) -> dict:
+            received.append(body)
+            return {"status": "ok"}
+
+        engine.set_app_command_handler(handler)
+
+        # These should NOT reach the handler
+        engine._handle_control({"command": "stt.start"})
+        engine._handle_control({"command": "stt.stop"})
+        engine._handle_control({"command": "stt.toggle"})
+        engine._handle_control({"command": "ping"})
+        engine._handle_control({"command": "engine.shutdown"})
+
+        assert len(received) == 0
 
 
 class TestHotwords:

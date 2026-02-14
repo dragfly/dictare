@@ -152,6 +152,9 @@ class AppController:
         )
         engine_ref[0] = self._engine
 
+        # Register app command handler for application-level /control commands
+        self._engine.set_app_command_handler(self._handle_app_command)
+
         # 3. Start HTTP server early (so StatusPanel can connect during loading)
         self._engine.start_http_server()
 
@@ -285,6 +288,16 @@ class AppController:
         # Engine uses 0-based, users use 1-based
         self._engine._switch_to_agent_by_index(index - 1)
 
+    def set_output_mode(self, mode: str) -> None:
+        """Switch output mode (keyboard <-> agents).
+
+        Args:
+            mode: "keyboard" or "agents".
+        """
+        if not self._engine:
+            return
+        self._engine._set_output_mode(mode)
+
     # =========================================================================
     # Properties
     # =========================================================================
@@ -326,6 +339,25 @@ class AppController:
     # =========================================================================
     # Internal
     # =========================================================================
+
+    def _handle_app_command(self, body: dict) -> dict:
+        """Handle application-level control commands.
+
+        Called by engine for commands that are not protocol-level
+        (i.e., not stt.*, engine.shutdown, or ping).
+        """
+        command = body.get("command", "")
+
+        if command == "output.set_agent" or command.startswith("output.set_agent:"):
+            agent = command.split(":", 1)[1] if ":" in command else body.get("agent", "")
+            self.switch_to_agent(agent)
+            return {"status": "ok"}
+        elif command.startswith("output.set_mode:"):
+            mode = command.split(":", 1)[1]
+            self.set_output_mode(mode)
+            return {"status": "ok", "mode": mode}
+
+        return {"status": "error", "error": f"Unknown command: {command}"}
 
     def _display_session_stats(self, stats: Any = None) -> None:
         """Display session statistics on exit.

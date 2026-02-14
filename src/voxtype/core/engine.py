@@ -6,6 +6,7 @@ import logging
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
@@ -174,6 +175,11 @@ class VoxtypeEngine:
         self._hotkey: HotkeyListener | None = None
         # HTTP server for OpenVIP SSE protocol
         self._http_server: Any = None  # OpenVIPServer
+
+        # App command handler — registered by AppController for application-level
+        # commands (output.*, etc.). Protocol commands (stt.*, ping, engine.shutdown)
+        # are always handled directly by the engine.
+        self._app_command_handler: Callable[[dict], dict] | None = None
 
         # Loading progress tracking (for /status endpoint)
         self._loading_active = False
@@ -415,6 +421,14 @@ class VoxtypeEngine:
     # -------------------------------------------------------------------------
     # Initialization
     # -------------------------------------------------------------------------
+
+    def set_app_command_handler(self, handler: Callable[[dict], dict]) -> None:
+        """Register a handler for application-level control commands.
+
+        Protocol commands (stt.*, engine.shutdown, ping) are always handled
+        by the engine. Everything else is delegated to this handler.
+        """
+        self._app_command_handler = handler
 
     def start_http_server(self) -> None:
         """Start the OpenVIP HTTP server.
@@ -1410,13 +1424,9 @@ class VoxtypeEngine:
     def _handle_control(self, body: dict) -> dict:
         """Handle a control command from the HTTP /control endpoint.
 
-        Supported commands:
-        - stt.start: Start listening
-        - stt.stop: Stop listening
-        - stt.toggle: Toggle listening
-        - output.set_agent: Switch to agent by name
-        - engine.shutdown: Request shutdown
-        - ping: Health check
+        Protocol commands (stt.*, engine.shutdown, ping) are handled directly.
+        Application commands (output.*, etc.) are delegated to the registered
+        app command handler. See set_app_command_handler().
 
         Args:
             body: Request body with "command" field.
@@ -1426,6 +1436,7 @@ class VoxtypeEngine:
         """
         command = body.get("command", "")
 
+        # --- Protocol commands (engine knobs) ---
         if command == "stt.start":
             self._set_listening(True)
             return {"status": "ok", "listening": True}
@@ -1435,25 +1446,17 @@ class VoxtypeEngine:
         elif command == "stt.toggle":
             self._toggle_listening()
             return {"status": "ok"}
-        elif command == "output.set_agent":
-            agent_name = body.get("agent", "")
-            self._switch_to_agent_by_name(agent_name)
-            return {"status": "ok"}
-        elif command.startswith("output.set_agent:"):
-            agent_name = command.split(":", 1)[1]
-            self._switch_to_agent_by_name(agent_name)
-            return {"status": "ok"}
-        elif command.startswith("output.set_mode:"):
-            mode = command.split(":", 1)[1]
-            self._set_output_mode(mode)
-            return {"status": "ok", "mode": mode}
         elif command == "engine.shutdown":
             self._running = False
             return {"status": "ok"}
         elif command == "ping":
             return {"status": "ok", "pong": True}
-        else:
-            return {"status": "error", "error": f"Unknown command: {command}"}
+
+        # --- Application commands (delegated to AppController) ---
+        if self._app_command_handler is not None:
+            return self._app_command_handler(body)
+
+        return {"status": "error", "error": f"Unknown command: {command}"}
 
     # -------------------------------------------------------------------------
     # Lifecycle
