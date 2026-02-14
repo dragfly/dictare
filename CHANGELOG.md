@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b39] - 2026-02-14
+
+### Changed
+
+- **Replace afplay/paplay with sounddevice for audio playback** — beep sounds now play in-process via `sounddevice` + `soundfile` instead of spawning external processes (`afplay` on macOS, `paplay`/`aplay` on Linux). Eliminates ~1 second of subprocess overhead per beep (measured: 1.38s → 0.47s for a 0.34s file). Bundled sounds are pre-loaded into memory at import time for zero-latency playback. Falls back to system commands if sounddevice is unavailable.
+
+### Fixed
+
+- **Tray icon delay when resuming from idle** — combined with the sounddevice change, the PLAYING→LISTENING transition is now ~1 second faster, making the tray icon update near-instant after the start beep.
+
 ## [0.1.0b38] - 2026-02-14
 
 ### Fixed
