@@ -942,11 +942,9 @@ class VoxtypeEngine:
             restore_id = self._last_sse_agent_id
             real_agents = self.visible_agents
             if restore_id and restore_id in self._agents:
-                self._current_agent_id = restore_id
+                self._set_current_agent(restore_id)
             elif real_agents:
-                self._current_agent_id = real_agents[0]
-            if self._current_agent_id:
-                self._emit("on_agent_change", self._current_agent_id, 0)
+                self._set_current_agent(real_agents[0])
         else:
             # Switch to keyboard: save current agent, make __keyboard__ current
             if self._current_agent_id and self._current_agent_id != "__keyboard__":
@@ -955,6 +953,16 @@ class VoxtypeEngine:
             self.agent_mode = False
 
         self._emit("on_agents_changed", self.visible_agents)
+        self._notify_http_status()
+
+    def _set_current_agent(self, agent_id: str, idx: int = 0) -> None:
+        """Set current agent, emit event, and push SSE status update.
+
+        Single place for the set + emit + notify tripletta. Use this for
+        intentional agent switches (voice filter, hotkey, API, mode switch).
+        """
+        self._current_agent_id = agent_id
+        self._emit("on_agent_change", agent_id, idx)
         self._notify_http_status()
 
     # -------------------------------------------------------------------------
@@ -1011,9 +1019,7 @@ class VoxtypeEngine:
         # Adjust current agent if needed
         if self._agent_order:
             if was_current:
-                # Switch to first agent
-                self._current_agent_id = self._agent_order[0]
-                self._emit("on_agent_change", self._current_agent_id, 0)
+                self._set_current_agent(self._agent_order[0])
         else:
             self._current_agent_id = None
 
@@ -1046,9 +1052,7 @@ class VoxtypeEngine:
         new_agent_id = self._agent_order[new_idx]
 
         if new_agent_id in self._agents:
-            self._current_agent_id = new_agent_id
-            self._emit("on_agent_change", self._current_agent_id, new_idx)
-            self._notify_http_status()
+            self._set_current_agent(new_agent_id, new_idx)
 
     def _switch_to_agent_by_name(self, name: str) -> bool:
         """Switch to a specific agent by name - sends event to controller."""
@@ -1069,9 +1073,7 @@ class VoxtypeEngine:
             """Try to switch to an agent."""
             if agent_id not in self._agents:
                 return False
-            self._current_agent_id = agent_id
-            self._emit("on_agent_change", agent_id, idx)
-            self._notify_http_status()
+            self._set_current_agent(agent_id, idx)
             return True
 
         # Try exact match first
@@ -1107,9 +1109,7 @@ class VoxtypeEngine:
         if agent_id not in self._agents:
             return False
 
-        self._current_agent_id = agent_id
-        self._emit("on_agent_change", self._current_agent_id, idx)
-        self._notify_http_status()
+        self._set_current_agent(agent_id, idx)
         return True
 
     def _send_submit(self) -> None:
