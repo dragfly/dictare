@@ -12,7 +12,11 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from voxtype.core.state import AppState, StateManager
+
+pytestmark = pytest.mark.slow
 
 
 class TestMuxFileReaderRaceConditions:

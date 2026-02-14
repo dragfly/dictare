@@ -399,6 +399,7 @@ class TestFullWorkflow:
         assert sm.state == AppState.LISTENING
 
 
+@pytest.mark.slow
 class TestThreadSafety:
     """Test thread safety of state machine."""
 

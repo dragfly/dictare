@@ -203,6 +203,7 @@ class TestConnectedAgents:
         assert sorted(agents) == ["alice", "bob"]
 
 
+@pytest.mark.slow
 class TestServerLifecycle:
     """Test server start/stop."""
 
