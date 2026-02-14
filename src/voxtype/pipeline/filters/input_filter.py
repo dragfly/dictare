@@ -24,7 +24,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from voxtype.pipeline.base import PipelineResult, derive_message
+from voxtype.pipeline.base import PipelineResult, fork_message
 from voxtype.pipeline.filters._text import normalize as _normalize
 from voxtype.pipeline.filters._text import tokenize as _tokenize
 
@@ -185,7 +185,7 @@ class InputFilter:
             cleaned_text = self._remove_trigger_from_text(text, match, tokens)
 
             # Create derived message with structured x_input
-            new_message = derive_message(message, {
+            new_message = fork_message(message, {
                 "text": cleaned_text,
                 "x_input": {
                     "submit": True,
