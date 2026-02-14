@@ -8,7 +8,7 @@ import queue
 import threading
 
 from voxtype.agent.base import BaseAgent, OpenVIPMessage
-from voxtype.agent.mux import _poll_active_agent, _read_from_sse
+from voxtype.agent.mux import _read_from_sse, _stream_active_agent
 from voxtype.agent.sse import SSEAgent
 
 class MockServer:
@@ -161,88 +161,26 @@ def _make_status_handler(agent_id: str, current_agent: str, state: str = "listen
 
     return Handler
 
-class TestPollActiveAgentStatus:
-    """Test _poll_active_agent status updates."""
+class TestStreamActiveAgentStatus:
+    """Test _stream_active_agent status updates via SSE."""
 
-    def test_poll_updates_status_on_active(self) -> None:
-        """Polling sets 'listening' when agent is active."""
-        handler = _make_status_handler("myagent", "myagent")
-        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
-        port = server.server_address[1]
-        t = threading.Thread(target=server.handle_request, daemon=True)
-        t.start()
+    def _make_status(self, state: str, current_agent: str, agents: list[str] | None = None):
+        """Create a mock Status object."""
+        from openvip import Status
 
-        stop = threading.Event()
-        statuses: list[tuple[str, str]] = []
+        return Status(
+            protocol_version="1.0",
+            state=state,
+            connected_agents=agents or [current_agent],
+            platform={
+                "state": state,
+                "output": {"current_agent": current_agent},
+            },
+        )
 
-        def on_status(text, style):
-            statuses.append((text, style))
-            stop.set()  # Stop after first update
-
-        _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop, on_status,
-                           poll_interval=0.05)
-        server.server_close()
-
-        assert len(statuses) >= 1
-        assert "listening" in statuses[0][0]
-        assert statuses[0][1] == "ok"
-
-    def test_poll_resets_was_active_on_error(self) -> None:
-        """After connection error, next success forces status update."""
-        statuses: list[tuple[str, str]] = []
-        handler = _make_status_handler("myagent", "myagent")
-
-        # Get a free port, close immediately — first poll will fail
-        temp = http.server.HTTPServer(("127.0.0.1", 0), handler)
-        port = temp.server_address[1]
-        temp.server_close()
-
-        # Phase 1: poll once against closed port (error → was_active = None)
-        stop1 = threading.Event()
-        original_on_status_calls = [0]
-
-        def on_status_phase1(text, style):
-            # _poll_active_agent does NOT call on_status on error,
-            # but we track calls to confirm none happen
-            original_on_status_calls[0] += 1
-
-        # Run one poll cycle — will fail on closed port, then stop
-        def poll_once():
-            _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop1,
-                               on_status_phase1, poll_interval=0.001)
-
-        pt = threading.Thread(target=poll_once, daemon=True)
-        pt.start()
-        # Give it a very short time then stop (poll_interval=0.001 is 1ms)
-        stop1.set()
-        pt.join(timeout=1)
-        assert original_on_status_calls[0] == 0  # No status on error
-
-        # Phase 2: start server, poll again — should force "listening"
-        server2 = http.server.HTTPServer(("127.0.0.1", port), handler)
-        t = threading.Thread(target=server2.handle_request, daemon=True)
-        t.start()
-
-        stop2 = threading.Event()
-
-        def on_status_phase2(text, style):
-            statuses.append((text, style))
-            stop2.set()
-
-        _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop2, on_status_phase2,
-                           poll_interval=0.001)
-        server2.server_close()
-
-        assert len(statuses) >= 1
-        assert "listening" in statuses[0][0]
-
-    def test_poll_shows_idle_when_engine_off(self) -> None:
-        """Active agent shows 'idle' when engine state is idle."""
-        handler = _make_status_handler("myagent", "myagent", state="idle")
-        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
-        port = server.server_address[1]
-        t = threading.Thread(target=server.handle_request, daemon=True)
-        t.start()
+    def test_stream_shows_listening_when_active(self) -> None:
+        """Active agent in listening state shows 'listening' (green)."""
+        from unittest.mock import patch
 
         stop = threading.Event()
         statuses: list[tuple[str, str]] = []
@@ -251,13 +189,89 @@ class TestPollActiveAgentStatus:
             statuses.append((text, style))
             stop.set()
 
-        _poll_active_agent("myagent", f"http://127.0.0.1:{port}", stop, on_status,
-                           poll_interval=0.05)
-        server.server_close()
+        def fake_subscribe(**kwargs):
+            yield self._make_status("listening", "myagent")
+
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
+            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+
+        assert len(statuses) >= 1
+        assert "listening" in statuses[0][0]
+        assert statuses[0][1] == "ok"
+
+    def test_stream_shows_idle_when_engine_off(self) -> None:
+        """Active agent with engine idle shows 'idle' (dim)."""
+        from unittest.mock import patch
+
+        stop = threading.Event()
+        statuses: list[tuple[str, str]] = []
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            stop.set()
+
+        def fake_subscribe(**kwargs):
+            yield self._make_status("idle", "myagent")
+
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
+            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
 
         assert len(statuses) >= 1
         assert "idle" in statuses[0][0]
         assert statuses[0][1] == "dim"
+
+    def test_stream_shows_standby_when_not_active(self) -> None:
+        """Non-active agent shows 'standby' (warn)."""
+        from unittest.mock import patch
+
+        stop = threading.Event()
+        statuses: list[tuple[str, str]] = []
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            stop.set()
+
+        def fake_subscribe(**kwargs):
+            yield self._make_status("listening", "other-agent")
+
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
+            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+
+        assert len(statuses) >= 1
+        assert "standby" in statuses[0][0]
+        assert statuses[0][1] == "warn"
+
+    def test_stream_deduplicates_same_status(self) -> None:
+        """Repeated identical status does not trigger on_status again."""
+        from unittest.mock import patch
+
+        stop = threading.Event()
+        statuses: list[tuple[str, str]] = []
+        call_count = [0]
+
+        def on_status(text, style):
+            statuses.append((text, style))
+            call_count[0] += 1
+            if call_count[0] >= 2:
+                stop.set()
+
+        def fake_subscribe(**kwargs):
+            # Yield same status twice — only first should trigger on_status
+            yield self._make_status("listening", "myagent")
+            yield self._make_status("listening", "myagent")
+            # Yield different status to trigger second on_status and stop
+            yield self._make_status("idle", "myagent")
+
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
+            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+
+        assert len(statuses) == 2
+        assert "listening" in statuses[0][0]
+        assert "idle" in statuses[1][0]
 
 class _FakeSSEResponse:
     """Fake HTTP response that yields SSE lines then stops."""
@@ -389,50 +403,13 @@ class TestSSEInputExecutorIntegration:
         assert item[1]["openvip_id"] == self._UUID3
         assert "submit" not in item[1]
 
-class TestSSEConnectedEvent:
-    """Test _read_from_sse signals sse_connected event (no direct status emit)."""
+class TestSSEDisconnectStatus:
+    """Test _read_from_sse reports disconnection errors via on_status."""
 
-    def test_sse_connect_sets_event(self) -> None:
-        """SSE connection success sets sse_connected event."""
+    def test_sse_error_reports_reconnecting(self) -> None:
+        """SSE connection error triggers 'reconnecting' status."""
         stop = threading.Event()
         wq: queue.Queue = queue.Queue()
-        sse_connected = threading.Event()
-        statuses: list[tuple[str, str]] = []
-
-        def on_status(text, style):
-            statuses.append((text, style))
-
-        heartbeat = json.dumps({"type": "heartbeat"})
-        fake_resp = _FakeSSEResponse([f"data: {heartbeat}\n"], stop)
-
-        def fake_urlopen(req, **kw):
-            return fake_resp
-
-        def stop_when_connected():
-            sse_connected.wait(timeout=1)
-            stop.set()
-
-        threading.Thread(target=stop_when_connected, daemon=True).start()
-
-        import unittest.mock as _mock
-        with _mock.patch("urllib.request.urlopen", fake_urlopen):
-            _read_from_sse(
-                "myagent",
-                "http://127.0.0.1:9999",
-                wq, stop,
-                on_status=on_status,
-                sse_connected=sse_connected,
-            )
-
-        assert sse_connected.is_set()
-        ok_statuses = [(t, s) for t, s in statuses if "connected" in t]
-        assert len(ok_statuses) == 0, f"SSE should not emit 'connected': {statuses}"
-
-    def test_sse_error_then_reconnect_sets_event(self) -> None:
-        """After SSE error, successful reconnect sets sse_connected event."""
-        stop = threading.Event()
-        wq: queue.Queue = queue.Queue()
-        sse_connected = threading.Event()
         statuses: list[tuple[str, str]] = []
         call_count = [0]
 
@@ -447,11 +424,13 @@ class TestSSEConnectedEvent:
         def on_status(text, style):
             statuses.append((text, style))
 
-        def stop_when_connected():
-            sse_connected.wait(timeout=2)
+        def stop_after_reconnect():
+            # Wait until we get at least one message (successful reconnect)
+            while wq.empty() and call_count[0] < 3:
+                threading.Event().wait(0.01)
             stop.set()
 
-        threading.Thread(target=stop_when_connected, daemon=True).start()
+        threading.Thread(target=stop_after_reconnect, daemon=True).start()
 
         import unittest.mock as _mock
         with _mock.patch("urllib.request.urlopen", fake_urlopen), \
@@ -461,51 +440,10 @@ class TestSSEConnectedEvent:
                 "http://127.0.0.1:9999",
                 wq, stop,
                 on_status=on_status,
-                sse_connected=sse_connected,
             )
 
-        assert sse_connected.is_set()
         error_statuses = [(t, s) for t, s in statuses if s == "error"]
         assert len(error_statuses) >= 1, f"Expected error status, got: {statuses}"
-
-    def test_poll_refreshes_on_sse_connected(self) -> None:
-        """Poll thread re-emits status when sse_connected event is set."""
-        statuses: list[tuple[str, str]] = []
-        handler = _make_status_handler("myagent", "myagent")
-        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
-        port = server.server_address[1]
-
-        stop = threading.Event()
-        sse_connected = threading.Event()
-        emit_count = [0]
-
-        def on_status(text, style):
-            statuses.append((text, style))
-            emit_count[0] += 1
-            if emit_count[0] == 1:
-                # After first "listening" emit, set sse_connected to force refresh
-                sse_connected.set()
-            elif emit_count[0] == 2:
-                # Second emit confirms poll re-emitted after sse_connected
-                stop.set()
-
-        # Serve enough requests for 2 poll cycles then stop
-        def serve_requests():
-            while not stop.is_set():
-                server.handle_request()
-
-        t = threading.Thread(target=serve_requests, daemon=True)
-        t.start()
-
-        _poll_active_agent(
-            "myagent", f"http://127.0.0.1:{port}", stop, on_status,
-            poll_interval=0.001, sse_connected=sse_connected,
-        )
-        server.server_close()
-
-        # Should have emitted "listening" twice: initial + refresh after sse_connected
-        assert emit_count[0] >= 2, f"Expected 2+ emits, got {emit_count[0]}: {statuses}"
-        assert all("listening" in t for t, s in statuses), f"Unexpected statuses: {statuses}"
 
 class TestSSEDuplicateAgent:
     """Test client behavior when server returns 409 (agent already connected)."""

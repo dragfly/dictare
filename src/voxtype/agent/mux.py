@@ -135,56 +135,55 @@ def _read_from_stdin(
     except (BrokenPipeError, OSError):
         pass
 
-def _poll_active_agent(
+def _stream_active_agent(
     agent_id: str,
     base_url: str,
     stop_event: threading.Event,
     on_status: Callable[[str, str], None],
-    poll_interval: float = 0.5,
-    sse_connected: threading.Event | None = None,
 ) -> None:
-    """Poll /status to check if this agent is the active one.
+    """Subscribe to /status/stream SSE to track active agent.
 
-    Updates status bar with listening/standby indicator.
-    This is the ONLY source of status updates — SSE thread signals
-    reconnection via sse_connected event instead of emitting status directly.
+    Updates status bar with listening/idle/standby indicator.
+    Push-based: engine sends status on every state transition and
+    agent connect/disconnect — no polling needed.
     """
     from openvip import Client
 
     client = Client(base_url, timeout=5)
     last_label: str | None = None
 
-    while not stop_event.is_set():
-        # SSE reconnected — force status refresh on next successful poll
-        if sse_connected and sse_connected.is_set():
-            sse_connected.clear()
-            last_label = None
+    def _on_disconnect(exc: Exception | None) -> None:
+        nonlocal last_label
+        if exc:
+            last_label = None  # Force refresh on reconnect
 
-        try:
-            status = client.get_status()
-            platform = status.platform or {}
-            engine_state = platform.get("state", "idle")
-            current = platform.get("output", {}).get("current_agent")
-            is_active = current == agent_id
+    for status in client.subscribe_status(
+        reconnect=True,
+        stop=stop_event.is_set,
+        on_disconnect=_on_disconnect,
+    ):
+        if stop_event.is_set():
+            break
 
-            # Determine label based on engine state + active agent
-            _active_states = ("listening", "recording", "transcribing", "playing")
-            if is_active and engine_state in _active_states:
-                label = f"\u25cf {agent_id} \u00b7 listening"
-                style = "ok"
-            elif is_active:
-                label = f"\u25cf {agent_id} \u00b7 idle"
-                style = "dim"
-            else:
-                label = f"\u25cb {agent_id} \u00b7 standby"
-                style = "warn"
+        platform = status.platform or {}
+        engine_state = platform.get("state", "idle")
+        current = platform.get("output", {}).get("current_agent")
+        is_active = current == agent_id
 
-            if label != last_label:
-                last_label = label
-                on_status(label, style)
-        except (ConnectionRefusedError, OSError, ValueError):
-            last_label = None  # Reset so next successful poll forces status update
-        stop_event.wait(poll_interval)
+        _active_states = ("listening", "recording", "transcribing", "playing")
+        if is_active and engine_state in _active_states:
+            label = f"\u25cf {agent_id} \u00b7 listening"
+            style = "ok"
+        elif is_active:
+            label = f"\u25cf {agent_id} \u00b7 idle"
+            style = "dim"
+        else:
+            label = f"\u25cb {agent_id} \u00b7 standby"
+            style = "warn"
+
+        if label != last_label:
+            last_label = label
+            on_status(label, style)
 
 def _read_from_sse(
     agent_id: str,
@@ -195,7 +194,6 @@ def _read_from_sse(
     keystroke_counter: KeystrokeCounter | None = None,
     verbose: bool = False,
     on_status: Callable[[str, str], None] | None = None,
-    sse_connected: threading.Event | None = None,
 ) -> None:
     """Connect to engine SSE and receive OpenVIP messages.
 
@@ -230,8 +228,6 @@ def _read_from_sse(
     input_executor = InputExecutor(write_fn=_enqueue_input)
 
     def _on_connect() -> None:
-        if sse_connected:
-            sse_connected.set()  # Signal poll thread to refresh status
         if session_path:
             _log_event(session_path, "sse_connected", {"url": url})
 
@@ -485,13 +481,11 @@ def run_agent(
             args=(write_queue, stop_event, keystroke_counter),
             daemon=True,
         )
-        # Shared event: SSE thread signals reconnection, poll thread refreshes status
-        sse_connected_event = threading.Event()
         # SSE-based IPC: connect to engine HTTP server
         sse_thread = threading.Thread(
             target=_read_from_sse,
             args=(agent_id, base_url, write_queue, stop_event, session_path, keystroke_counter, verbose),
-            kwargs={"on_status": sbar.update if sbar else None, "sse_connected": sse_connected_event},
+            kwargs={"on_status": sbar.update if sbar else None},
             daemon=True,
         )
         # Start consumer thread (read from queue, write to PTY)
@@ -500,12 +494,11 @@ def run_agent(
             args=(master_fd, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
-        # Poll engine to track active agent (status bar: listening/standby)
+        # Stream engine status via SSE (status bar: listening/idle/standby)
         if sbar:
-            poll_thread = threading.Thread(
-                target=_poll_active_agent,
+            status_thread = threading.Thread(
+                target=_stream_active_agent,
                 args=(agent_id, base_url, stop_event, sbar.update),
-                kwargs={"sse_connected": sse_connected_event},
                 daemon=True,
             )
 
@@ -513,7 +506,7 @@ def run_agent(
         sse_thread.start()
         writer_thread.start()
         if sbar:
-            poll_thread.start()
+            status_thread.start()
 
         exit_code = session.run_output_loop(
             on_idle=sbar.check_redraw if sbar else None,

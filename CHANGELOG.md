@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b46] - 2026-02-14
+
+### Changed
+
+- **Tray app: polling → SSE streaming** — replaced 100ms GET /status polling with `subscribe_status()` SSE push. Status updates arrive instantly on state transitions. Automatic reconnection with backoff.
+- **Agent mux: polling → SSE streaming** — replaced 0.5s polling for status bar with `subscribe_status()` SSE push. Removed `sse_connected` coordination event (no longer needed — engine pushes status on agent registration).
+
 ## [0.1.0b45] - 2026-02-14
 
 ### Added
