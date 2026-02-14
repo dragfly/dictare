@@ -395,7 +395,7 @@ class TrayApp:
             "disconnected": "voxtype_muted",
             "off": "voxtype",
             "listening": "voxtype_active",
-            "loading": "voxtype_loading",
+            "loading": "voxtype",  # Same as "off" — engine not ready, not disconnected
         }.get(self._state, "voxtype_muted")
 
         # Override to muted if permissions not granted

@@ -557,8 +557,9 @@ class VoxtypeEngine:
         else:
             self._hotkey = None
 
-        # Loading complete
+        # Loading complete — notify SSE subscribers to clear loading state
         self._loading_active = False
+        self._notify_http_status()
 
     # -------------------------------------------------------------------------
     # VAD Callbacks
