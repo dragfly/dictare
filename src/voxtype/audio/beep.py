@@ -276,7 +276,7 @@ def play_audio(
         return
 
     # --- File source — dispatched through the audio queue ---
-    _path = source
+    _path: str | Path = source  # type: ignore[assignment]
 
     if not pause_mic or controller is None:
         play_sound_file(_path)
