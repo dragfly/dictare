@@ -36,7 +36,7 @@ jobs:
       - name: Run tests
         run: |
           . .venv/bin/activate
-          pytest tests/ -v
+          pytest tests/ -v -m ''
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
@@ -67,7 +67,7 @@ jobs:
       - name: Run tests
         run: |
           . .venv/bin/activate
-          pytest tests/ -v
+          pytest tests/ -v -m ''
 
   typecheck:
     runs-on: [self-hosted, Linux, X64]
