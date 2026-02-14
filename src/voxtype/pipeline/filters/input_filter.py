@@ -9,23 +9,24 @@ Trigger words are organized by language. The filter checks triggers for:
 2. English (always, as a lingua franca)
 
 Pattern types:
-- Multi-word: ["ok", "invia"] - position-weighted confidence (closer to end = higher)
-- Last-word-only: ["vai."] - word ending with "." triggers ONLY if it's the last word
+- Multi-word: ["ok", "send"] - position-weighted confidence (closer to end = higher)
+- Last-word-only: ["go."] - word ending with "." triggers ONLY if it's the last word
 
 Examples:
-    "ho un bug nel parser ok invia" -> "ho un bug nel parser" + x_input={submit: true, ...}
-    "correggi il bug vai" -> "correggi il bug" + x_input={submit: true, ...} (vai. = last word only)
-    "vai a vedere il codice" -> unchanged (vai is NOT the last word)
+    "fix the parser bug ok send" -> "fix the parser bug" + x_input={submit: true, ...}
+    "fix the bug go" -> "fix the bug" + x_input={submit: true, ...} (go. = last word only)
+    "go check the code" -> unchanged (go is NOT the last word)
 """
 
 from __future__ import annotations
 
 import logging
 import re
-import unicodedata
 from dataclasses import dataclass, field
 
 from voxtype.pipeline.base import PipelineResult, derive_message
+from voxtype.pipeline.filters._text import normalize as _normalize
+from voxtype.pipeline.filters._text import tokenize as _tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,6 @@ DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {
         ["vai."],
     ],
     "en": [
-        # Multi-word - "ok" prefix prevents false positives
         ["ok", "send"],
         ["ok", "submit"],
         ["go", "ahead"],
@@ -62,25 +62,6 @@ DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {
         ["ok", "envoyer"],
     ],
 }
-
-def _normalize(text: str) -> str:
-    """Normalize text for comparison.
-
-    - Lowercase
-    - Remove accents
-    - Collapse whitespace
-    """
-    # Lowercase
-    text = text.lower()
-    # Remove accents (NFD decomposition, strip combining chars)
-    text = unicodedata.normalize("NFD", text)
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-    return text
-
-def _tokenize(text: str) -> list[str]:
-    """Split text into words, keeping only alphanumeric tokens."""
-    # Split on non-alphanumeric, filter empty
-    return [w for w in re.split(r"[^a-zA-Z0-9]+", _normalize(text)) if w]
 
 @dataclass
 class TriggerMatch:

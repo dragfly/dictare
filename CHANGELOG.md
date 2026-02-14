@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b34] - 2026-02-14
+
+### Changed
+
+- **Pre-release cleanup** — removed dead code (`VoxtypeError` class, unused), extracted shared `_normalize()`/`_tokenize()` from pipeline filters into `pipeline/filters/_text.py`, fixed `pyproject.toml` target-version mismatch (py310 → py311), removed redundant `typer` from dev extras. Added debug logging for partial transcription errors in engine.
+
+### Removed
+
+- Stale files from git history (`ERRORI.txt`, `mdpdf.log`, `how-to-work-with-llms.pdf`) via `git filter-repo`
+
 ## [0.1.0b33] - 2026-02-14
 
 ### Changed
