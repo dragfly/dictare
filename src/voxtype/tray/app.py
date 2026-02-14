@@ -491,10 +491,14 @@ class TrayApp:
 
                     platform = status.platform or {}
 
-                    state = platform.get("state", "idle")
-                    tray_state = "listening" if state in (
-                        "listening", "recording", "transcribing", "playing",
-                    ) else "off"
+                    loading = platform.get("loading", {})
+                    if loading.get("active", False):
+                        tray_state = "loading"
+                    else:
+                        state = platform.get("state", "idle")
+                        tray_state = "listening" if state in (
+                            "listening", "recording", "transcribing", "playing",
+                        ) else "off"
                     self.set_state(state=tray_state)
 
                     output = platform.get("output", {})
