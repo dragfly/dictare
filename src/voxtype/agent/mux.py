@@ -12,7 +12,7 @@ import termios
 import threading
 import tty
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -53,7 +53,7 @@ def _write_session_start(
     """Write session start metadata to log file."""
     metadata = {
         "event": "session_start",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "voxtype_version": __version__,
         "agent_id": agent_id,
         "command": command,
@@ -76,7 +76,7 @@ def _write_session_end(
     """Write session end event to log file."""
     metadata = {
         "event": "session_end",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "exit_code": exit_code,
         "total_keystrokes": total_keystrokes,
     }
@@ -89,7 +89,7 @@ def _log_event(session_path: Path, event: str, data: dict) -> None:
     try:
         log_entry = {
             "event": event,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             **data,
         }
         with open(session_path, "a") as f:
