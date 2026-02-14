@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b38] - 2026-02-14
+
+### Fixed
+
+- **Tray icon delay when resuming from idle** — tray treated the PLAYING state (mic muted during start beep) as "off", so the icon stayed gray until the beep finished + one poll cycle. Now maps "playing" as an active state, matching the status bar behavior. Icon turns green immediately on idle→listening, same as listening→idle.
+
 ## [0.1.0b37] - 2026-02-14
 
 ### Fixed

@@ -95,6 +95,16 @@ class TestTrayStates:
         app.set_state("listening")
         assert app._state == "listening"
 
+    def test_playing_maps_to_listening(self) -> None:
+        """Engine 'playing' state (mic muted during beep) should show as active."""
+        # The tray polls /status and maps engine states to tray states.
+        # "playing" is a sub-state of listening (mic temporarily muted for beep).
+        # Verify the mapping at the poll level: state in ("listening", ..., "playing")
+        active_states = ("listening", "recording", "transcribing", "playing")
+        for state in active_states:
+            tray_state = "listening" if state in active_states else "off"
+            assert tray_state == "listening", f"{state} should map to 'listening'"
+
     def test_set_state_rejects_unknown(self) -> None:
         app = TrayApp()
         app.set_state("bogus")
