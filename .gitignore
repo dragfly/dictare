@@ -59,8 +59,8 @@ debug-session*.jsonl
 error_output.txt
 test_sanitization.py
 
-# Local sound files (originals)
-sounds/
+# Local sound files (originals, root-level only)
+/sounds/
 
 # Claude Code
 .claude/
