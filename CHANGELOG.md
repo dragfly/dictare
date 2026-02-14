@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PipelineAction(str, Enum)` → `PipelineAction(StrEnum)`** — use Python 3.11 native StrEnum.
 - **Fix mypy errors in `PipelineLoader`** — `_build_step` now returns `Filter | Executor | None` instead of `object`.
 - **Pin ruff `>=0.14.0,<0.15.0`** — prevents version drift between local and CI.
+- **Xvfb for Linux CI** — `xvfb-run` provides virtual X11 display so tray/icon tests run on headless Linux.
 
 ## [0.1.0b34] - 2026-02-14
 

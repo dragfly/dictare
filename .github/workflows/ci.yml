@@ -21,6 +21,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
+      - name: Install system deps (Xvfb for tray tests)
+        run: |
+          which xvfb-run || sudo apt-get install -y xvfb
+
       - name: Set up Python and install deps
         run: |
           uv venv --python 3.11 .venv
@@ -36,7 +40,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           . .venv/bin/activate
-          pytest tests/ -v -m '' --cov=voxtype --cov-report=term-missing
+          xvfb-run pytest tests/ -v -m '' --cov=voxtype --cov-report=term-missing
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
