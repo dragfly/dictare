@@ -147,7 +147,7 @@ def _poll_active_agent(
     base_url: str,
     stop_event: threading.Event,
     on_status: Callable[[str, str], None],
-    poll_interval: float = 3.0,
+    poll_interval: float = 0.5,
     sse_connected: threading.Event | None = None,
 ) -> None:
     """Poll /status to check if this agent is the active one.

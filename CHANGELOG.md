@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b44] - 2026-02-14
+
+### Changed
+
+- **Faster PTY status bar polling** — reduced agent status polling from 3.0s to 0.5s for near-instant idle/listening feedback. Periodic redraw (2s) unchanged — it only serves to survive child app full-screen redraws.
+
 ## [0.1.0b43] - 2026-02-14
 
 ### Fixed
