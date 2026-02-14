@@ -220,16 +220,6 @@ class SubmitFilterConfig(BaseModel):
     enabled: bool = Field(default=True, description="Enable submit trigger detection")
     triggers: dict[str, list[list[str]]] = Field(
         default_factory=lambda: {
-            "it": [
-                ["ok", "invia"],
-                ["ok", "manda"],
-                ["ok", "fatto"],
-                ["va", "bene", "invia"],
-                ["invia"],
-                ["manda"],
-                ["fatto"],
-                ["adesso"],
-            ],
             "en": [
                 ["ok", "send"],
                 ["ok", "submit"],
@@ -238,26 +228,8 @@ class SubmitFilterConfig(BaseModel):
                 ["send"],
                 ["go"],
             ],
-            "es": [
-                ["ok", "enviar"],
-                ["enviar"],
-                ["envía"],
-                ["listo"],
-            ],
-            "de": [
-                ["ok", "senden"],
-                ["senden"],
-                ["abschicken"],
-                ["fertig"],
-            ],
-            "fr": [
-                ["ok", "envoyer"],
-                ["envoyer"],
-                ["envoie"],
-                ["terminé"],
-            ],
         },
-        description="Trigger patterns by language code (checked: message language + English)",
+        description="Trigger patterns by language code. English is always checked; add your language for localized triggers.",
     )
     confidence_threshold: float = Field(
         default=0.85,
@@ -788,7 +760,20 @@ def create_default_config() -> Path:
 # confidence_threshold = 0.85
 # max_scan_words = 15
 # decay_rate = 0.95               # 5% confidence decay per word from end
-# triggers = ...                  # See: voxtype config get pipeline.submit_filter.triggers
+#
+# Submit triggers by language. English is always checked.
+# Each trigger is a word sequence — all words must appear in order.
+# To add another language, add a new key with its ISO code (es, de, fr, ...).
+#
+# [pipeline.submit_filter.triggers]
+# en = [
+#     ["ok", "send"],
+#     ["ok", "submit"],
+#     ["go", "ahead"],
+#     ["submit"],
+#     ["send"],
+#     ["go"],
+# ]
 
 # [pipeline.agent_filter]
 # enabled = false

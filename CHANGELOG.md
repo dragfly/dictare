@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b28] - 2026-02-14
+
+### Changed
+
+- **Submit filter: English-only default** — removed hardcoded Italian/Spanish/German/French triggers from code defaults. Only English triggers ship by default. Users add their language via `[pipeline.submit_filter.triggers]` section in config.
+- **Config template: expanded TOML triggers** — triggers shown as multi-line arrays under `[pipeline.submit_filter.triggers]` instead of unreadable single-line JSON.
+
 ## [0.1.0b27] - 2026-02-14
 
 ### Changed
