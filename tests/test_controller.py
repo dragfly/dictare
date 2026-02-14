@@ -719,13 +719,13 @@ class TestAudioFeedbackSounds:
     """Test audio feedback sound files and config."""
 
     def test_transcribing_sound_exists(self) -> None:
-        """Bundled transcribing.mp3 exists."""
+        """Bundled transcribing sound exists."""
         from voxtype.audio.beep import DEFAULT_SOUND_TRANSCRIBING
 
         assert DEFAULT_SOUND_TRANSCRIBING.exists()
 
     def test_ready_sound_exists(self) -> None:
-        """Bundled ready.mp3 exists."""
+        """Bundled ready sound exists."""
         from voxtype.audio.beep import DEFAULT_SOUND_READY
 
         assert DEFAULT_SOUND_READY.exists()
@@ -763,7 +763,7 @@ class TestAudioFeedbackSounds:
             _wait_until(lambda: sm.state == AppState.TRANSCRIBING)
 
             assert any(n == AppState.TRANSCRIBING for _, n in played)
-            assert DEFAULT_SOUND_TRANSCRIBING.suffix == ".mp3"
+            assert DEFAULT_SOUND_TRANSCRIBING.suffix == ".wav"
         finally:
             controller.stop()
 
@@ -792,6 +792,6 @@ class TestAudioFeedbackSounds:
                 o == AppState.TRANSCRIBING and n == AppState.LISTENING
                 for o, n in played
             )
-            assert DEFAULT_SOUND_READY.suffix == ".mp3"
+            assert DEFAULT_SOUND_READY.suffix == ".wav"
         finally:
             controller.stop()
