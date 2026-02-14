@@ -117,3 +117,7 @@ check_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: integration tests (app bundle, http server, race conditions) — run with: pytest -m slow",
+]

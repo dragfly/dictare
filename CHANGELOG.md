@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b33] - 2026-02-14
+
+### Changed
+
+- **Fast test suite: 452 tests in 1.2s** — marked 23 integration tests (app bundle, http server, race conditions, thread safety) as `@pytest.mark.slow`. Default `pytest` runs only fast logic tests. CI runs all with `pytest -m ''`.
+- **Tray: readable Status and About text** — removed `enabled=False` from status line and version text. Items are now full-contrast black instead of greyed out.
+
 ## [0.1.0b32] - 2026-02-14
 
 ### Fixed

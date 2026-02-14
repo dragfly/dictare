@@ -192,6 +192,7 @@ class TestConnectedAgents:
         agents = server.connected_agents
         assert sorted(agents) == ["alice", "bob"]
 
+@pytest.mark.slow
 class TestServerLifecycle:
     """Test server start/stop."""
 
