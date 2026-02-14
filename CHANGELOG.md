@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b24] - 2026-02-14
+
+### Fixed
+
+- **Engine crash on brew install** — removed `rm_rf` of PyAV `.dylibs/` from brew formula. The hack prevented the install_name_tool warning but broke `av` at runtime (dlopen failure), causing the engine to crash in a respawn loop.
+
+### Changed
+
+- **`src/voxtype/libs/` — pure Python replacement library** — moved `metaphone()` and `levenshtein_distance()` into `voxtype.libs.jellyfish`, a drop-in module with the same interface as the external `jellyfish` package. To switch back: change `from voxtype.libs.jellyfish import ...` to `from jellyfish import ...`.
+- **`uvicorn[standard]` → `uvicorn`** — removed `[standard]` extras which pulled in `watchfiles` (another Rust extension with the same install_name_tool issue). `watchfiles` is only used for `--reload` in development, not needed in production.
+
+### Removed
+
+- **jellyfish dependency** — replaced with pure Python in `voxtype.libs.jellyfish`. The jellyfish Rust extension (`_rustyfish.so`) caused Homebrew's `install_name_tool` to fail with "header too small" during `brew install`.
+
 ## [0.1.0b23] - 2026-02-13
 
 ### Removed
