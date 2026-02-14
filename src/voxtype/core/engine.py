@@ -133,8 +133,9 @@ class VoxtypeEngine:
             self._state_manager,
             on_recording_start=lambda: self._emit("on_recording_start"),
             on_recording_end=lambda ms: self._emit("on_recording_end", ms),
-            on_state_change=lambda old, new, trigger: self._emit(
-                "on_state_change", old, new, trigger
+            on_state_change=lambda old, new, trigger: (
+                self._emit("on_state_change", old, new, trigger),
+                self._notify_http_status(),
             ),
             on_agent_change=lambda name, idx: self._emit("on_agent_change", name, idx),
         )
@@ -198,6 +199,11 @@ class VoxtypeEngine:
                     handler(*args, **kwargs)
                 except Exception:
                     logger.exception(f"Error in event handler {event}")
+
+    def _notify_http_status(self) -> None:
+        """Push status update to all SSE /status/stream subscribers."""
+        if self._http_server is not None:
+            self._http_server.notify_status_change()
 
     # -------------------------------------------------------------------------
     # Properties
@@ -974,6 +980,7 @@ class VoxtypeEngine:
 
         self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.registered", agent_id=agent.id)
+        self._notify_http_status()
         return True
 
     def unregister_agent(self, agent_id: str) -> bool:
@@ -1007,6 +1014,7 @@ class VoxtypeEngine:
 
         self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.unregistered", agent_id=agent_id)
+        self._notify_http_status()
         return True
 
     def _switch_agent(self, direction: int) -> None:
@@ -1419,6 +1427,10 @@ class VoxtypeEngine:
             return {"status": "ok"}
         elif command == "output.set_agent":
             agent_name = body.get("agent", "")
+            self._switch_to_agent_by_name(agent_name)
+            return {"status": "ok"}
+        elif command.startswith("output.set_agent:"):
+            agent_name = command.split(":", 1)[1]
             self._switch_to_agent_by_name(agent_name)
             return {"status": "ok"}
         elif command.startswith("output.set_mode:"):

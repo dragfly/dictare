@@ -489,6 +489,22 @@ class TestAgentSwitch:
         finally:
             engine._controller.stop()
 
+    def test_handle_control_set_agent_colon_format(self) -> None:
+        """_handle_control with output.set_agent:NAME switches agent."""
+        config = MockConfig()
+        events = MockEventHandler()
+        engine = VoxtypeEngine(config=config, events=events)
+        register_test_agents(engine, ["claude", "cursor"])
+        engine._controller.start()
+
+        try:
+            result = engine._handle_control({"command": "output.set_agent:cursor"})
+            _wait_for_controller(engine)
+            assert result["status"] == "ok"
+            assert engine.current_agent == "cursor"
+        finally:
+            engine._controller.stop()
+
 class TestHotwords:
     """Test hotwords building."""
 
