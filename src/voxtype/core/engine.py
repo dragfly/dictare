@@ -985,8 +985,8 @@ class VoxtypeEngine:
         self._agents[agent.id] = agent
         self._agent_order.append(agent.id)
 
-        # If this is the first agent, make it current
-        if self._current_agent_id is None:
+        # If this is the first non-reserved agent, make it current
+        if self._current_agent_id is None and agent.id not in self.RESERVED_AGENT_IDS:
             self._current_agent_id = agent.id
 
         self._emit("on_agents_changed", self.visible_agents)
