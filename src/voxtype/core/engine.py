@@ -156,6 +156,7 @@ class VoxtypeEngine:
         self._executor_pipeline = self._create_executor_pipeline()
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
         self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
+        self._last_sse_agent_id: str | None = None  # Remember last SSE agent for mode switch
 
         # Tap detection (isolated state machine)
         # Single tap: toggle listening on/off
@@ -936,27 +937,21 @@ class VoxtypeEngine:
             return  # Already in this mode
 
         if want_agent_mode:
-            # Switch to agents: stop and unregister keyboard agent,
-            # restore first SSE agent as current
-            if self._keyboard_agent:
-                self._keyboard_agent.stop()
-                self.unregister_agent(self._keyboard_agent.id)
-                self._keyboard_agent = None
+            # Switch to agents: restore last SSE agent as current
             self.agent_mode = True
-            # Restore first real agent as current
+            restore_id = self._last_sse_agent_id
             real_agents = self.visible_agents
-            if real_agents:
+            if restore_id and restore_id in self._agents:
+                self._current_agent_id = restore_id
+            elif real_agents:
                 self._current_agent_id = real_agents[0]
+            if self._current_agent_id:
                 self._emit("on_agent_change", self._current_agent_id, 0)
         else:
-            # Switch to keyboard: create keyboard agent, make it current
-            from voxtype.agent.keyboard import KeyboardAgent
-
-            keyboard_agent = KeyboardAgent(self.config)
-            keyboard_agent.start()
-            self._keyboard_agent = keyboard_agent
-            self.register_agent(keyboard_agent)
-            self._current_agent_id = keyboard_agent.id
+            # Switch to keyboard: save current agent, make __keyboard__ current
+            if self._current_agent_id and self._current_agent_id != "__keyboard__":
+                self._last_sse_agent_id = self._current_agent_id
+            self._current_agent_id = "__keyboard__"
             self.agent_mode = False
 
         self._emit("on_agents_changed", self.visible_agents)
@@ -1620,12 +1615,15 @@ def create_engine(
         hotkey_enabled=hotkey_enabled,
     )
 
-    if not effective_agent_mode:
-        # Keyboard mode: create KeyboardAgent (engine manages its lifecycle)
-        from voxtype.agent.keyboard import KeyboardAgent
+    # Always create KeyboardAgent — mode switch just changes current_agent_id
+    from voxtype.agent.keyboard import KeyboardAgent
 
-        keyboard_agent = KeyboardAgent(config)
-        engine._keyboard_agent = keyboard_agent  # Engine owns it
-        engine.register_agent(keyboard_agent)
+    keyboard_agent = KeyboardAgent(config)
+    engine._keyboard_agent = keyboard_agent
+    engine.register_agent(keyboard_agent)
+
+    if not effective_agent_mode:
+        # Keyboard mode: make __keyboard__ the current agent
+        engine._current_agent_id = "__keyboard__"
 
     return engine
