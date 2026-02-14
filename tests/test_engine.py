@@ -580,6 +580,87 @@ class TestAgentId:
         result = engine.current_agent
         assert result is None
 
+class TestRegisterAgent:
+    """Test agent registration behavior."""
+
+    def test_register_reserved_agent_does_not_become_current(self) -> None:
+        """Registering a reserved agent (__keyboard__) should not set it as current."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+
+        # __keyboard__ is registered but NOT current
+        assert "__keyboard__" in engine.agents
+        assert engine._current_agent_id is None
+        assert engine.visible_current_agent is None
+
+    def test_first_real_agent_becomes_current_after_reserved(self) -> None:
+        """First non-reserved agent becomes current even if reserved was first."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+
+        register_test_agents(engine, ["claude"])
+
+        assert engine.current_agent == "claude"
+        assert engine.visible_current_agent == "claude"
+
+    def test_agent_mode_with_keyboard_then_sse_agents(self) -> None:
+        """Regression: in agent mode, keyboard registered first, SSE agents arrive later.
+
+        Bug b48: KeyboardAgent registered first -> auto-set as current ->
+        SSE agents connect later but current stays __keyboard__ -> messages
+        go to keyboard injection instead of SSE agent.
+        """
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        # Simulate create_engine: keyboard registered first
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine.register_agent(mock_kb)
+
+        # At this point, current should NOT be __keyboard__
+        assert engine._current_agent_id is None
+
+        # SSE agents arrive later
+        register_test_agents(engine, ["varie", "voce"])
+
+        # First real agent becomes current
+        assert engine.current_agent == "varie"
+        assert engine.visible_current_agent == "varie"
+        # Status shows current agent, not null
+        status = engine._get_http_status()
+        assert status["platform"]["output"]["current_agent"] == "varie"
+
+    def test_messages_routed_to_sse_agent_not_keyboard(self) -> None:
+        """Regression: messages must go to SSE agent, not keyboard, in agent mode."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine.register_agent(mock_kb)
+
+        register_test_agents(engine, ["claude"])
+
+        # Get current agent — must be the SSE agent
+        agent = engine._get_current_agent()
+        assert agent is not None
+        assert agent.id == "claude"
+
 class TestThreadSafety:
     """Test thread safety of engine operations."""
 
