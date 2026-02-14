@@ -486,7 +486,7 @@ class TrayApp:
 
                     state = platform.get("state", "idle")
                     # Map engine states to tray states
-                    tray_state = "listening" if state in ("listening", "recording", "transcribing") else "off"
+                    tray_state = "listening" if state in ("listening", "recording", "transcribing", "playing") else "off"
                     self.set_state(state=tray_state)
 
                     output = platform.get("output", {})
