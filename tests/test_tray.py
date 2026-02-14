@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from voxtype.tray.app import TrayApp
+
+_no_display = sys.platform == "linux" and not os.environ.get("DISPLAY")
 
 def test_ensure_accessibility_noop_on_linux(monkeypatch: object) -> None:
     """On non-macOS, _ensure_accessibility always returns True."""
@@ -100,6 +105,7 @@ class TestTrayStates:
         app.set_state("bogus")
         assert app._state == "disconnected"  # unchanged from initial
 
+    @pytest.mark.skipif(_no_display, reason="pystray needs X11 DISPLAY")
     def test_update_icon_maps_disconnected_to_muted(self) -> None:
         app = TrayApp()
         mock_icon = MagicMock()
@@ -108,6 +114,7 @@ class TestTrayStates:
         # _update_icon was called; the icon should be set to voxtype_muted
         assert mock_icon.icon is not None  # icon was updated
 
+    @pytest.mark.skipif(_no_display, reason="pystray needs X11 DISPLAY")
     def test_menu_status_disconnected(self) -> None:
         app = TrayApp()
         app.set_state("disconnected")
@@ -116,6 +123,7 @@ class TestTrayStates:
         first_label = menu._items[0].text
         assert "Disconnected" in first_label
 
+    @pytest.mark.skipif(_no_display, reason="pystray needs X11 DISPLAY")
     def test_menu_status_idle(self) -> None:
         app = TrayApp()
         app.set_state("off")
