@@ -12,42 +12,26 @@ The filter subscribes to the "agents.changed" event on the internal event bus.
 When agents are added/removed, the filter automatically updates its list.
 
 Examples:
-    "fammi vedere il codice agent voxtype" -> "fammi vedere il codice" + x_agent_switch={target: "voxtype", ...}
-    "questo bug agent koder" -> "questo bug" + x_agent_switch={target: "koder", ...} (even if heard as "coder")
+    "show me the code agent voxtype" -> "show me the code" + x_agent_switch={target: "voxtype", ...}
+    "this bug agent koder" -> "this bug" + x_agent_switch={target: "koder", ...} (even if heard as "coder")
 """
 
 from __future__ import annotations
 
 import logging
 import re
-import unicodedata
 from dataclasses import dataclass, field
 
 from voxtype.events import bus
 from voxtype.libs.jellyfish import levenshtein_distance, metaphone
 from voxtype.pipeline.base import PipelineResult, derive_message
+from voxtype.pipeline.filters._text import normalize as _normalize
+from voxtype.pipeline.filters._text import tokenize as _tokenize
 
 logger = logging.getLogger(__name__)
 
 # Trigger words that precede agent name
 AGENT_TRIGGERS = ["agent", "agente"]
-
-
-def _normalize(text: str) -> str:
-    """Normalize text for comparison.
-
-    - Lowercase
-    - Remove accents
-    """
-    text = text.lower()
-    text = unicodedata.normalize("NFD", text)
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-    return text
-
-
-def _tokenize(text: str) -> list[str]:
-    """Split text into words, keeping only alphanumeric tokens."""
-    return [w for w in re.split(r"[^a-zA-Z0-9]+", _normalize(text)) if w]
 
 
 def phonetic_score(word1: str, word2: str) -> float:
