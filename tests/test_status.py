@@ -1,0 +1,73 @@
+"""Tests for shared display state resolution."""
+
+from __future__ import annotations
+
+from voxtype.status import resolve_display_state
+
+class TestResolveDisplayState:
+    """Test resolve_display_state()."""
+
+    # --- Engine-level (no agent_id) ---
+
+    def test_loading_returns_loading_warn(self) -> None:
+        platform = {"state": "idle", "loading": {"active": True}}
+        assert resolve_display_state(platform) == ("loading", "warn")
+
+    def test_listening_returns_listening_ok(self) -> None:
+        platform = {"state": "listening", "loading": {"active": False}}
+        assert resolve_display_state(platform) == ("listening", "ok")
+
+    def test_recording_returns_listening_ok(self) -> None:
+        platform = {"state": "recording"}
+        assert resolve_display_state(platform) == ("listening", "ok")
+
+    def test_idle_returns_idle_dim(self) -> None:
+        platform = {"state": "idle"}
+        assert resolve_display_state(platform) == ("idle", "dim")
+
+    def test_missing_state_defaults_idle(self) -> None:
+        platform = {}
+        assert resolve_display_state(platform) == ("idle", "dim")
+
+    def test_loading_overrides_listening(self) -> None:
+        """Loading takes priority even if engine state is listening."""
+        platform = {"state": "listening", "loading": {"active": True}}
+        assert resolve_display_state(platform) == ("loading", "warn")
+
+    # --- Per-agent (with agent_id) ---
+
+    def test_active_listening_agent(self) -> None:
+        platform = {
+            "state": "listening",
+            "output": {"current_agent": "claude"},
+        }
+        assert resolve_display_state(platform, "claude") == ("listening", "ok")
+
+    def test_active_idle_agent(self) -> None:
+        platform = {
+            "state": "idle",
+            "output": {"current_agent": "claude"},
+        }
+        assert resolve_display_state(platform, "claude") == ("idle", "dim")
+
+    def test_standby_agent(self) -> None:
+        platform = {
+            "state": "listening",
+            "output": {"current_agent": "cursor"},
+        }
+        assert resolve_display_state(platform, "claude") == ("standby", "warn")
+
+    def test_loading_overrides_agent_state(self) -> None:
+        platform = {
+            "state": "listening",
+            "output": {"current_agent": "claude"},
+            "loading": {"active": True},
+        }
+        assert resolve_display_state(platform, "claude") == ("loading", "warn")
+
+    def test_agent_with_no_current(self) -> None:
+        platform = {
+            "state": "listening",
+            "output": {"current_agent": None},
+        }
+        assert resolve_display_state(platform, "claude") == ("standby", "warn")
