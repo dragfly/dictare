@@ -705,6 +705,45 @@ class TestRegisterAgent:
         # No real agents left — current should be None (not __keyboard__)
         assert engine.visible_current_agent is None
 
+    def test_current_agent_disconnect_fallback_skips_keyboard(self) -> None:
+        """When current agent disconnects, fallback to next visible, not __keyboard__."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+        register_test_agents(engine, ["voce", "varie"])
+        assert engine.current_agent == "voce"
+
+        # "voce" disconnects — should fall back to "varie", NOT "__keyboard__"
+        engine.unregister_agent("voce")
+        assert engine.current_agent == "varie"
+        assert engine._current_agent_id != "__keyboard__"
+
+    def test_agents_restart_keeps_current_agent(self) -> None:
+        """Regression: restarting both agents must restore current_agent."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+        register_test_agents(engine, ["voce", "varie"])
+        assert engine.current_agent == "voce"
+
+        # Both agents disconnect (restart)
+        engine.unregister_agent("voce")  # Falls back to "varie"
+        engine.unregister_agent("varie")  # No visible agents → None
+        assert engine._current_agent_id is None
+
+        # Both reconnect
+        register_test_agents(engine, ["voce", "varie"])
+        # First to reconnect becomes current
+        assert engine.current_agent == "voce"
+
     def test_visible_agents_never_includes_keyboard(self) -> None:
         """visible_agents never shows __keyboard__ regardless of mode."""
         config = MockConfig()

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b53] - 2026-02-14
+
+### Fixed
+
+- **Agent disconnect fallback to `__keyboard__`** — when the current SSE agent disconnected, `unregister_agent()` fell back to `_agent_order[0]` which was `__keyboard__` (registered first). This caused `current_agent` to become null (reserved agent hidden from visible). Now falls back to the first visible agent, or None if no visible agents remain. Agents reconnecting after restart now correctly become current.
+
 ## [0.1.0b52] - 2026-02-14
 
 ### Added
