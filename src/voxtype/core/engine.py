@@ -936,20 +936,27 @@ class VoxtypeEngine:
             return  # Already in this mode
 
         if want_agent_mode:
-            # Switch to agents: stop and unregister keyboard agent
+            # Switch to agents: stop and unregister keyboard agent,
+            # restore first SSE agent as current
             if self._keyboard_agent:
                 self._keyboard_agent.stop()
                 self.unregister_agent(self._keyboard_agent.id)
                 self._keyboard_agent = None
             self.agent_mode = True
+            # Restore first real agent as current
+            real_agents = self.visible_agents
+            if real_agents:
+                self._current_agent_id = real_agents[0]
+                self._emit("on_agent_change", self._current_agent_id, 0)
         else:
-            # Switch to keyboard: create and register keyboard agent
+            # Switch to keyboard: create keyboard agent, make it current
             from voxtype.agent.keyboard import KeyboardAgent
 
             keyboard_agent = KeyboardAgent(self.config)
             keyboard_agent.start()
             self._keyboard_agent = keyboard_agent
             self.register_agent(keyboard_agent)
+            self._current_agent_id = keyboard_agent.id
             self.agent_mode = False
 
         self._emit("on_agents_changed", self.visible_agents)
