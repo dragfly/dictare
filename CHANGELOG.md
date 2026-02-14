@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b52] - 2026-02-14
+
+### Added
+
+- **Comprehensive regression tests for keyboard/agent mode** — covers all scenarios: agent mode with no SSE agents, last agent disconnect, visible_agents exclusion, keyboard mode at startup, message routing after keyboard-first registration. 466 total tests.
+
 ## [0.1.0b51] - 2026-02-14
 
 ### Fixed
