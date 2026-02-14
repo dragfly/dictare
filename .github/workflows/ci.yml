@@ -33,10 +33,10 @@ jobs:
           . .venv/bin/activate
           ruff check src/ tests/
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
           . .venv/bin/activate
-          pytest tests/ -v -m ''
+          pytest tests/ -v -m '' --cov=voxtype --cov-report=term-missing
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
