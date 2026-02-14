@@ -173,7 +173,7 @@ class TrayApp:
             status_text = state_display
 
         items = [
-            pystray.MenuItem(f"Status: {status_text}", None, enabled=False),
+            pystray.MenuItem(f"Status: {status_text}", None),
         ]
 
         # Permission warnings (shown when not granted)
@@ -258,7 +258,7 @@ class TrayApp:
         from voxtype import __version__
 
         about_items = [
-            pystray.MenuItem(f"Voxtype v{__version__}", None, enabled=False),
+            pystray.MenuItem(f"Voxtype v{__version__}", None),
         ]
         items.append(pystray.MenuItem("About", pystray.Menu(*about_items)))
 

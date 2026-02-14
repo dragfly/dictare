@@ -31,6 +31,7 @@ from voxtype.service.systemd import is_installed as systemd_is_installed
 # .app bundle
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestAppBundleCreate:
     def test_creates_directory_structure(self, tmp_path, monkeypatch):
         monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
@@ -65,6 +66,7 @@ class TestAppBundleCreate:
         python_path_file = tmp_path / "Test.app" / "Contents" / "MacOS" / "python_path"
         assert python_path_file.read_text().strip() == "/other/python"
 
+@pytest.mark.slow
 class TestAppBundleRemove:
     def test_removes_bundle(self, tmp_path, monkeypatch):
         monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
