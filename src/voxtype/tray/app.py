@@ -479,7 +479,16 @@ class TrayApp:
         def stream() -> None:
             from openvip import Client
 
+            from voxtype.status import resolve_display_state
+
             client = Client(f"http://{host}:{port}", timeout=2.0)
+
+            # Map shared state names to tray state names
+            _tray_state_map = {
+                "loading": "loading",
+                "listening": "listening",
+                "idle": "off",
+            }
 
             def _on_disconnect(exc: Exception | None) -> None:
                 if exc:
@@ -495,16 +504,8 @@ class TrayApp:
                         break
 
                     platform = status.platform or {}
-
-                    loading = platform.get("loading", {})
-                    if loading.get("active", False):
-                        tray_state = "loading"
-                    else:
-                        state = platform.get("state", "idle")
-                        tray_state = "listening" if state in (
-                            "listening", "recording", "transcribing", "playing",
-                        ) else "off"
-                    self.set_state(state=tray_state)
+                    state, _ = resolve_display_state(platform)
+                    self.set_state(state=_tray_state_map.get(state, "off"))
 
                     output = platform.get("output", {})
                     agents = output.get("available_agents", [])

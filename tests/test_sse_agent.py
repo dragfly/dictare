@@ -280,8 +280,8 @@ class TestStreamActiveAgentStatus:
         assert "idle" in statuses[1][0]
 
 
-    def test_stream_shows_starting_when_loading(self) -> None:
-        """Engine loading models shows 'starting' (warn)."""
+    def test_stream_shows_loading_when_loading(self) -> None:
+        """Engine loading models shows 'loading' (warn)."""
         from unittest.mock import patch
 
         from openvip import Status
@@ -310,7 +310,7 @@ class TestStreamActiveAgentStatus:
             _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
 
         assert len(statuses) >= 1
-        assert "starting" in statuses[0][0]
+        assert "loading" in statuses[0][0]
         assert statuses[0][1] == "warn"
 
 

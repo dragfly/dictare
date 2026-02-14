@@ -156,6 +156,8 @@ def _stream_active_agent(
     """
     from openvip import Client
 
+    from voxtype.status import resolve_display_state
+
     client = Client(base_url, timeout=5)
     last_label: str | None = None
 
@@ -173,26 +175,9 @@ def _stream_active_agent(
             break
 
         platform = status.platform or {}
-        loading = platform.get("loading", {})
-
-        if loading.get("active", False):
-            label = f"\u25cb {agent_id} \u00b7 starting"
-            style = "warn"
-        else:
-            engine_state = platform.get("state", "idle")
-            current = platform.get("output", {}).get("current_agent")
-            is_active = current == agent_id
-
-            _active_states = ("listening", "recording", "transcribing", "playing")
-            if is_active and engine_state in _active_states:
-                label = f"\u25cf {agent_id} \u00b7 listening"
-                style = "ok"
-            elif is_active:
-                label = f"\u25cf {agent_id} \u00b7 idle"
-                style = "dim"
-            else:
-                label = f"\u25cb {agent_id} \u00b7 standby"
-                style = "warn"
+        state, style = resolve_display_state(platform, agent_id)
+        dot = "●" if state in ("listening", "idle") else "○"
+        label = f"{dot} {agent_id} · {state}"
 
         if label != last_label:
             last_label = label
