@@ -461,27 +461,40 @@ class TrayApp:
         """Get current output mode."""
         return self._output_mode
 
-    def start_status_polling(self, host: str = "127.0.0.1", port: int = 8770) -> None:
-        """Start polling engine HTTP status every 100ms."""
+    def start_status_streaming(self, host: str = "127.0.0.1", port: int = 8770) -> None:
+        """Start listening to engine status changes via SSE.
+
+        Uses subscribe_status() from the OpenVIP SDK with automatic
+        reconnection. Push-based: updates arrive instantly on state
+        transitions and agent changes. No polling.
+        """
         if self._polling:
             return
 
-        def poll() -> None:
-            import time
-            import urllib.error
-
+        def stream() -> None:
             from openvip import Client
 
             client = Client(f"http://{host}:{port}", timeout=2.0)
 
-            while self._polling:
-                try:
-                    status = client.get_status()
+            def _on_disconnect(exc: Exception | None) -> None:
+                if exc:
+                    self.set_state("disconnected")
+
+            try:
+                for status in client.subscribe_status(
+                    reconnect=True,
+                    stop=lambda: not self._polling,
+                    on_disconnect=_on_disconnect,
+                ):
+                    if not self._polling:
+                        break
+
                     platform = status.platform or {}
 
                     state = platform.get("state", "idle")
-                    # Map engine states to tray states
-                    tray_state = "listening" if state in ("listening", "recording", "transcribing", "playing") else "off"
+                    tray_state = "listening" if state in (
+                        "listening", "recording", "transcribing", "playing",
+                    ) else "off"
                     self.set_state(state=tray_state)
 
                     output = platform.get("output", {})
@@ -497,18 +510,11 @@ class TrayApp:
                         self._microphone_granted = mic_granted
                         self._update_menu()
                         self._update_icon()
-                except (urllib.error.URLError, ConnectionRefusedError, OSError):
-                    self.set_state("disconnected")
-                except Exception as e:
-                    import sys
-                    print(f"Tray poll error: {e}", file=sys.stderr)
-
-                time.sleep(0.1)
-
-            self._polling = False
+            except Exception:
+                self.set_state("disconnected")
 
         self._polling = True
-        self._poll_thread = threading.Thread(target=poll, daemon=True)
+        self._poll_thread = threading.Thread(target=stream, daemon=True)
         self._poll_thread.start()
 
     def stop_status_polling(self) -> None:
@@ -606,8 +612,8 @@ def main() -> None:
     # its own listener. Having two listeners on the same key causes a double
     # toggle (OFF→LISTENING) that cancels itself out.
 
-    # Start polling engine HTTP status
-    app.start_status_polling(host=host, port=port)
+    # Subscribe to engine status changes via SSE
+    app.start_status_streaming(host=host, port=port)
 
     # Handle SIGINT/SIGTERM gracefully
     def signal_handler(signum: int, frame: object) -> None:
