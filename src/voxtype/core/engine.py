@@ -58,8 +58,8 @@ class VoxtypeEngine:
     Coordinates audio capture, STT, hotkey detection, and text injection.
     Implements OpenVIP v1.0 protocol for voice input.
 
-    This class contains NO UI code - use VoxtypeApp for the full application
-    with console output, status panels, and audio feedback.
+    This class contains NO UI code. Use AppController for the full application
+    with audio feedback, keyboard bindings, and lifecycle management.
     """
 
     # Minimum recording duration in seconds

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b58] - 2026-02-14
+
+### Removed
+
+- **Dead code cleanup (~1050 lines)** — removed legacy `VoxtypeApp` orchestrator (`core/app.py`), `LiveStatusPanel` (`ui/status.py`), and `commands/` package (`AppCommands`, `CommandSchema`, `CommandParam`). These were from a previous architecture superseded by `AppController` + `StatusPanel` (HTTP polling). Zero references in production code or tests.
+
 ## [0.1.0b57] - 2026-02-14
 
 ### Fixed
