@@ -27,6 +27,7 @@ classifiers = [
 
 dependencies = [
     "sounddevice>=0.5.0,<0.5.4",  # 0.5.4 has finished_callback bug
+    "soundfile>=0.12.0",
     "numpy>=1.24.0",
     "typer>=0.12.0",
     "pydantic>=2.0.0",

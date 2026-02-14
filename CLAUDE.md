@@ -55,6 +55,7 @@
 2. **Riassumi il problema** in 3-4 righe
 3. **Proponi opzioni** (1-2 righe max per opzione)
 4. **Aspetta** che l'utente scelga ("fixalo", "fallo", "vai")
+5. **MAI cambiare comportamento architetturale senza approvazione** — se qualcosa sembra "inutile" (es. mic muting durante play), chiedere PERCHÉ esiste prima di rimuoverlo. Spesso c'è una ragione non ovvia (es. utente può configurare TTS al posto del beep).
 
 ### Principi Python
 - **Senior Python Architect**: codice idiomatico, librerie standard, type hints

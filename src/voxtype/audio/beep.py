@@ -1,7 +1,8 @@
 """Audio feedback sounds for voxtype.
 
-Provides bundled sound file paths and OS-level audio playback.
-Playback via afplay (macOS) / paplay/aplay (Linux) to avoid sounddevice conflicts.
+Provides bundled sound file paths and in-process audio playback.
+Playback via sounddevice + soundfile (no external processes).
+Bundled sounds are pre-loaded into memory at import time for zero-latency playback.
 
 Key function:
     play_audio(source, pause_mic, controller) - shared entry point for all playback.
@@ -19,6 +20,8 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,26 @@ _DEFAULT_SOUNDS: dict[str, Path] = {
     "ready": DEFAULT_SOUND_READY,
     "sent": DEFAULT_SOUND_START,  # reuses up-beep
 }
+
+# Pre-loaded sound cache: path -> (numpy_array, sample_rate)
+_sound_cache: dict[str, tuple[np.ndarray, int]] = {}
+
+def _preload_sounds() -> None:
+    """Pre-load bundled sounds into memory at import time."""
+    try:
+        import soundfile as sf
+    except ImportError:
+        logger.debug("soundfile not available, sounds will be loaded on demand")
+        return
+
+    for path in {DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, DEFAULT_SOUND_TRANSCRIBING, DEFAULT_SOUND_READY}:
+        try:
+            data, sr = sf.read(path)
+            _sound_cache[str(path)] = (data, sr)
+        except Exception:
+            logger.debug("Failed to preload %s", path)
+
+_preload_sounds()
 
 def get_sound_for_event(audio_config: Any, name: str) -> tuple[bool, str]:
     """Check if a sound event is enabled and return its file path.
@@ -84,6 +107,9 @@ def get_sound_path(name: str) -> Path:
 def play_sound_file(path: str | Path) -> None:
     """Play a sound file (blocking).
 
+    Uses sounddevice for in-process playback. Falls back to system commands
+    if sounddevice/soundfile are unavailable.
+
     Call this from a background thread. For non-blocking playback,
     use play_sound_file_async().
 
@@ -91,6 +117,29 @@ def play_sound_file(path: str | Path) -> None:
         path: Path to sound file (mp3, wav, etc.)
     """
     path_str = str(path)
+    try:
+        # Check cache first (bundled sounds are pre-loaded)
+        cached = _sound_cache.get(path_str)
+        if cached is not None:
+            import sounddevice as sd
+            sd.play(cached[0], cached[1])
+            sd.wait()
+            return
+
+        # Not cached — try loading and playing via sounddevice
+        import sounddevice as sd
+        import soundfile as sf
+        data, sr = sf.read(path_str)
+        # Cache for future use
+        _sound_cache[path_str] = (data, sr)
+        sd.play(data, sr)
+        sd.wait()
+    except Exception:
+        # Fallback to system commands
+        _play_sound_file_fallback(path_str)
+
+def _play_sound_file_fallback(path_str: str) -> None:
+    """Fallback: play via system commands when sounddevice is unavailable."""
     try:
         if sys.platform == "darwin":
             subprocess.run(["afplay", path_str], capture_output=True, timeout=5)
