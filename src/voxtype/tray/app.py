@@ -433,7 +433,7 @@ class TrayApp:
         return self._output_mode
 
     def start_status_polling(self, host: str = "127.0.0.1", port: int = 8770) -> None:
-        """Start polling engine HTTP status every 500ms."""
+        """Start polling engine HTTP status every 100ms."""
         if self._polling:
             return
 
@@ -474,7 +474,7 @@ class TrayApp:
                     import sys
                     print(f"Tray poll error: {e}", file=sys.stderr)
 
-                time.sleep(0.5)
+                time.sleep(0.1)
 
             self._polling = False
 
