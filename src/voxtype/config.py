@@ -688,102 +688,121 @@ def create_default_config() -> Path:
     default_config = f"""\
 # voxtype configuration
 #
-# All values shown are defaults. Uncomment and change as needed.
+# Only non-default values need to be uncommented.
+# Uncomment and change any line to override the default.
+# Docs: voxtype config list
+
+# editor = ""                     # Editor for 'voxtype config edit' ($EDITOR if empty)
+# verbose = false
 
 [audio]
-sample_rate = 16000
-channels = 1
-# device = "default"            # Audio device name (None = system default)
-audio_feedback = true            # Master switch for all audio feedback
-silence_ms = 1200                # VAD silence duration to end speech (ms)
-# headphones_mode = false        # Set to true when using headphones (TTS won't pause listening)
-# max_duration = 60              # Max recording duration in seconds
+# sample_rate = 16000
+# channels = 1
+# device = ""                     # Audio device name (empty = system default)
+# max_duration = 60               # Max recording duration (seconds)
+# audio_feedback = true           # Master switch for all audio feedback
+# silence_ms = 1200               # VAD silence to end speech (ms)
+# headphones_mode = false         # TTS won't pause listening when true
+# pre_buffer_ms = 640             # Audio captured before VAD triggers
+# min_speech_ms = 150             # Min speech duration before VAD activates
 
-# Advanced VAD tuning
-# pre_buffer_ms = 640            # Audio captured before VAD triggers (increase if speech start is clipped)
-# min_speech_ms = 150            # Min speech duration before VAD activates (lower = faster, may trigger on noise)
-
-# Per-event sound configuration (disable individual sounds or set custom paths)
-# [audio.sounds.start]           # OFF → LISTENING beep
+# Per-event sound config — disable individual sounds or set custom paths
+# [audio.sounds.start]            # OFF → LISTENING beep
 # enabled = true
-# path = "/path/to/custom-start.mp3"
+# path = ""                       # Empty = bundled default
 #
-# [audio.sounds.stop]            # → OFF beep
+# [audio.sounds.stop]             # → OFF beep
 # enabled = true
 #
-# [audio.sounds.transcribing]    # LISTENING → TRANSCRIBING
+# [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING
 # enabled = true
 #
-# [audio.sounds.ready]           # TRANSCRIBING → LISTENING
+# [audio.sounds.ready]            # TRANSCRIBING → LISTENING
 # enabled = true
 #
-# [audio.sounds.sent]            # File write / max duration beep
+# [audio.sounds.sent]             # Text sent beep
 # enabled = true
 #
-# [audio.sounds.agent_announce]  # TTS agent name on switch
+# [audio.sounds.agent_announce]   # TTS agent name on switch
 # enabled = true
 
 [stt]
-model = "large-v3-turbo"         # tiny, base, small, medium, large-v3, large-v3-turbo
-language = "auto"                # auto-detect, or "en", "de", "fr", etc.
-device = "auto"                  # auto, cpu, cuda
-compute_type = "int8"
-beam_size = 5
-hw_accel = true                  # Enable hardware acceleration
-max_repetitions = 5              # Anti-hallucination: max consecutive word repeats
-# hotwords = "voxtype,joshua"    # Boost recognition of specific words
-# translate = false              # Translate any language to English
+# model = "large-v3-turbo"        # tiny, base, small, medium, large-v3, large-v3-turbo
+# realtime_model = "tiny"         # Fast model for partial transcriptions
+# language = "auto"               # Auto-detect, or "en", "it", "de", "fr", etc.
+# compute_type = "int8"           # int8, float16, float32
+# device = "auto"                 # auto, cpu, cuda
+# beam_size = 5
+# hw_accel = true                 # CUDA on Linux, MLX on macOS
+# hotwords = ""                   # Boost recognition: "voxtype,joshua"
+# max_repetitions = 5             # Anti-hallucination: max consecutive repeats
+# translate = false               # Any language → English
+
+[tts]
+# engine = "espeak"               # espeak, say (macOS), piper, outetts (MLX)
+# language = "en"
+# speed = 175                     # WPM (espeak: 80-500, say: 90-720)
+# voice = ""                      # Voice name or speaker WAV path
 
 [hotkey]
-key = "{hotkey}"  # {hotkey_comment} (toggle listening)
+# key = "{hotkey}"                # {hotkey_comment} (toggle listening)
+# device = ""                     # Keyboard device (empty = auto-detect)
 
 [output]
-mode = "keyboard"                # keyboard or agents
-typing_delay_ms = 5
-auto_enter = false               # Visual newline only
-# submit_keys = "enter"          # Keys for submit (when auto_enter=true)
-# newline_keys = "{newline_keys}"  # Keys for visual newline (when auto_enter=false)
+# mode = "keyboard"               # keyboard or agents
+# typing_delay_ms = 5
+# auto_enter = false              # Press Enter after typing
+# submit_keys = "enter"
+# newline_keys = "{newline_keys}"
 
-# Keyboard shortcuts - configure interactively with: voxtype config shortcuts
-# Example:
-# [[keyboard.shortcuts]]
-# keys = "Ctrl+Alt+N"
-# command = "project-next"
+# [keyboard]
+# shortcuts = []                  # Configure via: voxtype config shortcuts
 
 [server]
-# host = "127.0.0.1"             # Bind address (use "0.0.0.0" for remote agents)
-# port = 8770                     # OpenVIP HTTP server port
+# enabled = false                 # HTTP server (always on in agent mode)
+# host = "127.0.0.1"
+# port = 8770
 
 [client]
-# url = "http://127.0.0.1:8770"  # Default engine URL for 'voxtype agent'
-# status_bar = true               # Show persistent status bar in voxtype agent
-# clear_on_start = true            # Clear terminal before launching child process
+# url = "http://127.0.0.1:8770"
+# status_bar = true
+# clear_on_start = true
 
-# Agent templates — define named agents for single-command launch
-# Usage: voxtype agent claude          (uses template below)
-#        voxtype agent claude -- claude --model opus   (override command)
+# [logging]
+# log_file = ""                   # JSONL structured log path
+
+# [stats]
+# typing_wpm = 40                 # Your typing speed (for time saved calc)
+
+# [daemon]
+# socket_path = ""
+# preload_tts = true
+# preload_stt = false
+# idle_timeout = 0                # Auto-shutdown after N seconds (0 = never)
+
+[pipeline]
+# enabled = true
+
+# [pipeline.submit_filter]
+# enabled = true
+# confidence_threshold = 0.85
+# max_scan_words = 15
+# decay_rate = 0.95               # 5% confidence decay per word from end
+# triggers = ...                  # See: voxtype config get pipeline.submit_filter.triggers
+
+# [pipeline.agent_filter]
+# enabled = false
+# triggers = ["agent"]
+# match_threshold = 0.5
+
+# Agent templates — single-command launch
+# Usage: voxtype agent claude
 #
 # [agents.claude]
 # command = ["claude"]
 #
 # [agents.aider]
 # command = ["aider", "--model", "claude-3-opus"]
-
-[logging]
-log_file = ""
-
-[stats]
-typing_wpm = 40                  # Your average typing speed (for time saved calculation)
-
-# Editor for 'voxtype config edit'. If empty, uses $EDITOR or system default.
-# Examples:
-#   editor = "vim"
-#   editor = "nano"
-#   editor = "code --wait"          # VS Code (--wait keeps terminal until closed)
-#   editor = "subl --wait"          # Sublime Text
-#   editor = "open -a TextEdit"     # macOS TextEdit
-
-verbose = false
 """
 
     with open(config_path, "w") as f:
