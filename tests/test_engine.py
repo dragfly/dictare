@@ -661,6 +661,65 @@ class TestRegisterAgent:
         assert agent is not None
         assert agent.id == "claude"
 
+    def test_agent_mode_no_sse_agents_current_is_none(self) -> None:
+        """Agent mode with only keyboard registered: current is None."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+
+        assert engine.current_agent is None
+        assert engine.visible_current_agent is None
+        assert engine._get_current_agent() is None
+
+    def test_last_sse_agent_disconnects_current_becomes_none(self) -> None:
+        """When the only SSE agent disconnects, current becomes None."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+        register_test_agents(engine, ["claude"])
+        assert engine.current_agent == "claude"
+
+        engine.unregister_agent("claude")
+        # No real agents left — current should be None (not __keyboard__)
+        assert engine.visible_current_agent is None
+
+    def test_visible_agents_never_includes_keyboard(self) -> None:
+        """visible_agents never shows __keyboard__ regardless of mode."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+        register_test_agents(engine, ["claude", "cursor"])
+
+        assert "__keyboard__" not in engine.visible_agents
+        assert engine.visible_agents == ["claude", "cursor"]
+
+    def test_keyboard_mode_at_startup(self) -> None:
+        """Keyboard mode at startup: __keyboard__ is current, keystroke injection."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = False
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine.register_agent(mock_kb)
+        engine._current_agent_id = "__keyboard__"  # As create_engine does
+
+        assert engine._current_agent_id == "__keyboard__"
+        agent = engine._get_current_agent()
+        assert agent is mock_kb
+
 class TestThreadSafety:
     """Test thread safety of engine operations."""
 
