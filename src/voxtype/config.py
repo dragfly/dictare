@@ -239,12 +239,9 @@ class SubmitFilterConfig(BaseModel):
                 ["ok", "send"],
                 ["ok", "submit"],
                 ["go", "ahead"],
-                ["submit"],
-                ["send"],
-                ["go"],
             ],
         },
-        description="Trigger patterns by language code. English is always checked; add your language for localized triggers.",
+        description="Trigger patterns by language code. Only multi-word sequences — single words trigger too easily.",
     )
     confidence_threshold: float = Field(
         default=0.85,
@@ -795,17 +792,23 @@ def create_default_config() -> Path:
 # decay_rate = 0.95               # 5% confidence decay per word from end
 #
 # Submit triggers by language. English is always checked.
-# Each trigger is a word sequence — all words must appear in order.
-# To add another language, add a new key with its ISO code (es, de, fr, ...).
+# Each trigger is a multi-word sequence — all words must appear in order.
+# Single words trigger too easily; always use 2+ word sequences.
+# Add your language with its ISO code.
 #
 # [pipeline.submit_filter.triggers]
 # en = [
 #     ["ok", "send"],
 #     ["ok", "submit"],
 #     ["go", "ahead"],
-#     ["submit"],
-#     ["send"],
-#     ["go"],
+# ]
+# de = [
+#     ["ok", "senden"],
+#     ["ok", "abschicken"],
+# ]
+# fr = [
+#     ["ok", "envoyer"],
+#     ["allez", "envoyer"],
 # ]
 
 # [pipeline.agent_filter]
