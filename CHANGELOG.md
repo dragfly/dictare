@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- Stale files from git history (`ERRORI.txt`, `mdpdf.log`, `how-to-work-with-llms.pdf`) via `git filter-repo`
+- Stale debug/build files scrubbed from git history via `git filter-repo`
 
 ## [0.1.0b33] - 2026-02-14
 
