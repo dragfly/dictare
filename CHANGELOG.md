@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b42] - 2026-02-14
+
+### Fixed
+
+- **Audio engine crash (heap corruption)** — sounddevice output (`sd.play()`) was called from multiple daemon threads while the mic input stream callback ran on PortAudio's IOThread, causing concurrent access to PortAudio's non-thread-safe global session. All output playback is now serialized through a single worker thread via a queue. Fire-and-forget semantics preserved — one play does not block the next.
+
+### Added
+
+- **Status bar text in macOS menu bar** — shows agent name + state ("Idle" in grey, "Listening" in green) next to the tray icon. Uses NSAttributedString for colored text via pystray monkey-patch.
+- **VoxType capitalization** — fixed "Voxtype" → "VoxType" in tray About menu.
+
 ## [0.1.0b41] - 2026-02-14
 
 ### Fixed
