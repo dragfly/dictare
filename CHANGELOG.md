@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b45] - 2026-02-14
+
+### Added
+
+- **SSE `/status/stream` endpoint** — push-based status updates via Server-Sent Events. Engine notifies all subscribers on state transitions and agent connect/disconnect. Keepalive comments every 30s.
+- **`output.set_agent:NAME` control command** — colon-separated format for switching agents via `/control`, consistent with `output.set_mode:MODE`.
+
+### Fixed
+
+- **Tray agent switch not working** — clicking a different agent in the tray Target submenu had no effect because the `on_target_change` callback was never registered. Now sends `output.set_agent:NAME` to the engine.
+
+### Changed
+
+- **Voice agent switching enabled by default** — `pipeline.agent_filter.enabled` now defaults to `True`. Say "agent claude" or "agent cursor" to switch agents by voice.
+
 ## [0.1.0b44] - 2026-02-14
 
 ### Changed
