@@ -120,4 +120,5 @@ testpaths = ["tests"]
 addopts = "-m 'not slow'"
 markers = [
     "slow: integration tests (app bundle, http server, race conditions) — run with: pytest -m slow",
+    "internal: tests that depend on mock internals — skipped with --openvip-url",
 ]

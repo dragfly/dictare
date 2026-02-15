@@ -1,12 +1,15 @@
 """OpenVIP Protocol Compliance Test Suite.
 
-Tests VoxType's HTTP server against the OpenVIP protocol specification.
-Covers all endpoints, message schemas, SSE streaming, error codes,
-and edge cases defined in the OpenVIP OpenAPI spec.
+Dual-mode: runs in-process with mocks (default) or against a live server.
 
-This suite is designed to be portable — it can be moved to the
-OpenVIP protocol repository as a standalone compliance test for any
-OpenVIP-compatible implementation.
+    # In-process (CI, fast, with mocks):
+    pytest tests/test_openvip_compliance.py
+
+    # Against a real OpenVIP server:
+    pytest tests/test_openvip_compliance.py --openvip-url http://localhost:8770
+
+Tests marked @pytest.mark.internal depend on mock internals and are
+automatically skipped when --openvip-url is provided.
 
 Reference: https://openvip.org/protocol/
 Schema: https://openvip.org/schema/v1.0.json
@@ -25,7 +28,7 @@ from fastapi.testclient import TestClient
 from voxtype.core.http_server import OpenVIPServer
 
 # =============================================================================
-# Fixtures — Self-contained mocks for portability
+# Helpers
 # =============================================================================
 
 def _uuid() -> str:
@@ -55,6 +58,10 @@ def _speech_request(**overrides) -> dict:
     }
     msg.update(overrides)
     return msg
+
+# =============================================================================
+# Fixtures — mocks for in-process mode, httpx.Client for external mode
+# =============================================================================
 
 class ComplianceMockEngine:
     """Minimal mock engine implementing the public API surface."""
@@ -135,8 +142,21 @@ def server(engine, controller) -> OpenVIPServer:
     return OpenVIPServer(engine, controller, host="127.0.0.1", port=0)
 
 @pytest.fixture
-def client(server) -> TestClient:
-    return TestClient(server._app)
+def client(request, server):
+    """HTTP client — TestClient (in-process) or httpx.Client (external)."""
+    url = request.config.getoption("--openvip-url")
+    if url:
+        import httpx
+
+        c = httpx.Client(base_url=url)
+        try:
+            c.get("/status")
+        except httpx.ConnectError:
+            pytest.fail(f"OpenVIP server not reachable at {url}")
+        yield c
+        c.close()
+    else:
+        yield TestClient(server._app)
 
 # =============================================================================
 # 1. GET /status — Engine Status
@@ -145,41 +165,42 @@ def client(server) -> TestClient:
 class TestGetStatus:
     """OpenVIP: GET /status returns engine status."""
 
-    def test_returns_200(self, client: TestClient) -> None:
+    def test_returns_200(self, client) -> None:
         """GET /status returns 200 OK."""
         r = client.get("/status")
         assert r.status_code == 200
 
-    def test_returns_json(self, client: TestClient) -> None:
+    def test_returns_json(self, client) -> None:
         """Response content type is application/json."""
         r = client.get("/status")
         assert "application/json" in r.headers["content-type"]
 
-    def test_has_protocol_version(self, client: TestClient) -> None:
+    def test_has_protocol_version(self, client) -> None:
         """Response includes protocol_version field."""
         data = client.get("/status").json()
         assert "protocol_version" in data
         assert data["protocol_version"] == "1.0"
 
-    def test_has_state(self, client: TestClient) -> None:
+    def test_has_state(self, client) -> None:
         """Response includes state field."""
         data = client.get("/status").json()
         assert "state" in data
         assert isinstance(data["state"], str)
 
-    def test_has_connected_agents(self, client: TestClient) -> None:
+    def test_has_connected_agents(self, client) -> None:
         """Response includes connected_agents as a list."""
         data = client.get("/status").json()
         assert "connected_agents" in data
         assert isinstance(data["connected_agents"], list)
 
-    def test_has_platform(self, client: TestClient) -> None:
+    def test_has_platform(self, client) -> None:
         """Response includes opaque platform object."""
         data = client.get("/status").json()
         assert "platform" in data
         assert isinstance(data["platform"], dict)
 
-    def test_state_reflects_engine(self, client: TestClient, engine) -> None:
+    @pytest.mark.internal
+    def test_state_reflects_engine(self, client, engine) -> None:
         """Status state reflects engine state."""
         engine._state = "listening"
         data = client.get("/status").json()
@@ -192,7 +213,7 @@ class TestGetStatus:
 class TestControlProtocol:
     """OpenVIP: POST /control for protocol-defined commands."""
 
-    def test_stt_start(self, client: TestClient) -> None:
+    def test_stt_start(self, client) -> None:
         """stt.start returns ok with listening=True."""
         r = client.post("/control", json={"command": "stt.start"})
         assert r.status_code == 200
@@ -200,7 +221,7 @@ class TestControlProtocol:
         assert data["status"] == "ok"
         assert data["listening"] is True
 
-    def test_stt_stop(self, client: TestClient) -> None:
+    def test_stt_stop(self, client) -> None:
         """stt.stop returns ok with listening=False."""
         r = client.post("/control", json={"command": "stt.stop"})
         assert r.status_code == 200
@@ -208,19 +229,20 @@ class TestControlProtocol:
         assert data["status"] == "ok"
         assert data["listening"] is False
 
-    def test_stt_toggle(self, client: TestClient) -> None:
+    def test_stt_toggle(self, client) -> None:
         """stt.toggle returns ok."""
         r = client.post("/control", json={"command": "stt.toggle"})
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
-    def test_engine_shutdown(self, client: TestClient) -> None:
+    @pytest.mark.internal  # Would shut down a real server
+    def test_engine_shutdown(self, client) -> None:
         """engine.shutdown returns ok."""
         r = client.post("/control", json={"command": "engine.shutdown"})
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
-    def test_ping(self, client: TestClient) -> None:
+    def test_ping(self, client) -> None:
         """ping returns ok with pong=True."""
         r = client.post("/control", json={"command": "ping"})
         assert r.status_code == 200
@@ -228,16 +250,18 @@ class TestControlProtocol:
         assert data["status"] == "ok"
         assert data["pong"] is True
 
+    @pytest.mark.internal
     def test_stt_start_routed_to_engine(
-        self, client: TestClient, engine: ComplianceMockEngine
+        self, client, engine: ComplianceMockEngine,
     ) -> None:
         """stt.start is routed to engine, not controller."""
         client.post("/control", json={"command": "stt.start"})
         assert len(engine._protocol_calls) == 1
         assert engine._protocol_calls[0]["command"] == "stt.start"
 
+    @pytest.mark.internal
     def test_all_protocol_commands_go_to_engine(
-        self, client: TestClient, engine: ComplianceMockEngine,
+        self, client, engine: ComplianceMockEngine,
         controller: ComplianceMockController,
     ) -> None:
         """All protocol commands route to engine, none to controller."""
@@ -247,35 +271,36 @@ class TestControlProtocol:
         assert len(engine._protocol_calls) == 5
         assert len(controller._calls) == 0
 
+@pytest.mark.internal
 class TestControlRouting:
     """OpenVIP: POST /control routing between engine and controller."""
 
     def test_app_command_routed_to_controller(
-        self, client: TestClient, controller: ComplianceMockController
+        self, client, controller: ComplianceMockController,
     ) -> None:
         """Non-protocol commands go to controller."""
         client.post("/control", json={"command": "output.set_mode:agents"})
         assert len(controller._calls) == 1
 
     def test_app_command_not_routed_to_engine(
-        self, client: TestClient, engine: ComplianceMockEngine
+        self, client, engine: ComplianceMockEngine,
     ) -> None:
         """Non-protocol commands do not reach engine."""
         client.post("/control", json={"command": "output.set_agent:claude"})
         assert len(engine._protocol_calls) == 0
 
     def test_unknown_command_without_controller(
-        self, engine: ComplianceMockEngine
+        self, engine: ComplianceMockEngine,
     ) -> None:
         """Unknown command without controller returns error."""
         server = OpenVIPServer(engine, None, host="127.0.0.1", port=0)
-        client = TestClient(server._app)
-        r = client.post("/control", json={"command": "foo.bar"})
+        c = TestClient(server._app)
+        r = c.post("/control", json={"command": "foo.bar"})
         assert r.status_code == 200
         assert r.json()["status"] == "error"
 
     def test_control_engine_error_returns_500(
-        self, client: TestClient, engine: ComplianceMockEngine
+        self, client, engine: ComplianceMockEngine,
     ) -> None:
         """Engine exception results in 500."""
         engine.handle_protocol_command = MagicMock(
@@ -291,40 +316,43 @@ class TestControlRouting:
 class TestSpeech:
     """OpenVIP: POST /speech for text-to-speech."""
 
-    def test_speech_returns_200(self, client: TestClient) -> None:
+    def test_speech_returns_200(self, client) -> None:
         """Valid speech request returns 200 OK."""
         r = client.post("/speech", json=_speech_request())
         assert r.status_code == 200
 
-    def test_speech_returns_status_ok(self, client: TestClient) -> None:
+    def test_speech_returns_status_ok(self, client) -> None:
         """Response has status=ok."""
         data = client.post("/speech", json=_speech_request()).json()
         assert data["status"] == "ok"
 
-    def test_speech_returns_duration(self, client: TestClient) -> None:
+    def test_speech_returns_duration(self, client) -> None:
         """Response includes duration_ms."""
         data = client.post("/speech", json=_speech_request()).json()
         assert "duration_ms" in data
         assert isinstance(data["duration_ms"], int)
         assert data["duration_ms"] >= 0
 
+    @pytest.mark.internal
     def test_speech_with_language(
-        self, client: TestClient, engine: ComplianceMockEngine
+        self, client, engine: ComplianceMockEngine,
     ) -> None:
         """Speech request with language is accepted."""
         r = client.post("/speech", json=_speech_request(language="en"))
         assert r.status_code == 200
         assert engine._speech_calls[-1]["language"] == "en"
 
+    @pytest.mark.internal
     def test_speech_text_forwarded(
-        self, client: TestClient, engine: ComplianceMockEngine
+        self, client, engine: ComplianceMockEngine,
     ) -> None:
         """Speech text is forwarded to engine."""
         client.post("/speech", json=_speech_request(text="say this"))
         assert engine._speech_calls[-1]["text"] == "say this"
 
+    @pytest.mark.internal
     def test_speech_engine_error_returns_500(
-        self, client: TestClient, engine: ComplianceMockEngine
+        self, client, engine: ComplianceMockEngine,
     ) -> None:
         """Engine exception results in 500."""
         engine.handle_speech = MagicMock(side_effect=RuntimeError("TTS fail"))
@@ -338,8 +366,9 @@ class TestSpeech:
 class TestPostAgentMessages:
     """OpenVIP: POST /agents/{agent_id}/messages."""
 
+    @pytest.mark.internal
     def test_post_to_connected_agent_returns_200(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         """Posting to a connected agent returns 200 OK."""
         queue: asyncio.Queue = asyncio.Queue()
@@ -352,8 +381,9 @@ class TestPostAgentMessages:
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
+    @pytest.mark.internal
     def test_message_delivered_to_queue(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         """Posted message appears in agent queue."""
         queue: asyncio.Queue = asyncio.Queue()
@@ -366,18 +396,14 @@ class TestPostAgentMessages:
         queued = queue.get_nowait()
         assert queued["text"] == "test delivery"
 
-    def test_post_to_unconnected_agent_returns_404(
-        self, client: TestClient
-    ) -> None:
+    def test_post_to_unconnected_agent_returns_404(self, client) -> None:
         """Posting to a non-existent agent returns 404."""
         r = client.post(
             "/agents/ghost/messages", json=_transcription()
         )
         assert r.status_code == 404
 
-    def test_404_detail_mentions_not_connected(
-        self, client: TestClient
-    ) -> None:
+    def test_404_detail_mentions_not_connected(self, client) -> None:
         """404 error detail mentions agent not connected."""
         r = client.post(
             "/agents/ghost/messages", json=_transcription()
@@ -391,24 +417,25 @@ class TestPostAgentMessages:
 class TestSSEAgentRegistration:
     """OpenVIP: GET /agents/{agent_id}/messages — SSE lifecycle."""
 
-    def test_reserved_agent_id_returns_403(self, client: TestClient) -> None:
+    def test_reserved_agent_id_returns_403(self, client) -> None:
         """Reserved agent IDs (e.g., __keyboard__) return 403."""
         r = client.get("/agents/__keyboard__/messages")
         assert r.status_code == 403
 
+    @pytest.mark.internal
     def test_duplicate_agent_returns_409(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         """Connecting with an already-connected agent ID returns 409."""
-        # Simulate an existing connection
         with server._agent_queues_lock:
             server._agent_queues["alice"] = asyncio.Queue()
 
         r = client.get("/agents/alice/messages")
         assert r.status_code == 409
 
+    @pytest.mark.internal
     def test_409_detail_mentions_already_connected(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         """409 error detail mentions agent already connected."""
         with server._agent_queues_lock:
@@ -424,24 +451,22 @@ class TestSSEAgentRegistration:
 class TestStatusSchema:
     """OpenVIP: Status object schema compliance."""
 
-    def test_protocol_version_is_string(self, client: TestClient) -> None:
+    def test_protocol_version_is_string(self, client) -> None:
         data = client.get("/status").json()
         assert isinstance(data["protocol_version"], str)
 
-    def test_state_is_string(self, client: TestClient) -> None:
+    def test_state_is_string(self, client) -> None:
         data = client.get("/status").json()
         assert isinstance(data["state"], str)
 
-    def test_connected_agents_is_list_of_strings(
-        self, client: TestClient
-    ) -> None:
+    def test_connected_agents_is_list_of_strings(self, client) -> None:
         data = client.get("/status").json()
         agents = data["connected_agents"]
         assert isinstance(agents, list)
         for a in agents:
             assert isinstance(a, str)
 
-    def test_platform_is_object(self, client: TestClient) -> None:
+    def test_platform_is_object(self, client) -> None:
         data = client.get("/status").json()
         assert isinstance(data["platform"], dict)
 
@@ -452,20 +477,21 @@ class TestStatusSchema:
 class TestAckSchema:
     """OpenVIP: Ack response schema compliance."""
 
-    def test_ack_has_status_ok(self, client: TestClient) -> None:
+    def test_ack_has_status_ok(self, client) -> None:
         """Control command ack has status=ok."""
         data = client.post(
             "/control", json={"command": "ping"}
         ).json()
         assert data["status"] == "ok"
 
-    def test_speech_ack_has_status_ok(self, client: TestClient) -> None:
+    def test_speech_ack_has_status_ok(self, client) -> None:
         """Speech ack has status=ok."""
         data = client.post("/speech", json=_speech_request()).json()
         assert data["status"] == "ok"
 
+    @pytest.mark.internal
     def test_message_ack_has_status_ok(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         """Post message ack has status=ok."""
         with server._agent_queues_lock:
@@ -480,17 +506,18 @@ class TestAckSchema:
 # 8. PUT Message (thread-safe delivery)
 # =============================================================================
 
+@pytest.mark.internal
 class TestPutMessage:
     """OpenVIP: Server.put_message() thread-safe delivery."""
 
     def test_returns_false_for_unconnected_agent(
-        self, server: OpenVIPServer
+        self, server: OpenVIPServer,
     ) -> None:
         result = server.put_message("ghost", {"text": "hi"})
         assert result is False
 
     def test_returns_false_without_event_loop(
-        self, server: OpenVIPServer
+        self, server: OpenVIPServer,
     ) -> None:
         """put_message returns False when server event loop not running."""
         with server._agent_queues_lock:
@@ -502,6 +529,7 @@ class TestPutMessage:
 # 9. Connected Agents
 # =============================================================================
 
+@pytest.mark.internal
 class TestConnectedAgents:
     """OpenVIP: connected_agents property."""
 
@@ -519,6 +547,7 @@ class TestConnectedAgents:
 # =============================================================================
 
 @pytest.mark.slow
+@pytest.mark.internal
 class TestServerLifecycle:
     """OpenVIP: HTTP server start/stop."""
 
@@ -694,12 +723,13 @@ VALID_MESSAGES = [
     ),
 ]
 
+@pytest.mark.internal
 class TestValidMessages:
     """OpenVIP: Valid message schemas are accepted by transport."""
 
     @pytest.mark.parametrize("message", VALID_MESSAGES)
     def test_valid_message_accepted(
-        self, server: OpenVIPServer, client: TestClient, message: dict
+        self, server: OpenVIPServer, client, message: dict,
     ) -> None:
         """Valid OpenVIP messages are delivered to connected agents."""
         queue: asyncio.Queue = asyncio.Queue()
@@ -817,6 +847,7 @@ class TestInvalidMessageSchemas:
 # =============================================================================
 
 @pytest.mark.slow
+@pytest.mark.internal
 class TestSSEStatusStream:
     """OpenVIP: GET /status/stream SSE behavior.
 
@@ -852,20 +883,21 @@ class TestSSEStatusStream:
 class TestContentType:
     """OpenVIP: Response content types."""
 
-    def test_status_json(self, client: TestClient) -> None:
+    def test_status_json(self, client) -> None:
         r = client.get("/status")
         assert "application/json" in r.headers["content-type"]
 
-    def test_control_json(self, client: TestClient) -> None:
+    def test_control_json(self, client) -> None:
         r = client.post("/control", json={"command": "ping"})
         assert "application/json" in r.headers["content-type"]
 
-    def test_speech_json(self, client: TestClient) -> None:
+    def test_speech_json(self, client) -> None:
         r = client.post("/speech", json=_speech_request())
         assert "application/json" in r.headers["content-type"]
 
+    @pytest.mark.internal
     def test_post_message_json(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         with server._agent_queues_lock:
             server._agent_queues["a"] = asyncio.Queue()
@@ -887,24 +919,24 @@ class TestContentType:
 class TestEdgeCases:
     """OpenVIP: Edge cases and boundary conditions."""
 
-    def test_empty_command(self, client: TestClient) -> None:
+    def test_empty_command(self, client) -> None:
         """Empty command string is handled gracefully."""
         r = client.post("/control", json={"command": ""})
         # Should not crash — returns error or routes to controller
         assert r.status_code in (200, 400, 500)
 
-    def test_missing_command_field(self, client: TestClient) -> None:
+    def test_missing_command_field(self, client) -> None:
         """Missing command field is handled gracefully."""
         r = client.post("/control", json={})
         assert r.status_code in (200, 400, 500)
 
-    def test_empty_speech_text(self, client: TestClient) -> None:
+    def test_empty_speech_text(self, client) -> None:
         """Empty speech text returns error, not crash."""
         r = client.post("/speech", json={"text": ""})
         assert r.status_code == 200
         assert r.json()["status"] == "error"
 
-    def test_agent_id_with_special_chars(self, client: TestClient) -> None:
+    def test_agent_id_with_special_chars(self, client) -> None:
         """Agent IDs with dashes and underscores work."""
         # 404 is expected (not connected), but should not 500
         r = client.post(
@@ -912,8 +944,9 @@ class TestEdgeCases:
         )
         assert r.status_code == 404  # Not connected, not server error
 
+    @pytest.mark.internal
     def test_multiple_agents_independent(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         """Messages to different agents are independent."""
         q1: asyncio.Queue = asyncio.Queue()
@@ -936,8 +969,9 @@ class TestEdgeCases:
         assert q1.empty()
         assert q2.empty()
 
+    @pytest.mark.internal
     def test_large_text_accepted(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         """Large text messages are accepted."""
         with server._agent_queues_lock:
@@ -950,8 +984,9 @@ class TestEdgeCases:
         )
         assert r.status_code == 200
 
+    @pytest.mark.internal
     def test_unicode_text(
-        self, server: OpenVIPServer, client: TestClient
+        self, server: OpenVIPServer, client,
     ) -> None:
         """Unicode text (CJK, emoji, RTL) is preserved."""
         with server._agent_queues_lock:

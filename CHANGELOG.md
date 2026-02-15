@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b63] - 2026-02-15
+
+### Added
+
+- **Dual-mode compliance test suite** — Tests run in-process with mocks (default) or against a live OpenVIP server via `--openvip-url`. Tests depending on mock internals are marked `@pytest.mark.internal` and auto-skipped in external mode. Added `tests/conftest.py` with shared pytest hooks.
+
 ## [0.1.0b62] - 2026-02-15
 
 ### Added
