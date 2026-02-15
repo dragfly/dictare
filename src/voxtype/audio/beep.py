@@ -245,13 +245,13 @@ def play_audio(
             threading.Thread(target=fn, daemon=True).start()
             return
 
-        from voxtype.core.state import AppState
+        from voxtype.core.fsm import AppState
 
         if controller.state == AppState.OFF:
             threading.Thread(target=fn, daemon=True).start()
             return
 
-        from voxtype.core.state_messages import PlayCompleted, PlayStarted
+        from voxtype.core.fsm import PlayCompleted, PlayStarted
 
         try:
             play_id = controller.get_next_play_id()
@@ -282,13 +282,13 @@ def play_audio(
         play_sound_file(_path)
         return
 
-    from voxtype.core.state import AppState
+    from voxtype.core.fsm import AppState
 
     if controller.state == AppState.OFF:
         play_sound_file(_path)
         return
 
-    from voxtype.core.state_messages import PlayCompleted, PlayStarted
+    from voxtype.core.fsm import PlayCompleted, PlayStarted
 
     try:
         play_id = controller.get_next_play_id()

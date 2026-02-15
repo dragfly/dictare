@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from voxtype.core.state import AppState, StateManager
+from voxtype.core.fsm import AppState, StateManager
 
 pytestmark = pytest.mark.slow
 

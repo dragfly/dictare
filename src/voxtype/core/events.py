@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from voxtype.core.state import AppState
+    from voxtype.core.fsm import AppState
 
 @dataclass
 class TranscriptionResult:
