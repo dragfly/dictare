@@ -70,8 +70,9 @@
 ### Dopo ogni cambiamento
 1. `uv run python -m pytest tests/ -x --tb=short`
 2. `uv run ruff check .`
-3. Aggiorna CHANGELOG.md + bump versione in `src/voxtype/__init__.py`
-4. ⛔ **Commit + tag + push PRIMA di fare qualsiasi altra cosa**
+3. `uv run mypy src/`
+4. Aggiorna CHANGELOG.md + bump versione in `src/voxtype/__init__.py`
+5. ⛔ **Commit + tag + push PRIMA di fare qualsiasi altra cosa**
 
 ⚠️ NON iniziare nuovi task finché il commit non è pushato.
 
