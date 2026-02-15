@@ -17,19 +17,19 @@ from collections.abc import Callable
 from queue import Empty, Full, Queue
 from typing import TYPE_CHECKING, Any
 
-from voxtype.core.events import (
-    AgentSwitchEvent,
-    DiscardCurrentEvent,
-    HotkeyToggleEvent,
-    PlayCompleteEvent,
-    PlayStartEvent,
-    SetListeningEvent,
-    SpeechEndEvent,
-    SpeechStartEvent,
-    StateEvent,
-    TranscriptionCompleteEvent,
-)
 from voxtype.core.state import AppState
+from voxtype.core.state_messages import (
+    DiscardCurrent,
+    HotkeyPressed,
+    PlayCompleted,
+    PlayStarted,
+    SetListening,
+    SpeechEnded,
+    SpeechStarted,
+    StateMessage,
+    SwitchAgent,
+    TranscriptionCompleted,
+)
 
 if TYPE_CHECKING:
     from voxtype.core.state import StateManager
@@ -67,7 +67,7 @@ class StateController:
         self._state_manager = state_manager
         # Bounded queue to prevent memory exhaustion under heavy load
         # 100 events should be plenty - events should process fast
-        self._queue: Queue[StateEvent] = Queue(maxsize=100)
+        self._queue: Queue[StateMessage] = Queue(maxsize=100)
         self._running = False
         self._worker: threading.Thread | None = None
 
@@ -87,7 +87,7 @@ class StateController:
         self._engine: Any = None
 
         # Pending transcription during TTS
-        self._pending_transcription: TranscriptionCompleteEvent | None = None
+        self._pending_transcription: TranscriptionCompleted | None = None
 
         # Transcription watchdog timer
         self._transcription_watchdog: threading.Timer | None = None
@@ -100,7 +100,7 @@ class StateController:
         """
         self._engine = engine
 
-    def send(self, event: StateEvent) -> None:
+    def send(self, event: StateMessage) -> None:
         """Send event to queue. Thread-safe, non-blocking.
 
         Note:
@@ -166,32 +166,32 @@ class StateController:
             except Exception as e:
                 logger.exception(f"Error processing event: {e}")
 
-    def _handle_event(self, event: StateEvent) -> None:
+    def _handle_event(self, event: StateMessage) -> None:
         """Handle a single event. Called sequentially, never concurrently."""
-        if isinstance(event, SpeechStartEvent):
+        if isinstance(event, SpeechStarted):
             self._handle_speech_start(event)
-        elif isinstance(event, SpeechEndEvent):
+        elif isinstance(event, SpeechEnded):
             self._handle_speech_end(event)
-        elif isinstance(event, TranscriptionCompleteEvent):
+        elif isinstance(event, TranscriptionCompleted):
             self._handle_transcription_complete(event)
-        elif isinstance(event, PlayStartEvent):
+        elif isinstance(event, PlayStarted):
             self._handle_play_start(event)
-        elif isinstance(event, PlayCompleteEvent):
+        elif isinstance(event, PlayCompleted):
             self._handle_play_complete(event)
-        elif isinstance(event, HotkeyToggleEvent):
+        elif isinstance(event, HotkeyPressed):
             self._handle_hotkey_toggle(event)
-        elif isinstance(event, AgentSwitchEvent):
+        elif isinstance(event, SwitchAgent):
             self._handle_agent_switch(event)
-        elif isinstance(event, SetListeningEvent):
+        elif isinstance(event, SetListening):
             self._handle_set_listening(event)
-        elif isinstance(event, DiscardCurrentEvent):
+        elif isinstance(event, DiscardCurrent):
             self._handle_discard_current(event)
 
     # =========================================================================
     # Event Handlers
     # =========================================================================
 
-    def _handle_speech_start(self, event: SpeechStartEvent) -> None:
+    def _handle_speech_start(self, event: SpeechStarted) -> None:
         """VAD detected speech."""
         if self._state_manager.state != AppState.LISTENING:
             return
@@ -200,7 +200,7 @@ class StateController:
             if self._on_recording_start:
                 self._on_recording_start()
 
-    def _handle_speech_end(self, event: SpeechEndEvent) -> None:
+    def _handle_speech_end(self, event: SpeechEnded) -> None:
         """VAD detected speech end, start transcription."""
         current = self._state_manager.state
 
@@ -268,9 +268,9 @@ class StateController:
                 "Transcription watchdog timeout (%.0fs) — forcing recovery",
                 self.TRANSCRIPTION_TIMEOUT,
             )
-            self.send(TranscriptionCompleteEvent(text="", source="timeout"))
+            self.send(TranscriptionCompleted(text="", source="timeout"))
 
-    def _handle_transcription_complete(self, event: TranscriptionCompleteEvent) -> None:
+    def _handle_transcription_complete(self, event: TranscriptionCompleted) -> None:
         """Transcription finished."""
         self._cancel_transcription_watchdog()
         # If TTS is playing, defer the state transition
@@ -295,7 +295,7 @@ class StateController:
         if self._engine:
             self._engine._process_queued_audio()
 
-    def _handle_play_start(self, event: PlayStartEvent) -> None:
+    def _handle_play_start(self, event: PlayStarted) -> None:
         """TTS is about to play.
 
         Note: The play ID is assigned via get_next_play_id() BEFORE sending this event.
@@ -315,7 +315,7 @@ class StateController:
                 if self._on_state_change:
                     self._on_state_change(old_state, AppState.PLAYING, "tts_start")
 
-    def _handle_play_complete(self, event: PlayCompleteEvent) -> None:
+    def _handle_play_complete(self, event: PlayCompleted) -> None:
         """TTS finished playing.
 
         Only processes if event.play_id matches the LAST play started.
@@ -357,7 +357,7 @@ class StateController:
         if target_state == AppState.LISTENING and self._engine:
             self._engine._process_queued_audio()
 
-    def _handle_hotkey_toggle(self, event: HotkeyToggleEvent) -> None:
+    def _handle_hotkey_toggle(self, event: HotkeyPressed) -> None:
         """User wants to toggle listening."""
         current = self._state_manager.state
 
@@ -379,7 +379,7 @@ class StateController:
                 if self._on_state_change:
                     self._on_state_change(previous, AppState.OFF, "hotkey_toggle")
 
-    def _handle_agent_switch(self, event: AgentSwitchEvent) -> None:
+    def _handle_agent_switch(self, event: SwitchAgent) -> None:
         """User wants to switch agent."""
         if not self._engine or not self._engine.agents:
             return
@@ -403,7 +403,7 @@ class StateController:
             # Switch by direction
             self._engine._switch_agent_internal(event.direction)
 
-    def _handle_set_listening(self, event: SetListeningEvent) -> None:
+    def _handle_set_listening(self, event: SetListening) -> None:
         """API request to set listening on/off."""
         current = self._state_manager.state
 
@@ -416,7 +416,7 @@ class StateController:
                 if self._on_state_change:
                     self._on_state_change(AppState.LISTENING, AppState.OFF, "set_listening")
 
-    def _handle_discard_current(self, event: DiscardCurrentEvent) -> None:
+    def _handle_discard_current(self, event: DiscardCurrent) -> None:
         """User wants to discard current recording."""
         if self._engine:
             self._engine._discard_current_internal()

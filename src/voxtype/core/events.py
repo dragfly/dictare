@@ -1,123 +1,20 @@
-"""Event types and protocol for VoxtypeEngine."""
+"""Observer callbacks for VoxtypeEngine.
+
+EngineEvents is the observer interface for UI integration (audio feedback,
+status display). The engine calls _emit("on_xxx", ...) which dispatches
+to the registered EngineEvents subclass via reflection.
+
+Only AppController implements callbacks (on_state_change, on_agent_change).
+Daemon mode passes events=None — SSE handles everything.
+"""
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from voxtype.core.state import AppState
-
-
-# =============================================================================
-# State Events (for Event Queue Architecture)
-# =============================================================================
-
-
-@dataclass(frozen=True)
-class StateEvent:
-    """Base event with timestamp and source.
-
-    All events are immutable (frozen=True) to ensure thread-safety.
-    Events are processed FIFO - no priority.
-    """
-
-    timestamp: float = field(default_factory=time.time)
-    source: str = ""  # "vad", "stt", "tts", "hotkey", "api", etc.
-
-
-@dataclass(frozen=True)
-class SpeechStartEvent(StateEvent):
-    """VAD detected speech start."""
-
-    pass
-
-
-@dataclass(frozen=True)
-class SpeechEndEvent(StateEvent):
-    """VAD detected speech end.
-
-    Captures audio_data and agent at event creation time,
-    ensuring they go to the correct agent even if agent switches later.
-    """
-
-    audio_data: Any = None
-    agent: Any = None  # Captured at event creation time
-
-
-@dataclass(frozen=True)
-class TranscriptionCompleteEvent(StateEvent):
-    """STT finished transcribing."""
-
-    text: str = ""
-    agent: Any = None  # The agent to use for injection
-    language: str | None = None  # Detected language from STT
-
-
-@dataclass(frozen=True)
-class PlayStartEvent(StateEvent):
-    """TTS playback starting.
-
-    Each TTS start increments a counter. The play_id is assigned by the controller
-    when the event is processed, not when it's created.
-    """
-
-    text: str = ""
-
-
-@dataclass(frozen=True)
-class PlayCompleteEvent(StateEvent):
-    """TTS playback finished.
-
-    The play_id must match the ID assigned when PlayStartEvent was processed.
-    If multiple TTS are playing concurrently, only the completion of the
-    LAST started TTS will trigger state transition back to LISTENING.
-    """
-
-    play_id: int = 0  # Must match the ID from PlayStartEvent
-
-
-@dataclass(frozen=True)
-class HotkeyToggleEvent(StateEvent):
-    """User pressed hotkey to toggle listening."""
-
-    pass
-
-
-@dataclass(frozen=True)
-class HotkeyDoubleTapEvent(StateEvent):
-    """User double-tapped hotkey to switch mode."""
-
-    pass
-
-
-@dataclass(frozen=True)
-class AgentSwitchEvent(StateEvent):
-    """User wants to switch agent."""
-
-    direction: int = 1  # +1 next, -1 prev
-    agent_name: str | None = None  # If switching by name
-    agent_index: int | None = None  # If switching by index (1-based)
-
-
-@dataclass(frozen=True)
-class SetListeningEvent(StateEvent):
-    """API request to set listening on/off."""
-
-    on: bool = True
-
-
-@dataclass(frozen=True)
-class DiscardCurrentEvent(StateEvent):
-    """User wants to discard current recording."""
-
-    pass
-
-
-# =============================================================================
-# UI Event Results
-# =============================================================================
 
 
 @dataclass

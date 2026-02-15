@@ -14,7 +14,7 @@ Key function:
     play_audio(source, pause_mic, controller) - shared entry point for all playback.
     - pause_mic=False: fire-and-forget via queue.
     - pause_mic=True: registers play_id, transitions to PLAYING state (mic muted),
-      plays audio, waits for completion, then sends PlayCompleteEvent to resume.
+      plays audio, waits for completion, then sends PlayCompleted to resume.
 """
 
 from __future__ import annotations
@@ -263,11 +263,11 @@ def play_audio(
             threading.Thread(target=fn, daemon=True).start()
             return
 
-        from voxtype.core.events import PlayCompleteEvent, PlayStartEvent
+        from voxtype.core.state_messages import PlayCompleted, PlayStarted
 
         try:
             play_id = controller.get_next_play_id()
-            controller.send(PlayStartEvent(text="", source="audio"))
+            controller.send(PlayStarted(text="", source="audio"))
         except Exception:
             logger.debug("Failed to register play_id, playing without mic pause")
             threading.Thread(target=fn, daemon=True).start()
@@ -279,7 +279,7 @@ def play_audio(
             finally:
                 try:
                     controller.send(
-                        PlayCompleteEvent(play_id=play_id, source="audio")
+                        PlayCompleted(play_id=play_id, source="audio")
                     )
                 except Exception:
                     pass
@@ -300,11 +300,11 @@ def play_audio(
         play_sound_file(_path)
         return
 
-    from voxtype.core.events import PlayCompleteEvent, PlayStartEvent
+    from voxtype.core.state_messages import PlayCompleted, PlayStarted
 
     try:
         play_id = controller.get_next_play_id()
-        controller.send(PlayStartEvent(text="", source="audio"))
+        controller.send(PlayStarted(text="", source="audio"))
     except Exception:
         logger.debug("Failed to register play_id, playing without mic pause")
         play_sound_file(_path)
@@ -313,7 +313,7 @@ def play_audio(
     def on_complete() -> None:
         try:
             controller.send(
-                PlayCompleteEvent(play_id=play_id, source="audio")
+                PlayCompleted(play_id=play_id, source="audio")
             )
         except Exception:
             pass
