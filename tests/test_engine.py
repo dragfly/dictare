@@ -13,7 +13,7 @@ from voxtype.agent.base import OpenVIPMessage
 from voxtype.config import TTSConfig
 from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import InjectionResult, TranscriptionResult
-from voxtype.core.state import AppState
+from voxtype.core.fsm import AppState
 
 
 class MockAgent:

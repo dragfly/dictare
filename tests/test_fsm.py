@@ -1,11 +1,11 @@
-"""Tests for state machine."""
+"""Tests for FSM (states, transitions, messages)."""
 
 import threading
 import time
 
 import pytest
 
-from voxtype.core.state import (
+from voxtype.core.fsm import (
     AppState,
     InvalidTransitionError,
     StateManager,

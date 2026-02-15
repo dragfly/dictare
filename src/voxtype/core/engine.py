@@ -20,17 +20,18 @@ from voxtype.core.events import (
     InjectionResult,
     TranscriptionResult,
 )
-from voxtype.core.messages import create_message
-from voxtype.core.state import AppState, StateManager
-from voxtype.core.state_messages import (
+from voxtype.core.fsm import (
+    AppState,
     DiscardCurrent,
     HotkeyPressed,
     SetListening,
     SpeechEnded,
     SpeechStarted,
+    StateManager,
     SwitchAgent,
     TranscriptionCompleted,
 )
+from voxtype.core.messages import create_message
 from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
@@ -1217,7 +1218,7 @@ class VoxtypeEngine:
         Returns OpenVIP protocol-level fields at the top level,
         with implementation-specific details in the 'platform' object.
         """
-        from voxtype.core.state import AppState
+        from voxtype.core.fsm import AppState
 
         # Map engine state to string
         state_map = {
@@ -1354,8 +1355,7 @@ class VoxtypeEngine:
         start = time.time()
 
         if pause and self._controller is not None:
-            from voxtype.core.state import AppState
-            from voxtype.core.state_messages import PlayCompleted, PlayStarted
+            from voxtype.core.fsm import AppState, PlayCompleted, PlayStarted
 
             if self._controller.state != AppState.OFF:
                 try:

@@ -17,8 +17,8 @@ from collections.abc import Callable
 from queue import Empty, Full, Queue
 from typing import TYPE_CHECKING, Any
 
-from voxtype.core.state import AppState
-from voxtype.core.state_messages import (
+from voxtype.core.fsm import (
+    AppState,
     DiscardCurrent,
     HotkeyPressed,
     PlayCompleted,
@@ -32,7 +32,7 @@ from voxtype.core.state_messages import (
 )
 
 if TYPE_CHECKING:
-    from voxtype.core.state import StateManager
+    from voxtype.core.fsm import StateManager
 
 logger = logging.getLogger(__name__)
 

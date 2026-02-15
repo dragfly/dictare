@@ -117,7 +117,7 @@ class STTService(BaseService):
         )
 
         engine = self._ensure_engine(model_size)
-        return engine.transcribe(
+        result = engine.transcribe(
             audio,
             language=lang,
             hotwords=hw,
@@ -125,6 +125,7 @@ class STTService(BaseService):
             max_repetitions=max_rep,
             task=task,
         )
+        return result.text
 
     def transcribe_file(
         self,

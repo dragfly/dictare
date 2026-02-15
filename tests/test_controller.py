@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import numpy as np
 
 from voxtype.core.controller import StateController
-from voxtype.core.state import AppState, StateManager
-from voxtype.core.state_messages import (
+from voxtype.core.fsm import (
+    AppState,
     DiscardCurrent,
     HotkeyPressed,
     PlayCompleted,
@@ -18,6 +18,7 @@ from voxtype.core.state_messages import (
     SetListening,
     SpeechEnded,
     SpeechStarted,
+    StateManager,
     SwitchAgent,
     TranscriptionCompleted,
 )

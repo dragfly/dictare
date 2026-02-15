@@ -92,7 +92,7 @@ class AppController:
                     play_audio,
                     play_sound_file_async,
                 )
-                from voxtype.core.state import AppState
+                from voxtype.core.fsm import AppState
 
                 eng = engine_ref[0]
                 ctrl = eng._controller if eng else None
