@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b64] - 2026-02-15
+
+### Changed
+
+- **E2E compliance tests** — Rewrote 10 agent message tests from mock-based to true e2e: SSE agent connects via real HTTP, messages posted and verified through the SSE stream. Zero access to server internals. Added `SSEConnection` helper, `live_url`/`e2e_client`/`sse_connect` fixtures. Server uses `port` property and `wait_started()` for reliable startup. Module-scoped server keeps 79 tests under 12s.
+
 ## [0.1.0b63] - 2026-02-15
 
 ### Added
