@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b61] - 2026-02-15
+
+### Added
+
+- **OpenVIP compliance test suite** — 79 tests covering all protocol endpoints, message schemas, error codes, and edge cases. Tests validate status, control, speech, agent messages, SSE registration, content types, and schema enforcement against the OpenVIP spec. Designed for portability — can be extracted to the OpenVIP protocol repo as a standalone compliance suite.
+
 ## [0.1.0b60] - 2026-02-15
 
 ### Changed
