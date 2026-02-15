@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b74] - 2026-02-15
+
+### Changed
+
+- **Consolidated FSM into `core/fsm.py`** — Merged `state.py` (AppState, StateManager, VALID_TRANSITIONS) and `state_messages.py` (all FSM messages) into a single `core/fsm.py`. One file defines the entire state machine: states, transitions, and inputs. Old files removed. Test file renamed to `test_fsm.py`.
+
 ## [0.1.0b73] - 2026-02-15
 
 ### Changed
