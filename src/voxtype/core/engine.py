@@ -16,11 +16,7 @@ from voxtype.agent.base import Agent
 from voxtype.core.audio_manager import AudioManager
 from voxtype.core.bus import bus
 from voxtype.core.controller import StateController
-from voxtype.core.events import (
-    EngineEvents,
-    InjectionResult,
-    TranscriptionResult,
-)
+from voxtype.core.events import EngineEvents
 from voxtype.core.fsm import (
     AppState,
     DiscardCurrent,
@@ -135,8 +131,6 @@ class VoxtypeEngine:
         # Event queue controller - ONLY this component modifies state
         self._controller = StateController(
             self._state_manager,
-            on_recording_start=lambda: self._emit("on_recording_start"),
-            on_recording_end=lambda ms: self._emit("on_recording_end", ms),
             on_state_change=self._handle_state_change,
             on_agent_change=lambda name, idx: self._emit("on_agent_change", name, idx),
         )
@@ -495,7 +489,6 @@ class VoxtypeEngine:
             on_speech_end=self._on_vad_speech_end,
             on_max_speech=self._on_max_speech_duration,
             on_partial_audio=self._on_partial_audio if self._realtime else None,
-            on_vad_loading=lambda: self._emit("on_vad_loading"),
             headless=headless,
         )
         vad_elapsed = round(time.time() - self._loading_models[1]["start_time"], 1)
@@ -503,11 +496,6 @@ class VoxtypeEngine:
         self._loading_models[1]["status"] = "done"
         save_model_load_time(vad_model_id, vad_elapsed)
         logger.debug("VAD model loaded in %.1fs", vad_elapsed)
-        # Set reconnect callbacks
-        self._audio_manager.set_reconnect_callbacks(
-            on_attempt=lambda n: self._emit("on_device_reconnect_attempt", n),
-            on_success=lambda name: self._emit("on_device_reconnect_success", name),
-        )
 
         # Load TTS engine (optional — engine continues if unavailable)
         logger.debug("Loading TTS engine: %s", tts_engine_name)
@@ -565,7 +553,7 @@ class VoxtypeEngine:
 
     def _on_max_speech_duration(self) -> None:
         """Handle max speech duration reached in VAD mode."""
-        self._emit("on_max_duration_reached")
+        pass
 
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
@@ -614,9 +602,7 @@ class VoxtypeEngine:
                 text = result.text
                 if text:
                     with self._partial_text_lock:
-                        if text != self._partial_text:
-                            self._partial_text = text
-                            self._emit("on_partial_transcription", text)
+                        self._partial_text = text
             except Exception:
                 logger.debug("partial transcription error", exc_info=True)
 
@@ -704,16 +690,6 @@ class VoxtypeEngine:
                     self._stats_audio_seconds += audio_duration
                     self._stats_transcription_seconds += transcribe_time
 
-                    # Emit transcription event (for UI)
-                    self._emit(
-                        "on_transcription",
-                        TranscriptionResult(
-                            text=text,
-                            audio_duration_seconds=audio_duration,
-                            transcription_seconds=transcribe_time,
-                        ),
-                    )
-
                     # Log transcription
                     if self._logger:
                         duration_ms = audio_duration * 1000
@@ -730,7 +706,6 @@ class VoxtypeEngine:
             except Exception as e:
                 if self._logger:
                     self._logger.log_error(str(e), context="transcribe_and_process")
-                self._emit("on_error", str(e), "transcribe_and_process")
             finally:
                 # Send completion event to controller (it handles state transition)
                 self._controller.send(
@@ -830,7 +805,6 @@ class VoxtypeEngine:
             target_agent = self._get_current_agent()
 
         # Lock to prevent concurrent injections
-        error_msg: str | None = None
         with self._injection_lock:
             inject_start = time.time()
 
@@ -851,13 +825,9 @@ class VoxtypeEngine:
                     if msg_success:
                         success = True
 
-                # Set helpful error message for failures
-                if not success:
-                    error_msg = f"<agent '{target_agent.id}' not responding>"
             else:
                 # No agent available
                 method = "none"
-                error_msg = "<no agents registered - use --agents or start an agent>"
 
             self._stats_injection_seconds += time.time() - inject_start
 
@@ -868,12 +838,6 @@ class VoxtypeEngine:
         pipeline_submit = x_input_info.get("submit", False) if isinstance(x_input_info, dict) else False
         submit_trigger = x_input_info.get("trigger") if isinstance(x_input_info, dict) else None
         submit_confidence = x_input_info.get("confidence") if isinstance(x_input_info, dict) else None
-
-        # Emit injection event
-        self._emit(
-            "on_injection",
-            InjectionResult(text=final_text, success=success, method=method, error=error_msg),
-        )
 
         # Log injection
         if self._logger:
@@ -932,7 +896,6 @@ class VoxtypeEngine:
             self._current_agent_id = "__keyboard__"
             self.agent_mode = False
 
-        self._emit("on_agents_changed", self.visible_agents)
         self._notify_status()
 
     def _set_current_agent(self, agent_id: str, idx: int = 0) -> None:
@@ -971,7 +934,6 @@ class VoxtypeEngine:
         if self._current_agent_id is None and agent.id not in self.RESERVED_AGENT_IDS:
             self._current_agent_id = agent.id
 
-        self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.registered", agent_id=agent.id)
         self._notify_status()
         return True
@@ -1004,7 +966,6 @@ class VoxtypeEngine:
             else:
                 self._current_agent_id = None
 
-        self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.unregistered", agent_id=agent_id)
         self._notify_status()
         return True
@@ -1414,9 +1375,6 @@ class VoxtypeEngine:
                 should_process=lambda: self._state_manager.should_process_audio,
                 is_running=lambda: self._running,
             )
-
-        # Engine is now ready (STT, VAD, hotkey all initialized)
-        self._emit("on_engine_ready")
 
         # Transition to initial state
         if start_listening:
