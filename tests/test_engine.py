@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -12,7 +11,6 @@ import numpy as np
 from voxtype.agent.base import OpenVIPMessage
 from voxtype.config import TTSConfig
 from voxtype.core.engine import VoxtypeEngine
-from voxtype.core.events import InjectionResult, TranscriptionResult
 from voxtype.core.fsm import AppState
 
 
@@ -96,42 +94,16 @@ class MockEventHandler:
     """Mock event handler that records all events."""
 
     def __init__(self) -> None:
-        self.events: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
         self.state_changes: list[tuple[AppState, AppState, str]] = []
-        self.transcriptions: list[TranscriptionResult] = []
-        self.injections: list[InjectionResult] = []
         self.agent_changes: list[tuple[str, int]] = []
-        self.errors: list[tuple[str, str]] = []
-        self.partial_transcriptions: list[str] = []
 
     def on_state_change(
         self, old: AppState, new: AppState, trigger: str
     ) -> None:
         self.state_changes.append((old, new, trigger))
 
-    def on_transcription(self, result: TranscriptionResult) -> None:
-        self.transcriptions.append(result)
-
-    def on_injection(self, result: InjectionResult) -> None:
-        self.injections.append(result)
-
     def on_agent_change(self, agent_name: str, index: int) -> None:
         self.agent_changes.append((agent_name, index))
-
-    def on_error(self, message: str, context: str) -> None:
-        self.errors.append((message, context))
-
-    def on_partial_transcription(self, text: str) -> None:
-        self.partial_transcriptions.append(text)
-
-    def on_recording_start(self) -> None:
-        pass
-
-    def on_recording_end(self, duration_ms: float) -> None:
-        pass
-
-    def on_max_duration_reached(self) -> None:
-        pass
 
 
 class TestVoxtypeEngineInit:
@@ -196,16 +168,16 @@ class TestEventEmission:
         events = MockEventHandler()
         engine = VoxtypeEngine(config=config, events=events)
 
-        engine._emit("on_error", "test message", "test context")
-        assert len(events.errors) == 1
-        assert events.errors[0] == ("test message", "test context")
+        engine._emit("on_state_change", AppState.OFF, AppState.LISTENING, "test")
+        assert len(events.state_changes) == 1
+        assert events.state_changes[0] == (AppState.OFF, AppState.LISTENING, "test")
 
     def test_emit_without_handler_does_not_crash(self) -> None:
         """_emit with no handler doesn't crash."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config, events=None)
         # Should not raise
-        engine._emit("on_error", "test", "test")
+        engine._emit("on_state_change", AppState.OFF, AppState.LISTENING, "test")
 
     def test_emit_nonexistent_event_does_not_crash(self) -> None:
         """_emit with nonexistent event doesn't crash."""
@@ -219,11 +191,11 @@ class TestEventEmission:
         """_emit doesn't crash if handler raises."""
         config = MockConfig()
         events = MockEventHandler()
-        events.on_error = MagicMock(side_effect=Exception("Handler error"))
+        events.on_state_change = MagicMock(side_effect=Exception("Handler error"))
         engine = VoxtypeEngine(config=config, events=events)
 
         # Should not raise
-        engine._emit("on_error", "test", "test")
+        engine._emit("on_state_change", AppState.OFF, AppState.LISTENING, "test")
 
 
 def _wait_for_controller(engine, *, predicate=None, timeout: float = 2.0) -> None:
@@ -884,22 +856,17 @@ class TestVADCallbacks:
     Note: VAD callbacks now send events processed asynchronously.
     """
 
-    def test_on_vad_speech_start_emits_event(self) -> None:
-        """VAD speech start emits recording_start event."""
+    def test_on_vad_speech_start_transitions_to_recording(self) -> None:
+        """VAD speech start transitions to RECORDING."""
         config = MockConfig()
-        events = MockEventHandler()
-        recording_started = []
-        events.on_recording_start = lambda: recording_started.append(True)
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = VoxtypeEngine(config=config)
         engine._controller.start()
 
         try:
-            # Need to be in LISTENING state first
             engine._state_manager.transition(AppState.LISTENING)
             engine._on_vad_speech_start()
             _wait_for_controller(engine)
 
-            assert len(recording_started) == 1
             assert engine.state == AppState.RECORDING
         finally:
             engine._controller.stop()
@@ -907,33 +874,22 @@ class TestVADCallbacks:
     def test_on_vad_speech_start_ignored_when_off(self) -> None:
         """VAD speech start ignored when OFF."""
         config = MockConfig()
-        events = MockEventHandler()
-        recording_started = []
-        events.on_recording_start = lambda: recording_started.append(True)
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = VoxtypeEngine(config=config)
         engine._controller.start()
 
         try:
-            # State is OFF
             engine._on_vad_speech_start()
             _wait_for_controller(engine)
 
-            assert len(recording_started) == 0
             assert engine.state == AppState.OFF
         finally:
             engine._controller.stop()
 
-    def test_on_max_speech_duration_emits_event(self) -> None:
-        """Max speech duration emits event."""
+    def test_on_max_speech_duration_does_not_crash(self) -> None:
+        """Max speech duration handler doesn't crash."""
         config = MockConfig()
-        events = MockEventHandler()
-        max_reached = []
-        events.on_max_duration_reached = lambda: max_reached.append(True)
-        engine = VoxtypeEngine(config=config, events=events)
-
-        engine._on_max_speech_duration()
-
-        assert len(max_reached) == 1
+        engine = VoxtypeEngine(config=config)
+        engine._on_max_speech_duration()  # Should not raise
 
 
 class TestDiscardCurrent:

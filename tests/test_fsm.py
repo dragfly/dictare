@@ -301,50 +301,6 @@ class TestForceTransition:
         assert sm.state == AppState.LISTENING
 
 
-class TestTransitionCallback:
-    """Test on_transition callback."""
-
-    def test_callback_called_on_transition(self) -> None:
-        """Callback is called with from/to states."""
-        transitions = []
-
-        def on_transition(from_state, to_state):
-            transitions.append((from_state, to_state))
-
-        sm = StateManager(initial_state=AppState.LISTENING, on_transition=on_transition)
-        sm.transition(AppState.RECORDING)
-        sm.transition(AppState.TRANSCRIBING)
-
-        assert len(transitions) == 2
-        assert transitions[0] == (AppState.LISTENING, AppState.RECORDING)
-        assert transitions[1] == (AppState.RECORDING, AppState.TRANSCRIBING)
-
-    def test_callback_not_called_on_same_state(self) -> None:
-        """Callback is not called for same-state transition."""
-        transitions = []
-
-        def on_transition(from_state, to_state):
-            transitions.append((from_state, to_state))
-
-        sm = StateManager(on_transition=on_transition)
-        sm.transition(AppState.OFF)  # Same state
-
-        assert len(transitions) == 0
-
-    def test_callback_not_called_on_invalid_transition(self) -> None:
-        """Callback is not called when transition fails."""
-        transitions = []
-
-        def on_transition(from_state, to_state):
-            transitions.append((from_state, to_state))
-
-        sm = StateManager(on_transition=on_transition)
-        with pytest.raises(InvalidTransitionError):
-            sm.transition(AppState.INJECTING)
-
-        assert len(transitions) == 0
-
-
 class TestFullWorkflow:
     """Test complete state machine workflows."""
 

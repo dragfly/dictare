@@ -22,11 +22,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
+from typing import Any
 
 # =============================================================================
 # States
@@ -90,17 +86,14 @@ class StateManager:
     def __init__(
         self,
         initial_state: AppState = AppState.OFF,
-        on_transition: Callable[[AppState, AppState], None] | None = None,
     ) -> None:
         """Initialize state manager.
 
         Args:
             initial_state: Starting state (default: OFF)
-            on_transition: Optional callback(from_state, to_state) on successful transitions
         """
         self._state = initial_state
         self._lock = threading.Lock()
-        self._on_transition = on_transition
 
     @property
     def state(self) -> AppState:
@@ -155,10 +148,6 @@ class StateManager:
                     raise InvalidTransitionError(from_state, to_state)
 
             self._state = to_state
-
-        # Callback outside lock to prevent deadlocks
-        if self._on_transition:
-            self._on_transition(from_state, to_state)
 
         return True
 
