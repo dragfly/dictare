@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from voxtype.stt.base import STTEngine
+from voxtype.stt.base import STTEngine, STTResult
 from voxtype.stt.faster_whisper import _filter_repetitions
 
 if TYPE_CHECKING:
@@ -108,7 +108,7 @@ class MLXWhisperEngine(STTEngine):
         beam_size: int = 5,
         max_repetitions: int = 5,
         task: str = "transcribe",
-    ) -> str:
+    ) -> STTResult:
         """Transcribe audio to text.
 
         Args:
@@ -120,7 +120,7 @@ class MLXWhisperEngine(STTEngine):
             task: "transcribe" for same-language output, "translate" for English output.
 
         Returns:
-            Transcribed (or translated) text.
+            STTResult with transcribed text and detected language.
 
         Raises:
             RuntimeError: If model is not loaded.
@@ -156,7 +156,12 @@ class MLXWhisperEngine(STTEngine):
         text = result.get("text", "").strip()
 
         # Filter hallucinated repetitions (e.g., "la la la la la...")
-        return _filter_repetitions(text, max_repeats=max_repetitions)
+        filtered_text = _filter_repetitions(text, max_repeats=max_repetitions)
+
+        return STTResult(
+            text=filtered_text,
+            language=result.get("language"),
+        )
 
     def is_loaded(self) -> bool:
         """Check if model is loaded."""

@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
+
+
+@dataclass
+class STTResult:
+    """Result of STT transcription."""
+
+    text: str
+    language: str | None = None
+    language_confidence: float | None = None
 
 
 class STTEngine(ABC):
@@ -32,7 +42,7 @@ class STTEngine(ABC):
         beam_size: int = 5,
         max_repetitions: int = 5,
         task: str = "transcribe",
-    ) -> str:
+    ) -> STTResult:
         """Transcribe audio to text.
 
         Args:
@@ -46,7 +56,7 @@ class STTEngine(ABC):
             task: "transcribe" for same-language output, "translate" for English output.
 
         Returns:
-            Transcribed (or translated) text.
+            STTResult with transcribed text and detected language.
         """
         pass
 
