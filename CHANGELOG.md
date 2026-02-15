@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b60] - 2026-02-15
+
+### Changed
+
+- **Move HTTP server from Engine to AppController** — Engine is now a pure domain object with no HTTP awareness. AppController owns the HTTP server lifecycle (create, start, stop). The HTTP adapter routes protocol commands (`stt.*`, `engine.shutdown`, `ping`) to `engine.handle_protocol_command()` and application commands (`output.*`) to `controller._handle_app_command()`. Engine methods renamed to public API: `get_status()`, `handle_speech()`, `handle_protocol_command()`. SSEAgent creation moved from Engine to HTTP server. Status change notifications use a registered callback instead of direct server reference. Zero external API changes.
+
 ## [0.1.0b59] - 2026-02-14
 
 ### Changed
