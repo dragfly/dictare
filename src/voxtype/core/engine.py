@@ -136,10 +136,7 @@ class VoxtypeEngine:
             self._state_manager,
             on_recording_start=lambda: self._emit("on_recording_start"),
             on_recording_end=lambda ms: self._emit("on_recording_end", ms),
-            on_state_change=lambda old, new, trigger: (
-                self._emit("on_state_change", old, new, trigger),
-                self._notify_status(),
-            ),
+            on_state_change=self._handle_state_change,
             on_agent_change=lambda name, idx: self._emit("on_agent_change", name, idx),
         )
         self._controller.set_engine(self)
@@ -188,6 +185,11 @@ class VoxtypeEngine:
         self._last_text = ""
 
         # Note: No more _injector - each Agent handles its own transport
+
+    def _handle_state_change(self, old: Any, new: Any, trigger: str) -> None:
+        """Handle state change: emit event and notify status subscribers."""
+        self._emit("on_state_change", old, new, trigger)
+        self._notify_status()
 
     def _emit(self, event: str, *args: Any, **kwargs: Any) -> None:
         """Emit event to handler if registered.
