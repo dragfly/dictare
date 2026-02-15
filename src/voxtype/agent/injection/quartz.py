@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import time
 
-from voxtype.injection.base import TextInjector, sanitize_text_for_injection
+from voxtype.agent.injection.base import TextInjector, sanitize_text_for_injection
 
 # macOS virtual key codes
 MACOS_KEY_CODES = {
