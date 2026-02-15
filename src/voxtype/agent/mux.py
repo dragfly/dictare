@@ -204,7 +204,6 @@ def _read_from_sse(
 
     client = Client(base_url)
     msg_count = 0
-    url = f"{base_url}/agents/{agent_id}/messages"
 
     # Executor pipeline for x_input messages
     _openvip_meta: dict[str, Any] = {}
@@ -220,7 +219,7 @@ def _read_from_sse(
 
     def _on_connect() -> None:
         if session_path:
-            _log_event(session_path, "sse_connected", {"url": url})
+            _log_event(session_path, "sse_connected", {"agent_id": agent_id})
 
     def _on_disconnect(exc: Exception | None) -> None:
         if not exc:
