@@ -177,14 +177,19 @@ def e2e_client(live_url):
 def sse_connect(live_url):
     """Factory: connect an SSE agent, returns SSEConnection.
 
+    Each call appends a unique suffix to the agent_id to prevent
+    collisions between tests (server cleanup of disconnected agents
+    is async and may not complete before the next test starts).
+
     Usage:
         conn = sse_connect("alice")
-        # alice is now connected — POST messages, read conn.events
+        agent_url = f"/agents/{conn.agent_id}/messages"
     """
     connections: list[SSEConnection] = []
 
-    def _connect(agent_id: str) -> SSEConnection:
-        conn = SSEConnection(live_url, agent_id)
+    def _connect(agent_id: str = "agent") -> SSEConnection:
+        unique_id = f"{agent_id}-{uuid.uuid4().hex[:8]}"
+        conn = SSEConnection(live_url, unique_id)
         conn.start()
         conn.wait_connected()
         connections.append(conn)
@@ -316,8 +321,8 @@ class TestPostAgentMessages:
         self, e2e_client, sse_connect,
     ) -> None:
         """Posting to a connected agent returns 200 OK."""
-        sse_connect("alice")
-        r = e2e_client.post("/agents/alice/messages", json=_transcription())
+        conn = sse_connect("alice")
+        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=_transcription())
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
@@ -327,7 +332,7 @@ class TestPostAgentMessages:
         """Posted message is delivered to the agent's SSE stream."""
         conn = sse_connect("alice")
         msg = _transcription(text="test delivery")
-        e2e_client.post("/agents/alice/messages", json=msg)
+        e2e_client.post(f"/agents/{conn.agent_id}/messages", json=msg)
         _wait_until(lambda: len(conn.events) > 0)
         assert conn.events[0]["text"] == "test delivery"
 
@@ -363,16 +368,16 @@ class TestSSEAgentRegistration:
         self, e2e_client, sse_connect,
     ) -> None:
         """Connecting with an already-connected agent ID returns 409."""
-        sse_connect("alice")
-        r = e2e_client.get("/agents/alice/messages")
+        conn = sse_connect("alice")
+        r = e2e_client.get(f"/agents/{conn.agent_id}/messages")
         assert r.status_code == 409
 
     def test_409_detail_mentions_already_connected(
         self, e2e_client, sse_connect,
     ) -> None:
         """409 error detail mentions agent already connected."""
-        sse_connect("alice")
-        r = e2e_client.get("/agents/alice/messages")
+        conn = sse_connect("alice")
+        r = e2e_client.get(f"/agents/{conn.agent_id}/messages")
         assert "already connected" in r.json()["detail"].lower()
 
 
@@ -428,9 +433,9 @@ class TestAckSchema:
         self, e2e_client, sse_connect,
     ) -> None:
         """Post message ack has status=ok."""
-        sse_connect("alice")
+        conn = sse_connect("alice")
         data = e2e_client.post(
-            "/agents/alice/messages", json=_transcription()
+            f"/agents/{conn.agent_id}/messages", json=_transcription()
         ).json()
         assert data["status"] == "ok"
 
@@ -593,7 +598,7 @@ class TestValidMessages:
         """Valid OpenVIP messages are delivered to connected agents."""
         conn = sse_connect("test")
 
-        r = e2e_client.post("/agents/test/messages", json=message)
+        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=message)
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
@@ -725,8 +730,8 @@ class TestContentType:
 
     def test_post_message_json(self, e2e_client, sse_connect) -> None:
         """POST message response is application/json."""
-        sse_connect("a")
-        r = e2e_client.post("/agents/a/messages", json=_transcription())
+        conn = sse_connect("a")
+        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=_transcription())
         assert "application/json" in r.headers["content-type"]
 
     def test_status_stream_event_stream(self) -> None:
@@ -779,11 +784,11 @@ class TestEdgeCases:
         bob = sse_connect("bob")
 
         e2e_client.post(
-            "/agents/alice/messages",
+            f"/agents/{alice.agent_id}/messages",
             json=_transcription(text="for alice"),
         )
         e2e_client.post(
-            "/agents/bob/messages",
+            f"/agents/{bob.agent_id}/messages",
             json=_transcription(text="for bob"),
         )
 
@@ -795,10 +800,10 @@ class TestEdgeCases:
 
     def test_large_text_accepted(self, e2e_client, sse_connect) -> None:
         """Large text messages are accepted."""
-        sse_connect("test")
+        conn = sse_connect("test")
         big_text = "word " * 10000  # ~50KB
         r = e2e_client.post(
-            "/agents/test/messages",
+            f"/agents/{conn.agent_id}/messages",
             json=_transcription(text=big_text),
         )
         assert r.status_code == 200
@@ -813,7 +818,7 @@ class TestEdgeCases:
         ]
         for text in texts:
             e2e_client.post(
-                "/agents/test/messages",
+                f"/agents/{conn.agent_id}/messages",
                 json=_transcription(text=text),
             )
 
