@@ -70,6 +70,7 @@ class OpenVIPServer:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._server: Any = None  # uvicorn.Server
         self._running = False
+        self._started = threading.Event()
 
         # FastAPI app
         self._app = self._create_app()
@@ -270,11 +271,25 @@ class OpenVIPServer:
         )
         self._server = uvicorn.Server(config)
 
+        async def _run() -> None:
+            # Signal when uvicorn has bound the socket and is ready
+            async def _signal_started() -> None:
+                while not self._server.started:
+                    await asyncio.sleep(0.01)
+                self._started.set()
+
+            task = asyncio.create_task(_signal_started())
+            try:
+                await self._server.serve()
+            finally:
+                task.cancel()
+
         try:
-            self._loop.run_until_complete(self._server.serve())
+            self._loop.run_until_complete(_run())
         except Exception:
             logger.exception("OpenVIP server error")
         finally:
+            self._started.set()  # Ensure event fires even on error
             self._loop.close()
             self._loop = None
 
@@ -294,6 +309,19 @@ class OpenVIPServer:
 
         self._server = None
         logger.info("OpenVIP server stopped")
+
+    @property
+    def port(self) -> int:
+        """Actual bound port (resolves port=0 after start)."""
+        if self._server and hasattr(self._server, "servers") and self._server.servers:
+            sockets = self._server.servers[0].sockets
+            if sockets:
+                return sockets[0].getsockname()[1]
+        return self._port
+
+    def wait_started(self, timeout: float = 5.0) -> bool:
+        """Block until server is ready to accept connections."""
+        return self._started.wait(timeout)
 
     def put_message(self, agent_id: str, message: dict) -> bool:
         """Thread-safe: put a message into an agent's SSE queue.
