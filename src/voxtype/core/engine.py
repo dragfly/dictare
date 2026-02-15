@@ -891,37 +891,11 @@ class VoxtypeEngine:
     # State Control
     # -------------------------------------------------------------------------
 
-    def _enter_listening_mode(self, trigger: str = "voice_command") -> None:
-        """Enter LISTENING mode."""
-        old_state = self.state
-        if self._state_manager.try_transition(AppState.LISTENING):
-            self._emit("on_state_change", old_state, AppState.LISTENING, trigger)
-
-            if self._logger:
-                self._logger.log_state_change(
-                    old_state="IDLE",
-                    new_state="LISTENING",
-                    trigger=trigger,
-                )
-
-    def _exit_listening_mode(self, trigger: str = "voice_command") -> None:
-        """Exit LISTENING mode."""
-        old_state = self.state
-        if self._state_manager.try_transition(AppState.OFF):
-            self._emit("on_state_change", old_state, AppState.OFF, trigger)
-
-            if self._logger:
-                self._logger.log_state_change(
-                    old_state="LISTENING",
-                    new_state="IDLE",
-                    trigger=trigger,
-                )
-
-    def _toggle_listening(self) -> None:
+    def toggle_listening(self) -> None:
         """Toggle listening on/off - sends event to controller."""
         self._controller.send(HotkeyPressed(source="api"))
 
-    def _set_listening(self, on: bool) -> None:
+    def set_listening(self, on: bool) -> None:
         """Set listening state on/off - sends event to controller."""
         self._controller.send(SetListening(on=on, source="api"))
 
@@ -929,7 +903,7 @@ class VoxtypeEngine:
     # Output Mode
     # -------------------------------------------------------------------------
 
-    def _set_output_mode(self, mode: str) -> None:
+    def set_output_mode(self, mode: str) -> None:
         """Switch output mode at runtime (keyboard <-> agents).
 
         In keyboard mode, a built-in KeyboardAgent injects keystrokes.
@@ -1035,7 +1009,7 @@ class VoxtypeEngine:
         self._notify_status()
         return True
 
-    def _switch_agent(self, direction: int) -> None:
+    def switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent - sends event to controller."""
         self._controller.send(SwitchAgent(direction=direction, source="api"))
 
@@ -1061,7 +1035,7 @@ class VoxtypeEngine:
         if new_agent_id in self._agents:
             self._set_current_agent(new_agent_id, new_idx)
 
-    def _switch_to_agent_by_name(self, name: str) -> bool:
+    def switch_to_agent_by_name(self, name: str) -> bool:
         """Switch to a specific agent by name - sends event to controller."""
         self._controller.send(SwitchAgent(agent_name=name, source="api"))
         return True  # Actual success determined asynchronously
@@ -1095,7 +1069,7 @@ class VoxtypeEngine:
 
         return False
 
-    def _switch_to_agent_by_index(self, index: int) -> bool:
+    def switch_to_agent_by_index(self, index: int) -> bool:
         """Switch to a specific agent by index (1-based) - sends event."""
         self._controller.send(SwitchAgent(agent_index=index, source="api"))
         return True  # Actual success determined asynchronously
@@ -1119,16 +1093,7 @@ class VoxtypeEngine:
         self._set_current_agent(agent_id, idx)
         return True
 
-    def _send_submit(self) -> None:
-        """Send submit (Enter key) to the target."""
-        agent = self._get_current_agent()
-        if agent:
-            # Send empty message with submit flag
-            msg = create_message("")
-            msg["x_input"] = {"submit": True}
-            agent.send(msg)
-
-    def _discard_current(self) -> None:
+    def discard_current(self) -> None:
         """Discard current recording/transcription - sends event."""
         self._controller.send(DiscardCurrent(source="api"))
 
@@ -1395,13 +1360,13 @@ class VoxtypeEngine:
         command = body.get("command", "")
 
         if command == "stt.start":
-            self._set_listening(True)
+            self.set_listening(True)
             return {"status": "ok", "listening": True}
         elif command == "stt.stop":
-            self._set_listening(False)
+            self.set_listening(False)
             return {"status": "ok", "listening": False}
         elif command == "stt.toggle":
-            self._toggle_listening()
+            self.toggle_listening()
             return {"status": "ok"}
         elif command == "engine.shutdown":
             self._running = False
