@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b62] - 2026-02-15
+
+### Added
+
+- **Proactive audio device change detection** — Prevents SIGABRT crash when audio devices disconnect (e.g., AirPods removed). On macOS, a CoreAudio property listener via ctypes detects default input device changes and immediately aborts the PortAudio stream before the IOThread assertion fires. On Linux, a polling fallback monitors the default device every 2 seconds. New `AudioCapture.emergency_abort()` method for lock-free, thread-safe stream termination from any thread.
+
 ## [0.1.0b61] - 2026-02-15
 
 ### Added
