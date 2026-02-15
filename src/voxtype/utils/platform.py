@@ -445,7 +445,7 @@ def _check_tts_deps() -> list[CheckResult]:
             raise ValueError("not available")
     except (ValueError, Exception):
         dep_info = OPTIONAL_DEPENDENCIES.get(engine)
-        hint = get_install_command(dep_info[0]) if dep_info else None
+        hint = get_install_command(dep_info[0]) if dep_info else None  # type: ignore[assignment]
         results.append(CheckResult(
             name=f"TTS ({engine})",
             available=False,
