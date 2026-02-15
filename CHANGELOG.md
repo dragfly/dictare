@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b65] - 2026-02-15
+
+### Changed
+
+- **Split compliance tests into protocol and internal** — `test_openvip_protocol.py` (64 tests) contains the portable protocol compliance suite: zero voxtype imports, all tests via real HTTP/SSE. Can be copied to any OpenVIP implementation's repo as an executable spec. `test_openvip_internal.py` (19 tests) contains voxtype-specific tests using mock engine and TestClient. Shared infrastructure (mock classes, `live_url` fixture) moved to `conftest.py`.
+
 ## [0.1.0b64] - 2026-02-15
 
 ### Changed
