@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -10,7 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from voxtype.audio.capture import AudioCapture
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
+    from voxtype.audio.device_monitor import DeviceMonitor
     from voxtype.audio.vad import SileroVAD, StreamingVAD
     from voxtype.config import AudioConfig
 
@@ -66,6 +70,9 @@ class AudioManager:
         self._on_reconnect_attempt: Callable[[int], None] | None = None
         self._on_reconnect_success: Callable[[str | None], None] | None = None
 
+        # Device monitor (detects device changes at OS level)
+        self._device_monitor: DeviceMonitor | None = None
+
         # State check callbacks (set by start_streaming)
         # These are internal - use the properties should_process_audio / is_engine_running
         self._should_process_check: Callable[[], bool] | None = None
@@ -116,6 +123,13 @@ class AudioManager:
             sample_rate=self._config.sample_rate,
             channels=self._config.channels,
             device=self._config.device,
+        )
+
+        # Create device monitor (detects OS-level device changes before PortAudio crashes)
+        from voxtype.audio.device_monitor import create_device_monitor
+
+        self._device_monitor = create_device_monitor(
+            on_device_change=self._on_device_change,
         )
 
         # Notify VAD loading start
@@ -173,6 +187,8 @@ class AudioManager:
         self._is_running_check = is_running
         if self._audio:
             self._audio.start_streaming(self._on_audio_chunk)
+        if self._device_monitor:
+            self._device_monitor.start()
 
     def stop_streaming(self) -> None:
         """Stop audio streaming."""
@@ -181,12 +197,27 @@ class AudioManager:
                 self._audio.stop_recording()
             self._audio.stop_streaming()
 
+    def _on_device_change(self) -> None:
+        """Handle OS-level device change notification.
+
+        Called from CoreAudio thread (macOS) or polling thread (Linux).
+        Must be fast and safe for any thread.
+        """
+        logger.info("Audio device change detected, aborting stream")
+        if self._audio:
+            self._audio.emergency_abort()
+
     def close(self) -> None:
         """Clean up all resources.
 
         Call this on shutdown to release ONNX session resources
         and avoid semaphore leak warnings.
         """
+        # Stop device monitor first
+        if self._device_monitor:
+            self._device_monitor.stop()
+            self._device_monitor = None
+
         # Stop the audio stream first to prevent new callbacks
         self.stop_streaming()
 
@@ -228,6 +259,10 @@ class AudioManager:
         """
         import sounddevice as sd
 
+        # Stop device monitor during reconnection
+        if self._device_monitor:
+            self._device_monitor.stop()
+
         # Stop and destroy old audio capture
         if self._audio:
             try:
@@ -253,6 +288,10 @@ class AudioManager:
                     device=None,  # Always use new default on reconnect
                 )
                 self._audio.start_streaming(on_chunk_callback)
+
+                # Restart device monitor for the new stream
+                if self._device_monitor:
+                    self._device_monitor.start()
 
                 # Notify success with device name
                 if self._on_reconnect_success:

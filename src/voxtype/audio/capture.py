@@ -203,6 +203,20 @@ class AudioCapture:
         except Exception:
             return None
 
+    def emergency_abort(self) -> None:
+        """Abort stream immediately without acquiring locks.
+
+        Called from OS-level device change callbacks (e.g., CoreAudio thread).
+        Must be fast and lock-free to prevent deadlocks with start/stop_streaming.
+        """
+        self._needs_reconnect = True
+        stream = self._stream  # Atomic reference read
+        if stream is not None:
+            try:
+                stream.abort()  # Pa_AbortStream — fast C call, thread-safe
+            except Exception:
+                pass
+
     def needs_reconnect(self) -> bool:
         """Check if audio device needs reconnection."""
         if self._needs_reconnect:
