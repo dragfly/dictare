@@ -251,7 +251,7 @@ class TestStateControl:
         engine._controller.start()
 
         try:
-            engine._toggle_listening()
+            engine.toggle_listening()
             _wait_for_controller(engine)
             assert engine.state == AppState.LISTENING
             assert len(events.state_changes) == 1
@@ -268,10 +268,10 @@ class TestStateControl:
 
         try:
             # First toggle ON
-            engine._toggle_listening()
+            engine.toggle_listening()
             _wait_for_controller(engine)
             # Then toggle OFF
-            engine._toggle_listening()
+            engine.toggle_listening()
             _wait_for_controller(engine)
             assert engine.state == AppState.OFF
             assert len(events.state_changes) == 2
@@ -287,7 +287,7 @@ class TestStateControl:
         engine._controller.start()
 
         try:
-            engine._set_listening(True)
+            engine.set_listening(True)
             _wait_for_controller(engine)
             assert engine.state == AppState.LISTENING
         finally:
@@ -301,9 +301,9 @@ class TestStateControl:
         engine._controller.start()
 
         try:
-            engine._set_listening(True)
+            engine.set_listening(True)
             _wait_for_controller(engine)
-            engine._set_listening(False)
+            engine.set_listening(False)
             _wait_for_controller(engine)
             assert engine.state == AppState.OFF
         finally:
@@ -317,10 +317,10 @@ class TestStateControl:
         engine._controller.start()
 
         try:
-            engine._set_listening(True)
+            engine.set_listening(True)
             _wait_for_controller(engine)
             events.state_changes.clear()
-            engine._set_listening(True)  # Already on
+            engine.set_listening(True)  # Already on
             _wait_for_controller(engine)
             assert len(events.state_changes) == 0
         finally:
@@ -342,7 +342,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            engine._switch_agent(1)
+            engine.switch_agent(1)
             _wait_for_controller(engine)
             assert engine.current_agent == "cursor"
             assert engine.current_agent_index == 1
@@ -359,7 +359,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            engine._switch_agent(-1)  # Wraps to last
+            engine.switch_agent(-1)  # Wraps to last
             _wait_for_controller(engine)
             assert engine.current_agent == "vscode"
             assert engine.current_agent_index == 2
@@ -375,9 +375,9 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            engine._switch_agent(1)  # cursor
+            engine.switch_agent(1)  # cursor
             _wait_for_controller(engine)
-            engine._switch_agent(1)  # wraps to claude
+            engine.switch_agent(1)  # wraps to claude
             _wait_for_controller(engine)
             assert engine.current_agent == "claude"
             assert engine.current_agent_index == 0
@@ -392,7 +392,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            engine._switch_agent(1)  # Should not crash
+            engine.switch_agent(1)  # Should not crash
             _wait_for_controller(engine)
             assert len(events.agent_changes) == 0
         finally:
@@ -407,7 +407,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            result = engine._switch_to_agent_by_name("cursor")
+            result = engine.switch_to_agent_by_name("cursor")
             _wait_for_controller(engine)
             assert result is True
             assert engine.current_agent == "cursor"
@@ -423,7 +423,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            result = engine._switch_to_agent_by_name("CURSOR")
+            result = engine.switch_to_agent_by_name("CURSOR")
             _wait_for_controller(engine)
             assert result is True
             assert engine.current_agent == "cursor"
@@ -439,7 +439,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            result = engine._switch_to_agent_by_name("code")
+            result = engine.switch_to_agent_by_name("code")
             _wait_for_controller(engine)
             assert result is True
             assert engine.current_agent == "claude-code"
@@ -455,7 +455,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            result = engine._switch_to_agent_by_name("vscode")
+            result = engine.switch_to_agent_by_name("vscode")
             _wait_for_controller(engine)
             # With async processing, result is always True but no switch happens
             assert result is True
@@ -473,7 +473,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            result = engine._switch_to_agent_by_index(2)  # 1-based
+            result = engine.switch_to_agent_by_index(2)  # 1-based
             _wait_for_controller(engine)
             assert result is True
             assert engine.current_agent == "cursor"
@@ -490,7 +490,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            result = engine._switch_to_agent_by_index(10)
+            result = engine.switch_to_agent_by_index(10)
             _wait_for_controller(engine)
             # With async processing, result is always True but no switch happens
             assert result is True
@@ -512,7 +512,7 @@ class TestAgentSwitch:
         engine._controller.start()
 
         try:
-            engine._switch_to_agent_by_name("cursor")
+            engine.switch_to_agent_by_name("cursor")
             _wait_for_controller(engine)
             assert engine.current_agent == "cursor"
             assert len(status_calls) > 0
@@ -627,7 +627,7 @@ class TestAgentId:
         engine._controller.start()
 
         try:
-            engine._switch_agent(1)
+            engine.switch_agent(1)
             _wait_for_controller(engine)
             result = engine.current_agent
             assert result == "cursor"
@@ -835,7 +835,7 @@ class TestThreadSafety:
         def toggle_many_times() -> None:
             try:
                 for _ in range(50):
-                    engine._toggle_listening()
+                    engine.toggle_listening()
                     time.sleep(0.001)
             except Exception as e:
                 errors.append(e)
@@ -861,7 +861,7 @@ class TestThreadSafety:
         def switch_agents() -> None:
             try:
                 for _ in range(50):
-                    engine._switch_agent(1)
+                    engine.switch_agent(1)
                     time.sleep(0.001)
             except Exception as e:
                 errors.append(e)
@@ -953,7 +953,7 @@ class TestDiscardCurrent:
             engine._state_manager.transition(AppState.LISTENING)
             engine._state_manager.transition(AppState.RECORDING)
 
-            engine._discard_current()
+            engine.discard_current()
             _wait_for_controller(engine)
 
             assert engine.state == AppState.LISTENING
@@ -1249,7 +1249,7 @@ class TestSetOutputMode:
         engine._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude"])
 
-        engine._set_output_mode("keyboard")
+        engine.set_output_mode("keyboard")
 
         assert engine.agent_mode is False
         assert engine.current_agent == "__keyboard__"
@@ -1270,7 +1270,7 @@ class TestSetOutputMode:
         engine._current_agent_id = "__keyboard__"
         register_test_agents(engine, ["claude"])
 
-        engine._set_output_mode("agents")
+        engine.set_output_mode("agents")
 
         assert engine.agent_mode is True
         # KeyboardAgent stays registered, just not current
@@ -1284,7 +1284,7 @@ class TestSetOutputMode:
         engine = VoxtypeEngine(config=config)
         engine.agent_mode = True
 
-        engine._set_output_mode("agents")
+        engine.set_output_mode("agents")
 
         # No keyboard agent created — already in agents mode
         assert engine._keyboard_agent is None
@@ -1302,7 +1302,7 @@ class TestSetOutputMode:
         engine._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude", "aider"])
 
-        engine._set_output_mode("keyboard")
+        engine.set_output_mode("keyboard")
 
         # SSE agents are still registered
         assert "claude" in engine.agents
@@ -1323,7 +1323,7 @@ class TestSetOutputMode:
         # Select cursor as current
         engine._current_agent_id = "cursor"
 
-        engine._set_output_mode("keyboard")
+        engine.set_output_mode("keyboard")
 
         assert engine.current_agent == "__keyboard__"
         assert engine._last_sse_agent_id == "cursor"
@@ -1342,10 +1342,10 @@ class TestSetOutputMode:
         # Select cursor, then switch to keyboard, then back
         engine._current_agent_id = "cursor"
 
-        engine._set_output_mode("keyboard")
+        engine.set_output_mode("keyboard")
         assert engine.current_agent == "__keyboard__"
 
-        engine._set_output_mode("agents")
+        engine.set_output_mode("agents")
         assert engine.current_agent == "cursor"
         assert engine.agent_mode is True
 
@@ -1364,7 +1364,7 @@ class TestSetOutputMode:
         # Set a last_sse_agent that no longer exists
         engine._last_sse_agent_id = "aider"
 
-        engine._set_output_mode("agents")
+        engine.set_output_mode("agents")
         assert engine.current_agent == "claude"
 
     def test_switch_invalid_mode_is_noop(self) -> None:
@@ -1373,6 +1373,6 @@ class TestSetOutputMode:
         engine = VoxtypeEngine(config=config)
         engine.agent_mode = True
 
-        engine._set_output_mode("invalid")
+        engine.set_output_mode("invalid")
 
         assert engine.agent_mode is True

@@ -255,7 +255,7 @@ class AppController:
             return
 
         current = self._engine.is_listening
-        self._engine._set_listening(not current)
+        self._engine.set_listening(not current)
         logger.debug(f"toggle_listening: {current} -> {not current}")
 
     def next_agent(self) -> None:
@@ -266,7 +266,7 @@ class AppController:
         if not self._engine:
             return
 
-        self._engine._switch_agent(1)
+        self._engine.switch_agent(1)
 
     def prev_agent(self) -> None:
         """Switch to previous agent.
@@ -276,7 +276,7 @@ class AppController:
         if not self._engine:
             return
 
-        self._engine._switch_agent(-1)
+        self._engine.switch_agent(-1)
 
     def switch_to_agent(self, name: str) -> None:
         """Switch to agent by name.
@@ -287,7 +287,7 @@ class AppController:
         if not self._engine:
             return
 
-        self._engine._switch_to_agent_by_name(name)
+        self._engine.switch_to_agent_by_name(name)
 
     def switch_to_agent_index(self, index: int) -> None:
         """Switch to agent by index (1-based for user convenience).
@@ -299,7 +299,7 @@ class AppController:
             return
 
         # Engine uses 0-based, users use 1-based
-        self._engine._switch_to_agent_by_index(index - 1)
+        self._engine.switch_to_agent_by_index(index - 1)
 
     def set_output_mode(self, mode: str) -> None:
         """Switch output mode (keyboard <-> agents).
@@ -309,7 +309,7 @@ class AppController:
         """
         if not self._engine:
             return
-        self._engine._set_output_mode(mode)
+        self._engine.set_output_mode(mode)
 
     # =========================================================================
     # Properties

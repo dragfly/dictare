@@ -145,7 +145,7 @@ class _BindingCommands:
         """Set listening state (idempotent)."""
         engine = self._controller.engine
         if engine:
-            engine._set_listening(on)
+            engine.set_listening(on)
 
     def _switch_to_project(self, name: str) -> None:
         """Switch to project by name."""
