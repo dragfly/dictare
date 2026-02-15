@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from voxtype.core.messages import (
+from voxtype.core.openvip_messages import (
     OPENVIP_VERSION,
     create_error,
     create_message,

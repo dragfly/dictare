@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b75] - 2026-02-15
+
+### Changed
+
+- **Renamed `core/messages.py` → `core/openvip_messages.py`** — Disambiguates OpenVIP wire format messages from FSM `StateMessage` in `core/fsm.py`.
+- **Renamed `docs/design/event-architecture.md` → `docs/design/communication.md`** — Updated to reflect correct terminology (FSM messages, not events) and current file structure.
+
 ## [0.1.0b74] - 2026-02-15
 
 ### Changed
