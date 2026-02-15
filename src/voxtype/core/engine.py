@@ -16,19 +16,21 @@ from voxtype.agent.base import Agent
 from voxtype.core.audio_manager import AudioManager
 from voxtype.core.controller import StateController
 from voxtype.core.events import (
-    AgentSwitchEvent,
-    DiscardCurrentEvent,
     EngineEvents,
-    HotkeyToggleEvent,
     InjectionResult,
-    SetListeningEvent,
-    SpeechEndEvent,
-    SpeechStartEvent,
-    TranscriptionCompleteEvent,
     TranscriptionResult,
 )
 from voxtype.core.messages import create_message
 from voxtype.core.state import AppState, StateManager
+from voxtype.core.state_messages import (
+    DiscardCurrent,
+    HotkeyPressed,
+    SetListening,
+    SpeechEnded,
+    SpeechStarted,
+    SwitchAgent,
+    TranscriptionCompleted,
+)
 from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
@@ -159,8 +161,8 @@ class VoxtypeEngine:
         # Double tap: switch to next agent
         self._tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
-            on_single_tap=lambda: self._controller.send(HotkeyToggleEvent(source="hotkey")),
-            on_double_tap=lambda: self._controller.send(AgentSwitchEvent(direction=1, source="hotkey")),
+            on_single_tap=lambda: self._controller.send(HotkeyPressed(source="hotkey")),
+            on_double_tap=lambda: self._controller.send(SwitchAgent(direction=1, source="hotkey")),
         )
 
         # Initialize components
@@ -567,7 +569,7 @@ class VoxtypeEngine:
     def _on_vad_speech_start(self) -> None:
         """Handle VAD speech start detection."""
         # Send event to controller - it handles the state transition
-        self._controller.send(SpeechStartEvent(source="vad"))
+        self._controller.send(SpeechStarted(source="vad"))
 
         if self._logger:
             self._logger.log_vad_event("speech_start")
@@ -630,7 +632,7 @@ class VoxtypeEngine:
 
         # Send event to controller with captured agent
         self._controller.send(
-            SpeechEndEvent(
+            SpeechEnded(
                 audio_data=audio_data,
                 agent=captured_agent,
                 source="vad",
@@ -644,7 +646,7 @@ class VoxtypeEngine:
     def _transcribe_and_process(self, audio_data: Any, agent: Agent | None = None) -> None:
         """Transcribe audio and send to agent.
 
-        Called by StateController when SpeechEndEvent is processed.
+        Called by StateController when SpeechEnded is processed.
 
         Args:
             audio_data: Audio data to transcribe
@@ -731,7 +733,7 @@ class VoxtypeEngine:
             finally:
                 # Send completion event to controller (it handles state transition)
                 self._controller.send(
-                    TranscriptionCompleteEvent(
+                    TranscriptionCompleted(
                         text=transcribed_text,
                         agent=captured_agent,
                         language=detected_language if transcribed_text else None,
@@ -764,7 +766,7 @@ class VoxtypeEngine:
 
             # Found valid audio - send as event (controller handles state)
             self._controller.send(
-                SpeechEndEvent(
+                SpeechEnded(
                     audio_data=audio_data,
                     agent=self._get_current_agent(),
                     source="queued",
@@ -916,11 +918,11 @@ class VoxtypeEngine:
 
     def _toggle_listening(self) -> None:
         """Toggle listening on/off - sends event to controller."""
-        self._controller.send(HotkeyToggleEvent(source="api"))
+        self._controller.send(HotkeyPressed(source="api"))
 
     def _set_listening(self, on: bool) -> None:
         """Set listening state on/off - sends event to controller."""
-        self._controller.send(SetListeningEvent(on=on, source="api"))
+        self._controller.send(SetListening(on=on, source="api"))
 
     # -------------------------------------------------------------------------
     # Output Mode
@@ -1034,7 +1036,7 @@ class VoxtypeEngine:
 
     def _switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent - sends event to controller."""
-        self._controller.send(AgentSwitchEvent(direction=direction, source="api"))
+        self._controller.send(SwitchAgent(direction=direction, source="api"))
 
     def _switch_agent_internal(self, direction: int) -> None:
         """Internal: Actually switch agent. Called by controller.
@@ -1060,7 +1062,7 @@ class VoxtypeEngine:
 
     def _switch_to_agent_by_name(self, name: str) -> bool:
         """Switch to a specific agent by name - sends event to controller."""
-        self._controller.send(AgentSwitchEvent(agent_name=name, source="api"))
+        self._controller.send(SwitchAgent(agent_name=name, source="api"))
         return True  # Actual success determined asynchronously
 
     def _switch_to_agent_by_name_internal(self, name: str) -> bool:
@@ -1094,7 +1096,7 @@ class VoxtypeEngine:
 
     def _switch_to_agent_by_index(self, index: int) -> bool:
         """Switch to a specific agent by index (1-based) - sends event."""
-        self._controller.send(AgentSwitchEvent(agent_index=index, source="api"))
+        self._controller.send(SwitchAgent(agent_index=index, source="api"))
         return True  # Actual success determined asynchronously
 
     def _switch_to_agent_by_index_internal(self, index: int) -> bool:
@@ -1127,7 +1129,7 @@ class VoxtypeEngine:
 
     def _discard_current(self) -> None:
         """Discard current recording/transcription - sends event."""
-        self._controller.send(DiscardCurrentEvent(source="api"))
+        self._controller.send(DiscardCurrent(source="api"))
 
     def _discard_current_internal(self) -> None:
         """Internal: Actually discard. Called by controller."""
@@ -1350,13 +1352,13 @@ class VoxtypeEngine:
         start = time.time()
 
         if pause and self._controller is not None:
-            from voxtype.core.events import PlayCompleteEvent, PlayStartEvent
             from voxtype.core.state import AppState
+            from voxtype.core.state_messages import PlayCompleted, PlayStarted
 
             if self._controller.state != AppState.OFF:
                 try:
                     play_id = self._controller.get_next_play_id()
-                    self._controller.send(PlayStartEvent(text="", source="tts"))
+                    self._controller.send(PlayStarted(text="", source="tts"))
                 except Exception:
                     play_id = None
 
@@ -1366,7 +1368,7 @@ class VoxtypeEngine:
                     if play_id is not None:
                         try:
                             self._controller.send(
-                                PlayCompleteEvent(play_id=play_id, source="tts")
+                                PlayCompleted(play_id=play_id, source="tts")
                             )
                         except Exception:
                             pass

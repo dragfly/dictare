@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b73] - 2026-02-15
+
+### Changed
+
+- **Split events.py into state_messages.py + events.py** — FSM messages (inputs to StateController) now live in `core/state_messages.py` with proper naming: notifications use past tense (`SpeechStarted`, `SpeechEnded`, `TranscriptionCompleted`, `PlayStarted`, `PlayCompleted`), commands use imperative (`HotkeyPressed`, `SwitchAgent`, `SetListening`, `DiscardCurrent`). Base class renamed from `StateEvent` to `StateMessage`. Observer callbacks (`EngineEvents`, DTOs) remain in `core/events.py`. Removed dead `HotkeyDoubleTapEvent`.
+
 ## [0.1.0b72] - 2026-02-15
 
 ### Fixed
