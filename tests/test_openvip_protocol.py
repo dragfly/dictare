@@ -134,8 +134,6 @@ class SSEConnection:
         self._stop.set()
         if self._http:
             self._http.close()  # Interrupts blocking read
-        if self._thread:
-            self._thread.join(timeout=0.5)  # Daemon thread, don't wait long
 
     def _run(self) -> None:
         import httpx
