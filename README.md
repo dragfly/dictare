@@ -173,6 +173,9 @@ uv run --python 3.11 voxtype listen --keyboard
 
 # Tests
 uv run --python 3.11 python -m pytest tests/ -x
+
+# Tests (parallel — useful when suite grows beyond 10s)
+uv run --python 3.11 python -m pytest tests/ -x -n auto
 ```
 
 > Ghostty users: add `keybind = shift+enter=text:\n` to config. See [TERMINAL_COMPATIBILITY.md](TERMINAL_COMPATIBILITY.md).
