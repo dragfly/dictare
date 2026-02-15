@@ -15,7 +15,7 @@ OPENVIP_DIR="$(cd "${PROJECT_DIR}/../../openvip-dev/sdks/python" && pwd)"
 OPENVIP_TARBALL="${OPENVIP_DIR}/dist/openvip-1.1.0.tar.gz"
 
 # ---------- 1. Read version from source ----------
-VERSION=$(python3.11 -c "
+VERSION=$(.venv/bin/python -c "
 import re, pathlib
 text = pathlib.Path('${PROJECT_DIR}/src/voxtype/__init__.py').read_text()
 print(re.search(r'__version__\s*=\s*\"(.+?)\"', text).group(1))
