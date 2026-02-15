@@ -30,6 +30,18 @@ from typing import Any
 import pytest
 
 # =============================================================================
+# Timeout factor — scaled by --openvip-timeout-factor for slow implementations
+# =============================================================================
+
+_TIMEOUT_FACTOR = 1.0
+
+@pytest.fixture(autouse=True, scope="session")
+def _apply_timeout_factor(request):
+    """Read --openvip-timeout-factor and apply to all wait operations."""
+    global _TIMEOUT_FACTOR
+    _TIMEOUT_FACTOR = request.config.getoption("--openvip-timeout-factor")
+
+# =============================================================================
 # Helpers
 # =============================================================================
 
@@ -62,13 +74,21 @@ def _speech_request(**overrides) -> dict:
     return msg
 
 def _wait_until(predicate, *, timeout: float = 2.0) -> None:
-    """Poll predicate until True or timeout."""
-    deadline = time.monotonic() + timeout
+    """Poll predicate until True or timeout.
+
+    Timeout is scaled by --openvip-timeout-factor to accommodate slow
+    implementations. Default factor is 1.0 (no scaling).
+    """
+    scaled = timeout * _TIMEOUT_FACTOR
+    deadline = time.monotonic() + scaled
     while time.monotonic() < deadline:
         if predicate():
             return
         time.sleep(0.01)
-    raise TimeoutError("Predicate not satisfied within timeout")
+    raise TimeoutError(
+        f"Predicate not satisfied within {scaled:.1f}s "
+        f"(base={timeout}s, factor={_TIMEOUT_FACTOR}x)"
+    )
 
 # =============================================================================
 # SSE Connection Helper — connects as an agent via real HTTP
@@ -95,8 +115,11 @@ class SSEConnection:
         self._thread.start()
 
     def wait_connected(self, timeout: float = 5.0) -> None:
-        if not self._connected.wait(timeout):
-            raise TimeoutError(f"SSE agent {self.agent_id} did not connect")
+        scaled = timeout * _TIMEOUT_FACTOR
+        if not self._connected.wait(scaled):
+            raise TimeoutError(
+                f"SSE agent {self.agent_id} did not connect within {scaled:.1f}s"
+            )
 
     def stop(self) -> None:
         self._stop.set()
