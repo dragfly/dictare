@@ -9,13 +9,11 @@ This is the heart of voxtype. Key components:
 
 from voxtype.core.bus import EventBus, bus
 from voxtype.core.engine import VoxtypeEngine
-from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
+from voxtype.core.events import EngineEvents
 
 __all__ = [
     "EventBus",
     "VoxtypeEngine",
     "EngineEvents",
-    "TranscriptionResult",
-    "InjectionResult",
     "bus",
 ]
