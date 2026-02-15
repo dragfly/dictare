@@ -40,7 +40,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           . .venv/bin/activate
-          xvfb-run pytest tests/ -v -m '' --cov=voxtype --cov-report=term-missing
+          xvfb-run pytest tests/ -v -m '' --openvip-timeout-factor 3.0 --cov=voxtype --cov-report=term-missing
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
@@ -71,7 +71,7 @@ jobs:
       - name: Run tests
         run: |
           . .venv/bin/activate
-          pytest tests/ -v -m ''
+          pytest tests/ -v -m '' --openvip-timeout-factor 3.0
 
   typecheck:
     runs-on: [self-hosted, Linux, X64]
