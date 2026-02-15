@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b67] - 2026-02-15
+
+### Fixed
+
+- **VAD race condition: flush/reset without lock** — `flush_vad()` and `reset_vad()` now hold `_vad_lock`, preventing concurrent modification of VAD state by controller thread (TTS start/end) while audio thread is processing chunks. This race condition could corrupt VAD internal state, causing the engine to appear "listening" while silently dropping all speech detection.
+- **VAD LSTM state not reset after device reconnect** — After audio device reconnection, the Silero VAD LSTM hidden state (`_h`, `_c`, `_context`) is now reset. Stale state from the old device's noise floor could prevent speech detection on the new device.
+
 ## [0.1.0b66] - 2026-02-15
 
 ### Added
