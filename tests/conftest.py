@@ -17,6 +17,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=None,
         help="URL of a running OpenVIP server to test against (e.g. http://localhost:8770)",
     )
+    parser.addoption(
+        "--openvip-timeout-factor",
+        default=1.0,
+        type=float,
+        help="Multiply all wait timeouts by this factor (default: 1.0). "
+        "Use higher values for slow implementations (e.g. 5.0).",
+    )
 
 
 def pytest_collection_modifyitems(
