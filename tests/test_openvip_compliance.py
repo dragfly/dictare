@@ -1,8 +1,8 @@
 """OpenVIP Protocol Compliance Test Suite.
 
-Dual-mode: runs in-process with mocks (default) or against a live server.
+Dual-mode: runs in-process (default) or against a live server.
 
-    # In-process (CI, fast, with mocks):
+    # In-process (CI, fast):
     pytest tests/test_openvip_compliance.py
 
     # Against a real OpenVIP server:
@@ -11,6 +11,9 @@ Dual-mode: runs in-process with mocks (default) or against a live server.
 Tests marked @pytest.mark.internal depend on mock internals and are
 automatically skipped when --openvip-url is provided.
 
+E2E tests (agent message flow) use real HTTP + SSE — no mock internals.
+They start a local server automatically, or use --openvip-url if provided.
+
 Reference: https://openvip.org/protocol/
 Schema: https://openvip.org/schema/v1.0.json
 """
@@ -18,8 +21,12 @@ Schema: https://openvip.org/schema/v1.0.json
 from __future__ import annotations
 
 import asyncio
+import json
+import threading
+import time
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -59,8 +66,73 @@ def _speech_request(**overrides) -> dict:
     msg.update(overrides)
     return msg
 
+def _wait_until(predicate, *, timeout: float = 2.0) -> None:
+    """Poll predicate until True or timeout."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.01)
+    raise TimeoutError("Predicate not satisfied within timeout")
+
 # =============================================================================
-# Fixtures — mocks for in-process mode, httpx.Client for external mode
+# SSE Connection Helper — connects as an agent via real HTTP
+# =============================================================================
+
+class SSEConnection:
+    """Connect as an SSE agent via real HTTP and collect received events.
+
+    Uses httpx streaming to maintain a long-lived SSE connection in a
+    background thread. Events are collected in self.events as parsed dicts.
+    """
+
+    def __init__(self, base_url: str, agent_id: str) -> None:
+        self.agent_id = agent_id
+        self.events: list[dict] = []
+        self._base_url = base_url
+        self._connected = threading.Event()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._http: Any = None
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def wait_connected(self, timeout: float = 5.0) -> None:
+        if not self._connected.wait(timeout):
+            raise TimeoutError(f"SSE agent {self.agent_id} did not connect")
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._http:
+            self._http.close()  # Interrupts blocking read
+        if self._thread:
+            self._thread.join(timeout=0.5)  # Daemon thread, don't wait long
+
+    def _run(self) -> None:
+        import httpx
+
+        self._http = httpx.Client(base_url=self._base_url)
+        try:
+            with self._http.stream(
+                "GET", f"/agents/{self.agent_id}/messages"
+            ) as r:
+                self._connected.set()
+                for line in r.iter_lines():
+                    if self._stop.is_set():
+                        break
+                    if line.startswith("data:"):
+                        data = line[5:].strip()
+                        if data:
+                            self.events.append(json.loads(data))
+        except Exception:
+            pass  # Connection closed or interrupted
+        finally:
+            self._connected.set()  # Don't block forever on error
+
+# =============================================================================
+# Fixtures — mocks for in-process mode, real HTTP for e2e
 # =============================================================================
 
 class ComplianceMockEngine:
@@ -157,6 +229,56 @@ def client(request, server):
         c.close()
     else:
         yield TestClient(server._app)
+
+# --- E2E fixtures: real HTTP server + SSE connections ---
+#
+# The server is module-scoped (one start/stop per module, fast).
+# SSE connections are function-scoped (clean state per test).
+
+@pytest.fixture(scope="module")
+def live_url(request):
+    """URL of a running OpenVIP server for e2e tests (module-scoped)."""
+    url = request.config.getoption("--openvip-url")
+    if url:
+        yield url
+    else:
+        engine = ComplianceMockEngine()
+        controller = ComplianceMockController()
+        srv = OpenVIPServer(engine, controller, host="127.0.0.1", port=0)
+        srv.start()
+        assert srv.wait_started(timeout=5.0), "Server did not start"
+        yield f"http://127.0.0.1:{srv.port}"
+        srv.stop()
+
+@pytest.fixture
+def e2e_client(live_url):
+    """HTTP client connected to a real server (httpx)."""
+    import httpx
+
+    with httpx.Client(base_url=live_url) as c:
+        yield c
+
+@pytest.fixture
+def sse_connect(live_url):
+    """Factory: connect an SSE agent, returns SSEConnection.
+
+    Usage:
+        conn = sse_connect("alice")
+        # alice is now connected — POST messages, read conn.events
+    """
+    connections: list[SSEConnection] = []
+
+    def _connect(agent_id: str) -> SSEConnection:
+        conn = SSEConnection(live_url, agent_id)
+        conn.start()
+        conn.wait_connected()
+        connections.append(conn)
+        return conn
+
+    yield _connect
+
+    for conn in connections:
+        conn.stop()
 
 # =============================================================================
 # 1. GET /status — Engine Status
@@ -360,41 +482,30 @@ class TestSpeech:
         assert r.status_code == 500
 
 # =============================================================================
-# 4. POST /agents/{agent_id}/messages — Send Message
+# 4. POST /agents/{agent_id}/messages — Send Message (E2E)
 # =============================================================================
 
 class TestPostAgentMessages:
     """OpenVIP: POST /agents/{agent_id}/messages."""
 
-    @pytest.mark.internal
     def test_post_to_connected_agent_returns_200(
-        self, server: OpenVIPServer, client,
+        self, e2e_client, sse_connect,
     ) -> None:
         """Posting to a connected agent returns 200 OK."""
-        queue: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["alice"] = queue
-
-        r = client.post(
-            "/agents/alice/messages", json=_transcription()
-        )
+        sse_connect("alice")
+        r = e2e_client.post("/agents/alice/messages", json=_transcription())
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
-    @pytest.mark.internal
-    def test_message_delivered_to_queue(
-        self, server: OpenVIPServer, client,
+    def test_message_delivered_via_sse(
+        self, e2e_client, sse_connect,
     ) -> None:
-        """Posted message appears in agent queue."""
-        queue: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["alice"] = queue
-
+        """Posted message is delivered to the agent's SSE stream."""
+        conn = sse_connect("alice")
         msg = _transcription(text="test delivery")
-        client.post("/agents/alice/messages", json=msg)
-
-        queued = queue.get_nowait()
-        assert queued["text"] == "test delivery"
+        e2e_client.post("/agents/alice/messages", json=msg)
+        _wait_until(lambda: len(conn.events) > 0)
+        assert conn.events[0]["text"] == "test delivery"
 
     def test_post_to_unconnected_agent_returns_404(self, client) -> None:
         """Posting to a non-existent agent returns 404."""
@@ -411,7 +522,7 @@ class TestPostAgentMessages:
         assert "not connected" in r.json()["detail"].lower()
 
 # =============================================================================
-# 5. GET /agents/{agent_id}/messages — SSE Agent Registration
+# 5. GET /agents/{agent_id}/messages — SSE Agent Registration (E2E)
 # =============================================================================
 
 class TestSSEAgentRegistration:
@@ -422,26 +533,20 @@ class TestSSEAgentRegistration:
         r = client.get("/agents/__keyboard__/messages")
         assert r.status_code == 403
 
-    @pytest.mark.internal
     def test_duplicate_agent_returns_409(
-        self, server: OpenVIPServer, client,
+        self, e2e_client, sse_connect,
     ) -> None:
         """Connecting with an already-connected agent ID returns 409."""
-        with server._agent_queues_lock:
-            server._agent_queues["alice"] = asyncio.Queue()
-
-        r = client.get("/agents/alice/messages")
+        sse_connect("alice")
+        r = e2e_client.get("/agents/alice/messages")
         assert r.status_code == 409
 
-    @pytest.mark.internal
     def test_409_detail_mentions_already_connected(
-        self, server: OpenVIPServer, client,
+        self, e2e_client, sse_connect,
     ) -> None:
         """409 error detail mentions agent already connected."""
-        with server._agent_queues_lock:
-            server._agent_queues["alice"] = asyncio.Queue()
-
-        r = client.get("/agents/alice/messages")
+        sse_connect("alice")
+        r = e2e_client.get("/agents/alice/messages")
         assert "already connected" in r.json()["detail"].lower()
 
 # =============================================================================
@@ -471,7 +576,7 @@ class TestStatusSchema:
         assert isinstance(data["platform"], dict)
 
 # =============================================================================
-# 7. Ack Response Schema
+# 7. Ack Response Schema (E2E for message ack)
 # =============================================================================
 
 class TestAckSchema:
@@ -489,21 +594,18 @@ class TestAckSchema:
         data = client.post("/speech", json=_speech_request()).json()
         assert data["status"] == "ok"
 
-    @pytest.mark.internal
     def test_message_ack_has_status_ok(
-        self, server: OpenVIPServer, client,
+        self, e2e_client, sse_connect,
     ) -> None:
         """Post message ack has status=ok."""
-        with server._agent_queues_lock:
-            server._agent_queues["alice"] = asyncio.Queue()
-
-        data = client.post(
+        sse_connect("alice")
+        data = e2e_client.post(
             "/agents/alice/messages", json=_transcription()
         ).json()
         assert data["status"] == "ok"
 
 # =============================================================================
-# 8. PUT Message (thread-safe delivery)
+# 8. PUT Message (thread-safe delivery) — Internal
 # =============================================================================
 
 @pytest.mark.internal
@@ -526,7 +628,7 @@ class TestPutMessage:
         assert result is False
 
 # =============================================================================
-# 9. Connected Agents
+# 9. Connected Agents — Internal
 # =============================================================================
 
 @pytest.mark.internal
@@ -543,7 +645,7 @@ class TestConnectedAgents:
         assert sorted(server.connected_agents) == ["alice", "bob"]
 
 # =============================================================================
-# 10. Server Lifecycle
+# 10. Server Lifecycle — Internal
 # =============================================================================
 
 @pytest.mark.slow
@@ -570,18 +672,14 @@ class TestServerLifecycle:
         server.stop()  # Should not raise
 
 # =============================================================================
-# 11. Message Schema Validation (from OpenVIP protocol spec)
+# 11. Message Schema Validation — E2E
 # =============================================================================
 #
 # These tests validate message structures against the OpenVIP JSON Schema.
 # Test cases sourced from:
 #   protocol/tests/schema/messages.json
 #
-# Note: VoxType's HTTP server currently accepts any JSON body on POST
-# /agents/{id}/messages (no schema validation at transport level).
-# These tests validate the MESSAGE FORMAT contract, not HTTP-level rejection.
-# Schema validation is the responsibility of the SDK client (openvip.Client)
-# and the engine pipeline, not the HTTP transport layer.
+# E2E: messages are posted via HTTP and verified via SSE delivery.
 
 VALID_MESSAGES = [
     pytest.param(
@@ -723,33 +821,31 @@ VALID_MESSAGES = [
     ),
 ]
 
-@pytest.mark.internal
 class TestValidMessages:
-    """OpenVIP: Valid message schemas are accepted by transport."""
+    """OpenVIP: Valid message schemas are accepted and delivered via SSE."""
 
     @pytest.mark.parametrize("message", VALID_MESSAGES)
     def test_valid_message_accepted(
-        self, server: OpenVIPServer, client, message: dict,
+        self, e2e_client, sse_connect, message: dict,
     ) -> None:
         """Valid OpenVIP messages are delivered to connected agents."""
-        queue: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["test"] = queue
+        conn = sse_connect("test")
 
-        r = client.post("/agents/test/messages", json=message)
+        r = e2e_client.post("/agents/test/messages", json=message)
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
-        # Message should be in queue, preserving all fields
-        queued = queue.get_nowait()
-        assert queued["text"] == message["text"]
+        # Message should arrive via SSE, preserving all fields
+        _wait_until(lambda: len(conn.events) > 0)
+        received = conn.events[0]
+        assert received["text"] == message["text"]
         if "x_input" in message:
-            assert queued["x_input"] == message["x_input"]
+            assert received["x_input"] == message["x_input"]
         if "x_agent_switch" in message:
-            assert queued["x_agent_switch"] == message["x_agent_switch"]
+            assert received["x_agent_switch"] == message["x_agent_switch"]
         if "trace_id" in message:
-            assert queued["trace_id"] == message["trace_id"]
-            assert queued["parent_id"] == message["parent_id"]
+            assert received["trace_id"] == message["trace_id"]
+            assert received["parent_id"] == message["parent_id"]
 
 # Message schema validation test data — these should be REJECTED by schema
 # validators (SDK, engine) but the HTTP transport accepts any JSON.
@@ -843,7 +939,7 @@ class TestInvalidMessageSchemas:
         # OpenVIP protocol repo, these will drive jsonschema validation.
 
 # =============================================================================
-# 12. SSE Event Format
+# 12. SSE Event Format — Internal
 # =============================================================================
 
 @pytest.mark.slow
@@ -877,7 +973,7 @@ class TestSSEStatusStream:
         pass  # Protocol documentation test
 
 # =============================================================================
-# 13. Content Negotiation
+# 13. Content Negotiation (E2E for message endpoint)
 # =============================================================================
 
 class TestContentType:
@@ -895,13 +991,10 @@ class TestContentType:
         r = client.post("/speech", json=_speech_request())
         assert "application/json" in r.headers["content-type"]
 
-    @pytest.mark.internal
-    def test_post_message_json(
-        self, server: OpenVIPServer, client,
-    ) -> None:
-        with server._agent_queues_lock:
-            server._agent_queues["a"] = asyncio.Queue()
-        r = client.post("/agents/a/messages", json=_transcription())
+    def test_post_message_json(self, e2e_client, sse_connect) -> None:
+        """POST message response is application/json."""
+        sse_connect("a")
+        r = e2e_client.post("/agents/a/messages", json=_transcription())
         assert "application/json" in r.headers["content-type"]
 
     def test_status_stream_event_stream(self) -> None:
@@ -913,7 +1006,7 @@ class TestContentType:
         pass  # Requires live server
 
 # =============================================================================
-# 14. Edge Cases
+# 14. Edge Cases (E2E for agent-related tests)
 # =============================================================================
 
 class TestEdgeCases:
@@ -944,65 +1037,52 @@ class TestEdgeCases:
         )
         assert r.status_code == 404  # Not connected, not server error
 
-    @pytest.mark.internal
     def test_multiple_agents_independent(
-        self, server: OpenVIPServer, client,
+        self, e2e_client, sse_connect,
     ) -> None:
         """Messages to different agents are independent."""
-        q1: asyncio.Queue = asyncio.Queue()
-        q2: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["alice"] = q1
-            server._agent_queues["bob"] = q2
+        alice = sse_connect("alice")
+        bob = sse_connect("bob")
 
-        client.post(
+        e2e_client.post(
             "/agents/alice/messages",
             json=_transcription(text="for alice"),
         )
-        client.post(
+        e2e_client.post(
             "/agents/bob/messages",
             json=_transcription(text="for bob"),
         )
 
-        assert q1.get_nowait()["text"] == "for alice"
-        assert q2.get_nowait()["text"] == "for bob"
-        assert q1.empty()
-        assert q2.empty()
+        _wait_until(lambda: len(alice.events) > 0 and len(bob.events) > 0)
+        assert alice.events[0]["text"] == "for alice"
+        assert bob.events[0]["text"] == "for bob"
+        assert len(alice.events) == 1
+        assert len(bob.events) == 1
 
-    @pytest.mark.internal
-    def test_large_text_accepted(
-        self, server: OpenVIPServer, client,
-    ) -> None:
+    def test_large_text_accepted(self, e2e_client, sse_connect) -> None:
         """Large text messages are accepted."""
-        with server._agent_queues_lock:
-            server._agent_queues["test"] = asyncio.Queue()
-
+        sse_connect("test")
         big_text = "word " * 10000  # ~50KB
-        r = client.post(
+        r = e2e_client.post(
             "/agents/test/messages",
             json=_transcription(text=big_text),
         )
         assert r.status_code == 200
 
-    @pytest.mark.internal
-    def test_unicode_text(
-        self, server: OpenVIPServer, client,
-    ) -> None:
+    def test_unicode_text(self, e2e_client, sse_connect) -> None:
         """Unicode text (CJK, emoji, RTL) is preserved."""
-        with server._agent_queues_lock:
-            server._agent_queues["test"] = asyncio.Queue()
-
+        conn = sse_connect("test")
         texts = [
             "Accendi la luce in cucina",
             "台所の電気をつけて",
             "مرحبا بالعالم",
         ]
         for text in texts:
-            client.post(
+            e2e_client.post(
                 "/agents/test/messages",
                 json=_transcription(text=text),
             )
 
-        queue = server._agent_queues["test"]
-        for text in texts:
-            assert queue.get_nowait()["text"] == text
+        _wait_until(lambda: len(conn.events) >= 3)
+        for i, text in enumerate(texts):
+            assert conn.events[i]["text"] == text
