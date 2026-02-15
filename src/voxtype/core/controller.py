@@ -278,7 +278,7 @@ class StateController:
             self._pending_transcription = event
             # Still inject the text (goes to correct agent via captured agent)
             if self._engine and event.text:
-                self._engine._inject_text(event.text, agent=event.agent)
+                self._engine._inject_text(event.text, agent=event.agent, language=event.language)
             return
 
         # Normal flow: transition to LISTENING and inject
@@ -288,7 +288,7 @@ class StateController:
             self._on_state_change(old_state, AppState.LISTENING, "transcription_complete")
 
         if self._engine and event.text:
-            self._engine._inject_text(event.text, agent=event.agent)
+            self._engine._inject_text(event.text, agent=event.agent, language=event.language)
 
         # Process queued audio
         if self._engine:

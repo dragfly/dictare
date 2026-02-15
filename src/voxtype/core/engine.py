@@ -603,11 +603,12 @@ class VoxtypeEngine:
             try:
                 if self._realtime_stt is None:
                     continue
-                text = self._realtime_stt.transcribe(
+                result = self._realtime_stt.transcribe(
                     audio_data,
                     language=self.config.stt.language,
                     task="translate" if self.config.stt.translate else "transcribe",
                 )
+                text = result.text
                 if text:
                     with self._partial_text_lock:
                         if text != self._partial_text:
@@ -661,6 +662,7 @@ class VoxtypeEngine:
 
         def do_transcribe() -> None:
             transcribed_text = ""
+            detected_language: str | None = None
             try:
                 if not self._stt:
                     return
@@ -672,7 +674,7 @@ class VoxtypeEngine:
                     logger.warning("STT lock timeout — previous transcription may be stuck")
                     return
                 try:
-                    text = self._stt.transcribe(
+                    stt_result = self._stt.transcribe(
                         audio_data,
                         language=self.config.stt.language,
                         hotwords=self._get_hotwords(),
@@ -683,6 +685,9 @@ class VoxtypeEngine:
                 finally:
                     self._stt_lock.release()
                 transcribe_time = time.time() - transcribe_start
+
+                text = stt_result.text
+                detected_language = stt_result.language
 
                 if text:
                     transcribed_text = text
@@ -729,6 +734,7 @@ class VoxtypeEngine:
                     TranscriptionCompleteEvent(
                         text=transcribed_text,
                         agent=captured_agent,
+                        language=detected_language if transcribed_text else None,
                         source="stt",
                     )
                 )
@@ -770,7 +776,7 @@ class VoxtypeEngine:
     # Text Injection
     # -------------------------------------------------------------------------
 
-    def _inject_text(self, text: str, *, agent: Agent | None = None) -> None:
+    def _inject_text(self, text: str, *, agent: Agent | None = None, language: str | None = None) -> None:
         """Inject text into the target agent.
 
         Uses OpenVIP message format - each agent handles its own transport:
@@ -795,9 +801,12 @@ class VoxtypeEngine:
         target_agent = agent if agent is not None else self._get_current_agent()
 
         # Get language for pipeline filters
-        # TODO: Use detected language from Whisper once we propagate it
-        stt_language = self.config.stt.language
-        message_language = stt_language if stt_language != "auto" else "it"
+        if language:
+            message_language = language
+        elif self.config.stt.language != "auto":
+            message_language = self.config.stt.language
+        else:
+            message_language = None
 
         # Build OpenVIP transcription message
         message = create_message(text, language=message_language)
