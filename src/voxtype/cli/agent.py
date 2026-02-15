@@ -24,9 +24,9 @@ def _try_start_service() -> None:
 
     try:
         if sys.platform == "darwin":
-            from voxtype.service.launchd import is_installed, start
+            from voxtype.daemon.launchd import is_installed, start
         elif sys.platform == "linux":
-            from voxtype.service.systemd import is_installed, start
+            from voxtype.daemon.systemd import is_installed, start
         else:
             return
 

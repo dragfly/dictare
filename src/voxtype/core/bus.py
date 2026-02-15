@@ -16,7 +16,7 @@ If requirements grow significantly, we should evaluate migrating to Blinker.
 
 Usage
 -----
-    from voxtype.events import bus
+    from voxtype.core import bus
 
     # Subscribe to events
     bus.subscribe("agents.changed", lambda agent_ids: print(agent_ids))

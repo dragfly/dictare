@@ -7,12 +7,15 @@ This is the heart of voxtype. Key components:
 - EngineEvents: callback protocol for UI/audio feedback (used by AppController)
 """
 
+from voxtype.core.bus import EventBus, bus
 from voxtype.core.engine import VoxtypeEngine
 from voxtype.core.events import EngineEvents, InjectionResult, TranscriptionResult
 
 __all__ = [
+    "EventBus",
     "VoxtypeEngine",
     "EngineEvents",
     "TranscriptionResult",
     "InjectionResult",
+    "bus",
 ]
