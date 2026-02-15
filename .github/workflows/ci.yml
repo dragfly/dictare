@@ -9,8 +9,6 @@ on:
 jobs:
   test-linux:
     runs-on: [self-hosted, Linux, X64]
-    env:
-      VIRTUAL_ENV: ~/.venvs/voxtype
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +27,11 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          test -d $VIRTUAL_ENV || uv venv --python 3.11 $VIRTUAL_ENV
+          VENV=$HOME/.venvs/voxtype-ci
+          test -d $VENV || uv venv --python 3.11 $VENV
+          echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
+          echo "$VENV/bin" >> $GITHUB_PATH
+          export VIRTUAL_ENV=$VENV PATH="$VENV/bin:$PATH"
           uv pip install -e ./openvip-sdks/python
           uv pip install --no-sources -e ".[dev]"
 
@@ -41,8 +43,6 @@ jobs:
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
-    env:
-      VIRTUAL_ENV: ~/.venvs/voxtype
     steps:
       - uses: actions/checkout@v4
 
@@ -57,7 +57,11 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          test -d $VIRTUAL_ENV || uv venv --python 3.11 $VIRTUAL_ENV
+          VENV=$HOME/.venvs/voxtype-ci
+          test -d $VENV || uv venv --python 3.11 $VENV
+          echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
+          echo "$VENV/bin" >> $GITHUB_PATH
+          export VIRTUAL_ENV=$VENV PATH="$VENV/bin:$PATH"
           uv pip install -e ./openvip-sdks/python
           uv pip install --no-sources -e ".[dev]"
 
@@ -69,8 +73,6 @@ jobs:
 
   typecheck:
     runs-on: [self-hosted, Linux, X64]
-    env:
-      VIRTUAL_ENV: ~/.venvs/voxtype
     steps:
       - uses: actions/checkout@v4
 
@@ -85,7 +87,11 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          test -d $VIRTUAL_ENV || uv venv --python 3.11 $VIRTUAL_ENV
+          VENV=$HOME/.venvs/voxtype-ci
+          test -d $VENV || uv venv --python 3.11 $VENV
+          echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
+          echo "$VENV/bin" >> $GITHUB_PATH
+          export VIRTUAL_ENV=$VENV PATH="$VENV/bin:$PATH"
           uv pip install -e ./openvip-sdks/python
           uv pip install --no-sources -e ".[dev]"
 
