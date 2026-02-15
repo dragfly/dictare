@@ -330,9 +330,9 @@ class TrayApp:
 
                 # Fall back to native service backend
                 if sys.platform == "darwin":
-                    from voxtype.service import launchd as backend
+                    from voxtype.daemon import launchd as backend
                 elif sys.platform == "linux":
-                    from voxtype.service import systemd as backend
+                    from voxtype.daemon import systemd as backend
                 else:
                     return
                 backend.stop()

@@ -283,7 +283,7 @@ def _run_panel_mode(
     import signal
     import threading
 
-    from voxtype.ui.panel import StatusPanel
+    from voxtype.cli.panel import StatusPanel
 
     # Run StatusPanel in main thread (polls /status, shows UI)
     panel = StatusPanel(console, base_url)

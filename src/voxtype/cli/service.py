@@ -14,11 +14,11 @@ app = typer.Typer(help="Manage voxtype as a system service.", no_args_is_help=Tr
 def _get_backend():
     """Return the platform-specific service backend module."""
     if sys.platform == "darwin":
-        from voxtype.service import launchd
+        from voxtype.daemon import launchd
 
         return launchd
     elif sys.platform == "linux":
-        from voxtype.service import systemd
+        from voxtype.daemon import systemd
 
         return systemd
     else:
@@ -137,7 +137,7 @@ def service_status() -> None:
 def service_logs() -> None:
     """Show recent service logs."""
     if sys.platform == "darwin":
-        from voxtype.service.launchd import LOG_DIR
+        from voxtype.daemon.launchd import LOG_DIR
 
         for name in ("stderr.log", "stdout.log"):
             log_file = LOG_DIR / name

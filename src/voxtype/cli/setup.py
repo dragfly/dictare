@@ -63,9 +63,9 @@ def register(app: typer.Typer) -> None:
         console.print("[dim]Installing service...[/]")
         try:
             if sys.platform == "darwin":
-                from voxtype.service import launchd as backend
+                from voxtype.daemon import launchd as backend
             elif sys.platform == "linux":
-                from voxtype.service import systemd as backend
+                from voxtype.daemon import systemd as backend
             else:
                 console.print(f"[yellow]Skipping service install (unsupported platform: {sys.platform})[/]")
                 return

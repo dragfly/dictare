@@ -3,7 +3,7 @@
 
 import pytest
 
-from voxtype.events import bus
+from voxtype.core.bus import bus
 from voxtype.pipeline import (
     AgentFilter,
     InputFilter,

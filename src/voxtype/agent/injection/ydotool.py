@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import time
 
-from voxtype.injection.base import TextInjector, sanitize_text_for_injection
+from voxtype.agent.injection.base import TextInjector, sanitize_text_for_injection
 
 # Key codes for ydotool (Linux input event codes)
 KEY_CODES = {

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from voxtype.ui.panel import StatusPanel
+from voxtype.cli.panel import StatusPanel
 
 
 def _make_status(*, state: str = "idle", device: str = "cpu", model: str = "large-v3-turbo") -> dict:

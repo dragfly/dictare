@@ -91,8 +91,8 @@ class TestTryStartService:
         monkeypatch.setattr("sys.platform", "darwin")
         mock_start = MagicMock()
         with (
-            patch("voxtype.service.launchd.is_installed", return_value=False),
-            patch("voxtype.service.launchd.start", mock_start),
+            patch("voxtype.daemon.launchd.is_installed", return_value=False),
+            patch("voxtype.daemon.launchd.start", mock_start),
         ):
             _try_start_service()  # fire-and-forget, no return value
             mock_start.assert_not_called()
@@ -101,8 +101,8 @@ class TestTryStartService:
         monkeypatch.setattr("sys.platform", "darwin")
         mock_start = MagicMock()
         with (
-            patch("voxtype.service.launchd.is_installed", return_value=True),
-            patch("voxtype.service.launchd.start", mock_start),
+            patch("voxtype.daemon.launchd.is_installed", return_value=True),
+            patch("voxtype.daemon.launchd.start", mock_start),
         ):
             _try_start_service()
             mock_start.assert_called_once()
@@ -188,7 +188,7 @@ class TestAgentNeverBlocksOnEngine:
         """_try_start_service is fire-and-forget — exceptions are swallowed."""
         monkeypatch.setattr("sys.platform", "darwin")
         with (
-            patch("voxtype.service.launchd.is_installed", side_effect=RuntimeError("boom")),
+            patch("voxtype.daemon.launchd.is_installed", side_effect=RuntimeError("boom")),
         ):
             _try_start_service()  # must not raise
 
@@ -196,8 +196,8 @@ class TestAgentNeverBlocksOnEngine:
         """_try_start_service must not return a truthy/falsy gate value."""
         monkeypatch.setattr("sys.platform", "darwin")
         with (
-            patch("voxtype.service.launchd.is_installed", return_value=False),
-            patch("voxtype.service.launchd.start"),
+            patch("voxtype.daemon.launchd.is_installed", return_value=False),
+            patch("voxtype.daemon.launchd.start"),
         ):
             result = _try_start_service()
             assert result is None, (

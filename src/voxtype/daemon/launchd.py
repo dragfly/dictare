@@ -23,7 +23,7 @@ def generate_plist(python_path: str) -> str:
     so macOS associates permissions with the bundle (shows in Accessibility).
     Otherwise falls back to the raw python path.
     """
-    from voxtype.service.app_bundle import get_app_path, get_executable_path
+    from voxtype.daemon.app_bundle import get_app_path, get_executable_path
 
     app_path = get_app_path()
     if app_path.exists():
@@ -50,7 +50,7 @@ def install() -> None:
     """
     import sys
 
-    from voxtype.service.app_bundle import create_app_bundle
+    from voxtype.daemon.app_bundle import create_app_bundle
 
     create_app_bundle(sys.executable)
     plist_path = get_plist_path()
@@ -65,7 +65,7 @@ def install() -> None:
 
 def uninstall() -> None:
     """Unload and remove all LaunchAgents, then remove .app bundle."""
-    from voxtype.service.app_bundle import remove_app_bundle
+    from voxtype.daemon.app_bundle import remove_app_bundle
 
     # Uninstall tray first
     uninstall_tray()

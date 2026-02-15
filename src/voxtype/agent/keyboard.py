@@ -51,7 +51,7 @@ class KeyboardAgent(BaseAgent):
     def _create_injector(self) -> Any:
         """Create keyboard injector for current platform."""
         if sys.platform == "darwin":
-            from voxtype.injection.quartz import QuartzInjector
+            from voxtype.agent.injection.quartz import QuartzInjector
 
             injector = QuartzInjector()
             if not injector.is_available():
@@ -62,7 +62,7 @@ class KeyboardAgent(BaseAgent):
                 )
             return injector
         else:
-            from voxtype.injection.ydotool import YdotoolInjector
+            from voxtype.agent.injection.ydotool import YdotoolInjector
 
             injector = YdotoolInjector()
             if not injector.is_available():

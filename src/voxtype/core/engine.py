@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from voxtype import __version__
 from voxtype.agent.base import Agent
 from voxtype.core.audio_manager import AudioManager
+from voxtype.core.bus import bus
 from voxtype.core.controller import StateController
 from voxtype.core.events import (
     EngineEvents,
@@ -32,7 +33,6 @@ from voxtype.core.fsm import (
     TranscriptionCompleted,
 )
 from voxtype.core.openvip_messages import create_message
-from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
 from voxtype.pipeline import Pipeline, PipelineLoader

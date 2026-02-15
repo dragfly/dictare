@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from voxtype.service.app_bundle import (
+from voxtype.daemon.app_bundle import (
     APP_NAME,
     BUNDLE_ID,
     create_app_bundle,
@@ -18,14 +18,14 @@ from voxtype.service.app_bundle import (
     get_executable_path,
     remove_app_bundle,
 )
-from voxtype.service.launchd import (
+from voxtype.daemon.launchd import (
     LABEL,
     generate_plist,
     get_plist_path,
     is_installed,
 )
-from voxtype.service.systemd import generate_unit, get_unit_path
-from voxtype.service.systemd import is_installed as systemd_is_installed
+from voxtype.daemon.systemd import generate_unit, get_unit_path
+from voxtype.daemon.systemd import is_installed as systemd_is_installed
 
 # ---------------------------------------------------------------------------
 # .app bundle
@@ -35,14 +35,14 @@ from voxtype.service.systemd import is_installed as systemd_is_installed
 @pytest.mark.slow
 class TestAppBundleCreate:
     def test_creates_directory_structure(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("voxtype.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
         app_path = create_app_bundle("/usr/bin/python3")
         assert (app_path / "Contents" / "Info.plist").exists()
         assert (app_path / "Contents" / "MacOS" / APP_NAME).exists()
         assert (app_path / "Contents" / "Resources").exists()
 
     def test_info_plist_contents(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("voxtype.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
         app_path = create_app_bundle("/usr/bin/python3")
         with open(app_path / "Contents" / "Info.plist", "rb") as f:
             plist = plistlib.load(f)
@@ -52,7 +52,7 @@ class TestAppBundleCreate:
         assert plist["CFBundleIconFile"] == APP_NAME
 
     def test_launcher_is_executable(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("voxtype.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
         app_path = create_app_bundle("/opt/brew/bin/python3.11")
         launcher = app_path / "Contents" / "MacOS" / APP_NAME
         assert launcher.stat().st_mode & stat.S_IEXEC
@@ -61,7 +61,7 @@ class TestAppBundleCreate:
         assert python_path_file.read_text().strip() == "/opt/brew/bin/python3.11"
 
     def test_replaces_existing_bundle(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("voxtype.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
         create_app_bundle("/usr/bin/python3")
         create_app_bundle("/other/python")
         python_path_file = tmp_path / "Test.app" / "Contents" / "MacOS" / "python_path"
@@ -71,14 +71,14 @@ class TestAppBundleCreate:
 @pytest.mark.slow
 class TestAppBundleRemove:
     def test_removes_bundle(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("voxtype.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
         create_app_bundle("/usr/bin/python3")
         assert (tmp_path / "Test.app").exists()
         remove_app_bundle()
         assert not (tmp_path / "Test.app").exists()
 
     def test_noop_if_not_exists(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("voxtype.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
         remove_app_bundle()  # Should not raise
 
 
@@ -108,7 +108,7 @@ class TestLaunchdGeneratePlist:
     def test_fallback_when_no_app_bundle(self, monkeypatch):
         """Without .app bundle, plist uses raw python path."""
         monkeypatch.setattr(
-            "voxtype.service.app_bundle.get_app_path",
+            "voxtype.daemon.app_bundle.get_app_path",
             lambda: Path("/tmp/nonexistent/Voxtype.app"),
         )
         xml = generate_plist("/opt/venv/bin/python")
@@ -119,9 +119,9 @@ class TestLaunchdGeneratePlist:
         """With .app bundle, plist points to the bundle executable."""
         app_path = tmp_path / "Voxtype.app"
         app_path.mkdir()
-        monkeypatch.setattr("voxtype.service.app_bundle.get_app_path", lambda: app_path)
+        monkeypatch.setattr("voxtype.daemon.app_bundle.get_app_path", lambda: app_path)
         monkeypatch.setattr(
-            "voxtype.service.app_bundle.get_executable_path",
+            "voxtype.daemon.app_bundle.get_executable_path",
             lambda: str(app_path / "Contents" / "MacOS" / "Voxtype"),
         )
         xml = generate_plist("/usr/bin/python3")
@@ -156,7 +156,7 @@ class TestLaunchdPaths:
 class TestLaunchdIsInstalled:
     def test_not_installed(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "voxtype.service.launchd.get_plist_path",
+            "voxtype.daemon.launchd.get_plist_path",
             lambda: tmp_path / "nonexistent.plist",
         )
         assert is_installed() is False
@@ -165,7 +165,7 @@ class TestLaunchdIsInstalled:
         plist = tmp_path / "test.plist"
         plist.write_text("<plist/>")
         monkeypatch.setattr(
-            "voxtype.service.launchd.get_plist_path",
+            "voxtype.daemon.launchd.get_plist_path",
             lambda: plist,
         )
         assert is_installed() is True
@@ -211,7 +211,7 @@ class TestSystemdPaths:
 class TestSystemdIsInstalled:
     def test_not_installed(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "voxtype.service.systemd.get_unit_path",
+            "voxtype.daemon.systemd.get_unit_path",
             lambda: tmp_path / "nonexistent.service",
         )
         assert systemd_is_installed() is False
@@ -220,7 +220,7 @@ class TestSystemdIsInstalled:
         unit = tmp_path / "test.service"
         unit.write_text("[Unit]\n")
         monkeypatch.setattr(
-            "voxtype.service.systemd.get_unit_path",
+            "voxtype.daemon.systemd.get_unit_path",
             lambda: unit,
         )
         assert systemd_is_installed() is True

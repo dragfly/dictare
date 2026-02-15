@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from voxtype.events import EventBus, bus
+from voxtype.core.bus import EventBus, bus
 
 
 @pytest.fixture(autouse=True)
@@ -201,7 +201,7 @@ class TestEventBusInstance:
 
     def test_global_bus_is_singleton(self) -> None:
         """Importing bus always gets the same instance."""
-        from voxtype.events import bus as bus1
-        from voxtype.events.bus import bus as bus2
+        from voxtype.core import bus as bus1
+        from voxtype.core.bus import bus as bus2
 
         assert bus1 is bus2

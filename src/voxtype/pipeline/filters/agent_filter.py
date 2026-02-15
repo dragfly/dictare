@@ -22,11 +22,11 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from voxtype.events import bus
-from voxtype.libs.jellyfish import levenshtein_distance, metaphone
+from voxtype.core.bus import bus
 from voxtype.pipeline.base import PipelineResult, fork_message
 from voxtype.pipeline.filters._text import normalize as _normalize
 from voxtype.pipeline.filters._text import tokenize as _tokenize
+from voxtype.utils.jellyfish import levenshtein_distance, metaphone
 
 logger = logging.getLogger(__name__)
 
