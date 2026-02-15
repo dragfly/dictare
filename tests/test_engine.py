@@ -507,123 +507,82 @@ class TestAgentSwitch:
         engine = VoxtypeEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor"])
 
-        mock_server = MagicMock()
-        engine._http_server = mock_server
+        status_calls: list[int] = []
+        engine.set_status_change_callback(lambda: status_calls.append(1))
         engine._controller.start()
 
         try:
             engine._switch_to_agent_by_name("cursor")
             _wait_for_controller(engine)
             assert engine.current_agent == "cursor"
-            mock_server.notify_status_change.assert_called()
+            assert len(status_calls) > 0
         finally:
             engine._controller.stop()
 
-    def test_handle_control_set_agent_colon_format(self) -> None:
-        """_handle_control delegates output.set_agent:NAME to app handler."""
-        config = MockConfig()
-        events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
-        register_test_agents(engine, ["claude", "cursor"])
-        engine._controller.start()
-
-        # Register an app handler that routes to engine methods
-        def app_handler(body: dict) -> dict:
-            cmd = body.get("command", "")
-            if cmd.startswith("output.set_agent:"):
-                name = cmd.split(":", 1)[1]
-                engine._switch_to_agent_by_name(name)
-                return {"status": "ok"}
-            return {"status": "error"}
-
-        engine.set_app_command_handler(app_handler)
-
-        try:
-            result = engine._handle_control({"command": "output.set_agent:cursor"})
-            _wait_for_controller(engine)
-            assert result["status"] == "ok"
-            assert engine.current_agent == "cursor"
-        finally:
-            engine._controller.stop()
-
-
-class TestControlCommandRouting:
-    """Test protocol vs. application command routing."""
-
-    def test_protocol_commands_work_without_app_handler(self) -> None:
-        """Protocol commands (stt.*, ping, engine.shutdown) work without app handler."""
+    def test_handle_protocol_command(self) -> None:
+        """handle_protocol_command handles stt.*, ping, engine.shutdown."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
 
-        # No app handler registered
-        assert engine._app_command_handler is None
-
-        result = engine._handle_control({"command": "ping"})
+        result = engine.handle_protocol_command({"command": "ping"})
         assert result["status"] == "ok"
         assert result["pong"] is True
 
-        result = engine._handle_control({"command": "stt.start"})
+        result = engine.handle_protocol_command({"command": "stt.start"})
         assert result["status"] == "ok"
 
-        result = engine._handle_control({"command": "engine.shutdown"})
+        result = engine.handle_protocol_command({"command": "engine.shutdown"})
         assert result["status"] == "ok"
         assert engine._running is False
 
-    def test_app_commands_error_without_handler(self) -> None:
-        """Application commands return error when no app handler is registered."""
+    def test_handle_protocol_command_unknown(self) -> None:
+        """handle_protocol_command returns error for unknown commands."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
 
-        result = engine._handle_control({"command": "output.set_agent:cursor"})
+        result = engine.handle_protocol_command({"command": "output.set_mode:agents"})
         assert result["status"] == "error"
-        assert "Unknown command" in result["error"]
+        assert "Unknown protocol command" in result["error"]
 
-        result = engine._handle_control({"command": "output.set_mode:keyboard"})
-        assert result["status"] == "error"
 
-    def test_app_commands_delegated_to_handler(self) -> None:
-        """Application commands are delegated to registered handler."""
+class TestStatusChangeCallback:
+    """Test status change callback (replaces _notify_http_status)."""
+
+    def test_callback_fires_on_register_agent(self) -> None:
+        """Callback is called when an agent is registered."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
 
-        received: list[dict] = []
+        calls: list[int] = []
+        engine.set_status_change_callback(lambda: calls.append(1))
 
-        def handler(body: dict) -> dict:
-            received.append(body)
-            return {"status": "ok", "handled": True}
+        agent = MockAgent("test-agent")
+        engine.register_agent(agent)
+        assert len(calls) == 1
 
-        engine.set_app_command_handler(handler)
-
-        result = engine._handle_control({"command": "output.set_agent:cursor"})
-        assert result["status"] == "ok"
-        assert result["handled"] is True
-        assert received[-1]["command"] == "output.set_agent:cursor"
-
-        result = engine._handle_control({"command": "output.set_mode:agents"})
-        assert result["handled"] is True
-        assert len(received) == 2
-
-    def test_protocol_commands_not_delegated(self) -> None:
-        """Protocol commands are never sent to the app handler."""
+    def test_callback_fires_on_unregister_agent(self) -> None:
+        """Callback is called when an agent is unregistered."""
         config = MockConfig()
         engine = VoxtypeEngine(config=config)
 
-        received: list[dict] = []
+        agent = MockAgent("test-agent")
+        engine.register_agent(agent)
 
-        def handler(body: dict) -> dict:
-            received.append(body)
-            return {"status": "ok"}
+        calls: list[int] = []
+        engine.set_status_change_callback(lambda: calls.append(1))
 
-        engine.set_app_command_handler(handler)
+        engine.unregister_agent("test-agent")
+        assert len(calls) >= 1
 
-        # These should NOT reach the handler
-        engine._handle_control({"command": "stt.start"})
-        engine._handle_control({"command": "stt.stop"})
-        engine._handle_control({"command": "stt.toggle"})
-        engine._handle_control({"command": "ping"})
-        engine._handle_control({"command": "engine.shutdown"})
+    def test_no_error_without_callback(self) -> None:
+        """Engine works fine without a status callback registered."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
 
-        assert len(received) == 0
+        # No callback registered — should not raise
+        agent = MockAgent("test-agent")
+        engine.register_agent(agent)
+        engine.unregister_agent("test-agent")
 
 
 class TestHotwords:
@@ -744,7 +703,7 @@ class TestRegisterAgent:
         assert engine.current_agent == "varie"
         assert engine.visible_current_agent == "varie"
         # Status shows current agent, not null
-        status = engine._get_http_status()
+        status = engine.get_status()
         assert status["platform"]["output"]["current_agent"] == "varie"
 
     def test_messages_routed_to_sse_agent_not_keyboard(self) -> None:
@@ -1179,7 +1138,7 @@ class TestMessageSendingLogic:
 
 
 class TestTTSIntegration:
-    """Tests for TTS engine integration in speak_text / _handle_tts_request."""
+    """Tests for TTS engine integration in speak_text / handle_speech."""
 
     def _make_engine(self, tts_available: bool = True) -> tuple[VoxtypeEngine, MagicMock]:
         config = MockConfig()
@@ -1221,10 +1180,10 @@ class TestTTSIntegration:
         mock_play_audio.assert_not_called()
 
     def test_handle_tts_request_uses_tts_engine(self) -> None:
-        """_handle_tts_request uses pre-loaded TTS engine and returns duration."""
+        """handle_speech uses pre-loaded TTS engine and returns duration."""
         engine, mock_tts = self._make_engine()
 
-        result = engine._handle_tts_request({"text": "test"})
+        result = engine.handle_speech({"text": "test"})
 
         assert result["status"] == "ok"
         assert "duration_ms" in result
@@ -1234,12 +1193,12 @@ class TestTTSIntegration:
     def test_handle_tts_request_override_config(
         self, mock_get_tts: MagicMock
     ) -> None:
-        """_handle_tts_request applies engine/language/voice/speed overrides."""
+        """handle_speech applies engine/language/voice/speed overrides."""
         engine, _ = self._make_engine()
         mock_override_tts = MagicMock()
         mock_get_tts.return_value = mock_override_tts
 
-        engine._handle_tts_request({
+        engine.handle_speech({
             "text": "ciao",
             "engine": "piper",
             "language": "it",
@@ -1255,20 +1214,20 @@ class TestTTSIntegration:
         mock_override_tts.speak.assert_called_once_with("ciao")
 
     def test_handle_tts_request_empty_text(self) -> None:
-        """_handle_tts_request returns error for empty text."""
+        """handle_speech returns error for empty text."""
         engine, _ = self._make_engine()
 
-        result = engine._handle_tts_request({"text": ""})
+        result = engine.handle_speech({"text": ""})
         assert result["status"] == "error"
 
-        result2 = engine._handle_tts_request({})
+        result2 = engine.handle_speech({})
         assert result2["status"] == "error"
 
     def test_handle_tts_request_unavailable_returns_error(self) -> None:
-        """_handle_tts_request returns error when TTS engine not loaded."""
+        """handle_speech returns error when TTS engine not loaded."""
         engine, _ = self._make_engine(tts_available=False)
 
-        result = engine._handle_tts_request({"text": "test"})
+        result = engine.handle_speech({"text": "test"})
 
         assert result["status"] == "error"
         assert "not available" in result["error"]

@@ -2,7 +2,8 @@
 
 The AppController is the central coordinator for foreground mode (CLI and Tray).
 It creates and manages:
-- Engine (STT, VAD, audio, HTTP server)
+- Engine (STT, VAD, audio, pipeline, agents)
+- HTTP server (OpenVIP protocol + app endpoints)
 - KeyboardBindingManager (hotkeys, shortcuts, device profiles)
 
 CLI and Tray both:
@@ -47,6 +48,7 @@ class AppController:
         """
         self._config = config
         self._engine: VoxtypeEngine | None = None
+        self._http_server: Any = None  # OpenVIPServer
         self._bindings: KeyboardBindingManager | None = None
         self._logger: Any = None  # JSONLLogger
         self._running = False
@@ -152,11 +154,17 @@ class AppController:
         )
         engine_ref[0] = self._engine
 
-        # Register app command handler for application-level /control commands
-        self._engine.set_app_command_handler(self._handle_app_command)
-
         # 3. Start HTTP server early (so StatusPanel can connect during loading)
-        self._engine.start_http_server()
+        from voxtype.core.http_server import OpenVIPServer
+
+        self._http_server = OpenVIPServer(
+            self._engine, self,
+            self._config.server.host, self._config.server.port,
+        )
+        self._http_server.start()
+        self._engine.set_status_change_callback(
+            self._http_server.notify_status_change
+        )
 
         # 4. Initialize engine (load models — HTTP server serves loading progress)
         self._engine.init_components(headless=True)
@@ -192,7 +200,12 @@ class AppController:
             self._bindings.stop()
             self._bindings = None
 
-        # Stop engine (includes HTTP server shutdown)
+        # Stop HTTP server (before engine, so SSE clients get clean disconnect)
+        if self._http_server:
+            self._http_server.stop()
+            self._http_server = None
+
+        # Stop engine
         if self._engine:
             self._engine.stop()
             self._engine = None

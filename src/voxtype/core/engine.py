@@ -138,7 +138,7 @@ class VoxtypeEngine:
             on_recording_end=lambda ms: self._emit("on_recording_end", ms),
             on_state_change=lambda old, new, trigger: (
                 self._emit("on_state_change", old, new, trigger),
-                self._notify_http_status(),
+                self._notify_status(),
             ),
             on_agent_change=lambda name, idx: self._emit("on_agent_change", name, idx),
         )
@@ -173,13 +173,9 @@ class VoxtypeEngine:
         self._stt: STTEngine | None = None
         self._realtime_stt: STTEngine | None = None  # Separate fast model for realtime
         self._hotkey: HotkeyListener | None = None
-        # HTTP server for OpenVIP SSE protocol
-        self._http_server: Any = None  # OpenVIPServer
-
-        # App command handler — registered by AppController for application-level
-        # commands (output.*, etc.). Protocol commands (stt.*, ping, engine.shutdown)
-        # are always handled directly by the engine.
-        self._app_command_handler: Callable[[dict], dict] | None = None
+        # Status change callback — registered by AppController to push SSE updates.
+        # Engine calls this on every status-relevant change (state, agents, mode).
+        self._status_change_callback: Callable[[], None] | None = None
 
         # Loading progress tracking (for /status endpoint)
         self._loading_active = False
@@ -209,10 +205,10 @@ class VoxtypeEngine:
                 except Exception:
                     logger.exception(f"Error in event handler {event}")
 
-    def _notify_http_status(self) -> None:
-        """Push status update to all SSE /status/stream subscribers."""
-        if self._http_server is not None:
-            self._http_server.notify_status_change()
+    def _notify_status(self) -> None:
+        """Notify status change via registered callback."""
+        if self._status_change_callback is not None:
+            self._status_change_callback()
 
     # -------------------------------------------------------------------------
     # Properties
@@ -422,32 +418,15 @@ class VoxtypeEngine:
     # Initialization
     # -------------------------------------------------------------------------
 
-    def set_app_command_handler(self, handler: Callable[[dict], dict]) -> None:
-        """Register a handler for application-level control commands.
+    def set_status_change_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback for status change notifications.
 
-        Protocol commands (stt.*, engine.shutdown, ping) are always handled
-        by the engine. Everything else is delegated to this handler.
+        Called by AppController to wire Engine status changes to the
+        HTTP adapter's SSE push. The callback is invoked on every
+        status-relevant change (state transition, agent register/unregister,
+        mode switch).
         """
-        self._app_command_handler = handler
-
-    def start_http_server(self) -> None:
-        """Start the OpenVIP HTTP server.
-
-        The HTTP server is the protocol binding — it always starts,
-        regardless of output mode (keyboard or agents).
-
-        Call this before init_components() so the StatusPanel can connect
-        during model loading and show progress.
-        """
-        if self._http_server is not None:
-            return  # Already started
-
-        from voxtype.core.http_server import OpenVIPServer
-
-        self._http_server = OpenVIPServer(
-            self, self.config.server.host, self.config.server.port
-        )
-        self._http_server.start()
+        self._status_change_callback = callback
 
     def init_components(self, *, headless: bool = False) -> None:
         """Initialize engine components (STT, VAD, audio, hotkey).
@@ -575,7 +554,7 @@ class VoxtypeEngine:
 
         # Loading complete — notify SSE subscribers to clear loading state
         self._loading_active = False
-        self._notify_http_status()
+        self._notify_status()
 
     # -------------------------------------------------------------------------
     # VAD Callbacks
@@ -968,7 +947,7 @@ class VoxtypeEngine:
             self.agent_mode = False
 
         self._emit("on_agents_changed", self.visible_agents)
-        self._notify_http_status()
+        self._notify_status()
 
     def _set_current_agent(self, agent_id: str, idx: int = 0) -> None:
         """Set current agent, emit event, and push SSE status update.
@@ -978,7 +957,7 @@ class VoxtypeEngine:
         """
         self._current_agent_id = agent_id
         self._emit("on_agent_change", agent_id, idx)
-        self._notify_http_status()
+        self._notify_status()
 
     # -------------------------------------------------------------------------
     # Agent Control
@@ -1008,7 +987,7 @@ class VoxtypeEngine:
 
         self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.registered", agent_id=agent.id)
-        self._notify_http_status()
+        self._notify_status()
         return True
 
     def unregister_agent(self, agent_id: str) -> bool:
@@ -1041,7 +1020,7 @@ class VoxtypeEngine:
 
         self._emit("on_agents_changed", self.visible_agents)
         bus.publish("agent.unregistered", agent_id=agent_id)
-        self._notify_http_status()
+        self._notify_status()
         return True
 
     def _switch_agent(self, direction: int) -> None:
@@ -1216,39 +1195,11 @@ class VoxtypeEngine:
         self.speak_text(f"{agent_prefix} {agent_name}")
 
     # -------------------------------------------------------------------------
-    # SSE Agent Registration (called by HTTP server)
+    # Public Domain API (called by HTTP adapter and tests)
     # -------------------------------------------------------------------------
 
-    def _register_sse_agent(self, agent_id: str) -> None:
-        """Register an SSE agent (called when SSE client connects).
-
-        Creates an SSEAgent instance and registers it with the engine.
-
-        Args:
-            agent_id: Agent identifier from the SSE connection URL.
-        """
-        from voxtype.agent.sse import SSEAgent
-
-        if self._http_server is None:
-            return
-
-        agent = SSEAgent(agent_id, self._http_server)
-        self.register_agent(agent)
-
-    def _unregister_sse_agent(self, agent_id: str) -> None:
-        """Unregister an SSE agent (called when SSE client disconnects).
-
-        Args:
-            agent_id: Agent identifier to remove.
-        """
-        self.unregister_agent(agent_id)
-
-    # -------------------------------------------------------------------------
-    # HTTP Status / Control / TTS (called by HTTP server endpoints)
-    # -------------------------------------------------------------------------
-
-    def _get_http_status(self) -> dict:
-        """Build status dict for the /status HTTP endpoint.
+    def get_status(self) -> dict:
+        """Build engine status dict.
 
         Returns OpenVIP protocol-level fields at the top level,
         with implementation-specific details in the 'platform' object.
@@ -1342,14 +1293,12 @@ class VoxtypeEngine:
             "microphone_url": MICROPHONE_SETTINGS_URL,
         }
 
-    def _handle_tts_request(self, body: dict) -> dict:
-        """Handle a TTS request from the HTTP /speech endpoint.
+    def handle_speech(self, body: dict) -> dict:
+        """Handle a speech (TTS) request.
 
         Accepts override fields from the request body: engine, language,
         voice, speed. Falls back to the engine's TTSConfig for any field
         not provided.
-
-        Called via asyncio.to_thread — blocking is fine.
 
         Args:
             body: Request body with ``text`` (required) and optional
@@ -1421,12 +1370,10 @@ class VoxtypeEngine:
 
         return {"status": "ok", "duration_ms": duration_ms}
 
-    def _handle_control(self, body: dict) -> dict:
-        """Handle a control command from the HTTP /control endpoint.
+    def handle_protocol_command(self, body: dict) -> dict:
+        """Handle an OpenVIP protocol command.
 
-        Protocol commands (stt.*, engine.shutdown, ping) are handled directly.
-        Application commands (output.*, etc.) are delegated to the registered
-        app command handler. See set_app_command_handler().
+        Protocol commands: stt.start, stt.stop, stt.toggle, engine.shutdown, ping.
 
         Args:
             body: Request body with "command" field.
@@ -1436,7 +1383,6 @@ class VoxtypeEngine:
         """
         command = body.get("command", "")
 
-        # --- Protocol commands (engine knobs) ---
         if command == "stt.start":
             self._set_listening(True)
             return {"status": "ok", "listening": True}
@@ -1452,11 +1398,7 @@ class VoxtypeEngine:
         elif command == "ping":
             return {"status": "ok", "pong": True}
 
-        # --- Application commands (delegated to AppController) ---
-        if self._app_command_handler is not None:
-            return self._app_command_handler(body)
-
-        return {"status": "error", "error": f"Unknown command: {command}"}
+        return {"status": "error", "error": f"Unknown protocol command: {command}"}
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -1489,9 +1431,6 @@ class VoxtypeEngine:
                 on_release=self._tap_detector.on_key_up,
                 on_other_key=self._tap_detector.on_other_key,
             )
-
-        # Start HTTP server if not already started (backward compat for direct callers)
-        self.start_http_server()
 
         # Start audio streaming (always needed for VAD to work)
         if self._audio_manager:
@@ -1572,11 +1511,6 @@ class VoxtypeEngine:
             self._keyboard_agent = None
 
         # Note: AgentRegistrar.stop() is called by the app, not here
-
-        # Stop HTTP server
-        if self._http_server:
-            self._http_server.stop()
-            self._http_server = None
 
         if self._hotkey:
             self._hotkey.stop()
