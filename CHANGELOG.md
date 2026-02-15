@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b72] - 2026-02-15
+
+### Fixed
+
+- **Hardcoded Italian language fallback** — When `stt.language = "auto"`, the detected language from Whisper is now propagated through the full chain (`STTResult` → `TranscriptionCompleteEvent` → `_inject_text()`). Previously, auto-detection discarded the language and fell back to hardcoded `"it"`, breaking submit triggers for non-Italian users (e.g., "ok send" never matched because the pipeline thought the message was Italian).
+
 ## [0.1.0b67] - 2026-02-15
 
 ### Fixed

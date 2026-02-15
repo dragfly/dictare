@@ -57,8 +57,8 @@ class MockEngine:
     def _transcribe_and_process(self, audio_data: Any, agent: Any = None) -> None:
         self.transcriptions.append((audio_data, agent))
 
-    def _inject_text(self, text: str, agent: Any = None) -> None:
-        self.injections.append((text, agent))
+    def _inject_text(self, text: str, agent: Any = None, language: str | None = None) -> None:
+        self.injections.append((text, agent, language))
 
     def _process_queued_audio(self) -> None:
         pass
@@ -281,7 +281,7 @@ class TestTranscriptionComplete:
 
             assert sm.state == AppState.LISTENING
             assert len(engine.injections) == 1
-            assert engine.injections[0] == ("Hello world", mock_agent)
+            assert engine.injections[0] == ("Hello world", mock_agent, None)
         finally:
             controller.stop()
 

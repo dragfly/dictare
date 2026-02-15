@@ -47,6 +47,7 @@ class TranscriptionCompleteEvent(StateEvent):
 
     text: str = ""
     agent: Any = None  # The agent to use for injection
+    language: str | None = None  # Detected language from STT
 
 @dataclass(frozen=True)
 class PlayStartEvent(StateEvent):
