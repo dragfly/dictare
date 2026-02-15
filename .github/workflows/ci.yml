@@ -9,6 +9,8 @@ on:
 jobs:
   test-linux:
     runs-on: [self-hosted, Linux, X64]
+    env:
+      VIRTUAL_ENV: ~/.venvs/voxtype
     steps:
       - uses: actions/checkout@v4
 
@@ -20,8 +22,6 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
 
       - name: Install system deps (Xvfb for tray tests)
         run: |
@@ -29,23 +29,20 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          uv venv --python 3.11 .venv
-          . .venv/bin/activate
+          test -d $VIRTUAL_ENV || uv venv --python 3.11 $VIRTUAL_ENV
           uv pip install -e ./openvip-sdks/python
           uv pip install --no-sources -e ".[dev]"
 
       - name: Run linter
-        run: |
-          . .venv/bin/activate
-          ruff check src/ tests/
+        run: ruff check src/ tests/
 
       - name: Run tests with coverage
-        run: |
-          . .venv/bin/activate
-          xvfb-run pytest tests/ -v -m '' --cov=voxtype --cov-report=term-missing
+        run: xvfb-run pytest tests/ -v -m '' --cov=voxtype --cov-report=term-missing
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
+    env:
+      VIRTUAL_ENV: ~/.venvs/voxtype
     steps:
       - uses: actions/checkout@v4
 
@@ -57,28 +54,23 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
 
       - name: Set up Python and install deps
         run: |
-          uv venv --python 3.11 .venv
-          . .venv/bin/activate
+          test -d $VIRTUAL_ENV || uv venv --python 3.11 $VIRTUAL_ENV
           uv pip install -e ./openvip-sdks/python
           uv pip install --no-sources -e ".[dev]"
 
       - name: Run linter
-        run: |
-          . .venv/bin/activate
-          ruff check src/ tests/
+        run: ruff check src/ tests/
 
       - name: Run tests
-        run: |
-          . .venv/bin/activate
-          pytest tests/ -v -m ''
+        run: pytest tests/ -v -m ''
 
   typecheck:
     runs-on: [self-hosted, Linux, X64]
+    env:
+      VIRTUAL_ENV: ~/.venvs/voxtype
     steps:
       - uses: actions/checkout@v4
 
@@ -90,17 +82,12 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
 
       - name: Set up Python and install deps
         run: |
-          uv venv --python 3.11 .venv
-          . .venv/bin/activate
+          test -d $VIRTUAL_ENV || uv venv --python 3.11 $VIRTUAL_ENV
           uv pip install -e ./openvip-sdks/python
           uv pip install --no-sources -e ".[dev]"
 
       - name: Run mypy
-        run: |
-          . .venv/bin/activate
-          mypy src/
+        run: mypy src/
