@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b66] - 2026-02-15
+
+### Added
+
+- **`--openvip-timeout-factor`** — Scales all wait timeouts in the protocol compliance suite. Default 1.0 for fast implementations, use higher values (e.g. 5.0) for slow ones. Compliance tests verify correctness, not performance — a slow but compliant server should pass. Applied to `_wait_until()` polling and `SSEConnection.wait_connected()`. Timeout error messages report both base and scaled values.
+
 ## [0.1.0b65] - 2026-02-15
 
 ### Changed
