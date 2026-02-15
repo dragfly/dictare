@@ -31,7 +31,7 @@ from voxtype.core.fsm import (
     SwitchAgent,
     TranscriptionCompleted,
 )
-from voxtype.core.messages import create_message
+from voxtype.core.openvip_messages import create_message
 from voxtype.events import bus
 from voxtype.hotkey.base import HotkeyListener
 from voxtype.hotkey.tap_detector import TapDetector
