@@ -2,6 +2,9 @@
 
 Provides SSE-based agent communication, TTS, status, and control endpoints.
 Runs in its own background thread with a dedicated asyncio event loop.
+
+The HTTP adapter translates HTTP requests to method calls on Engine
+(protocol commands) and AppController (application commands).
 """
 
 from __future__ import annotations
@@ -18,9 +21,13 @@ from sse_starlette.sse import EventSourceResponse
 from voxtype import __version__
 
 if TYPE_CHECKING:
+    from voxtype.app.controller import AppController
     from voxtype.core.engine import VoxtypeEngine
 
 logger = logging.getLogger(__name__)
+
+# Protocol commands handled by the engine directly
+PROTOCOL_COMMANDS = {"stt.start", "stt.stop", "stt.toggle", "engine.shutdown", "ping"}
 
 class OpenVIPServer:
     """FastAPI server implementing OpenVIP protocol endpoints.
@@ -40,10 +47,12 @@ class OpenVIPServer:
     def __init__(
         self,
         engine: VoxtypeEngine,
+        controller: AppController | None = None,
         host: str = "127.0.0.1",
         port: int = 8770,
     ) -> None:
         self._engine = engine
+        self._controller = controller
         self._host = host
         self._port = port
 
@@ -94,8 +103,11 @@ class OpenVIPServer:
                 queue: asyncio.Queue = asyncio.Queue()
                 self._agent_queues[agent_id] = queue
 
-            # Register agent in engine
-            self._engine._register_sse_agent(agent_id)
+            # Create SSE agent and register with engine
+            from voxtype.agent.sse import SSEAgent
+
+            agent = SSEAgent(agent_id, self)
+            self._engine.register_agent(agent)
             logger.info(f"SSE agent connected: {agent_id}")
 
             async def event_generator():
@@ -121,7 +133,7 @@ class OpenVIPServer:
                     # Cleanup on disconnect
                     with self._agent_queues_lock:
                         self._agent_queues.pop(agent_id, None)
-                    self._engine._unregister_sse_agent(agent_id)
+                    self._engine.unregister_agent(agent_id)
                     logger.info(f"SSE agent disconnected: {agent_id}")
 
             return EventSourceResponse(event_generator())
@@ -146,7 +158,7 @@ class OpenVIPServer:
             body = await request.json()
             try:
                 result = await asyncio.to_thread(
-                    self._engine._handle_tts_request, body
+                    self._engine.handle_speech, body
                 )
                 return result
             except Exception as e:
@@ -155,7 +167,7 @@ class OpenVIPServer:
         @app.get("/status")
         async def get_status():
             """Get engine status."""
-            return self._engine._get_http_status()
+            return self._engine.get_status()
 
         @app.get("/status/stream")
         async def sse_status_stream(request: Request):
@@ -169,7 +181,7 @@ class OpenVIPServer:
                 self._status_queues.append(sq)
 
             # Send current status immediately on connect
-            initial = self._engine._get_http_status()
+            initial = self._engine.get_status()
             await sq.put(initial)
 
             async def event_generator():
@@ -199,13 +211,29 @@ class OpenVIPServer:
 
         @app.post("/control")
         async def control_command(request: Request):
-            """Handle control commands."""
+            """Handle control commands.
+
+            Routes protocol commands (stt.*, engine.shutdown, ping) to the
+            engine and application commands to the controller.
+            """
             body = await request.json()
+            command = body.get("command", "")
             try:
-                result = await asyncio.to_thread(
-                    self._engine._handle_control, body
-                )
-                return result
+                # Protocol commands → engine
+                if command in PROTOCOL_COMMANDS:
+                    result = await asyncio.to_thread(
+                        self._engine.handle_protocol_command, body
+                    )
+                    return result
+
+                # App commands → controller
+                if self._controller is not None:
+                    result = await asyncio.to_thread(
+                        self._controller._handle_app_command, body
+                    )
+                    return result
+
+                return {"status": "error", "error": f"Unknown command: {command}"}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
@@ -303,7 +331,7 @@ class OpenVIPServer:
         if not (self._loop and self._loop.is_running()):
             return
 
-        status = self._engine._get_http_status()
+        status = self._engine.get_status()
         for q in queues:
             self._loop.call_soon_threadsafe(q.put_nowait, status)
 

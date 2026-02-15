@@ -12,19 +12,23 @@ from voxtype.core.http_server import OpenVIPServer
 class MockEngine:
     """Mock engine for HTTP server tests."""
 
+    RESERVED_AGENT_IDS = {"__keyboard__"}
+
     def __init__(self) -> None:
-        self._registered_agents: list[str] = []
+        self._registered_agents: list = []
         self._unregistered_agents: list[str] = []
         self._tts_calls: list[dict] = []
-        self._control_calls: list[dict] = []
+        self._protocol_calls: list[dict] = []
 
-    def _register_sse_agent(self, agent_id: str) -> None:
-        self._registered_agents.append(agent_id)
+    def register_agent(self, agent) -> bool:
+        self._registered_agents.append(agent)
+        return True
 
-    def _unregister_sse_agent(self, agent_id: str) -> None:
+    def unregister_agent(self, agent_id: str) -> bool:
         self._unregistered_agents.append(agent_id)
+        return True
 
-    def _get_http_status(self) -> dict:
+    def get_status(self) -> dict:
         return {
             "protocol_version": "1.0",
             "state": "idle",
@@ -32,21 +36,31 @@ class MockEngine:
             "uptime_seconds": 0,
             "platform": {
                 "name": "Voxtype",
-                "version": "3.0.0a8",
+                "version": "test",
                 "state": "idle",
                 "uptime_seconds": 0,
             },
         }
 
-    def _handle_tts_request(self, body: dict) -> dict:
+    def handle_speech(self, body: dict) -> dict:
         self._tts_calls.append(body)
         return {"status": "ok", "duration_ms": 100}
 
-    def _handle_control(self, body: dict) -> dict:
-        self._control_calls.append(body)
+    def handle_protocol_command(self, body: dict) -> dict:
+        self._protocol_calls.append(body)
         cmd = body.get("command", "")
         if cmd == "ping":
-            return {"status": "pong"}
+            return {"status": "ok", "pong": True}
+        return {"status": "ok"}
+
+class MockController:
+    """Mock controller for HTTP server tests."""
+
+    def __init__(self) -> None:
+        self._app_calls: list[dict] = []
+
+    def _handle_app_command(self, body: dict) -> dict:
+        self._app_calls.append(body)
         return {"status": "ok"}
 
 @pytest.fixture
@@ -54,8 +68,12 @@ def engine() -> MockEngine:
     return MockEngine()
 
 @pytest.fixture
-def server(engine: MockEngine) -> OpenVIPServer:
-    return OpenVIPServer(engine, host="127.0.0.1", port=0)
+def controller() -> MockController:
+    return MockController()
+
+@pytest.fixture
+def server(engine: MockEngine, controller: MockController) -> OpenVIPServer:
+    return OpenVIPServer(engine, controller, host="127.0.0.1", port=0)
 
 @pytest.fixture
 def client(server: OpenVIPServer) -> TestClient:
@@ -87,19 +105,46 @@ class TestControlEndpoint:
         """POST /control with ping returns pong."""
         response = client.post("/control", json={"command": "ping"})
         assert response.status_code == 200
-        assert response.json()["status"] == "pong"
-        assert len(engine._control_calls) == 1
+        assert response.json()["pong"] is True
+        assert len(engine._protocol_calls) == 1
 
     def test_stt_start_command(self, client: TestClient, engine: MockEngine) -> None:
-        """POST /control with stt.start calls engine."""
+        """POST /control with stt.start routes to engine."""
         response = client.post("/control", json={"command": "stt.start"})
         assert response.status_code == 200
-        assert engine._control_calls[0]["command"] == "stt.start"
+        assert engine._protocol_calls[0]["command"] == "stt.start"
 
-    def test_control_error_returns_500(self, client: TestClient, engine: MockEngine) -> None:
+    def test_protocol_command_routed_to_engine(
+        self, client: TestClient, engine: MockEngine, controller: MockController
+    ) -> None:
+        """Protocol commands go to engine.handle_protocol_command, not controller."""
+        client.post("/control", json={"command": "stt.toggle"})
+        assert len(engine._protocol_calls) == 1
+        assert len(controller._app_calls) == 0
+
+    def test_app_command_routed_to_controller(
+        self, client: TestClient, engine: MockEngine, controller: MockController
+    ) -> None:
+        """App commands go to controller._handle_app_command, not engine."""
+        client.post("/control", json={"command": "output.set_mode:agents"})
+        assert len(controller._app_calls) == 1
+        assert len(engine._protocol_calls) == 0
+
+    def test_unknown_command_without_controller(self, engine: MockEngine) -> None:
+        """Unknown command without controller returns error."""
+        server = OpenVIPServer(engine, None, host="127.0.0.1", port=0)
+        client = TestClient(server._app)
+        response = client.post("/control", json={"command": "foo.bar"})
+        assert response.json()["status"] == "error"
+
+    def test_control_error_returns_500(
+        self, client: TestClient, engine: MockEngine
+    ) -> None:
         """POST /control returns 500 on engine error."""
-        engine._handle_control = MagicMock(side_effect=RuntimeError("boom"))
-        response = client.post("/control", json={"command": "bad"})
+        engine.handle_protocol_command = MagicMock(
+            side_effect=RuntimeError("boom")
+        )
+        response = client.post("/control", json={"command": "stt.start"})
         assert response.status_code == 500
 
 class TestSpeechEndpoint:
@@ -115,9 +160,11 @@ class TestSpeechEndpoint:
         assert len(engine._tts_calls) == 1
         assert engine._tts_calls[0]["text"] == "Hello world"
 
-    def test_tts_error_returns_500(self, client: TestClient, engine: MockEngine) -> None:
+    def test_tts_error_returns_500(
+        self, client: TestClient, engine: MockEngine
+    ) -> None:
         """POST /speech returns 500 on engine error."""
-        engine._handle_tts_request = MagicMock(side_effect=RuntimeError("TTS failed"))
+        engine.handle_speech = MagicMock(side_effect=RuntimeError("TTS failed"))
         response = client.post("/speech", json={"text": "test"})
         assert response.status_code == 500
 
@@ -133,7 +180,9 @@ class TestPostAgentMessage:
         assert response.status_code == 404
         assert "not connected" in response.json()["detail"]
 
-    def test_post_to_connected_agent(self, server: OpenVIPServer, client: TestClient) -> None:
+    def test_post_to_connected_agent(
+        self, server: OpenVIPServer, client: TestClient
+    ) -> None:
         """POST to connected agent queues message."""
         import asyncio
 
