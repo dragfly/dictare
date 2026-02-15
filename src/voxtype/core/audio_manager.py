@@ -288,6 +288,10 @@ class AudioManager:
                 )
                 self._audio.start_streaming(on_chunk_callback)
 
+                # Reset VAD state for new device (LSTM hidden state from old
+                # device's noise floor can prevent speech detection)
+                self.reset_vad()
+
                 # Restart device monitor for the new stream
                 if self._device_monitor:
                     self._device_monitor.start()
@@ -304,13 +308,15 @@ class AudioManager:
 
     def flush_vad(self) -> None:
         """Flush VAD state (send buffered audio as speech_end)."""
-        if self._streaming_vad:
-            self._streaming_vad.flush()
+        with self._vad_lock:
+            if self._streaming_vad:
+                self._streaming_vad.flush()
 
     def reset_vad(self) -> None:
         """Reset VAD state (discard buffered audio without processing)."""
-        if self._streaming_vad:
-            self._streaming_vad.reset()
+        with self._vad_lock:
+            if self._streaming_vad:
+                self._streaming_vad.reset()
 
     def queue_audio(self, audio_data: object) -> None:
         """Add audio to queue for later processing.
