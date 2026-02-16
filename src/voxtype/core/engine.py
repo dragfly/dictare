@@ -888,15 +888,19 @@ class VoxtypeEngine:
             restore_id = self._last_sse_agent_id
             real_agents = self.visible_agents
             if restore_id and restore_id in self._agents:
-                self._set_current_agent(restore_id)
+                self._current_agent_id = restore_id
             elif real_agents:
-                self._set_current_agent(real_agents[0])
+                self._current_agent_id = real_agents[0]
+            self.speak_text("agent mode")
         else:
             # Switch to keyboard: save current agent, make __keyboard__ current
             if self._current_agent_id and self._current_agent_id != "__keyboard__":
                 self._last_sse_agent_id = self._current_agent_id
+            self._current_agent_id = "__keyboard__"
             self.agent_mode = False
-            self._set_current_agent("__keyboard__")
+            self.speak_text("keyboard mode")
+
+        self._notify_status()
 
     def _set_current_agent(self, agent_id: str, idx: int = 0) -> None:
         """Set current agent, emit event, and push SSE status update.
