@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b82] - 2026-02-16
+
+### Changed
+
+- **Double-tap hotkey toggles output mode (agents ↔ keyboard)** — Previously double-tap switched to the next agent. Now it toggles between agents mode and keyboard mode, allowing quick fallback to local keystroke injection when the CPU is busy. Restores the last active SSE agent when switching back to agents mode.
+
 ## [0.1.0b81] - 2026-02-16
 
 ### Fixed

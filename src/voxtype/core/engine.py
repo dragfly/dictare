@@ -155,11 +155,13 @@ class VoxtypeEngine:
 
         # Tap detection (isolated state machine)
         # Single tap: toggle listening on/off
-        # Double tap: switch to next agent
+        # Double tap: toggle output mode (agents <-> keyboard)
         self._tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
             on_single_tap=lambda: self._controller.send(HotkeyPressed(source="hotkey")),
-            on_double_tap=lambda: self._controller.send(SwitchAgent(direction=1, source="hotkey")),
+            on_double_tap=lambda: self.set_output_mode(
+                "keyboard" if self.agent_mode else "agents"
+            ),
         )
 
         # Initialize components
