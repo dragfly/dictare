@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b80] - 2026-02-16
+
+### Fixed
+
+- **CI: remove orphan tests for deleted `on_transition` parameter** — Two stress tests (`test_callback_called_outside_lock`, `test_callback_under_contention`) still passed `on_transition=` to `StateManager()` after the parameter was removed in b78. Caused `TypeError` in GitHub Actions.
+
 ## [0.1.0b75] - 2026-02-15
 
 ### Changed
