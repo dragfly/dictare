@@ -1102,6 +1102,7 @@ class VoxtypeEngine:
             text: Text to speak.
         """
         if self._tts_engine is None:
+            logger.warning("speak_text(%r): TTS engine not loaded", text)
             return
 
         from voxtype.audio.beep import get_sound_for_event
@@ -1113,12 +1114,13 @@ class VoxtypeEngine:
         from voxtype.audio.beep import play_audio
 
         tts = self._tts_engine
+        logger.info("TTS: %r", text)
 
         def _do_tts() -> None:
             try:
                 tts.speak(text)
             except Exception:
-                logger.debug("TTS speak failed", exc_info=True)
+                logger.warning("TTS speak failed for %r", text, exc_info=True)
 
         pause = not self.config.audio.headphones_mode
         play_audio(_do_tts, pause_mic=pause, controller=self._controller)
