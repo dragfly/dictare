@@ -897,11 +897,8 @@ class VoxtypeEngine:
             # Switch to keyboard: save current agent, make __keyboard__ current
             if self._current_agent_id and self._current_agent_id != "__keyboard__":
                 self._last_sse_agent_id = self._current_agent_id
-            self._current_agent_id = "__keyboard__"
             self.agent_mode = False
-
-
-        self._notify_status()
+            self._set_current_agent("__keyboard__")
 
     def _set_current_agent(self, agent_id: str, idx: int = 0) -> None:
         """Set current agent, emit event, and push SSE status update.
@@ -1137,7 +1134,8 @@ class VoxtypeEngine:
         """
         phrases = self._load_tts_phrases()
         agent_prefix = phrases.get("agent", "agent")
-        self.speak_text(f"{agent_prefix} {agent_name}")
+        display_name = agent_name.strip("_")
+        self.speak_text(f"{agent_prefix} {display_name}")
 
     # -------------------------------------------------------------------------
     # Public Domain API (called by HTTP adapter and tests)
