@@ -1358,3 +1358,25 @@ class TestSetOutputMode:
         engine.set_output_mode("invalid")
 
         assert engine.agent_mode is True
+
+    def test_double_tap_toggles_output_mode(self) -> None:
+        """Double-tap hotkey toggles between agents and keyboard mode."""
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine._keyboard_agent = mock_kb
+        engine._agents["__keyboard__"] = mock_kb
+        engine._agent_order.append("__keyboard__")
+        register_test_agents(engine, ["claude"])
+
+        # Simulate double-tap: should toggle to keyboard
+        engine._tap_detector._on_double_tap()
+        assert engine.agent_mode is False
+        assert engine._current_agent_id == "__keyboard__"
+
+        # Second double-tap: should toggle back to agents
+        engine._tap_detector._on_double_tap()
+        assert engine.agent_mode is True
