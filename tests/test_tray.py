@@ -3,9 +3,26 @@
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from voxtype.tray.app import TrayApp
+
+
+def _mock_pystray():
+    """Create a mock pystray module for headless testing."""
+
+    def menu_factory(*items):
+        m = SimpleNamespace(_items=list(items))
+        return m
+
+    menu_factory.SEPARATOR = SimpleNamespace(text="---")
+
+    mock = SimpleNamespace(
+        MenuItem=lambda text, action=None, **kw: SimpleNamespace(text=text, action=action, **kw),
+        Menu=menu_factory,
+    )
+    return mock
 
 
 def test_ensure_accessibility_noop_on_linux(monkeypatch: object) -> None:
@@ -118,22 +135,24 @@ class TestTrayStates:
         app = TrayApp()
         mock_icon = MagicMock()
         app._icon = mock_icon
-        app.set_state("disconnected")
+        with patch.object(app, "_update_menu"):  # avoid pystray import
+            app.set_state("disconnected")
         # _update_icon was called; the icon should be set to voxtype_muted
         assert mock_icon.icon is not None  # icon was updated
 
     def test_menu_status_disconnected(self) -> None:
         app = TrayApp()
-        app.set_state("disconnected")
-        menu = app._create_menu()
-        # First item is status — label should say "Disconnected"
+        app._state = "disconnected"
+        with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
+            menu = app._create_menu()
         first_label = menu._items[0].text
         assert "Disconnected" in first_label
 
     def test_menu_status_idle(self) -> None:
         app = TrayApp()
-        app.set_state("off")
-        menu = app._create_menu()
+        app._state = "off"
+        with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
+            menu = app._create_menu()
         first_label = menu._items[0].text
         assert "IDLE" in first_label
 
