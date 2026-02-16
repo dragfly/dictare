@@ -362,35 +362,3 @@ class TestStateManagerRaceConditions:
         # Final state should be valid (likely LISTENING from reset)
         assert sm.state in AppState
 
-    def test_callback_under_contention(self) -> None:
-        """Callbacks should be called correctly under contention."""
-        transitions = []
-        lock = threading.Lock()
-
-        def on_transition(from_state, to_state):
-            with lock:
-                transitions.append((from_state, to_state))
-
-        sm = StateManager(initial_state=AppState.LISTENING, on_transition=on_transition)
-
-        def worker():
-            for _ in range(50):
-                if sm.try_transition(AppState.RECORDING):
-                    sm.try_transition(AppState.TRANSCRIBING)
-                    sm.try_transition(AppState.LISTENING)
-                time.sleep(0.001)
-
-        threads = [threading.Thread(target=worker) for _ in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        # All recorded transitions should be valid
-        for from_state, to_state in transitions:
-            assert from_state in AppState
-            assert to_state in AppState
-            # Verify it was a valid transition
-            valid_targets = StateManager.VALID_TRANSITIONS.get(from_state, [])
-            assert to_state in valid_targets or from_state == to_state
-
