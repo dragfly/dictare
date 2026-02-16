@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b83] - 2026-02-16
+
+### Fixed
+
+- **TTS announce missing on mode switch to keyboard** — `set_output_mode("keyboard")` set `_current_agent_id` directly, bypassing `_set_current_agent()` and its `on_agent_change` emit. Now announces "agent keyboard" via TTS when switching to keyboard mode.
+
 ## [0.1.0b82] - 2026-02-16
 
 ### Changed
