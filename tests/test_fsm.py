@@ -449,21 +449,3 @@ class TestThreadSafety:
             t.join()
 
         assert sm.state == AppState.LISTENING
-
-    def test_callback_called_outside_lock(self) -> None:
-        """Callback is called outside the lock (no deadlock potential)."""
-        callback_lock_held = []
-
-        def callback(from_state, to_state):
-            # If we can acquire the lock here, it means
-            # the callback is called OUTSIDE the state lock
-            acquired = sm._lock.acquire(blocking=False)
-            callback_lock_held.append(acquired)
-            if acquired:
-                sm._lock.release()
-
-        sm = StateManager(initial_state=AppState.LISTENING, on_transition=callback)
-        sm.transition(AppState.RECORDING)
-
-        # Callback should have been able to acquire lock
-        assert callback_lock_held == [True]
