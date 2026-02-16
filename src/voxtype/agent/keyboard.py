@@ -141,7 +141,8 @@ class KeyboardAgent(BaseAgent):
             message: OpenVIP message dict.
         """
         text = message.get("text", "")
-        submit = message.get("submit", False)
+        x_input = message.get("x_input", {})
+        submit = x_input.get("submit", False) if isinstance(x_input, dict) else False
         visual_newline = message.get("visual_newline", False)
 
         # Get config values
