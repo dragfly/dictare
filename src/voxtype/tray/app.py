@@ -510,6 +510,7 @@ class TrayApp:
                     output = platform.get("output", {})
                     agents = output.get("available_agents", [])
                     self.set_targets(agents, output.get("current_agent", ""))
+                    self.set_output_mode(output.get("mode", self._output_mode))
 
                     # Update permissions state
                     perms = platform.get("permissions", {})

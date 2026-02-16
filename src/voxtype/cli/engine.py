@@ -84,7 +84,17 @@ def _run_daemon(controller, config, os) -> None:
     """Run engine in daemon mode (headless)."""
     import signal
 
+    from voxtype import __version__
+    from voxtype.logging.setup import get_default_log_path, setup_logging
     from voxtype.utils.paths import get_pid_path
+
+    # Configure file logging — daemon has no stderr
+    log_path = get_default_log_path("engine")
+    setup_logging(
+        log_path=log_path,
+        version=__version__,
+        params={"mode": "daemon", "pid": os.getpid()},
+    )
 
     pid_path = get_pid_path()
     pid_path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,6 +102,7 @@ def _run_daemon(controller, config, os) -> None:
 
     console.print(f"[dim]Starting engine in daemon mode (PID: {os.getpid()})...[/]")
     console.print(f"[dim]HTTP: http://{config.server.host}:{config.server.port}[/]")
+    console.print(f"[dim]Log: {log_path}[/]")
 
     try:
         controller.start(

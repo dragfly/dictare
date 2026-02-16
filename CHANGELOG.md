@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b85] - 2026-02-16
+
+### Fixed
+
+- **Tray app not reflecting engine mode changes** — SSE status stream was not reading `output.mode` from engine status. Double-tap mode switch worked in the engine but the tray menu stayed stale.
+- **Daemon has no log output** — `setup_logging()` was never called in daemon mode. Python logger had no handler, all `logger.info/warning` calls went nowhere. Now logs to `~/.local/share/voxtype/logs/engine.jsonl`.
+- **TTS failures logged at wrong level** — `speak_text()` failures logged at DEBUG (invisible). Now: WARNING for TTS engine missing or speak failure, INFO for successful TTS dispatch.
+
 ## [0.1.0b84] - 2026-02-16
 
 ### Changed
