@@ -779,6 +779,55 @@ class TestRegisterAgent:
         agent = engine._get_current_agent()
         assert agent is mock_kb
 
+class TestKeyboardAgentSubmit:
+    """Test that KeyboardAgent reads submit from x_input, not top-level."""
+
+    def _make_agent(self):
+        from voxtype.agent.keyboard import KeyboardAgent
+
+        config = MockConfig()
+        config.output.auto_enter = False
+        config.output.typing_delay_ms = 0
+        config.output.submit_keys = "enter"
+        config.output.newline_keys = "shift+enter"
+        agent = KeyboardAgent(config)
+        agent._injector = MagicMock()
+        return agent
+
+    def test_x_input_submit_sends_enter(self) -> None:
+        """Message with x_input.submit=True sends submit_keys (enter)."""
+        agent = self._make_agent()
+        agent._process_message({"text": "hello", "x_input": {"submit": True}})
+
+        agent._injector.type_text.assert_called_once_with(
+            "hello",
+            delay_ms=0,
+            auto_enter=True,
+            submit_keys="enter",
+            newline_keys="shift+enter",
+        )
+
+    def test_x_input_newline_sends_shift_enter(self) -> None:
+        """Message with x_input.newline=True (no submit) sends newline_keys."""
+        agent = self._make_agent()
+        agent._process_message({"text": "hello", "x_input": {"newline": True}})
+
+        agent._injector.type_text.assert_called_once_with(
+            "hello",
+            delay_ms=0,
+            auto_enter=False,  # config.auto_enter is False, submit is False
+            submit_keys="enter",
+            newline_keys="shift+enter",
+        )
+
+    def test_submit_only_no_text(self) -> None:
+        """Submit-only message (no text) calls send_submit."""
+        agent = self._make_agent()
+        agent._process_message({"text": "", "x_input": {"submit": True}})
+
+        agent._injector.send_submit.assert_called_once()
+        agent._injector.type_text.assert_not_called()
+
 class TestThreadSafety:
     """Test thread safety of engine operations."""
 
