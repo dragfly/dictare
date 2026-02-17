@@ -17,7 +17,7 @@
 
 <Input
 	type="number"
-	class="{widthClass} text-right"
+	class="{widthClass} text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
 	{step}
 	value={value ?? ""}
 	onchange={(e) => {
