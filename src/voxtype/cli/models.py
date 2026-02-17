@@ -225,7 +225,24 @@ def models_list() -> None:
     Shows STT (Whisper) and TTS models with download status.
     Configured models shown in green (cached) or red (missing).
     """
-    _show_models_list()
+    config = load_config()
+    _show_models_list(config)
+
+    # Show configured TTS engine (system engines aren't in the model registry)
+    tts_engine = config.tts.engine
+    if tts_engine in ("espeak", "say"):
+        from voxtype.tts import get_cached_tts_engine
+
+        try:
+            tts = get_cached_tts_engine(config.tts)
+            available = tts.is_available()
+        except ValueError:
+            available = False
+        status = "[green]available[/]" if available else "[red]not found[/]"
+        console.print(f"\n[bold]TTS engine:[/] {tts_engine} ({status})")
+    else:
+        console.print(f"\n[bold]TTS engine:[/] {tts_engine} (neural model)")
+
     console.print()
     console.print("[dim]Pull:   voxtype models pull <model>[/]")
     console.print("[dim]Remove: voxtype models rm <model>[/]")
