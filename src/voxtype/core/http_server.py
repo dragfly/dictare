@@ -16,6 +16,7 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
 
 from voxtype import __version__
@@ -237,6 +238,64 @@ class OpenVIPServer:
                 return {"status": "error", "error": f"Unknown command: {command}"}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
+
+        # ----- Settings UI -----
+
+        @app.get("/settings", response_class=HTMLResponse)
+        async def settings_page():
+            """Serve the Settings UI page."""
+            from voxtype.core.settings_ui import get_settings_html
+
+            return get_settings_html()
+
+        @app.get("/settings/schema")
+        async def settings_schema():
+            """Return JSON Schema, current values, and field metadata."""
+            from voxtype import __version__
+            from voxtype.config import Config, list_config_keys, load_config
+
+            config = load_config()
+            return {
+                "schema": Config.model_json_schema(),
+                "values": config.model_dump(),
+                "keys": [
+                    {
+                        "key": key,
+                        "type": type_name,
+                        "default": default,
+                        "description": desc,
+                        "env_var": env_var,
+                    }
+                    for key, type_name, default, desc, env_var in list_config_keys()
+                ],
+                "version": __version__,
+            }
+
+        @app.post("/settings")
+        async def update_setting(request: Request):
+            """Update a single config value."""
+            from pydantic import ValidationError
+
+            from voxtype.config import (
+                get_config_value,
+                load_config,
+                set_config_value,
+            )
+
+            body = await request.json()
+            key = body.get("key", "")
+            value = body.get("value")
+            if not key:
+                raise HTTPException(status_code=400, detail="Missing 'key'")
+            try:
+                set_config_value(key, str(value))
+                config = load_config()
+                current = get_config_value(key, config)
+                return {"status": "ok", "key": key, "value": current}
+            except KeyError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            except (ValueError, ValidationError) as e:
+                raise HTTPException(status_code=422, detail=str(e))
 
         return app
 

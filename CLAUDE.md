@@ -14,6 +14,11 @@
 - Se voxtype non usa il suo SDK, nessuno lo userà. L'SDK NON è opzionale, MAI.
 - Il codice client (agent/mux.py SSE, agent/sse.py, cli/speak.py, tray/app.py) DEVE usare l'SDK
 
+### Cross-platform UX
+- **UX must be identical on macOS and Linux** — no platform-specific UI code
+- Use browser-based UI (served from existing FastAPI) for any GUI needs
+- Tray menu via pystray (cross-platform), settings via web browser
+
 ### Cosa NON costruire
 - ❌ Subscription-to-API proxy (claude-max-api-proxy lo fa)
 - ❌ Autonomous loop engine (Ralph Wiggum è ufficiale Anthropic)
