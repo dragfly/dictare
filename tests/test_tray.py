@@ -144,7 +144,7 @@ class TestTrayStates:
         """Verify each state maps to the correct icon name.
 
         red    (muted)   = disconnected — server unreachable
-        blue   (loading) = loading — connected, preparing
+        blue   (loading) = restarting / loading — engine preparing
         yellow (default) = off (idle) — ready
         green  (active)  = listening
         """
@@ -154,6 +154,7 @@ class TestTrayStates:
 
         expected = {
             "disconnected": "voxtype_muted",
+            "restarting": "voxtype_loading",
             "loading": "voxtype_loading",
             "off": "voxtype",
             "listening": "voxtype_active",
@@ -179,6 +180,44 @@ class TestTrayStates:
             menu = app._create_menu()
         first_label = menu._items[0].text
         assert "IDLE" in first_label
+
+    def test_menu_status_restarting(self) -> None:
+        app = TrayApp()
+        app._state = "restarting"
+        with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
+            menu = app._create_menu()
+        first_label = menu._items[0].text
+        assert "Restarting" in first_label
+
+    def test_restarting_flag_suppresses_disconnected(self) -> None:
+        """During restart, SSE disconnect should not switch to red."""
+        app = TrayApp()
+        app._restarting = True
+        app.set_state("restarting")
+        assert app._state == "restarting"
+
+        # Simulate SSE disconnect — would normally go to 'disconnected'
+        # but _restarting flag keeps it in 'restarting'
+        # (the on_disconnect callback checks _restarting)
+        assert app._restarting is True
+        assert app._state == "restarting"
+
+    def test_restarting_flag_clears_on_real_state(self) -> None:
+        """Once engine reports loading/idle/listening, clear restarting."""
+        app = TrayApp()
+        app._restarting = True
+        app.set_state("restarting")
+        assert app._restarting is True
+
+        # Engine comes back with loading
+        app.set_state("loading")
+        assert app._state == "loading"
+        assert app._restarting is False
+
+        # Same for idle
+        app._restarting = True
+        app.set_state("off")
+        assert app._restarting is False
 
 
 class TestSetTargets:
