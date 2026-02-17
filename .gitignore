@@ -62,6 +62,13 @@ test_sanitization.py
 # Local sound files (originals, root-level only)
 /sounds/
 
+# Settings UI (SvelteKit build tooling)
+ui/node_modules/
+ui/.svelte-kit/
+# Override generic dist/ and lib/ patterns for UI files
+!ui/src/lib/
+!src/voxtype/ui/dist/
+
 # Claude Code
 .claude/
 CLAUDE.md
