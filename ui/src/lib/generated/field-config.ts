@@ -1,12 +1,14 @@
+export type PresetOption = string | { value: string; label: string };
+
 /** Fields rendered as read-only 'Edit in config file' */
 export const COMPLEX_KEYS = new Set(["agents", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter", "pipeline.submit_filter.triggers"]);
 
 /** Fields with preset dropdown + custom input */
-export const FIELD_PRESETS: Record<string, string[]> = {
-  "stt.language": ["auto", "en", "it", "es", "de", "fr", "pt", "ja", "zh", "ko", "ru"],
+export const FIELD_PRESETS: Record<string, PresetOption[]> = {
+  "stt.language": [{ value: "auto", label: "Auto-detect" }, { value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }, { value: "ko", label: "Korean" }, { value: "ru", label: "Russian" }],
   "stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
   "stt.realtime_model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
-  "tts.language": ["en", "it", "es", "de", "fr", "pt", "ja", "zh"],
+  "tts.language": [{ value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }],
 };
 
 /** Input width hints: narrow | medium | normal */
