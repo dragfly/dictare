@@ -11,13 +11,13 @@
 	let { value, step = 1, size = "normal", onchange }: Props = $props();
 
 	const widthClass = $derived(
-		size === "narrow" ? "w-24" : size === "medium" ? "w-36" : "w-48"
+		size === "narrow" ? "w-20" : size === "medium" ? "w-24" : "w-28"
 	);
 </script>
 
 <Input
 	type="number"
-	class={widthClass}
+	class="{widthClass} text-right"
 	{step}
 	value={value ?? ""}
 	onchange={(e) => {

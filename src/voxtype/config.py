@@ -87,13 +87,13 @@ class STTConfig(BaseModel):
         default="auto",
         description="Language code or 'auto' for auto-detection",
     )
-    compute_type: str = Field(
+    compute_type: Literal["int8", "float16", "float32"] = Field(
         default="int8",
-        description="Compute type for faster-whisper (int8/float16/float32)",
+        description="Compute type for faster-whisper",
     )
-    device: str = Field(
+    device: Literal["auto", "cpu", "cuda", "mlx"] = Field(
         default="auto",
-        description="Device to use (auto/cpu/cuda) - auto detects best available",
+        description="Device to use - auto detects best available",
     )
     beam_size: int = Field(default=5, description="Beam size for decoding")
     hw_accel: bool = Field(
@@ -596,7 +596,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "logging", "stats", "daemon", "pipeline", "agents"):
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "client", "logging", "stats", "daemon", "pipeline", "agents"):
             # These are sections, handle below (agents is dynamic, skip)
             continue
         value = getattr(config, field_name)
@@ -618,6 +618,7 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ("output", OutputConfig),
         ("keyboard", KeyboardConfig),
         ("server", ServerConfig),
+        ("client", ClientConfig),
         ("logging", LoggingConfig),
         ("stats", StatsConfig),
         ("daemon", DaemonConfig),

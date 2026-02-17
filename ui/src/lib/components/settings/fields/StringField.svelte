@@ -10,7 +10,7 @@
 	let { value, size = "normal", onchange }: Props = $props();
 
 	const widthClass = $derived(
-		size === "narrow" ? "w-24" : size === "medium" ? "w-48" : "w-64"
+		size === "narrow" ? "w-24" : size === "medium" ? "w-36" : "w-48"
 	);
 </script>
 

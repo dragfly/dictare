@@ -4,6 +4,7 @@
 	import StringField from "./fields/StringField.svelte";
 	import NumberField from "./fields/NumberField.svelte";
 	import EnumField from "./fields/EnumField.svelte";
+	import PresetField from "./fields/PresetField.svelte";
 	import ComplexField from "./fields/ComplexField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
@@ -21,8 +22,18 @@
 		"audio.sounds",
 		"keyboard.shortcuts",
 		"pipeline.submit_filter.triggers",
+		"pipeline.submit_filter",
+		"pipeline.agent_filter",
 		"agents"
 	]);
+
+	/** Fields with preset dropdown options (accept custom values too) */
+	const FIELD_PRESETS: Record<string, string[]> = {
+		"stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
+		"stt.realtime_model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
+		"stt.language": ["auto", "en", "it", "es", "de", "fr", "pt", "ja", "zh", "ko", "ru"],
+		"tts.language": ["en", "it", "es", "de", "fr", "pt", "ja", "zh"],
+	};
 
 	function isComplex(f: FieldMeta): boolean {
 		for (const ck of COMPLEX_KEYS) {
@@ -42,7 +53,7 @@
 	/** Infer input size hint from key name */
 	function sizeHint(key: string): "narrow" | "medium" | "normal" {
 		const k = key.toLowerCase();
-		if (k.endsWith(".port") || k.endsWith("_port") || k.endsWith("_ms") || k.endsWith("_wpm")) return "narrow";
+		if (k.endsWith(".port") || k.endsWith("_port") || k.endsWith("_ms") || k.endsWith("_wpm") || k.endsWith(".beam_size") || k.endsWith(".channels") || k.endsWith(".speed") || k.endsWith("_timeout") || k.endsWith("_size") || k.endsWith("_repetitions")) return "narrow";
 		if (k.endsWith(".host") || k.endsWith("_host") || k.endsWith(".ip") || k.endsWith(".key") || k.endsWith(".device")) return "medium";
 		return "normal";
 	}
@@ -50,6 +61,7 @@
 	const fieldSchema = $derived(resolveFieldSchema(field.key, schema));
 	const enumValues = $derived(getEnumValues(fieldSchema));
 	const complex = $derived(isComplex(field));
+	const presets = $derived(FIELD_PRESETS[field.key]);
 	const currentValue = $derived(settingsStore.getValue(field.key));
 	const isDirty = $derived(field.key in settingsStore.getDirty());
 	const error = $derived(settingsStore.getSaveErrors()[field.key]);
@@ -68,7 +80,7 @@
 			<Tooltip.Trigger class="text-muted-foreground hover:text-foreground transition-colors">
 				<Info class="size-3.5" />
 			</Tooltip.Trigger>
-			<Tooltip.Content side="right" class="max-w-xs space-y-1.5 text-xs">
+			<Tooltip.Content side="right" class="max-w-sm space-y-1.5 text-xs break-words">
 				{#if field.description}
 					<p>{field.description}</p>
 				{/if}
@@ -102,6 +114,13 @@
 			<EnumField
 				options={enumValues}
 				value={currentValue as string}
+				defaultValue={field.default as string}
+				onchange={(v) => settingsStore.markDirty(field.key, v)}
+			/>
+		{:else if presets}
+			<PresetField
+				options={presets}
+				value={(currentValue as string) ?? ""}
 				defaultValue={field.default as string}
 				onchange={(v) => settingsStore.markDirty(field.key, v)}
 			/>
