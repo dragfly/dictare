@@ -1,6 +1,3 @@
-// AUTO-GENERATED — do not edit manually.
-// Re-run the generator after changing the model or UI hints.
-
 /** Fields rendered as read-only 'Edit in config file' */
 export const COMPLEX_KEYS = new Set(["agents", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter", "pipeline.submit_filter.triggers"]);
 
