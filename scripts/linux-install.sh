@@ -40,11 +40,12 @@ Options:
   --help     Show this help
 
 What happens:
-  1. Installs system dependencies (apt) for audio, tray, TTS
-  2. Creates Python venv with system-site-packages (for PyGObject)
-  3. Installs voxtype from local source via uv sync
-  4. Installs systemd user service
-  5. Starts the engine
+  1. Installs system packages (apt/dnf/pacman) — requires sudo
+  2. Installs uv (Python package manager)
+  3. Creates Python venv + installs PyGObject for tray icon
+  4. Installs voxtype from local source via uv sync
+  5. Installs systemd user service
+  6. Starts the engine
 EOF
             exit 0
             ;;
@@ -57,10 +58,27 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     error "This script is for Linux only. Use ./scripts/macos-install.sh on macOS."
 fi
 
+# ─── Check we're NOT running as root ───────────────────────────────────
+if [[ "$EUID" -eq 0 ]]; then
+    error "Do not run this script as root or with sudo. The script will ask for sudo when needed."
+fi
+
 cd "$PROJECT_DIR"
 
+# ─── Explain what we're about to do ────────────────────────────────────
+printf "\n"
+info "This script will install voxtype for Linux development."
+printf "\n"
+printf "What happens:\n"
+printf "  1. Install system packages via apt/dnf/pacman ${YELLOW}(requires sudo)${RESET}\n"
+printf "  2. Install uv (Python package manager)\n"
+printf "  3. Create Python venv and install dependencies\n"
+printf "  4. Install systemd user service\n"
+printf "  5. Start the engine\n"
+printf "\n"
+
 # ─── 1. Install system dependencies ────────────────────────────────────
-info "Installing system dependencies..."
+info "Installing system dependencies (sudo required)..."
 
 # Detect package manager
 if command -v apt-get &>/dev/null; then
@@ -70,9 +88,11 @@ if command -v apt-get &>/dev/null; then
         libportaudio2 portaudio19-dev
         # TTS fallback
         espeak-ng
-        # Tray icon (PyGObject + AppIndicator)
-        python3-gi python3-gi-cairo gir1.2-appindicator3-0.1
-        # Build tools for some Python packages
+        # Tray icon — GObject introspection typelibs (runtime)
+        gir1.2-appindicator3-0.1
+        # Tray icon — PyGObject build dependencies (compile for Python 3.11)
+        libgirepository-2.0-dev libcairo2-dev
+        # Build tools
         build-essential pkg-config
     )
     sudo apt-get update
@@ -80,20 +100,30 @@ if command -v apt-get &>/dev/null; then
 elif command -v dnf &>/dev/null; then
     PKG_MGR="dnf"
     PACKAGES=(
+        # Audio
         portaudio portaudio-devel
+        # TTS fallback
         espeak-ng
-        python3-gobject gtk3
+        # Tray icon — GObject introspection typelibs
         libappindicator-gtk3
+        # PyGObject build dependencies
+        gobject-introspection-devel cairo-devel
+        # Build tools
         gcc pkg-config
     )
     sudo dnf install -y "${PACKAGES[@]}"
 elif command -v pacman &>/dev/null; then
     PKG_MGR="pacman"
     PACKAGES=(
+        # Audio
         portaudio
+        # TTS fallback
         espeak-ng
-        python-gobject gtk3
+        # Tray icon — GObject introspection typelibs
         libappindicator-gtk3
+        # PyGObject build dependencies
+        gobject-introspection cairo
+        # Build tools
         base-devel pkg-config
     )
     sudo pacman -S --noconfirm "${PACKAGES[@]}"
@@ -134,30 +164,30 @@ else
     ok "uv installed"
 fi
 
-# ─── 4. Create/update venv with system-site-packages ───────────────────
+# ─── 4. Create/update venv ─────────────────────────────────────────────
 info "Setting up Python environment..."
 
 VENV_DIR="$PROJECT_DIR/.venv"
 
-if [[ -d "$VENV_DIR" ]]; then
-    # Update existing venv to use system-site-packages
-    if grep -q "include-system-site-packages = false" "$VENV_DIR/pyvenv.cfg" 2>/dev/null; then
-        info "Enabling system-site-packages in existing venv..."
-        sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' "$VENV_DIR/pyvenv.cfg"
-    fi
-else
-    info "Creating venv with system-site-packages..."
-    uv venv --python 3.11 --system-site-packages "$VENV_DIR"
-fi
-
-# Verify gi is accessible
-if ! "$VENV_DIR/bin/python" -c "import gi" 2>/dev/null; then
-    warn "PyGObject (gi) not accessible in venv. Tray icon may not work."
+if [[ ! -d "$VENV_DIR" ]]; then
+    info "Creating venv..."
+    uv venv --python 3.11 "$VENV_DIR"
 fi
 
 ok "Python venv ready"
 
-# ─── 5. Install voxtype from source ────────────────────────────────────
+# ─── 5. Install PyGObject for tray icon ────────────────────────────────
+info "Installing PyGObject (tray icon support)..."
+uv pip install PyGObject pycairo
+
+# Verify gi is accessible
+if "$VENV_DIR/bin/python" -c "import gi; gi.require_version('AppIndicator3', '0.1')" 2>/dev/null; then
+    ok "PyGObject + AppIndicator3 working"
+else
+    warn "AppIndicator3 not available. Tray icon may not work."
+fi
+
+# ─── 6. Install voxtype from source ────────────────────────────────────
 info "Installing voxtype from source..."
 
 # Stop existing service first
@@ -179,7 +209,7 @@ fi
 VERSION=$("$VENV_DIR/bin/python" -m voxtype --version 2>&1 || echo "unknown")
 ok "voxtype installed: $VERSION"
 
-# ─── 6. Install systemd service ────────────────────────────────────────
+# ─── 7. Install systemd service ────────────────────────────────────────
 info "Installing systemd user service..."
 
 SERVICE_DIR="$HOME/.config/systemd/user"
@@ -205,7 +235,7 @@ systemctl --user daemon-reload
 systemctl --user enable voxtype.service
 ok "systemd service installed"
 
-# ─── 7. Start engine ───────────────────────────────────────────────────
+# ─── 8. Start engine ───────────────────────────────────────────────────
 info "Starting voxtype engine..."
 systemctl --user start voxtype.service
 
@@ -218,7 +248,7 @@ else
     warn "Engine may have failed to start. Check: journalctl --user -u voxtype.service"
 fi
 
-# ─── 8. Summary ────────────────────────────────────────────────────────
+# ─── 9. Summary ────────────────────────────────────────────────────────
 printf "\n"
 ok "Done! Voxtype is installed and running."
 printf "\n"
