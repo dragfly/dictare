@@ -66,6 +66,7 @@ export const tabs: TabDef[] = [
     icon: SlidersHorizontal,
     sections: ["client", "logging", "stats", "daemon", "pipeline"],
     desc: "Client, logging, daemon, and pipeline settings",
+    groups: [{"label": "Client", "sections": ["client"]}, {"label": "Logging", "sections": ["logging"]}, {"label": "Statistics", "sections": ["stats"]}, {"label": "Daemon", "sections": ["daemon"]}, {"label": "Pipeline", "sections": ["pipeline"]}],
   },
 ];
 
