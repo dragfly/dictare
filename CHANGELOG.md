@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b104] - 2026-02-17
+
+### Added
+
+- **Engine state persistence** — Saves active agent, output mode, and listening state to `~/.voxtype/state.json`. Restores output mode and preferred agent on restart. Config option `daemon.restore_listening` (default: false) controls whether listening state is restored.
+- **Preferred agent reconnect** — When an agent reconnects after restart and matches the saved preferred agent, it becomes the current agent automatically.
+
+### Fixed
+
+- **Field label acronyms** — Settings UI now correctly shows "Preload TTS", "Preload STT", "VAD", "URL" etc. instead of "Preload Tts", "Preload Stt".
+
 ## [0.1.0b101] - 2026-02-17
 
 ### Fixed

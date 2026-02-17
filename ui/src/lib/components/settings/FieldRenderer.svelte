@@ -26,12 +26,16 @@
 		return f.type === "dict" || f.type === "list";
 	}
 
+	/** Known acronyms that should stay uppercase */
+	const ACRONYMS = new Set(["tts", "stt", "url", "wpm", "vad", "api", "sse", "pid", "hw", "ms"]);
+
 	/** Derive a short human label from the dotted key */
 	function humanize(key: string): string {
 		const last = key.split(".").pop() ?? key;
 		return last
-			.replace(/_/g, " ")
-			.replace(/\b\w/g, (c) => c.toUpperCase());
+			.split("_")
+			.map((w) => ACRONYMS.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))
+			.join(" ");
 	}
 
 	const fieldSchema = $derived(resolveFieldSchema(field.key, schema));
