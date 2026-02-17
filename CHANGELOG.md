@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b100] - 2026-02-17
+
+### Changed
+
+- **Section grouping from UI hints** — Tab groups are now defined in UI hints JSON (`groups` field on tabs), not hardcoded. The generator emits group definitions, SettingsSection reads them. Tabs without `groups` render flat.
+- **Number spinners fully hidden** — Added `margin: 0` to webkit pseudo-elements to ensure arrows are completely invisible on all browsers including macOS Safari hover.
+
 ## [0.1.0b99] - 2026-02-17
 
 ### Fixed
