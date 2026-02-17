@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 import sys
 
 from voxtype.tts.base import TTSEngine
+
+logger = logging.getLogger(__name__)
 
 class SayTTS(TTSEngine):
     """TTS using macOS built-in 'say' command."""
@@ -37,6 +40,7 @@ class SayTTS(TTSEngine):
             True if successful.
         """
         if not self.is_available():
+            logger.warning("say: not available (platform=%s)", sys.platform)
             return False
 
         try:
@@ -45,9 +49,17 @@ class SayTTS(TTSEngine):
                 cmd.extend(["-v", self.voice])
             cmd.append(text)
 
-            subprocess.run(cmd, capture_output=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, timeout=120)
+            if result.returncode != 0:
+                logger.warning(
+                    "say exited %d: %s",
+                    result.returncode,
+                    result.stderr.decode(errors="replace").strip(),
+                )
+                return False
             return True
         except Exception:
+            logger.warning("say subprocess failed", exc_info=True)
             return False
 
     def get_name(self) -> str:
