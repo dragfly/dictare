@@ -116,6 +116,23 @@ def _patch_pystray_retina() -> None:
     except Exception:
         logger.warning("Could not patch pystray for Retina icons", exc_info=True)
 
+def _run_on_main_thread(fn: Callable[[], None]) -> None:
+    """Schedule fn on the main thread (required for AppKit on macOS).
+
+    On macOS, pystray runs an NSApplication run loop on the main thread.
+    All AppKit mutations (icon, menu, tooltip) MUST happen there.
+    PyObjCTools.AppHelper.callAfter dispatches to that run loop.
+    """
+    if sys.platform != "darwin" or threading.current_thread() is threading.main_thread():
+        fn()
+        return
+    try:
+        from PyObjCTools.AppHelper import callAfter
+
+        callAfter(fn)
+    except ImportError:
+        fn()  # Non-macOS or missing PyObjC — run directly
+
 class TrayApp:
     """System tray application for VoxType.
 
@@ -412,39 +429,43 @@ class TrayApp:
             self._icon.stop()
 
     def _update_icon(self) -> None:
-        """Update the tray icon based on state."""
-        if not self._icon:
-            return
+        """Update the tray icon based on state (dispatches to main thread)."""
+        def _do() -> None:
+            if not self._icon:
+                return
 
-        icon_name = {
-            "disconnected": "voxtype_muted",  # Red — server unreachable
-            "restarting": "voxtype_loading",  # Blue — engine restarting
-            "loading": "voxtype_loading",  # Blue — connected, preparing
-            "off": "voxtype",  # Yellow — ready, idle
-            "listening": "voxtype_active",  # Green — listening
-        }.get(self._state, "voxtype_muted")
+            icon_name = {
+                "disconnected": "voxtype_muted",
+                "restarting": "voxtype_loading",
+                "loading": "voxtype_loading",
+                "off": "voxtype",
+                "listening": "voxtype_active",
+            }.get(self._state, "voxtype_muted")
 
-        # Override to muted if permissions not granted
-        if (not self._accessibility_granted or not self._microphone_granted) and self._state not in ("disconnected", "restarting", "loading"):
-            icon_name = "voxtype_muted"
+            if (not self._accessibility_granted or not self._microphone_granted) and self._state not in ("disconnected", "restarting", "loading"):
+                icon_name = "voxtype_muted"
 
-        self._icon.icon = _load_icon(icon_name)
+            self._icon.icon = _load_icon(icon_name)
 
-        # Update hover tooltip with current state
-        title_map = {
-            "disconnected": "VoxType — Disconnected",
-            "restarting": "VoxType — Restarting…",
-            "loading": "VoxType — Loading"
-            + (f" {self._loading_stage}…" if self._loading_stage else "…"),
-            "off": "VoxType — Idle",
-            "listening": "VoxType — Listening",
-        }
-        self._icon.title = title_map.get(self._state, "VoxType")
+            title_map = {
+                "disconnected": "VoxType — Disconnected",
+                "restarting": "VoxType — Restarting…",
+                "loading": "VoxType — Loading"
+                + (f" {self._loading_stage}…" if self._loading_stage else "…"),
+                "off": "VoxType — Idle",
+                "listening": "VoxType — Listening",
+            }
+            self._icon.title = title_map.get(self._state, "VoxType")
+
+        _run_on_main_thread(_do)
 
     def _update_menu(self) -> None:
-        """Update the tray menu."""
-        if self._icon:
-            self._icon.menu = self._create_menu()
+        """Update the tray menu (dispatches to main thread)."""
+        def _do() -> None:
+            if self._icon:
+                self._icon.menu = self._create_menu()
+
+        _run_on_main_thread(_do)
 
     def set_state(
         self,
