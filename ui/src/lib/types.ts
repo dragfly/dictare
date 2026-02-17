@@ -33,10 +33,16 @@ export interface JsonSchemaDefinition {
 	properties?: Record<string, JsonSchemaProperty>;
 }
 
+export interface TabGroup {
+	label: string;
+	sections: string[];
+}
+
 export interface TabDef {
 	id: string;
 	label: string;
 	icon: Component;
 	sections: string[];
 	desc: string;
+	groups?: TabGroup[];
 }
