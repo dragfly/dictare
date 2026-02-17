@@ -118,13 +118,22 @@ class AppController:
                         play_sound_file_async(path)
 
             def on_agent_change(self, agent_name: str, index: int) -> None:
+                import logging as _logging
+
+                _log = _logging.getLogger(__name__)
+                _log.info("on_agent_change: %s (index=%d)", agent_name, index)
+
                 from voxtype.audio.beep import get_sound_for_event
 
                 enabled, _ = get_sound_for_event(config.audio, "agent_announce")
-                if enabled:
-                    eng = engine_ref[0]
-                    if eng:
-                        eng.speak_agent(agent_name)
+                if not enabled:
+                    _log.info("on_agent_change: agent_announce disabled")
+                    return
+                eng = engine_ref[0]
+                if eng:
+                    eng.speak_agent(agent_name)
+                else:
+                    _log.warning("on_agent_change: engine_ref not set")
 
         # 1. Create logger for engine
         from voxtype import __version__
@@ -359,9 +368,11 @@ class AppController:
         (i.e., not stt.*, engine.shutdown, or ping).
         """
         command = body.get("command", "")
+        logger.info("app_command: %s", command)
 
         if command == "output.set_agent" or command.startswith("output.set_agent:"):
             agent = command.split(":", 1)[1] if ":" in command else body.get("agent", "")
+            logger.info("switch_to_agent: %s", agent)
             self.switch_to_agent(agent)
             return {"status": "ok"}
         elif command.startswith("output.set_mode:"):

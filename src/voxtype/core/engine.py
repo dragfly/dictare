@@ -908,6 +908,7 @@ class VoxtypeEngine:
         Single place for the set + emit + notify tripletta. Use this for
         intentional agent switches (voice filter, hotkey, API, mode switch).
         """
+        logger.info("_set_current_agent: %s (idx=%d)", agent_id, idx)
         self._current_agent_id = agent_id
         self._emit("on_agent_change", agent_id, idx)
         self._notify_status()
@@ -1118,7 +1119,9 @@ class VoxtypeEngine:
 
         def _do_tts() -> None:
             try:
-                tts.speak(text)
+                ok = tts.speak(text)
+                if not ok:
+                    logger.warning("TTS speak(%r) returned False", text)
             except Exception:
                 logger.warning("TTS speak failed for %r", text, exc_info=True)
 
