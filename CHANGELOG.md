@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b109] - 2026-02-17
+
+### Fixed
+
+- **Linux install script** — PyGObject now installed via pip (compiled for Python 3.11) instead of relying on system packages. Added build deps (`libgirepository-2.0-dev`, `libcairo2-dev`). Script now refuses to run as root/sudo to prevent permission issues.
+
 ## [0.1.0b108] - 2026-02-17
 
 ### Added
 
-- **Linux install script** — `scripts/linux-install.sh` installs all system dependencies (portaudio, espeak-ng, PyGObject, AppIndicator), creates venv with system-site-packages, installs systemd service. Supports `--gpu` for CUDA acceleration. Works on Debian/Ubuntu, Fedora, and Arch.
+- **Linux install script** — `scripts/linux-install.sh` installs all system dependencies (portaudio, espeak-ng, PyGObject, AppIndicator), creates venv, installs systemd service. Supports `--gpu` for CUDA acceleration. Works on Debian/Ubuntu, Fedora, and Arch.
 - **Renamed macOS install script** — `scripts/macos-install.sh` (was `brew-rebuild.sh`) for consistency.
 
 ## [0.1.0b107] - 2026-02-17
