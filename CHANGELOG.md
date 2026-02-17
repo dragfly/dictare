@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b89] - 2026-02-17
+
+### Added
+
+- **Settings UI** — Web-based configuration page served at `http://127.0.0.1:8770/settings`. Auto-generates form controls from Pydantic JSON Schema. Dark theme, tabbed layout (General, Audio, STT, TTS, Hotkey, Output, Server, Advanced). Tray "Settings" now opens the browser instead of a text editor.
+- **Italian submit triggers in config defaults** — Italian was present in `input_filter.py` but missing from `config.py` defaults and template. Now all 5 languages (it, en, es, de, fr) are included in both places.
+
 ## [0.1.0b88] - 2026-02-17
 
 ### Fixed

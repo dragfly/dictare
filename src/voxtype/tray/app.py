@@ -362,16 +362,32 @@ class TrayApp:
     def _on_open_settings(
         self, icon: pystray.Icon, item: pystray.MenuItem
     ) -> None:
-        """Open the config file in the default editor."""
+        """Open Settings UI in the browser, or config file if engine is down."""
+        import webbrowser
+
+        from voxtype.config import load_config
+
+        config = load_config()
+        host = config.server.host
+        port = config.server.port
+        url = f"http://{host}:{port}/settings"
+
+        # Try the web UI first (requires engine running)
+        if self._state != "disconnected":
+            webbrowser.open(url)
+            return
+
+        # Fallback: open config file in editor
+        self._open_config_in_editor()
+
+    def _open_config_in_editor(self) -> None:
+        """Open config.toml in the system text editor (fallback)."""
         import subprocess
 
-        from voxtype.config import get_config_path
+        from voxtype.config import create_default_config, get_config_path
 
         config_file = get_config_path()
         if not config_file.exists():
-            # Create default config if it doesn't exist
-            from voxtype.config import create_default_config
-
             config_file = create_default_config()
 
         if sys.platform == "darwin":

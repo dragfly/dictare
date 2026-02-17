@@ -236,10 +236,30 @@ class SubmitFilterConfig(BaseModel):
     enabled: bool = Field(default=True, description="Enable submit trigger detection")
     triggers: dict[str, list[list[str]]] = Field(
         default_factory=lambda: {
+            "it": [
+                ["ok", "invia"],
+                ["ok", "in", "via"],
+                ["ok", "manda"],
+                ["ok", "fatto"],
+                ["va", "bene", "invia"],
+                ["va", "bene", "in", "via"],
+                ["invia", "adesso"],
+                ["manda", "adesso"],
+                ["vai."],
+            ],
             "en": [
                 ["ok", "send"],
                 ["ok", "submit"],
                 ["go", "ahead"],
+            ],
+            "es": [
+                ["ok", "enviar"],
+            ],
+            "de": [
+                ["ok", "senden"],
+            ],
+            "fr": [
+                ["ok", "envoyer"],
             ],
         },
         description="Trigger patterns by language code. Only multi-word sequences — single words trigger too easily.",
@@ -749,18 +769,28 @@ def create_default_config() -> Path:
 # Add your language with its ISO code.
 #
 # [pipeline.submit_filter.triggers]
+# it = [
+#     ["ok", "invia"],
+#     ["ok", "in", "via"],
+#     ["ok", "manda"],
+#     ["ok", "fatto"],
+#     ["va", "bene", "invia"],
+#     ["invia", "adesso"],
+#     ["vai."],
+# ]
 # en = [
 #     ["ok", "send"],
 #     ["ok", "submit"],
 #     ["go", "ahead"],
 # ]
+# es = [
+#     ["ok", "enviar"],
+# ]
 # de = [
 #     ["ok", "senden"],
-#     ["ok", "abschicken"],
 # ]
 # fr = [
 #     ["ok", "envoyer"],
-#     ["allez", "envoyer"],
 # ]
 
 # [pipeline.agent_filter]
