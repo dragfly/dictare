@@ -244,7 +244,10 @@ class TestDaemonPidWrite:
             controller = MagicMock()
             controller.run.side_effect = KeyboardInterrupt
 
-            config = SimpleNamespace(server=SimpleNamespace(host="127.0.0.1", port=9999))
+            config = SimpleNamespace(
+                server=SimpleNamespace(host="127.0.0.1", port=9999),
+                daemon=SimpleNamespace(restore_listening=False),
+            )
             mock_os = MagicMock()
             mock_os.getpid.return_value = 12345
             mock_os._exit.side_effect = SystemExit(0)
@@ -268,7 +271,10 @@ class TestDaemonPidWrite:
             controller = MagicMock()
             controller.start.side_effect = RuntimeError("boom")
 
-            config = SimpleNamespace(server=SimpleNamespace(host="127.0.0.1", port=9999))
+            config = SimpleNamespace(
+                server=SimpleNamespace(host="127.0.0.1", port=9999),
+                daemon=SimpleNamespace(restore_listening=False),
+            )
             mock_os = MagicMock()
             mock_os.getpid.return_value = 99999
 

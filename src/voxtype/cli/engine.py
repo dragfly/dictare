@@ -104,9 +104,17 @@ def _run_daemon(controller, config, os) -> None:
     console.print(f"[dim]HTTP: http://{config.server.host}:{config.server.port}[/]")
     console.print(f"[dim]Log: {log_path}[/]")
 
+    # Determine initial listening state
+    start_listening = False  # Privacy-aware default
+    if config.daemon.restore_listening:
+        from voxtype.utils.state import load_state
+
+        saved = load_state()
+        start_listening = saved.get("listening", False)
+
     try:
         controller.start(
-            start_listening=False,  # Privacy-aware: don't listen until triggered
+            start_listening=start_listening,
             mode="daemon",
             with_bindings=False,  # No keyboard bindings in daemon mode
         )
