@@ -4,15 +4,20 @@
 	interface Props {
 		value: number | null;
 		step: number;
+		size?: "narrow" | "medium" | "normal";
 		onchange: (value: number) => void;
 	}
 
-	let { value, step = 1, onchange }: Props = $props();
+	let { value, step = 1, size = "normal", onchange }: Props = $props();
+
+	const widthClass = $derived(
+		size === "narrow" ? "w-24" : size === "medium" ? "w-36" : "w-48"
+	);
 </script>
 
 <Input
 	type="number"
-	class="max-w-[200px]"
+	class={widthClass}
 	{step}
 	value={value ?? ""}
 	onchange={(e) => {
