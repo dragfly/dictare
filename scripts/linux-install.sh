@@ -176,18 +176,7 @@ fi
 
 ok "Python venv ready"
 
-# ─── 5. Install PyGObject for tray icon ────────────────────────────────
-info "Installing PyGObject (tray icon support)..."
-uv pip install PyGObject pycairo
-
-# Verify gi is accessible
-if "$VENV_DIR/bin/python" -c "import gi; gi.require_version('AppIndicator3', '0.1')" 2>/dev/null; then
-    ok "PyGObject + AppIndicator3 working"
-else
-    warn "AppIndicator3 not available. Tray icon may not work."
-fi
-
-# ─── 6. Install voxtype from source ────────────────────────────────────
+# ─── 5. Install voxtype + sync dependencies ───────────────────────────
 info "Installing voxtype from source..."
 
 # Stop existing service first
@@ -203,6 +192,18 @@ if [[ "$INSTALL_GPU" == true ]]; then
     uv sync --extra gpu --extra tts
 else
     uv sync --extra tts
+fi
+
+# ─── 6. Install PyGObject for tray icon ────────────────────────────────
+# Must be AFTER uv sync, otherwise uv sync removes it
+info "Installing PyGObject (tray icon support)..."
+uv pip install PyGObject pycairo
+
+# Verify gi is accessible
+if "$VENV_DIR/bin/python" -c "import gi; gi.require_version('AppIndicator3', '0.1')" 2>/dev/null; then
+    ok "PyGObject + AppIndicator3 working"
+else
+    warn "AppIndicator3 not available. Tray icon may not work."
 fi
 
 # Verify installation
@@ -222,7 +223,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$VENV_DIR/bin/python -m voxtype engine start --foreground
+ExecStart=$VENV_DIR/bin/python -m voxtype engine start
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
