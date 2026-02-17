@@ -471,6 +471,8 @@ def get_config_value(key: str, config: Config | None = None) -> Any:
 def set_config_value(key: str, value: str, config_path: Path | None = None) -> None:
     """Set a config value by dot-notation key.
 
+    Uses tomlkit to preserve comments and formatting.
+
     Args:
         key: Dot-notation key like 'stt.model' or 'verbose'
         value: String value (will be converted to appropriate type)
@@ -479,21 +481,21 @@ def set_config_value(key: str, value: str, config_path: Path | None = None) -> N
     Raises:
         KeyError: If key not found
     """
+    import tomlkit
+
     if config_path is None:
         config_path = get_config_path()
 
-    # Load current config
+    # Validate the key exists in the schema
     config = load_config(config_path)
     config_dict = config.model_dump()
 
     parts = key.split(".")
 
     if len(parts) == 1:
-        # Top-level key
         if parts[0] not in config_dict:
             raise KeyError(f"Unknown config key: {key}")
         current_value = config_dict[parts[0]]
-        config_dict[parts[0]] = _parse_value(value, type(current_value) if current_value is not None else str)
     elif len(parts) == 2:
         section, field = parts
         if section not in config_dict or not isinstance(config_dict[section], dict):
@@ -501,86 +503,37 @@ def set_config_value(key: str, value: str, config_path: Path | None = None) -> N
         if field not in config_dict[section]:
             raise KeyError(f"Unknown config key: {key}")
         current_value = config_dict[section][field]
-        config_dict[section][field] = _parse_value(value, type(current_value) if current_value is not None else str)
     else:
         raise KeyError(f"Invalid config key format: {key}")
 
-    # Validate the new config
-    Config.model_validate(config_dict)
+    parsed = _parse_value(value, type(current_value) if current_value is not None else str)
 
-    # Write back to TOML
-    _write_config(config_dict, config_path)
-
-def _write_config(config_dict: dict, config_path: Path) -> None:
-    """Write config dict to TOML file."""
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    lines = ["# voxtype configuration\n"]
-
-    # Top-level keys first
-    for key, value in config_dict.items():
-        if not isinstance(value, dict):
-            lines.append(f"{key} = {_format_toml_value(value)}\n")
-
-    lines.append("\n")
-
-    # Sections
-    for section, values in config_dict.items():
-        if isinstance(values, dict):
-            lines.append(f"[{section}]\n")
-            for key, value in values.items():
-                if isinstance(value, dict):
-                    # Skip nested dicts here, handle them as subsections
-                    pass
-                else:
-                    lines.append(f"{key} = {_format_toml_value(value)}\n")
-            lines.append("\n")
-
-            # Handle nested dicts as subsections
-            for key, value in values.items():
-                if isinstance(value, dict):
-                    # Check if values are themselves dicts (three-level nesting)
-                    if value and all(isinstance(v, dict) for v in value.values()):
-                        for subkey, subvalue in value.items():
-                            lines.append(f"[{section}.{key}.{subkey}]\n")
-                            for k, v in subvalue.items():
-                                lines.append(f"{k} = {_format_toml_value(v)}\n")
-                            lines.append("\n")
-                    else:
-                        lines.append(f"[{section}.{key}]\n")
-                        for subkey, subvalue in value.items():
-                            lines.append(f"{subkey} = {_format_toml_value(subvalue)}\n")
-                        lines.append("\n")
-
-    with open(config_path, "w") as f:
-        f.writelines(lines)
-
-def _format_toml_value(value: Any) -> str:
-    """Format a value for TOML output."""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    elif isinstance(value, str):
-        return f'"{value}"'
-    elif value is None:
-        return '""'  # TOML doesn't have null, use empty string
-    elif isinstance(value, list):
-        if not value:
-            return "[]"
-        # Check if it's a list of dicts (inline tables)
-        if isinstance(value[0], dict):
-            items = []
-            for item in value:
-                pairs = ", ".join(f'{k} = {_format_toml_value(v)}' for k, v in item.items())
-                items.append(f"{{ {pairs} }}")
-            return "[\n    " + ",\n    ".join(items) + ",\n]"
-        else:
-            # Simple list
-            return "[" + ", ".join(_format_toml_value(v) for v in value) + "]"
-    elif isinstance(value, dict):
-        pairs = ", ".join(f'{k} = {_format_toml_value(v)}' for k, v in value.items())
-        return f"{{ {pairs} }}"
+    # Validate the new value
+    test_dict = config_dict.copy()
+    if len(parts) == 1:
+        test_dict[parts[0]] = parsed
     else:
-        return str(value)
+        test_dict[parts[0]] = {**test_dict[parts[0]], parts[1]: parsed}
+    Config.model_validate(test_dict)
+
+    # Read file with tomlkit (preserves comments and formatting)
+    if config_path.exists():
+        doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+    else:
+        doc = tomlkit.document()
+
+    # Set the value
+    if len(parts) == 1:
+        doc[parts[0]] = parsed
+    else:
+        section, field = parts
+        if section not in doc:
+            doc.add(section, tomlkit.table())
+        doc[section][field] = parsed  # type: ignore[index]
+
+    # Write back (preserves all comments and formatting)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
 
 def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
     """List all config keys with their descriptions and defaults.
