@@ -10,6 +10,7 @@
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import * as Tooltip from "$lib/components/ui/tooltip";
 	import { Info } from "lucide-svelte";
+	import { COMPLEX_KEYS, FIELD_PRESETS, SIZE_HINTS } from "$lib/generated/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -17,23 +18,6 @@
 	}
 
 	let { field, schema }: Props = $props();
-
-	const COMPLEX_KEYS = new Set([
-		"audio.sounds",
-		"keyboard.shortcuts",
-		"pipeline.submit_filter.triggers",
-		"pipeline.submit_filter",
-		"pipeline.agent_filter",
-		"agents"
-	]);
-
-	/** Fields with preset dropdown options (accept custom values too) */
-	const FIELD_PRESETS: Record<string, string[]> = {
-		"stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
-		"stt.realtime_model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
-		"stt.language": ["auto", "en", "it", "es", "de", "fr", "pt", "ja", "zh", "ko", "ru"],
-		"tts.language": ["en", "it", "es", "de", "fr", "pt", "ja", "zh"],
-	};
 
 	function isComplex(f: FieldMeta): boolean {
 		for (const ck of COMPLEX_KEYS) {
@@ -50,14 +34,6 @@
 			.replace(/\b\w/g, (c) => c.toUpperCase());
 	}
 
-	/** Infer input size hint from key name */
-	function sizeHint(key: string): "narrow" | "medium" | "normal" {
-		const k = key.toLowerCase();
-		if (k.endsWith(".port") || k.endsWith("_port") || k.endsWith("_ms") || k.endsWith("_wpm") || k.endsWith(".beam_size") || k.endsWith(".channels") || k.endsWith(".speed") || k.endsWith("_timeout") || k.endsWith("_size") || k.endsWith("_repetitions")) return "narrow";
-		if (k.endsWith(".host") || k.endsWith("_host") || k.endsWith(".ip") || k.endsWith(".key") || k.endsWith(".device")) return "medium";
-		return "normal";
-	}
-
 	const fieldSchema = $derived(resolveFieldSchema(field.key, schema));
 	const enumValues = $derived(getEnumValues(fieldSchema));
 	const complex = $derived(isComplex(field));
@@ -66,7 +42,7 @@
 	const isDirty = $derived(field.key in settingsStore.getDirty());
 	const error = $derived(settingsStore.getSaveErrors()[field.key]);
 	const label = $derived(humanize(field.key));
-	const size = $derived(sizeHint(field.key));
+	const size = $derived((SIZE_HINTS[field.key] ?? "normal") as "narrow" | "medium" | "normal");
 </script>
 
 <div
