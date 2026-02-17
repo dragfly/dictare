@@ -26,6 +26,12 @@ export function hasDirtyFields(): boolean {
 	return Object.keys(dirty).length > 0;
 }
 
+export function resetDirty(): void {
+	dirty = {};
+	saveErrors = {};
+	saveStatus = "idle";
+}
+
 export async function load(): Promise<void> {
 	schema = await fetchSchema();
 }

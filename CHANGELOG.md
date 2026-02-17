@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b94] - 2026-02-17
+
+### Improved
+
+- **Settings UI polish** — Horizontal layout (label left, control right) for cleaner rows. Field details (description, key, env_var, default) moved into info tooltip. Dynamic input widths based on key name (port→narrow, host→medium). Enum fields show "Default (value)" option with capitalized labels. Save bar hidden when clean, added Cancel button with `resetDirty()`.
+
+### Fixed
+
+- **Tooltip.Provider missing** — Added `Tooltip.Provider` wrapper in layout to fix `Context "Tooltip.Provider" not found` crash.
+
 ## [0.1.0b93] - 2026-02-17
 
 ### Added

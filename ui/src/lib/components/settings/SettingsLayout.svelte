@@ -25,11 +25,13 @@
 <div class="flex h-screen">
 	<SettingsNav {tabs} bind:activeTabId version={schema?.version ?? ""} />
 	<main class="flex-1 overflow-y-auto">
-		<div class="max-w-2xl mx-auto px-8 py-6">
+		<div class="max-w-2xl mx-auto py-6">
 			<RestartBanner />
 			{#if activeTab && schema}
-				<h2 class="text-lg font-semibold mb-1">{activeTab.label}</h2>
-				<p class="text-sm text-muted-foreground mb-6">{activeTab.desc}</p>
+				<div class="px-4 mb-6">
+					<h2 class="text-lg font-semibold mb-1">{activeTab.label}</h2>
+					<p class="text-sm text-muted-foreground">{activeTab.desc}</p>
+				</div>
 				<SettingsSection tab={activeTab} {schema} />
 			{:else}
 				<div class="text-muted-foreground py-20 text-center text-sm">Loading settings...</div>

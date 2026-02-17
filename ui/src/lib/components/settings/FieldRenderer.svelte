@@ -7,6 +7,8 @@
 	import ComplexField from "./fields/ComplexField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
+	import * as Tooltip from "$lib/components/ui/tooltip";
+	import { Info } from "lucide-svelte";
 
 	interface Props {
 		field: FieldMeta;
@@ -29,58 +31,97 @@
 		return f.type === "dict" || f.type === "list";
 	}
 
+	/** Derive a short human label from the dotted key */
+	function humanize(key: string): string {
+		const last = key.split(".").pop() ?? key;
+		return last
+			.replace(/_/g, " ")
+			.replace(/\b\w/g, (c) => c.toUpperCase());
+	}
+
+	/** Infer input size hint from key name */
+	function sizeHint(key: string): "narrow" | "medium" | "normal" {
+		const k = key.toLowerCase();
+		if (k.endsWith(".port") || k.endsWith("_port") || k.endsWith("_ms") || k.endsWith("_wpm")) return "narrow";
+		if (k.endsWith(".host") || k.endsWith("_host") || k.endsWith(".ip") || k.endsWith(".key") || k.endsWith(".device")) return "medium";
+		return "normal";
+	}
+
 	const fieldSchema = $derived(resolveFieldSchema(field.key, schema));
 	const enumValues = $derived(getEnumValues(fieldSchema));
 	const complex = $derived(isComplex(field));
 	const currentValue = $derived(settingsStore.getValue(field.key));
 	const isDirty = $derived(field.key in settingsStore.getDirty());
 	const error = $derived(settingsStore.getSaveErrors()[field.key]);
+	const label = $derived(humanize(field.key));
+	const size = $derived(sizeHint(field.key));
 </script>
 
 <div
-	class="group rounded-lg px-4 py-3 transition-colors hover:bg-accent/30
+	class="flex items-center justify-between gap-4 rounded-lg px-4 py-3 transition-colors hover:bg-accent/30
 		{isDirty ? 'bg-accent/20 border-l-2 border-primary' : ''}"
 >
-	<div class="flex items-baseline gap-2 mb-1">
-		<span class="text-sm font-medium">{field.description || field.key}</span>
-		<code class="text-[11px] text-muted-foreground font-mono">{field.key}</code>
+	<!-- Left: label + info tooltip -->
+	<div class="flex items-center gap-1.5 min-w-0 shrink-0">
+		<span class="text-sm font-medium whitespace-nowrap">{label}</span>
+		<Tooltip.Root>
+			<Tooltip.Trigger class="text-muted-foreground hover:text-foreground transition-colors">
+				<Info class="size-3.5" />
+			</Tooltip.Trigger>
+			<Tooltip.Content side="right" class="max-w-xs space-y-1.5 text-xs">
+				{#if field.description}
+					<p>{field.description}</p>
+				{/if}
+				<p class="font-mono text-muted-foreground">
+					{field.key}
+				</p>
+				{#if field.env_var}
+					<p class="font-mono text-muted-foreground">
+						{field.env_var}
+					</p>
+				{/if}
+				{#if field.default !== null && field.default !== undefined}
+					<p class="text-muted-foreground">
+						Default: <code class="font-mono">{JSON.stringify(field.default)}</code>
+					</p>
+				{/if}
+			</Tooltip.Content>
+		</Tooltip.Root>
 	</div>
 
-	{#if complex}
-		<ComplexField />
-	{:else if field.type === "bool"}
-		<BoolField
-			checked={currentValue as boolean}
-			onchange={(v) => settingsStore.markDirty(field.key, v)}
-		/>
-	{:else if enumValues}
-		<EnumField
-			options={enumValues}
-			value={currentValue as string}
-			onchange={(v) => settingsStore.markDirty(field.key, v)}
-		/>
-	{:else if field.type === "int" || field.type === "float"}
-		<NumberField
-			value={currentValue as number}
-			step={field.type === "float" ? 0.01 : 1}
-			onchange={(v) => settingsStore.markDirty(field.key, v)}
-		/>
-	{:else}
-		<StringField
-			value={(currentValue as string) ?? ""}
-			onchange={(v) => settingsStore.markDirty(field.key, v)}
-		/>
-	{/if}
-
-	{#if field.default !== null && field.default !== undefined && !complex}
-		<p class="text-[11px] text-muted-foreground mt-1.5">
-			Default: <code class="font-mono">{JSON.stringify(field.default)}</code>
-		</p>
-	{/if}
-	{#if field.env_var}
-		<p class="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{field.env_var}</p>
-	{/if}
-	{#if error}
-		<p class="text-xs text-destructive mt-1">{error}</p>
-	{/if}
+	<!-- Right: control -->
+	<div class="flex items-center gap-2 shrink-0">
+		{#if complex}
+			<ComplexField />
+		{:else if field.type === "bool"}
+			<BoolField
+				checked={currentValue as boolean}
+				onchange={(v) => settingsStore.markDirty(field.key, v)}
+			/>
+		{:else if enumValues}
+			<EnumField
+				options={enumValues}
+				value={currentValue as string}
+				defaultValue={field.default as string}
+				onchange={(v) => settingsStore.markDirty(field.key, v)}
+			/>
+		{:else if field.type === "int" || field.type === "float"}
+			<NumberField
+				value={currentValue as number}
+				step={field.type === "float" ? 0.01 : 1}
+				{size}
+				onchange={(v) => settingsStore.markDirty(field.key, v)}
+			/>
+		{:else}
+			<StringField
+				value={(currentValue as string) ?? ""}
+				{size}
+				onchange={(v) => settingsStore.markDirty(field.key, v)}
+			/>
+		{/if}
+	</div>
 </div>
+
+{#if error}
+	<p class="text-xs text-destructive px-4 -mt-1 mb-1">{error}</p>
+{/if}
