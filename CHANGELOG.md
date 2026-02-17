@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b110] - 2026-02-17
+
+### Fixed
+
+- **Linux install script** — PyGObject installed AFTER `uv sync` (otherwise uv sync removes it). Fixed systemd service `--foreground` → no flag (foreground is default).
+
 ## [0.1.0b109] - 2026-02-17
 
 ### Fixed
