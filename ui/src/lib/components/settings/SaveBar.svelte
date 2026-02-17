@@ -4,6 +4,14 @@
 
 	const hasDirty = $derived(settingsStore.hasDirtyFields());
 	const status = $derived(settingsStore.getSaveStatus());
+
+	// Auto-dismiss "Saved" after 3 seconds
+	$effect(() => {
+		if (status === "saved") {
+			const timer = setTimeout(() => settingsStore.clearSaveStatus(), 3000);
+			return () => clearTimeout(timer);
+		}
+	});
 </script>
 
 {#if hasDirty || status === "saved" || status === "error"}

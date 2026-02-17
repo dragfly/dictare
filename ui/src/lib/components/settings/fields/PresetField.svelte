@@ -3,9 +3,10 @@
 	import { Input } from "$lib/components/ui/input";
 	import { Button } from "$lib/components/ui/button";
 	import { X } from "lucide-svelte";
+	import type { PresetOption } from "$lib/generated/field-config";
 
 	interface Props {
-		options: string[];
+		options: PresetOption[];
 		value: string;
 		defaultValue?: string;
 		onchange: (value: string) => void;
@@ -19,20 +20,39 @@
 	const SENTINEL = "__default__";
 	const CUSTOM = "__custom__";
 
+	/** Extract the raw value from a preset option */
+	function optValue(opt: PresetOption): string {
+		return typeof opt === "string" ? opt : opt.value;
+	}
+
+	/** Extract the display label from a preset option */
+	function optLabel(opt: PresetOption): string {
+		return typeof opt === "string" ? opt : opt.label;
+	}
+
+	const allValues = $derived(options.map(optValue));
+
 	const defaultLabel = $derived(
 		defaultValue != null ? `Default (${defaultValue})` : "Default"
 	);
 
 	/** Check if current value is in the known options or is the default */
 	const isKnown = $derived(
-		value === defaultValue || value === "" || value == null || options.includes(value)
+		value === defaultValue || value === "" || value == null || allValues.includes(value)
 	);
 
 	const displayValue = $derived(
 		value === defaultValue || value === "" || value == null
 			? SENTINEL
-			: options.includes(value) ? value : CUSTOM
+			: allValues.includes(value) ? value : CUSTOM
 	);
+
+	/** Find the label for the current value */
+	const currentLabel = $derived(() => {
+		if (displayValue === SENTINEL) return defaultLabel;
+		const opt = options.find((o) => optValue(o) === value);
+		return opt ? optLabel(opt) : value;
+	});
 
 	// If current value isn't in presets, start in custom mode
 	$effect(() => {
@@ -64,7 +84,6 @@
 
 	function exitCustomMode() {
 		customMode = false;
-		// Revert to default if custom value was empty
 		if (!customValue.trim()) {
 			onchange(defaultValue ?? "");
 		}
@@ -88,14 +107,12 @@
 {:else}
 	<Select.Root type="single" value={displayValue} onValueChange={(v) => { if (v) handleSelect(v); }}>
 		<Select.Trigger class="w-48">
-			{displayValue === SENTINEL ? defaultLabel : value}
+			{currentLabel()}
 		</Select.Trigger>
 		<Select.Content>
 			<Select.Item value={SENTINEL} label={defaultLabel} />
-			{#each options as opt (opt)}
-				{#if opt !== defaultValue}
-					<Select.Item value={opt} label={opt} />
-				{/if}
+			{#each options as opt (optValue(opt))}
+				<Select.Item value={optValue(opt)} label={optLabel(opt)} />
 			{/each}
 			<Select.Item value={CUSTOM} label="Custom…" />
 		</Select.Content>

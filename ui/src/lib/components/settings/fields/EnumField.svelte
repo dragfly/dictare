@@ -19,7 +19,7 @@
 		defaultValue != null ? `Default (${defaultValue})` : "Default"
 	);
 
-	/** Internal value: use empty string to represent "use default" */
+	/** Internal value: use sentinel to represent "use default" */
 	const SENTINEL = "__default__";
 
 	const displayValue = $derived(
@@ -48,9 +48,7 @@
 	<Select.Content>
 		<Select.Item value={SENTINEL} label={defaultLabel} />
 		{#each options as opt (opt)}
-			{#if opt !== defaultValue}
-				<Select.Item value={opt} label={capitalize(opt)} />
-			{/if}
+			<Select.Item value={opt} label={capitalize(opt)} />
 		{/each}
 	</Select.Content>
 </Select.Root>

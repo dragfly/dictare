@@ -32,6 +32,12 @@ export function resetDirty(): void {
 	saveStatus = "idle";
 }
 
+export function clearSaveStatus(): void {
+	if (saveStatus === "saved") {
+		saveStatus = "idle";
+	}
+}
+
 export async function load(): Promise<void> {
 	schema = await fetchSchema();
 }
