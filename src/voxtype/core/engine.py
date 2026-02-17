@@ -213,7 +213,14 @@ class VoxtypeEngine:
         self._persist_state()
 
     def _persist_state(self) -> None:
-        """Save current engine state to disk for restore after restart."""
+        """Save current engine state to disk for restore after restart.
+
+        Skipped when engine is not running (during shutdown, agents
+        unregister and state would be saved as None/idle).
+        """
+        if not self._running:
+            return
+
         from voxtype.utils.state import save_state
 
         save_state(
