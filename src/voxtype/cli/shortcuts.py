@@ -100,14 +100,14 @@ def _get_current_shortcuts(config) -> dict[str, str]:
 
 
 def _save_shortcuts(shortcuts: dict[str, str], config_path: Path) -> None:
-    import toml  # type: ignore[import-untyped]
+    import tomlkit
 
-    config_data = {}
     if config_path.exists():
-        with open(config_path) as f:
-            config_data = toml.load(f)
+        doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+    else:
+        doc = tomlkit.document()
 
-    shortcuts_list = []
+    shortcuts_list: list[dict[str, Any]] = []
     for cmd in AVAILABLE_COMMANDS:
         key = _command_key(cmd)
         if key in shortcuts and shortcuts[key]:
@@ -116,13 +116,12 @@ def _save_shortcuts(shortcuts: dict[str, str], config_path: Path) -> None:
                 entry["args"] = cmd["args"]
             shortcuts_list.append(entry)
 
-    if "keyboard" not in config_data:
-        config_data["keyboard"] = {}
-    config_data["keyboard"]["shortcuts"] = shortcuts_list
+    if "keyboard" not in doc:
+        doc.add("keyboard", tomlkit.table())
+    doc["keyboard"]["shortcuts"] = shortcuts_list  # type: ignore[index]
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(config_path, "w") as f:
-        toml.dump(config_data, f)
+    config_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
 
 
 def _normalize_shortcut(s: str) -> str:

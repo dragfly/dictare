@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b88] - 2026-02-17
+
+### Fixed
+
+- **Config file overwritten on `config set` and `config shortcuts`** — `_write_config()` rebuilt the entire file from scratch, destroying comments and formatting. `_save_shortcuts()` used `toml.dump()` which stripped all comments. Both now use `tomlkit` to preserve comments, formatting, and structure.
+- **Replaced `toml` dependency with `tomlkit`** — `toml` (unmaintained) replaced by `tomlkit` which preserves comments and formatting on round-trip.
+
 ## [0.1.0b87] - 2026-02-17
 
 ### Improved
