@@ -102,6 +102,7 @@ class TestEnginePersistState:
 
     def test_persist_saves_current_state(self, state_dir: Path) -> None:
         engine = self._make_engine()
+        engine._running = True
         engine.agent_mode = True
         engine._current_agent_id = "claude"
         engine._persist_state()
@@ -112,12 +113,29 @@ class TestEnginePersistState:
 
     def test_persist_keyboard_mode(self, state_dir: Path) -> None:
         engine = self._make_engine()
+        engine._running = True
         engine.agent_mode = False
         engine._current_agent_id = "__keyboard__"
         engine._persist_state()
 
         loaded = load_state()
         assert loaded["output_mode"] == "keyboard"
+
+    def test_persist_skipped_during_shutdown(self, state_dir: Path) -> None:
+        engine = self._make_engine()
+        engine._running = True
+        engine.agent_mode = True
+        engine._current_agent_id = "voice"
+        engine._persist_state()
+
+        # Simulate shutdown: _running = False, agent cleared
+        engine._running = False
+        engine._current_agent_id = None
+        engine._persist_state()
+
+        # State file should still have "voice" (not overwritten)
+        loaded = load_state()
+        assert loaded["active_agent"] == "voice"
 
     def test_restore_sets_agent_mode(self, state_dir: Path) -> None:
         save_state(output_mode="agents", active_agent="claude")
