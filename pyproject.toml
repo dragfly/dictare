@@ -32,7 +32,7 @@ dependencies = [
     "typer>=0.12.0",
     "pydantic>=2.0.0",
     "faster-whisper>=1.0.0",
-    "toml>=0.10.0",
+    "tomlkit>=0.13.0",
     "rich>=13.0.0",  # Console output, tables, progress bars
     # Platform-specific dependencies
     "evdev>=1.7.0; sys_platform == 'linux'",
@@ -50,6 +50,7 @@ dependencies = [
     "sse-starlette>=2.0.0",
     # OpenVIP client SDK
     "openvip>=1.0.0",
+    "tomlkit>=0.14.0",
 ]
 
 [project.optional-dependencies]
