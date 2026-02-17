@@ -140,6 +140,29 @@ class TestTrayStates:
         # _update_icon was called; the icon should be set to voxtype_muted
         assert mock_icon.icon is not None  # icon was updated
 
+    def test_icon_state_mapping(self) -> None:
+        """Verify each state maps to the correct icon name.
+
+        red (muted)  = disconnected, loading
+        yellow       = off (idle)
+        green        = listening
+        """
+        app = TrayApp()
+        mock_icon = MagicMock()
+        app._icon = mock_icon
+
+        expected = {
+            "disconnected": "voxtype_muted",
+            "loading": "voxtype_muted",
+            "off": "voxtype",
+            "listening": "voxtype_active",
+        }
+        for state, icon_name in expected.items():
+            with patch("voxtype.tray.app._load_icon", return_value="img") as mock_load:
+                with patch.object(app, "_update_menu"):
+                    app.set_state(state)
+                mock_load.assert_called_with(icon_name), f"state={state}"
+
     def test_menu_status_disconnected(self) -> None:
         app = TrayApp()
         app._state = "disconnected"
