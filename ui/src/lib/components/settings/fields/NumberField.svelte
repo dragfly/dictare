@@ -16,12 +16,13 @@
 </script>
 
 <Input
-	type="number"
-	class="{widthClass} text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0"
-	{step}
+	type="text"
+	inputmode="numeric"
+	class="{widthClass} text-right"
 	value={value ?? ""}
 	onchange={(e) => {
-		const v = step === 1 ? parseInt(e.currentTarget.value, 10) : parseFloat(e.currentTarget.value);
+		const raw = e.currentTarget.value.trim();
+		const v = step === 1 ? parseInt(raw, 10) : parseFloat(raw);
 		if (!isNaN(v)) onchange(v);
 	}}
 />
