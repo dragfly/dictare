@@ -430,6 +430,17 @@ class TrayApp:
 
         self._icon.icon = _load_icon(icon_name)
 
+        # Update hover tooltip with current state
+        title_map = {
+            "disconnected": "VoxType — Disconnected",
+            "restarting": "VoxType — Restarting…",
+            "loading": "VoxType — Loading"
+            + (f" {self._loading_stage}…" if self._loading_stage else "…"),
+            "off": "VoxType — Idle",
+            "listening": "VoxType — Listening",
+        }
+        self._icon.title = title_map.get(self._state, "VoxType")
+
     def _update_menu(self) -> None:
         """Update the tray menu."""
         if self._icon:
