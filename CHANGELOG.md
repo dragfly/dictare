@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b93] - 2026-02-17
+
+### Added
+
+- **Tray `restarting` state** — New distinct state shown when engine restart is triggered from tray. Shows blue icon with "Restarting..." status text. SSE disconnect is suppressed during restart (stays blue instead of flashing red). Clears automatically when engine reports loading/idle/listening.
+
 ## [0.1.0b92] - 2026-02-17
 
 ### Fixed

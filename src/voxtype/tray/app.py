@@ -125,9 +125,10 @@ class TrayApp:
 
     def __init__(self) -> None:
         self._icon: pystray.Icon | None = None
-        self._state = "disconnected"  # disconnected, off, listening, loading
+        self._state = "disconnected"  # disconnected, restarting, loading, off, listening
         self._progress: int = 0  # 0-100, for loading state
         self._loading_stage: str = ""  # "STT" | "VAD" | ""
+        self._restarting = False  # True while engine restart in progress
         self._targets: list[str] = []
         self._current_target: str = ""
 
@@ -163,7 +164,9 @@ class TrayApp:
         import pystray
 
         # Status line
-        if self._state == "loading":
+        if self._state == "restarting":
+            status_text = "Restarting..."
+        elif self._state == "loading":
             stage_text = f" {self._loading_stage}..." if self._loading_stage else ""
             status_text = f"Loading{stage_text}"
         elif self._state == "disconnected":
@@ -309,6 +312,10 @@ class TrayApp:
         import sys
         import threading
 
+        # Show blue "Restarting..." immediately
+        self._restarting = True
+        self.set_state("restarting")
+
         def do_restart() -> None:
             try:
                 # Try brew services first (if brew is managing the service)
@@ -335,6 +342,8 @@ class TrayApp:
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).error(f"Restart failed: {e}")
+                self._restarting = False
+                self.set_state("disconnected")
 
         threading.Thread(target=do_restart, daemon=True).start()
 
@@ -409,13 +418,14 @@ class TrayApp:
 
         icon_name = {
             "disconnected": "voxtype_muted",  # Red — server unreachable
+            "restarting": "voxtype_loading",  # Blue — engine restarting
             "loading": "voxtype_loading",  # Blue — connected, preparing
             "off": "voxtype",  # Yellow — ready, idle
             "listening": "voxtype_active",  # Green — listening
         }.get(self._state, "voxtype_muted")
 
         # Override to muted if permissions not granted
-        if (not self._accessibility_granted or not self._microphone_granted) and self._state not in ("disconnected", "loading"):
+        if (not self._accessibility_granted or not self._microphone_granted) and self._state not in ("disconnected", "restarting", "loading"):
             icon_name = "voxtype_muted"
 
         self._icon.icon = _load_icon(icon_name)
@@ -438,10 +448,13 @@ class TrayApp:
             progress: Loading progress 0-100 (only for loading state)
             loading_stage: What's loading ("STT", "VAD", "")
         """
-        if state in ("disconnected", "off", "listening", "loading"):
+        if state in ("disconnected", "restarting", "loading", "off", "listening"):
             self._state = state
             self._progress = progress
             self._loading_stage = loading_stage
+            # Clear restarting flag once engine reports a real state
+            if state not in ("disconnected", "restarting"):
+                self._restarting = False
             self._update_icon()
             self._update_menu()
 
@@ -503,7 +516,9 @@ class TrayApp:
 
             def _on_disconnect(exc: Exception | None) -> None:
                 if exc:
-                    self.set_state("disconnected")
+                    # During restart, stay blue instead of going red
+                    if not self._restarting:
+                        self.set_state("disconnected")
 
             try:
                 for status in client.subscribe_status(
@@ -533,7 +548,8 @@ class TrayApp:
                         self._update_menu()
                         self._update_icon()
             except Exception:
-                self.set_state("disconnected")
+                if not self._restarting:
+                    self.set_state("disconnected")
 
         self._polling = True
         self._poll_thread = threading.Thread(target=stream, daemon=True)
