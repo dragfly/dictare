@@ -15,6 +15,42 @@ DIST_DIR="${PROJECT_DIR}/dist"
 OPENVIP_DIR="$(cd "${PROJECT_DIR}/../../openvip-dev/sdks/python" && pwd)"
 OPENVIP_TARBALL="${OPENVIP_DIR}/dist/openvip-1.1.0.tar.gz"
 
+# ---------- Helpers ----------
+
+stop_services() {
+    echo "==> Stopping services..."
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        # macOS: brew service + launchd tray
+        brew services stop voxtype 2>/dev/null || true
+        "${BREW_PREFIX}/bin/voxtype" tray stop 2>/dev/null || true
+    else
+        # Linux: try systemd user service first, then brew
+        if systemctl --user is-active voxtype.service &>/dev/null; then
+            systemctl --user stop voxtype.service 2>/dev/null || true
+        else
+            brew services stop voxtype 2>/dev/null || true
+        fi
+        "${BREW_PREFIX}/bin/voxtype" tray stop 2>/dev/null || true
+    fi
+}
+
+start_services() {
+    echo "==> Starting service..."
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        brew services start voxtype 2>&1
+        echo "==> Done. Use 'voxtype tray start' for the tray icon."
+    else
+        if [[ -f "$HOME/.config/systemd/user/voxtype.service" ]]; then
+            systemctl --user daemon-reload
+            systemctl --user start voxtype.service 2>&1
+            echo "==> Done (systemd). Use 'voxtype tray start' for the tray icon."
+        else
+            brew services start voxtype 2>&1
+            echo "==> Done (brew). Use 'voxtype tray start' for the tray icon."
+        fi
+    fi
+}
+
 # ---------- 1. Read version from source ----------
 VERSION=$(.venv/bin/python -c "
 import re, pathlib
@@ -62,9 +98,7 @@ fi
     "$FORMULA"
 
 # ---------- 5. Stop running services ----------
-echo "==> Stopping services..."
-brew services stop voxtype 2>/dev/null || true
-"${BREW_PREFIX}/bin/voxtype" tray stop 2>/dev/null || true
+stop_services
 
 # ---------- 6. Reinstall ----------
 echo "==> brew reinstall voxtype..."
@@ -80,7 +114,4 @@ if [[ "$INSTALLED" != *"$VERSION"* ]]; then
 fi
 
 # ---------- 8. Restart service ----------
-echo "==> Starting service..."
-brew services start voxtype 2>&1
-
-echo "==> Done. Use 'voxtype tray start' for the tray icon."
+start_services
