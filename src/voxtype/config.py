@@ -325,6 +325,10 @@ class DaemonConfig(BaseModel):
         default=0,
         description="Shutdown daemon after N seconds of inactivity (0 = never)",
     )
+    restore_listening: bool = Field(
+        default=False,
+        description="Restore listening state on restart (false = always start idle)",
+    )
 
 class TTSConfig(BaseModel):
     """Text-to-speech configuration."""

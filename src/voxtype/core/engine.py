@@ -208,6 +208,39 @@ class VoxtypeEngine:
         """Notify status change via registered callback."""
         if self._status_change_callback is not None:
             self._status_change_callback()
+        self._persist_state()
+
+    def _persist_state(self) -> None:
+        """Save current engine state to disk for restore after restart."""
+        from voxtype.utils.state import save_state
+
+        save_state(
+            active_agent=self._current_agent_id,
+            output_mode="agents" if self.agent_mode else "keyboard",
+            listening=self.is_listening,
+        )
+
+    def _restore_state(self) -> None:
+        """Restore engine state from disk after restart."""
+        from voxtype.utils.state import load_state
+
+        saved = load_state()
+        logger.info("Restoring state: %s", saved)
+
+        # Restore output mode
+        saved_mode = saved.get("output_mode", "keyboard")
+        if saved_mode == "agents" and not self.agent_mode:
+            self.agent_mode = True
+            logger.info("Restored output mode: agents")
+        elif saved_mode == "keyboard" and self.agent_mode:
+            self.agent_mode = False
+            logger.info("Restored output mode: keyboard")
+
+        # Remember preferred agent for when it reconnects
+        saved_agent = saved.get("active_agent")
+        if saved_agent and saved_agent != "__keyboard__":
+            self._last_sse_agent_id = saved_agent
+            logger.info("Preferred agent: %s (will activate on reconnect)", saved_agent)
 
     # -------------------------------------------------------------------------
     # Properties
@@ -935,9 +968,15 @@ class VoxtypeEngine:
         self._agents[agent.id] = agent
         self._agent_order.append(agent.id)
 
-        # If this is the first non-reserved agent, make it current
-        if self._current_agent_id is None and agent.id not in self.RESERVED_AGENT_IDS:
-            self._current_agent_id = agent.id
+        # Activate this agent if:
+        # 1. It's the saved preferred agent from last session, OR
+        # 2. It's the first non-reserved agent and no current agent set
+        if agent.id not in self.RESERVED_AGENT_IDS:
+            if self._last_sse_agent_id and agent.id == self._last_sse_agent_id:
+                self._current_agent_id = agent.id
+                logger.info("Activated preferred agent from saved state: %s", agent.id)
+            elif self._current_agent_id is None:
+                self._current_agent_id = agent.id
 
         bus.publish("agent.registered", agent_id=agent.id)
         self._notify_status()
@@ -1385,6 +1424,9 @@ class VoxtypeEngine:
                 should_process=lambda: self._state_manager.should_process_audio,
                 is_running=lambda: self._running,
             )
+
+        # Restore saved state (output mode, preferred agent)
+        self._restore_state()
 
         # Transition to initial state
         if start_listening:
