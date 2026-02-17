@@ -42,7 +42,7 @@
 </script>
 
 <Select.Root type="single" value={displayValue} onValueChange={(v) => { if (v) handleChange(v); }}>
-	<Select.Trigger class="w-auto min-w-[10rem]">
+	<Select.Trigger class="w-48">
 		{displayLabel}
 	</Select.Trigger>
 	<Select.Content>

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b96] - 2026-02-17
+
+### Fixed
+
+- **[object Object] for client config** — `client` section was missing from `list_config_keys()` sections list. Now properly expands to client.url, client.status_bar, client.clear_on_start individual fields.
+- **Numbers right-aligned and compact** — NumberField now uses `text-right` and reduced widths (w-20/w-24/w-28).
+- **Input widths reduced** — StringField (w-24/w-36/w-48), EnumField (w-48), all tighter and visually aligned.
+- **Tooltip wrapping** — Changed from `max-w-xs` to `max-w-sm` with `break-words` for long descriptions.
+- **Size hints expanded** — More fields (beam_size, channels, speed, timeout) now get compact "narrow" sizing.
+
+### Added
+
+- **Preset dropdowns for STT/TTS fields** — stt.model, stt.realtime_model, stt.language, tts.language now show dropdown with common presets + "Custom…" option for free-form entry. First option is always "Default (value)".
+- **Literal types for STT compute_type/device** — Converted from plain `str` to `Literal["int8","float16","float32"]` and `Literal["auto","cpu","cuda","mlx"]`. JSON Schema now emits proper enum → automatic dropdown in UI.
+- **pipeline.submit_filter and pipeline.agent_filter** added to COMPLEX_KEYS (edit via config.toml).
+
 ## [0.1.0b95] - 2026-02-17
 
 ### Added
