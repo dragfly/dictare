@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 
 from voxtype.tts.base import TTSEngine
+
+logger = logging.getLogger(__name__)
 
 
 class EspeakTTS(TTSEngine):
@@ -23,11 +26,13 @@ class EspeakTTS(TTSEngine):
         self._cmd = self._detect_espeak()
 
     def _detect_espeak(self) -> str | None:
-        """Detect espeak or espeak-ng."""
-        if shutil.which("espeak-ng"):
-            return "espeak-ng"
-        if shutil.which("espeak"):
-            return "espeak"
+        """Detect espeak or espeak-ng (stores full path for daemon safety)."""
+        path = shutil.which("espeak-ng")
+        if path:
+            return path
+        path = shutil.which("espeak")
+        if path:
+            return path
         return None
 
     def is_available(self) -> bool:
@@ -44,10 +49,11 @@ class EspeakTTS(TTSEngine):
             True if successful.
         """
         if not self._cmd:
+            logger.warning("espeak: no binary found")
             return False
 
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [
                     self._cmd,
                     "-v", self.language,
@@ -57,8 +63,16 @@ class EspeakTTS(TTSEngine):
                 capture_output=True,
                 timeout=60,
             )
+            if result.returncode != 0:
+                logger.warning(
+                    "espeak exited %d: %s",
+                    result.returncode,
+                    result.stderr.decode(errors="replace").strip(),
+                )
+                return False
             return True
         except Exception:
+            logger.warning("espeak subprocess failed", exc_info=True)
             return False
 
     def get_name(self) -> str:

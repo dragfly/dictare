@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b86] - 2026-02-17
+
+### Fixed
+
+- **espeak TTS fails silently in daemon mode** — `_detect_espeak()` stored only the command name ("espeak"), not the full path. In daemon environments where PATH may differ, the subprocess could fail to find the binary. Now stores the absolute path from `shutil.which()`. Also added logging for all espeak failure modes (binary not found, non-zero exit, subprocess error).
+- **TTS chain has no diagnostic logging** — Added logging at every step: app command received, agent switch dispatched, `_set_current_agent()` called, `on_agent_change` callback, `speak_text()` dispatch, and `tts.speak()` result. Silent failures are now impossible.
+
 ## [0.1.0b85] - 2026-02-16
 
 ### Fixed
