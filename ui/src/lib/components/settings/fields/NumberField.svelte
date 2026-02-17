@@ -13,30 +13,27 @@
 	const widthClass = $derived(
 		size === "narrow" ? "w-20" : size === "medium" ? "w-24" : "w-28"
 	);
-
-	const isFloat = $derived(step !== 1);
-	const pattern = $derived(isFloat ? "[0-9.\\-]*" : "[0-9\\-]*");
-
-	function filterInput(e: Event) {
-		const input = e.currentTarget as HTMLInputElement;
-		const allowed = isFloat ? /[^0-9.\-]/g : /[^0-9\-]/g;
-		const filtered = input.value.replace(allowed, "");
-		if (filtered !== input.value) {
-			input.value = filtered;
-		}
-	}
 </script>
 
 <Input
-	type="text"
-	inputmode="numeric"
-	{pattern}
-	class="{widthClass} text-right"
+	type="number"
+	class="hide-spinners {widthClass} text-right"
+	{step}
 	value={value ?? ""}
-	oninput={filterInput}
 	onchange={(e) => {
-		const raw = e.currentTarget.value.trim();
-		const v = isFloat ? parseFloat(raw) : parseInt(raw, 10);
+		const v = step === 1 ? parseInt(e.currentTarget.value, 10) : parseFloat(e.currentTarget.value);
 		if (!isNaN(v)) onchange(v);
 	}}
 />
+
+<style>
+	:global(.hide-spinners::-webkit-inner-spin-button),
+	:global(.hide-spinners::-webkit-outer-spin-button) {
+		-webkit-appearance: none;
+		margin: 0;
+		display: none;
+	}
+	:global(.hide-spinners) {
+		-moz-appearance: textfield;
+	}
+</style>
