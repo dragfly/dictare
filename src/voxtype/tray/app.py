@@ -413,10 +413,10 @@ class TrayApp:
             return
 
         icon_name = {
-            "disconnected": "voxtype_muted",
-            "off": "voxtype",
-            "listening": "voxtype_active",
-            "loading": "voxtype_muted",  # Red — engine not ready yet
+            "disconnected": "voxtype_muted",  # Red — server unreachable
+            "loading": "voxtype_loading",  # Blue — connected, preparing
+            "off": "voxtype",  # Yellow — ready, idle
+            "listening": "voxtype_active",  # Green — listening
         }.get(self._state, "voxtype_muted")
 
         # Override to muted if permissions not granted

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b92] - 2026-02-17
+
+### Fixed
+
+- **Tray icon color code** — Four distinct colors for four states: red = disconnected (server unreachable), blue = loading/restarting (connected, preparing), yellow = idle (ready), green = listening. Loading previously reused the yellow idle icon; now uses the dedicated blue `voxtype_loading` icon.
+
 ## [0.1.0b91] - 2026-02-17
 
 ### Fixed
