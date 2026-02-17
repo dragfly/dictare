@@ -32,19 +32,22 @@ def client(settings_app):
     return TestClient(settings_app)
 
 class TestGetSettingsPage:
-    """GET /settings — serves the HTML page."""
+    """GET /settings — redirects to SPA or serves fallback HTML."""
 
-    def test_returns_html(self, client):
-        r = client.get("/settings")
+    def test_settings_redirects_to_ui(self, client):
+        r = client.get("/settings", follow_redirects=False)
+        assert r.status_code in (301, 302, 307, 308)
+        assert "/ui" in r.headers.get("location", "")
+
+    def test_ui_serves_html(self, client):
+        r = client.get("/ui/")
         assert r.status_code == 200
         assert "text/html" in r.headers["content-type"]
 
-    def test_contains_app_structure(self, client):
-        r = client.get("/settings")
+    def test_ui_contains_sveltekit_app(self, client):
+        r = client.get("/ui/")
         html = r.text
         assert "<title>VoxType Settings</title>" in html
-        assert "sidebar" in html
-        assert "/settings/schema" in html
 
 class TestGetSettingsSchema:
     """GET /settings/schema — returns JSON Schema + current values."""

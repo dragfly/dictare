@@ -241,12 +241,37 @@ class OpenVIPServer:
 
         # ----- Settings UI -----
 
-        @app.get("/settings", response_class=HTMLResponse)
-        async def settings_page():
-            """Serve the Settings UI page."""
-            from voxtype.core.settings_ui import get_settings_html
+        from pathlib import Path as _Path
 
-            return get_settings_html()
+        _ui_dist = _Path(__file__).parent.parent / "ui" / "dist"
+
+        if _ui_dist.is_dir():
+            from starlette.responses import RedirectResponse
+            from starlette.staticfiles import StaticFiles
+
+            @app.get("/settings")
+            async def settings_redirect():
+                """Redirect to new Settings SPA."""
+                return RedirectResponse(url="/ui/")
+
+            @app.get("/ui")
+            async def ui_redirect():
+                """Redirect /ui to /ui/."""
+                return RedirectResponse(url="/ui/")
+
+            app.mount(
+                "/ui",
+                StaticFiles(directory=str(_ui_dist), html=True),
+                name="ui",
+            )
+        else:
+
+            @app.get("/settings", response_class=HTMLResponse)
+            async def settings_page():
+                """Serve the fallback Settings UI page."""
+                from voxtype.core.settings_ui import get_settings_html
+
+                return get_settings_html()
 
         @app.get("/settings/schema")
         async def settings_schema():
