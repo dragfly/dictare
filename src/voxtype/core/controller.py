@@ -380,7 +380,11 @@ class StateController:
 
     def _handle_agent_switch(self, event: SwitchAgent) -> None:
         """User wants to switch agent."""
-        if not self._engine or not self._engine.agents:
+        if not self._engine:
+            logger.warning("agent_switch: no engine")
+            return
+        if not self._engine.agents:
+            logger.warning("agent_switch: no agents registered")
             return
 
         # Flush VAD to send buffered audio to CURRENT agent before switching
