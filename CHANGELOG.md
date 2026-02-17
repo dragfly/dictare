@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b106] - 2026-02-17
+
+### Fixed
+
+- **State restore timing** — `_restore_state()` now runs before HTTP server starts (was running 9s after agents registered). Preferred agent and output mode are correctly set when SSE agents connect.
+- **Restore listening on restart** — `daemon.restore_listening` set to `true` in config. Engine now restores listening state across restarts.
+
 ## [0.1.0b105] - 2026-02-17
 
 ### Fixed

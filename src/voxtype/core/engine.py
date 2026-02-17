@@ -1425,9 +1425,6 @@ class VoxtypeEngine:
                 is_running=lambda: self._running,
             )
 
-        # Restore saved state (output mode, preferred agent)
-        self._restore_state()
-
         # Transition to initial state
         if start_listening:
             old_state = self.state
