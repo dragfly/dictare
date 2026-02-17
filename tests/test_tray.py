@@ -138,9 +138,10 @@ class TestTrayStates:
     def test_icon_state_mapping(self) -> None:
         """Verify each state maps to the correct icon name.
 
-        red (muted)  = disconnected, loading
-        yellow       = off (idle)
-        green        = listening
+        red    (muted)   = disconnected — server unreachable
+        blue   (loading) = loading — connected, preparing
+        yellow (default) = off (idle) — ready
+        green  (active)  = listening
         """
         app = TrayApp()
         mock_icon = MagicMock()
@@ -148,7 +149,7 @@ class TestTrayStates:
 
         expected = {
             "disconnected": "voxtype_muted",
-            "loading": "voxtype_muted",
+            "loading": "voxtype_loading",
             "off": "voxtype",
             "listening": "voxtype_active",
         }
