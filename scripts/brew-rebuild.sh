@@ -5,7 +5,8 @@
 set -euo pipefail
 
 BREW_PREFIX="$(brew --prefix)"
-FORMULA="${BREW_PREFIX}/Library/Taps/dragfly/homebrew-voxtype/Formula/voxtype.rb"
+# Homebrew tap path differs: macOS uses $PREFIX/Library, Linux uses $PREFIX/Homebrew/Library
+FORMULA="$(brew --repository)/Library/Taps/dragfly/homebrew-voxtype/Formula/voxtype.rb"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="${PROJECT_DIR}/dist"
