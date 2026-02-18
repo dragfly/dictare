@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b120] - 2026-02-18
+
+### Fixed
+
+- SettingsNav: `effect_update_depth_exceeded` crash when expanding Keyboard/Advanced
+  — `$effect` read `expanded` via spread, causing a reactive loop. Fixed with `untrack()`.
+
+### Added
+
+- TOML editor support for `audio.sounds`, `pipeline.submit_filter`, `pipeline.agent_filter`
+  (backend serialize/apply + frontend widget)
+- Size hints for previously unsized string fields: `audio.device`, `stt.hotwords`,
+  `tts.voice`, `logging.log_file`, `daemon.socket_path`
+- ui-hints.json regenerated; `pipeline.submit_filter.triggers` removed as standalone key
+
 ## [0.1.0b119] - 2026-02-18
 
 ### Changed
