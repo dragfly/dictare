@@ -323,6 +323,40 @@ class OpenVIPServer:
             except (ValueError, ValidationError) as e:
                 raise HTTPException(status_code=422, detail=str(e))
 
+        @app.get("/settings/toml-section/{section}")
+        async def get_toml_section(section: str):
+            """Return the current TOML fragment for a complex config section."""
+            from voxtype.config import load_config
+            from voxtype.core.toml_sections import serialize_section
+
+            config = load_config()
+            try:
+                content = serialize_section(section, config)
+            except KeyError:
+                raise HTTPException(status_code=404, detail=f"Unknown section: {section}")
+            return {"section": section, "content": content}
+
+        @app.post("/settings/toml-section/{section}")
+        async def update_toml_section(section: str, request: Request):
+            """Validate and save a TOML section submitted from the UI editor."""
+            from pydantic import ValidationError
+
+            from voxtype.config import get_config_path, load_config
+            from voxtype.core.toml_sections import apply_section
+
+            body = await request.json()
+            content = body.get("content", "")
+            if not content.strip():
+                raise HTTPException(status_code=400, detail="Empty content")
+            try:
+                apply_section(section, content, get_config_path())
+                load_config()  # re-validate after save
+            except KeyError:
+                raise HTTPException(status_code=404, detail=f"Unknown section: {section}")
+            except (ValueError, ValidationError) as e:
+                raise HTTPException(status_code=422, detail=str(e))
+            return {"status": "ok", "section": section}
+
         return app
 
     def start(self) -> None:

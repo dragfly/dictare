@@ -73,19 +73,30 @@ def register(app: typer.Typer) -> None:
             voxtype agent claude                        # Use template from config
             voxtype agent claude -- claude --model opus # Override command
         """
-        # Show help if no agent_id
-        if agent_id is None:
-            import click
-
-            click.echo(ctx.get_help())
-            raise typer.Exit(0)
-
         from voxtype.agent import run_agent
         from voxtype.config import load_config
 
         config = load_config()
         if server is None:
             server = config.client.url
+
+        # Resolve agent_id: explicit arg > default_agent_type > help
+        if agent_id is None:
+            if config.default_agent_type:
+                agent_id = config.default_agent_type
+            else:
+                import click
+
+                click.echo(ctx.get_help())
+                if config.agent_types:
+                    console.print()
+                    console.print("[dim]Available agent types:[/]")
+                    for name, at in config.agent_types.items():
+                        desc = f"  {at.description}" if at.description else ""
+                        console.print(f"[dim]  {name}{desc}[/]")
+                    console.print()
+                    console.print("[dim]Set a default: voxtype config set default_agent_type claude[/]")
+                raise typer.Exit(0)
 
         # Parse extra args: extract own flags and command override
         args = list(ctx.args)
@@ -110,17 +121,17 @@ def register(app: typer.Typer) -> None:
 
         command_override = [arg for i, arg in enumerate(args) if i not in own_flags_to_remove]
 
-        # Resolve command: explicit override > template > error
-        template = config.agents.get(agent_id)
+        # Resolve command: explicit override > agent type > error
+        agent_type = config.agent_types.get(agent_id)
         if command_override:
             command = command_override
-        elif template:
-            command = template.command
+        elif agent_type:
+            command = agent_type.command
         else:
-            console.print(f"[red]Error: No template '{agent_id}' in config and no command specified[/]")
+            console.print(f"[red]Error: No agent type '{agent_id}' in config and no command specified[/]")
             console.print()
-            console.print("[dim]Either add a template to ~/.config/voxtype/config.toml:[/]")
-            console.print(f'[dim]  [agents.{agent_id}][/]')
+            console.print("[dim]Either add an agent type to ~/.config/voxtype/config.toml:[/]")
+            console.print(f'[dim]  [agent_types.{agent_id}][/]')
             console.print(f'[dim]  command = ["{agent_id}"][/]')
             console.print()
             console.print("[dim]Or specify the command explicitly:[/]")

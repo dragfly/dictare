@@ -1,4 +1,4 @@
-"""Tests for agent template config and single-command launch logic."""
+"""Tests for agent type config and single-command launch logic."""
 
 from __future__ import annotations
 
@@ -7,20 +7,22 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from voxtype.cli.agent import _check_engine, _try_start_service
-from voxtype.config import AgentTemplateConfig, Config, load_config
+from voxtype.config import AgentTypeConfig, Config, load_config
 
 # ---------------------------------------------------------------------------
-# AgentTemplateConfig parsing
+# AgentTypeConfig parsing
 # ---------------------------------------------------------------------------
 
 
-class TestAgentTemplateConfig:
-    def test_config_with_agents(self):
+class TestAgentTypeConfig:
+    def test_config_with_agent_types(self):
         toml_content = """
-[agents.claude]
+default_agent_type = "claude"
+
+[agent_types.claude]
 command = ["claude"]
 
-[agents.aider]
+[agent_types.aider]
 command = ["aider", "--model", "claude-3-opus"]
 """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
@@ -29,17 +31,19 @@ command = ["aider", "--model", "claude-3-opus"]
 
         try:
             config = load_config(temp_path)
-            assert "claude" in config.agents
-            assert config.agents["claude"].command == ["claude"]
-            assert config.agents["aider"].command == ["aider", "--model", "claude-3-opus"]
+            assert config.default_agent_type == "claude"
+            assert "claude" in config.agent_types
+            assert config.agent_types["claude"].command == ["claude"]
+            assert config.agent_types["aider"].command == ["aider", "--model", "claude-3-opus"]
         finally:
             temp_path.unlink()
 
-    def test_config_without_agents(self):
+    def test_config_without_agent_types(self):
         config = Config()
-        assert config.agents == {}
+        assert config.agent_types == {}
+        assert config.default_agent_type is None
 
-    def test_config_partial_no_agents(self):
+    def test_config_partial_no_agent_types(self):
         toml_content = """
 [stt]
 model = "tiny"
@@ -50,20 +54,41 @@ model = "tiny"
 
         try:
             config = load_config(temp_path)
-            assert config.agents == {}
+            assert config.agent_types == {}
             assert config.stt.model == "tiny"
         finally:
             temp_path.unlink()
 
-    def test_template_lookup_hit(self):
-        config = Config(agents={"claude": AgentTemplateConfig(command=["claude"])})
-        template = config.agents.get("claude")
-        assert template is not None
-        assert template.command == ["claude"]
+    def test_agent_type_lookup_hit(self):
+        config = Config(agent_types={"claude": AgentTypeConfig(command=["claude"])})
+        agent_type = config.agent_types.get("claude")
+        assert agent_type is not None
+        assert agent_type.command == ["claude"]
 
-    def test_template_lookup_miss(self):
-        config = Config(agents={"claude": AgentTemplateConfig(command=["claude"])})
-        assert config.agents.get("unknown") is None
+    def test_agent_type_lookup_miss(self):
+        config = Config(agent_types={"claude": AgentTypeConfig(command=["claude"])})
+        assert config.agent_types.get("unknown") is None
+
+    def test_agent_type_with_description(self):
+        config = Config(agent_types={
+            "sonnet-4.6": AgentTypeConfig(
+                command=["claude", "--model", "claude-sonnet-4-6"],
+                description="Claude Sonnet 4.6",
+            )
+        })
+        at = config.agent_types["sonnet-4.6"]
+        assert at.command == ["claude", "--model", "claude-sonnet-4-6"]
+        assert at.description == "Claude Sonnet 4.6"
+
+    def test_default_agent_type(self):
+        config = Config(
+            default_agent_type="claude",
+            agent_types={"claude": AgentTypeConfig(command=["claude"])},
+        )
+        assert config.default_agent_type == "claude"
+        default_at = config.agent_types.get(config.default_agent_type)
+        assert default_at is not None
+        assert default_at.command == ["claude"]
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +143,7 @@ class TestTryStartService:
 
 
 class TestCommandResolution:
-    """Test the command resolution: override > template > error."""
+    """Test the command resolution: override > agent type > error."""
 
     def _make_config_toml(self, content: str) -> Path:
         f = tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False)
@@ -126,46 +151,46 @@ class TestCommandResolution:
         f.close()
         return Path(f.name)
 
-    def test_template_provides_command(self):
-        """When template exists and no override, template command is used."""
-        config = Config(agents={"claude": AgentTemplateConfig(command=["claude", "--flag"])})
-        template = config.agents.get("claude")
+    def test_agent_type_provides_command(self):
+        """When agent type exists and no override, agent type command is used."""
+        config = Config(agent_types={"claude": AgentTypeConfig(command=["claude", "--flag"])})
+        agent_type = config.agent_types.get("claude")
         command_override: list[str] = []
 
         if command_override:
             command = command_override
-        elif template:
-            command = template.command
+        elif agent_type:
+            command = agent_type.command
         else:
             command = None
 
         assert command == ["claude", "--flag"]
 
-    def test_override_beats_template(self):
-        """When both template and override exist, override wins."""
-        config = Config(agents={"claude": AgentTemplateConfig(command=["claude"])})
-        template = config.agents.get("claude")
+    def test_override_beats_agent_type(self):
+        """When both agent type and override exist, override wins."""
+        config = Config(agent_types={"claude": AgentTypeConfig(command=["claude"])})
+        agent_type = config.agent_types.get("claude")
         command_override = ["claude", "--model", "opus"]
 
         if command_override:
             command = command_override
-        elif template:
-            command = template.command
+        elif agent_type:
+            command = agent_type.command
         else:
             command = None
 
         assert command == ["claude", "--model", "opus"]
 
-    def test_no_template_no_override_is_none(self):
-        """When no template and no override, result is None (error case)."""
+    def test_no_agent_type_no_override_is_none(self):
+        """When no agent type and no override, result is None (error case)."""
         config = Config()
-        template = config.agents.get("unknown")
+        agent_type = config.agent_types.get("unknown")
         command_override: list[str] = []
 
         if command_override:
             command = command_override
-        elif template:
-            command = template.command
+        elif agent_type:
+            command = agent_type.command
         else:
             command = None
 

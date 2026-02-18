@@ -295,11 +295,15 @@ class AgentFilterConfig(BaseModel):
     )
 
 
-class AgentTemplateConfig(BaseModel):
-    """Agent template configuration (defines a named agent command)."""
+class AgentTypeConfig(BaseModel):
+    """Agent type configuration (defines a named agent preset and its launch command)."""
 
     command: list[str] = Field(
         description="Command and arguments to launch the agent",
+    )
+    description: str = Field(
+        default="",
+        description="Human-readable description of this agent type",
     )
 
 
@@ -386,9 +390,13 @@ class Config(BaseModel):
     stats: StatsConfig = Field(default_factory=StatsConfig)
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
-    agents: dict[str, AgentTemplateConfig] = Field(
+    default_agent_type: str | None = Field(
+        default=None,
+        description="Default agent type used when running 'voxtype agent' with no arguments",
+    )
+    agent_types: dict[str, AgentTypeConfig] = Field(
         default_factory=dict,
-        description="Agent templates: [agents.claude], [agents.cursor], etc.",
+        description="Agent type presets: [agent_types.claude], [agent_types.sonnet-4.6], etc.",
     )
 
     editor: str = Field(
@@ -600,8 +608,8 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
 
     # Top-level fields
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "client", "logging", "stats", "daemon", "pipeline", "agents"):
-            # These are sections, handle below (agents is dynamic, skip)
+        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "client", "logging", "stats", "daemon", "pipeline", "agent_types"):
+            # These are sections, handle below (agent_types is dynamic, skip)
             continue
         value = getattr(config, field_name)
         env_var = _key_to_env_var(field_name)
@@ -803,14 +811,26 @@ def create_default_config() -> Path:
 # triggers = ["agent"]
 # match_threshold = 0.5
 
-# Agent templates — single-command launch
-# Usage: voxtype agent claude
+# Agent type presets — single-command launch
+# Usage: voxtype agent claude  (or just 'voxtype agent' if default_agent_type is set)
 #
-# [agents.claude]
+# default_agent_type = "claude"
+#
+# [agent_types.claude]
 # command = ["claude"]
+# description = "Claude Code (default model)"
 #
-# [agents.aider]
-# command = ["aider", "--model", "claude-3-opus"]
+# [agent_types.sonnet-4.6]
+# command = ["claude", "--model", "claude-sonnet-4-6"]
+# description = "Claude Sonnet 4.6"
+#
+# [agent_types.opus-4.6]
+# command = ["claude", "--model", "claude-opus-4-6"]
+# description = "Claude Opus 4.6"
+#
+# [agent_types.aider]
+# command = ["aider", "--model", "claude-sonnet-4-5"]
+# description = "Aider with Claude Sonnet"
 """
 
     with open(config_path, "w") as f:

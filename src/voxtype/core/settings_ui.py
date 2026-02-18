@@ -138,7 +138,7 @@ const TABS = [
 
 // Complex fields shown as read-only
 const COMPLEX_KEYS = new Set([
-  "audio.sounds","keyboard.shortcuts","pipeline.submit_filter.triggers","agents"
+  "audio.sounds","keyboard.shortcuts","pipeline.submit_filter.triggers","agent_types","default_agent_type"
 ]);
 const SKIP_KEYS = new Set(["keyboard.shortcuts"]);
 
