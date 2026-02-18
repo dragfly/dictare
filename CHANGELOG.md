@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b131] - 2026-02-18
+
+### Fixed
+
+- Linux: `linux-install.sh` now installs `gir1.2-ayatanaappindicator3-0.1` on Ubuntu 22.04+
+  (old name `gir1.2-appindicator3-0.1` no longer exists), fixing tray icon on modern Ubuntu.
+- Linux: `linux-install.sh` installs udev rule `99-voxtype.rules` for evdev access —
+  hotkey (ScrollLock) now works immediately without adding user to `input` group or re-logging in.
+- Linux: `GI_TYPELIB_PATH` in the generated systemd unit is now architecture-aware —
+  ARM64 uses `aarch64-linux-gnu`, ARMv7 uses `arm-linux-gnueabihf`, x86_64 unchanged.
+- `pyproject.toml`: relaxed `requires-python` from `>=3.11,<3.12` to `>=3.11,<3.13`,
+  unblocking users on Python 3.12 (Ubuntu 24.04, Fedora 41 default).
+
 ## [0.1.0b124] - 2026-02-18
 
 ### Fixed
