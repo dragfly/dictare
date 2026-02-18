@@ -201,6 +201,7 @@ _LOOP_CHUNK_DURATION: float = 1.0  # seconds per chunk
 _loop_active: threading.Event = threading.Event()
 _loop_chunk_keys: list[str] = []   # cache keys for each 1s slice
 _loop_chunk_pos: int = 0           # next chunk index (wraps around)
+_loop_pending_timer: threading.Timer | None = None  # delayed start timer
 
 def _enqueue_loop_next() -> None:
     """on_complete callback: schedule the next 1s chunk if still active."""
@@ -211,17 +212,14 @@ def _enqueue_loop_next() -> None:
     _loop_chunk_pos += 1
     _play_queue.put((key, _enqueue_loop_next))
 
-def start_loop(path: str | Path) -> None:
-    """Start looping *path* in 1-second chunks until stop_loop() is called.
+def _start_loop_now(path_str: str) -> None:
+    """Internal: load, chunk, and kick off the loop immediately."""
+    global _loop_chunk_keys, _loop_chunk_pos, _loop_pending_timer
+    _loop_pending_timer = None
 
-    Non-blocking.  Pre-slices the audio into ~1s chunks stored in the sound
-    cache, then kicks off the first chunk via the normal audio worker queue.
-    """
-    global _loop_chunk_keys, _loop_chunk_pos
+    if not _loop_active.is_set():
+        return  # stop_loop() was called before the delay fired
 
-    path_str = str(path)
-
-    # Load full audio (use cache if available)
     cached = _sound_cache.get(path_str)
     if cached is not None:
         data, sr = cached
@@ -231,10 +229,9 @@ def start_loop(path: str | Path) -> None:
             data, sr = sf.read(path_str)
             _sound_cache[path_str] = (data, sr)
         except Exception:
-            logger.debug("start_loop: failed to load %s", path_str, exc_info=True)
+            logger.debug("_start_loop_now: failed to load %s", path_str, exc_info=True)
             return
 
-    # Slice into ~1s chunks and register each in the cache under a stable key
     chunk_size = max(1, int(_LOOP_CHUNK_DURATION * sr))
     new_keys: list[str] = []
     for i, start in enumerate(range(0, len(data), chunk_size)):
@@ -245,12 +242,30 @@ def start_loop(path: str | Path) -> None:
 
     _loop_chunk_keys = new_keys
     _loop_chunk_pos = 0
-    _loop_active.set()
     _ensure_worker()
     _enqueue_loop_next()
 
+def start_loop(path: str | Path) -> None:
+    """Start looping *path* in 1-second chunks until stop_loop() is called.
+
+    Non-blocking.  Caller is responsible for the audio-duration threshold check
+    (only call this when the recording was long enough to warrant feedback).
+    """
+    global _loop_pending_timer
+
+    if _loop_pending_timer is not None:
+        _loop_pending_timer.cancel()
+        _loop_pending_timer = None
+
+    _loop_active.set()
+    _start_loop_now(str(path))
+
 def stop_loop() -> None:
-    """Stop the loop. The current 1s chunk finishes, then playback stops."""
+    """Stop the loop after the current 1s chunk finishes."""
+    global _loop_pending_timer
+    if _loop_pending_timer is not None:
+        _loop_pending_timer.cancel()
+        _loop_pending_timer = None
     _loop_active.clear()
 
 def is_looping() -> bool:

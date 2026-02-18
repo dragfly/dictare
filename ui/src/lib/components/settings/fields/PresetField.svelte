@@ -106,7 +106,7 @@
 	</div>
 {:else}
 	<Select.Root type="single" value={displayValue} onValueChange={(v) => { if (v) handleSelect(v); }}>
-		<Select.Trigger class="w-48">
+		<Select.Trigger class="w-fit whitespace-nowrap">
 			{currentLabel()}
 		</Select.Trigger>
 		<Select.Content>
