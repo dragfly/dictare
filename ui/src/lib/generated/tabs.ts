@@ -41,14 +41,24 @@ export const tabs: TabDef[] = [
     desc: "Text-to-speech engine",
   },
   {
-    id: "hotkey",
-    label: "Hotkey",
+    id: "keyboard",
+    label: "Keyboard",
     icon: Keyboard,
     sections: ["hotkey", "keyboard"],
-    desc: "Toggle listening key and keyboard shortcuts",
-    groups: [
-      { label: "Hotkey", sections: ["hotkey"] },
-      { label: "Shortcuts", sections: ["keyboard"] },
+    desc: "Hotkey and shortcuts",
+    children: [
+      {
+        id: "keyboard-hotkey",
+        label: "Hotkey",
+        sections: ["hotkey"],
+        desc: "Toggle listening key",
+      },
+      {
+        id: "keyboard-shortcuts",
+        label: "Shortcuts",
+        sections: ["keyboard"],
+        desc: "Keyboard shortcuts",
+      },
     ],
   },
   {
@@ -78,7 +88,12 @@ export const tabs: TabDef[] = [
     icon: SlidersHorizontal,
     sections: ["client", "logging", "stats", "daemon", "pipeline"],
     desc: "Client, logging, daemon, and pipeline settings",
-    groups: [{"label": "Client", "sections": ["client"]}, {"label": "Logging", "sections": ["logging"]}, {"label": "Statistics", "sections": ["stats"]}, {"label": "Daemon", "sections": ["daemon"]}, {"label": "Pipeline", "sections": ["pipeline"]}],
+    children: [
+      { id: "advanced-client",   label: "Client",     sections: ["client"],   desc: "Agent client settings" },
+      { id: "advanced-logging",  label: "Logging",    sections: ["logging"],  desc: "Log file and level" },
+      { id: "advanced-stats",    label: "Statistics", sections: ["stats"],    desc: "Typing statistics" },
+      { id: "advanced-daemon",   label: "Daemon",     sections: ["daemon"],   desc: "Background service" },
+      { id: "advanced-pipeline", label: "Pipeline",   sections: ["pipeline"], desc: "Message pipeline filters" },
+    ],
   },
 ];
-

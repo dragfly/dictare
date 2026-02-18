@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b117] - 2026-02-18
+
+### Changed
+
+- **Settings UI — hierarchical nav** — expandable sections in the left sidebar. "Keyboard" expands to Hotkey + Shortcuts; "Advanced" expands to Client, Logging, Statistics, Daemon, Pipeline. Each sub-item shows only its focused content on the right. Removed accordion from the content area.
+
 ## [0.1.0b116] - 2026-02-18
 
 ### Changed
