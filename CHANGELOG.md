@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b114] - 2026-02-18
+
+### Fixed
+
+- **Agents tab empty** — `agent_types` was excluded from `list_config_keys()` so the Agents tab showed "No configurable fields". Now exposed as a `dict` field so the TOML editor renders correctly.
+
 ## [0.1.0b113] - 2026-02-18
 
 ### Changed
