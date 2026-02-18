@@ -9,8 +9,6 @@
 	import TomlField from "./fields/TomlField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import * as Tooltip from "$lib/components/ui/tooltip";
-	import { Info } from "lucide-svelte";
 	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS } from "$lib/generated/field-config";
 
 	interface Props {
@@ -73,42 +71,24 @@
 	</div>
 {:else}
 <div
-	class="flex items-center justify-between gap-4 rounded-lg px-4 py-3 transition-colors hover:bg-accent/30
+	class="flex items-start justify-between gap-6 rounded-lg px-4 py-3 transition-colors hover:bg-accent/30
 		{isDirty ? 'bg-accent/20 border-l-2 border-primary' : ''}"
 >
-	<!-- Left: label + info tooltip -->
-	<div class="flex items-center gap-1.5 min-w-0 shrink-0">
-		<span class="text-sm font-medium whitespace-nowrap {isNonDefault ? 'text-amber-500 dark:text-amber-400' : ''}">{label}</span>
-		{#if isNonDefault}
-			<span class="size-1.5 rounded-full bg-amber-500 dark:bg-amber-400 shrink-0" title="Custom value (differs from default)"></span>
+	<!-- Left: label + description -->
+	<div class="flex flex-col gap-0.5 min-w-0">
+		<div class="flex items-center gap-1.5">
+			<span class="text-sm font-medium {isNonDefault ? 'text-amber-500 dark:text-amber-400' : ''}">{label}</span>
+			{#if isNonDefault}
+				<span class="size-1.5 rounded-full bg-amber-500 dark:bg-amber-400 shrink-0"></span>
+			{/if}
+		</div>
+		{#if field.description}
+			<p class="text-xs text-muted-foreground leading-relaxed">{field.description}</p>
 		{/if}
-		<Tooltip.Root>
-			<Tooltip.Trigger class="text-muted-foreground hover:text-foreground transition-colors">
-				<Info class="size-3.5" />
-			</Tooltip.Trigger>
-			<Tooltip.Content side="right" class="max-w-sm space-y-1.5 text-xs break-words">
-				{#if field.description}
-					<p>{field.description}</p>
-				{/if}
-				<p class="font-mono text-muted-foreground">
-					{field.key}
-				</p>
-				{#if field.env_var}
-					<p class="font-mono text-muted-foreground">
-						{field.env_var}
-					</p>
-				{/if}
-				{#if field.default !== null && field.default !== undefined}
-					<p class="text-muted-foreground">
-						Default: <code class="font-mono">{JSON.stringify(field.default)}</code>
-					</p>
-				{/if}
-			</Tooltip.Content>
-		</Tooltip.Root>
 	</div>
 
 	<!-- Right: control -->
-	<div class="flex items-center gap-2 shrink-0">
+	<div class="flex items-center gap-2 shrink-0 mt-0.5">
 		{#if complex}
 			<ComplexField />
 		{:else if field.type === "bool"}
