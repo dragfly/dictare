@@ -81,15 +81,27 @@ printf "\n"
 info "Installing system dependencies (sudo required)..."
 
 # Detect package manager
+PKG_MGR=""
 if command -v apt-get &>/dev/null; then
     PKG_MGR="apt"
+
+    # Ubuntu 22.04+ renamed AppIndicator to AyatanaAppIndicator
+    APPINDICATOR_PKG="gir1.2-appindicator3-0.1"
+    if command -v lsb_release &>/dev/null; then
+        _distro_id=$(lsb_release -is 2>/dev/null || echo "")
+        _distro_rel=$(lsb_release -rs 2>/dev/null || echo "0")
+        if [[ "$_distro_id" == "Ubuntu" && "${_distro_rel%%.*}" -ge 22 ]]; then
+            APPINDICATOR_PKG="gir1.2-ayatanaappindicator3-0.1"
+        fi
+    fi
+
     PACKAGES=(
         # Audio
         libportaudio2 portaudio19-dev
         # TTS fallback
         espeak-ng
         # Tray icon — GObject introspection typelibs (runtime)
-        gir1.2-appindicator3-0.1
+        "$APPINDICATOR_PKG"
         # Tray icon — PyGObject build dependencies (compile for Python 3.11)
         libgirepository-2.0-dev libcairo2-dev
         # Build tools
@@ -135,6 +147,23 @@ else
 fi
 
 ok "System dependencies installed"
+
+# ─── 1b. Install udev rule for evdev hotkey support ────────────────────
+# evdev reads /dev/input/event* which requires the 'input' group by default.
+# A udev rule grants access without requiring a re-login.
+if [[ "$PKG_MGR" != "" ]]; then
+    UDEV_RULE='KERNEL=="event*", GROUP="input", MODE="0660"'
+    UDEV_FILE="/etc/udev/rules.d/99-voxtype.rules"
+    if [[ ! -f "$UDEV_FILE" ]]; then
+        info "Installing udev rule for hotkey access..."
+        echo "$UDEV_RULE" | sudo tee "$UDEV_FILE" > /dev/null
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
+        ok "Hotkey udev rule installed (no re-login needed)"
+    else
+        ok "Hotkey udev rule already present"
+    fi
+fi
 
 # ─── 2. Check for NVIDIA GPU ───────────────────────────────────────────
 HAS_NVIDIA=false
@@ -199,11 +228,21 @@ fi
 info "Installing PyGObject (tray icon support)..."
 uv pip install PyGObject pycairo
 
-# Verify gi is accessible
-if "$VENV_DIR/bin/python" -c "import gi; gi.require_version('AppIndicator3', '0.1')" 2>/dev/null; then
-    ok "PyGObject + AppIndicator3 working"
+# Verify gi is accessible — try AyatanaAppIndicator3 first (Ubuntu 22.04+), then AppIndicator3
+if "$VENV_DIR/bin/python" - << 'PYEOF' 2>/dev/null
+import gi, sys
+for ns in ("AyatanaAppIndicator3", "AppIndicator3"):
+    try:
+        gi.require_version(ns, "0.1")
+        sys.exit(0)
+    except ValueError:
+        pass
+sys.exit(1)
+PYEOF
+then
+    ok "PyGObject + AppIndicator working"
 else
-    warn "AppIndicator3 not available. Tray icon may not work."
+    warn "AppIndicator not available. Tray icon may not work."
 fi
 
 # Verify installation
@@ -212,6 +251,15 @@ ok "voxtype installed: $VERSION"
 
 # ─── 7. Install systemd service ────────────────────────────────────────
 info "Installing systemd user service..."
+
+# Detect CPU architecture for GI typelib path (H3: ARM64/RISC-V support)
+case "$(uname -m)" in
+    aarch64|arm64) _ARCH_TRIPLET="aarch64-linux-gnu" ;;
+    armv7l|armhf)  _ARCH_TRIPLET="arm-linux-gnueabihf" ;;
+    riscv64)       _ARCH_TRIPLET="riscv64-linux-gnu" ;;
+    *)             _ARCH_TRIPLET="x86_64-linux-gnu" ;;
+esac
+GI_TYPELIB_PATH_VAL="/usr/lib/girepository-1.0:/usr/lib/${_ARCH_TRIPLET}/girepository-1.0"
 
 SERVICE_DIR="$HOME/.config/systemd/user"
 mkdir -p "$SERVICE_DIR"
@@ -227,7 +275,7 @@ ExecStart=$VENV_DIR/bin/python -m voxtype engine start
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
-Environment=GI_TYPELIB_PATH=/usr/lib/girepository-1.0:/usr/lib/x86_64-linux-gnu/girepository-1.0
+Environment=GI_TYPELIB_PATH=${GI_TYPELIB_PATH_VAL}
 
 [Install]
 WantedBy=default.target
