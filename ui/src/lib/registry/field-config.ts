@@ -17,6 +17,7 @@ export const FIELD_PRESETS: Record<string, PresetOption[]> = {
 /** Input width hints: narrow | medium | normal */
 export const SIZE_HINTS: Record<string, string> = {
   "audio.channels": "narrow",
+  "audio.device": "normal",
   "audio.max_duration": "narrow",
   "audio.min_speech_ms": "narrow",
   "audio.pre_buffer_ms": "narrow",
@@ -24,8 +25,10 @@ export const SIZE_HINTS: Record<string, string> = {
   "audio.silence_ms": "narrow",
   "client.url": "normal",
   "daemon.idle_timeout": "narrow",
+  "daemon.socket_path": "normal",
   "hotkey.device": "medium",
   "hotkey.key": "medium",
+  "logging.log_file": "normal",
   "output.newline_keys": "medium",
   "output.submit_keys": "medium",
   "output.typing_delay_ms": "narrow",
@@ -33,8 +36,10 @@ export const SIZE_HINTS: Record<string, string> = {
   "server.port": "narrow",
   "stats.typing_wpm": "narrow",
   "stt.beam_size": "narrow",
+  "stt.hotwords": "normal",
   "stt.max_repetitions": "narrow",
   "tts.speed": "narrow",
+  "tts.voice": "normal",
 };
 
 /** Fields with enum/Literal types (fixed options from schema) */
