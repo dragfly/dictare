@@ -13,7 +13,7 @@
 	import { StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 	import { toml } from "@codemirror/legacy-modes/mode/toml";
 	import { classHighlighter } from "@lezer/highlight";
-	import { history, defaultKeymap, historyKeymap } from "codemirror";
+	import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 	import { Button } from "$lib/components/ui/button";
 	import { fetchTomlSection, saveTomlSection } from "$lib/api";
 
