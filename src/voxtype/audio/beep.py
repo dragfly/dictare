@@ -37,7 +37,7 @@ _SOUNDS_DIR = Path(__file__).parent / "sounds"
 # Default bundled sound files
 DEFAULT_SOUND_START = _SOUNDS_DIR / "up-beep.wav"
 DEFAULT_SOUND_STOP = _SOUNDS_DIR / "down-beep.wav"
-DEFAULT_SOUND_TRANSCRIBING = _SOUNDS_DIR / "transcribing.wav"
+DEFAULT_SOUND_TRANSCRIBING = _SOUNDS_DIR / "typewriter.wav"
 DEFAULT_SOUND_READY = _SOUNDS_DIR / "ready.wav"
 
 
@@ -197,6 +197,43 @@ def play_sound_file(
     """
     _ensure_worker()
     _play_queue.put((str(path), on_complete))
+
+
+# ---------------------------------------------------------------------------
+# Loop support — plays a sound repeatedly until stop_loop() is called
+# ---------------------------------------------------------------------------
+
+_loop_active: threading.Event = threading.Event()
+_loop_path: str | None = None
+
+
+def _enqueue_loop_next() -> None:
+    """on_complete callback: re-enqueue the loop sound if still active."""
+    if _loop_active.is_set() and _loop_path:
+        _play_queue.put((_loop_path, _enqueue_loop_next))
+
+
+def start_loop(path: str | Path) -> None:
+    """Start looping *path* until stop_loop() is called.
+
+    Non-blocking.  Replaces any previously active loop.
+    The current play finishes before the next one starts (gapless via on_complete).
+    """
+    global _loop_path
+    _loop_path = str(path)
+    _loop_active.set()
+    _ensure_worker()
+    _enqueue_loop_next()
+
+
+def stop_loop() -> None:
+    """Stop the loop after the current play finishes. No-op if not looping."""
+    _loop_active.clear()
+
+
+def is_looping() -> bool:
+    """Return True if a loop is currently active."""
+    return _loop_active.is_set()
 
 
 def _play_sound_file_fallback(path_str: str) -> None:

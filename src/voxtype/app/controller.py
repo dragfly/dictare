@@ -89,14 +89,21 @@ class AppController:
             def on_state_change(self, old: Any, new: Any, trigger: str) -> None:
                 from voxtype.audio.beep import (
                     get_sound_for_event,
+                    is_looping,
                     play_audio,
                     play_sound_file_async,
+                    start_loop,
+                    stop_loop,
                 )
                 from voxtype.core.fsm import AppState
 
                 eng = engine_ref[0]
                 ctrl = eng._controller if eng else None
                 pause = not config.audio.headphones_mode
+
+                # Stop any active loop whenever we leave TRANSCRIBING
+                if old == AppState.TRANSCRIBING:
+                    stop_loop()
 
                 if new == AppState.LISTENING and old == AppState.OFF:
                     enabled, path = get_sound_for_event(config.audio, "start")
@@ -109,7 +116,7 @@ class AppController:
                 elif new == AppState.TRANSCRIBING:
                     enabled, path = get_sound_for_event(config.audio, "transcribing")
                     if enabled:
-                        play_sound_file_async(path)
+                        start_loop(path)
                 elif new == AppState.LISTENING and old in (
                     AppState.TRANSCRIBING,
                     AppState.INJECTING,
