@@ -9,7 +9,9 @@
 
 	let { tab, schema }: Props = $props();
 
-	const SKIP_KEYS = new Set(["keyboard.shortcuts"]);
+	// keyboard.shortcuts is shown via TomlField in the Hotkey tab
+	// default_agent_type is part of the agent_types TOML editor (Agents tab)
+	const SKIP_KEYS = new Set(["default_agent_type"]);
 
 	const allFields = $derived(
 		schema.keys.filter((k) => {

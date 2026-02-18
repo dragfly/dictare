@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b112] - 2026-02-18
+
+### Added
+
+- **Agent type presets** — renamed `[agents.*]` → `[agent_types.*]` in config for clarity. Added `default_agent_type` field so `voxtype agent` with no arguments launches the default agent. Added optional `description` field to each agent type.
+- **TOML textarea editor in settings UI** — complex config sections (`agent_types`, `keyboard.shortcuts`) now display a CodeMirror-powered TOML editor with syntax highlighting instead of "Edit in config.toml". Server-side validation via Pydantic before saving.
+- **Agents tab in settings UI** — dedicated tab for agent type presets with TOML editor including commented examples.
+- **Shortcuts tab in Hotkey settings** — `keyboard.shortcuts` now visible in the UI via TOML editor (previously hidden).
+- **New API endpoints** — `GET /settings/toml-section/{section}` and `POST /settings/toml-section/{section}` for reading/writing complex config sections.
+
 ## [0.1.0b111] - 2026-02-18
 
 ### Fixed

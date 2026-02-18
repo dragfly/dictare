@@ -22,6 +22,28 @@ export async function saveSetting(
 	return r.json();
 }
 
+export async function fetchTomlSection(section: string): Promise<string> {
+	const r = await fetch(`/settings/toml-section/${section}`);
+	if (!r.ok) throw new Error(`Failed to load section: ${r.status}`);
+	const data = await r.json();
+	return data.content as string;
+}
+
+export async function saveTomlSection(
+	section: string,
+	content: string
+): Promise<void> {
+	const r = await fetch(`/settings/toml-section/${section}`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ content })
+	});
+	if (!r.ok) {
+		const data = await r.json().catch(() => ({}));
+		throw new Error(data.detail || `Save failed: ${r.status}`);
+	}
+}
+
 export async function restartEngine(): Promise<void> {
 	try {
 		await fetch("/control", {
