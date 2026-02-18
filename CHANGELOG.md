@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b123] - 2026-02-18
+
+### Changed
+
+- `voxtype agent`: agent_id (session name) is now independent from the agent type.
+  Added `--type <type>` option to select the command template from `agent_types` config.
+  Without `--type`, `default_agent_type` is used. agent_id is required.
+  Examples: `voxtype agent frontend --type claude-sonnet`, `voxtype agent frontend`
+- Tests: added `TestAgentCLIContract` — 7 end-to-end CLI tests verifying name is
+  required, `--type` selects command, default fallback, and session name independence.
+
 ## [0.1.0b122] - 2026-02-18
 
 ### Changed

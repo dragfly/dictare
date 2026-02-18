@@ -48,7 +48,7 @@ def register(app: typer.Typer) -> None:
         ctx: typer.Context,
         agent_id: Annotated[
             str | None,
-            typer.Argument(help="Agent name or template (e.g., 'claude')"),
+            typer.Argument(help="Agent session name — identifies this instance (e.g., 'frontend', 'Pippo')"),
         ] = None,
         quiet: Annotated[
             bool,
@@ -65,13 +65,15 @@ def register(app: typer.Typer) -> None:
     ) -> None:
         """Launch an agent with voxtype voice input.
 
-        Uses agent templates from config for single-command launch.
-        Auto-connects to the engine (starts it if the service is installed).
+        AGENT_ID is the session name (project, role, etc.) — not the model type.
+        Use --type to pick which agent_types template to run. Without --type,
+        default_agent_type from config is used.
 
         Examples:
 
-            voxtype agent claude                        # Use template from config
-            voxtype agent claude -- claude --model opus # Override command
+            voxtype agent frontend                         # Use default_agent_type
+            voxtype agent frontend --type claude-sonnet    # Explicit type from config
+            voxtype agent frontend -- claude --model opus  # Explicit command override
         """
         from voxtype.agent import run_agent
         from voxtype.config import load_config
@@ -80,28 +82,24 @@ def register(app: typer.Typer) -> None:
         if server is None:
             server = config.client.url
 
-        # Resolve agent_id: explicit arg > default_agent_type > help
+        # agent_id (session name) is required
         if agent_id is None:
-            if config.default_agent_type:
-                agent_id = config.default_agent_type
-            else:
-                import click
+            import click
 
-                click.echo(ctx.get_help())
-                if config.agent_types:
-                    console.print()
-                    console.print("[dim]Available agent types:[/]")
-                    for name, at in config.agent_types.items():
-                        desc = f"  {at.description}" if at.description else ""
-                        console.print(f"[dim]  {name}{desc}[/]")
-                    console.print()
-                    console.print("[dim]Set a default: voxtype config set default_agent_type claude[/]")
-                raise typer.Exit(0)
+            click.echo(ctx.get_help())
+            if config.agent_types:
+                console.print()
+                console.print("[dim]Available agent types:[/]")
+                for name, at in config.agent_types.items():
+                    desc = f"  {at.description}" if at.description else ""
+                    console.print(f"[dim]  {name}{desc}[/]")
+            raise typer.Exit(1)
 
         # Parse extra args: extract own flags and command override
         args = list(ctx.args)
         own_flags_to_remove: set[int] = set()
         show_status_bar: bool | None = None
+        agent_type_name: str | None = None
         for i, arg in enumerate(args):
             if arg in ("--verbose", "-v"):
                 verbose = True
@@ -116,27 +114,44 @@ def register(app: typer.Typer) -> None:
                 server = args[i + 1]
                 own_flags_to_remove.add(i)
                 own_flags_to_remove.add(i + 1)
+            elif arg in ("--type", "-t") and i + 1 < len(args):
+                agent_type_name = args[i + 1]
+                own_flags_to_remove.add(i)
+                own_flags_to_remove.add(i + 1)
             elif arg == "--":
                 own_flags_to_remove.add(i)
 
         command_override = [arg for i, arg in enumerate(args) if i not in own_flags_to_remove]
 
-        # Resolve command: explicit override > agent type > error
-        agent_type = config.agent_types.get(agent_id)
+        # Resolve command: explicit override > --type > default_agent_type > error
         if command_override:
             command = command_override
-        elif agent_type:
-            command = agent_type.command
         else:
-            console.print(f"[red]Error: No agent type '{agent_id}' in config and no command specified[/]")
-            console.print()
-            console.print("[dim]Either add an agent type to ~/.config/voxtype/config.toml:[/]")
-            console.print(f'[dim]  [agent_types.{agent_id}][/]')
-            console.print(f'[dim]  command = ["{agent_id}"][/]')
-            console.print()
-            console.print("[dim]Or specify the command explicitly:[/]")
-            console.print(f"[dim]  voxtype agent {agent_id} -- {agent_id}[/]")
-            raise typer.Exit(1)
+            type_key = agent_type_name or config.default_agent_type
+            if type_key is None:
+                console.print(f"[red]Error: no --type given and no default_agent_type set[/]")
+                console.print(f"[dim]  voxtype agent {agent_id} --type <type>[/]")
+                console.print(f"[dim]  voxtype agent {agent_id} -- <command> [args...][/]")
+                if config.agent_types:
+                    console.print()
+                    console.print("[dim]Available types:[/]")
+                    for name, at in config.agent_types.items():
+                        desc = f"  {at.description}" if at.description else ""
+                        console.print(f"[dim]  {name}{desc}[/]")
+                raise typer.Exit(1)
+
+            agent_type = config.agent_types.get(type_key)
+            if agent_type is None:
+                console.print(f"[red]Error: agent type '{type_key}' not found in config[/]")
+                if config.agent_types:
+                    console.print()
+                    console.print("[dim]Available types:[/]")
+                    for name, at in config.agent_types.items():
+                        desc = f"  {at.description}" if at.description else ""
+                        console.print(f"[dim]  {name}{desc}[/]")
+                raise typer.Exit(1)
+
+            command = agent_type.command
 
         # Best-effort: try to start the engine if it's not reachable.
         # Never block — the SSE layer has its own reconnect loop.

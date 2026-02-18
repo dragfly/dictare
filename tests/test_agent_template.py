@@ -6,8 +6,12 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from typer.testing import CliRunner
+
 from voxtype.cli.agent import _check_engine, _try_start_service
 from voxtype.config import AgentTypeConfig, Config, load_config
+
+_runner = CliRunner()
 
 # ---------------------------------------------------------------------------
 # AgentTypeConfig parsing
@@ -142,58 +146,55 @@ class TestTryStartService:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_command(
+    config: Config,
+    command_override: list[str],
+    agent_type_name: str | None = None,
+) -> list[str] | None:
+    """Replicate the CLI command resolution logic for testing."""
+    if command_override:
+        return command_override
+    type_key = agent_type_name or config.default_agent_type
+    if type_key is None:
+        return None
+    agent_type = config.agent_types.get(type_key)
+    return agent_type.command if agent_type else None
+
+
 class TestCommandResolution:
-    """Test the command resolution: override > agent type > error."""
+    """Test the command resolution: override > --type > default_agent_type > error."""
 
-    def _make_config_toml(self, content: str) -> Path:
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False)
-        f.write(content)
-        f.close()
-        return Path(f.name)
+    def test_explicit_type_provides_command(self):
+        """--type picks command from agent_types regardless of session name."""
+        config = Config(agent_types={"claude-sonnet": AgentTypeConfig(command=["claude", "--model", "sonnet"])})
+        command = _resolve_command(config, [], agent_type_name="claude-sonnet")
+        assert command == ["claude", "--model", "sonnet"]
 
-    def test_agent_type_provides_command(self):
-        """When agent type exists and no override, agent type command is used."""
-        config = Config(agent_types={"claude": AgentTypeConfig(command=["claude", "--flag"])})
-        agent_type = config.agent_types.get("claude")
-        command_override: list[str] = []
+    def test_default_agent_type_used_when_no_type_flag(self):
+        """Without --type, default_agent_type is the fallback."""
+        config = Config(
+            default_agent_type="claude-sonnet",
+            agent_types={"claude-sonnet": AgentTypeConfig(command=["claude", "--model", "sonnet"])},
+        )
+        command = _resolve_command(config, [], agent_type_name=None)
+        assert command == ["claude", "--model", "sonnet"]
 
-        if command_override:
-            command = command_override
-        elif agent_type:
-            command = agent_type.command
-        else:
-            command = None
-
-        assert command == ["claude", "--flag"]
-
-    def test_override_beats_agent_type(self):
-        """When both agent type and override exist, override wins."""
+    def test_override_beats_type(self):
+        """Explicit command override wins over --type."""
         config = Config(agent_types={"claude": AgentTypeConfig(command=["claude"])})
-        agent_type = config.agent_types.get("claude")
-        command_override = ["claude", "--model", "opus"]
-
-        if command_override:
-            command = command_override
-        elif agent_type:
-            command = agent_type.command
-        else:
-            command = None
-
+        command = _resolve_command(config, ["claude", "--model", "opus"], agent_type_name="claude")
         assert command == ["claude", "--model", "opus"]
 
-    def test_no_agent_type_no_override_is_none(self):
-        """When no agent type and no override, result is None (error case)."""
-        config = Config()
-        agent_type = config.agent_types.get("unknown")
-        command_override: list[str] = []
+    def test_no_type_no_default_returns_none(self):
+        """No --type and no default_agent_type → error (None)."""
+        config = Config(agent_types={"claude": AgentTypeConfig(command=["claude"])})
+        command = _resolve_command(config, [], agent_type_name=None)
+        assert command is None
 
-        if command_override:
-            command = command_override
-        elif agent_type:
-            command = agent_type.command
-        else:
-            command = None
-
+    def test_type_not_in_config_returns_none(self):
+        """--type pointing to unknown key → error (None)."""
+        config = Config(agent_types={"claude": AgentTypeConfig(command=["claude"])})
+        command = _resolve_command(config, [], agent_type_name="nonexistent")
         assert command is None
 
 
@@ -229,3 +230,149 @@ class TestAgentNeverBlocksOnEngine:
                 "_try_start_service must return None (fire-and-forget), "
                 "not a bool that gates agent startup"
             )
+
+
+# ---------------------------------------------------------------------------
+# CLI contract: agent_id required, --type selects command template
+# ---------------------------------------------------------------------------
+
+
+def _make_config(content: str) -> Path:
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False)
+    f.write(content)
+    f.close()
+    return Path(f.name)
+
+
+def _invoke_agent(args: list[str], config_path: Path):
+    """Invoke the agent CLI command with a fake config, engine unreachable."""
+    from voxtype.cli import app
+
+    with (
+        patch("voxtype.cli.agent._check_engine", return_value=False),
+        patch("voxtype.cli.agent._try_start_service"),
+        patch("voxtype.agent.run_agent", return_value=0),
+        patch("voxtype.config.get_config_path", return_value=config_path),
+    ):
+        return _runner.invoke(app, ["agent"] + args, catch_exceptions=False)
+
+
+class TestAgentCLIContract:
+    """Verify the CLI contract: name required, --type selects template."""
+
+    def setup_method(self):
+        self.config = _make_config("""
+default_agent_type = "claude-sonnet"
+
+[agent_types.claude-sonnet]
+command = ["claude", "--model", "claude-sonnet-4-6"]
+description = "Claude Sonnet"
+
+[agent_types.claude-opus]
+command = ["claude", "--model", "claude-opus-4-6"]
+description = "Claude Opus"
+""")
+
+    def teardown_method(self):
+        self.config.unlink(missing_ok=True)
+
+    def test_missing_agent_id_exits_nonzero(self):
+        """AGENT_ID is required — omitting it must fail."""
+        result = _invoke_agent([], self.config)
+        assert result.exit_code != 0
+
+    def test_agent_id_with_type_uses_type_command(self):
+        """voxtype agent Pippo --type claude-opus → uses claude-opus command."""
+        launched: list[list[str]] = []
+
+        def fake_run_agent(agent_id, command, **_kw):
+            launched.append((agent_id, command))
+            return 0
+
+        with (
+            patch("voxtype.cli.agent._check_engine", return_value=True),
+            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
+            patch("voxtype.config.get_config_path", return_value=self.config),
+        ):
+            from voxtype.cli import app
+            result = _runner.invoke(app, ["agent", "Pippo", "--type", "claude-opus"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert launched[0] == ("Pippo", ["claude", "--model", "claude-opus-4-6"])
+
+    def test_agent_id_without_type_uses_default(self):
+        """voxtype agent Pippo (no --type) → uses default_agent_type command."""
+        launched: list[list[str]] = []
+
+        def fake_run_agent(agent_id, command, **_kw):
+            launched.append((agent_id, command))
+            return 0
+
+        with (
+            patch("voxtype.cli.agent._check_engine", return_value=True),
+            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
+            patch("voxtype.config.get_config_path", return_value=self.config),
+        ):
+            from voxtype.cli import app
+            result = _runner.invoke(app, ["agent", "Pippo"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert launched[0] == ("Pippo", ["claude", "--model", "claude-sonnet-4-6"])
+
+    def test_agent_id_unknown_type_exits_nonzero(self):
+        """--type pointing to non-existent key → exit 1."""
+        result = _invoke_agent(["Pippo", "--type", "nonexistent"], self.config)
+        assert result.exit_code != 0
+
+    def test_no_default_no_type_exits_nonzero(self):
+        """No --type and no default_agent_type → exit 1."""
+        config = _make_config("""
+[agent_types.claude-sonnet]
+command = ["claude"]
+""")
+        try:
+            result = _invoke_agent(["Pippo"], config)
+            assert result.exit_code != 0
+        finally:
+            config.unlink(missing_ok=True)
+
+    def test_command_override_ignores_type(self):
+        """-- command override wins over --type."""
+        launched: list[list[str]] = []
+
+        def fake_run_agent(agent_id, command, **_kw):
+            launched.append((agent_id, command))
+            return 0
+
+        with (
+            patch("voxtype.cli.agent._check_engine", return_value=True),
+            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
+            patch("voxtype.config.get_config_path", return_value=self.config),
+        ):
+            from voxtype.cli import app
+            result = _runner.invoke(
+                app, ["agent", "Pippo", "--", "my-tool", "--flag"], catch_exceptions=False
+            )
+
+        assert result.exit_code == 0
+        assert launched[0] == ("Pippo", ["my-tool", "--flag"])
+
+    def test_session_name_is_independent_of_type(self):
+        """Session id in run_agent must be the name, not the type key."""
+        launched: list[tuple] = []
+
+        def fake_run_agent(agent_id, command, **_kw):
+            launched.append((agent_id, command))
+            return 0
+
+        with (
+            patch("voxtype.cli.agent._check_engine", return_value=True),
+            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
+            patch("voxtype.config.get_config_path", return_value=self.config),
+        ):
+            from voxtype.cli import app
+            _runner.invoke(app, ["agent", "frontend", "--type", "claude-opus"], catch_exceptions=False)
+
+        agent_id, command = launched[0]
+        assert agent_id == "frontend"          # session name = what the user said
+        assert "claude-opus-4-6" in command    # command from the type
