@@ -1,11 +1,19 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
 	import { EditorState } from "@codemirror/state";
-	import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
-	import { StreamLanguage, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+	import {
+		EditorView,
+		keymap,
+		lineNumbers,
+		highlightActiveLine,
+		drawSelection,
+		highlightSpecialChars,
+		dropCursor,
+	} from "@codemirror/view";
+	import { StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 	import { toml } from "@codemirror/legacy-modes/mode/toml";
-	import { tags } from "@lezer/highlight";
-	import { minimalSetup } from "codemirror";
+	import { classHighlighter } from "@lezer/highlight";
+	import { history, defaultKeymap, historyKeymap } from "codemirror";
 	import { Button } from "$lib/components/ui/button";
 	import { fetchTomlSection, saveTomlSection } from "$lib/api";
 
@@ -22,18 +30,27 @@
 	let errorMessage = $state("");
 	let originalContent = $state("");
 
-	// Comments: green. Section headers: yellow. Everything else: plain text.
-	const tomlHighlight = HighlightStyle.define([
-		{ tag: tags.comment, color: "#6a9955", fontStyle: "normal" },
-		{ tag: tags.heading, color: "#dcd43a", fontWeight: "normal", textDecoration: "none" },
-		{ tag: tags.string, color: "inherit" },
-		{ tag: tags.number, color: "inherit" },
-		{ tag: tags.atom, color: "inherit" },
-		{ tag: tags.keyword, color: "inherit" },
-		{ tag: tags.operator, color: "inherit" },
-		{ tag: tags.variableName, color: "inherit" },
-		{ tag: tags.propertyName, color: "inherit" },
-	]);
+	// Build extensions once — no defaultHighlightStyle, so no conflicting colors.
+	// classHighlighter adds tok-* CSS classes; EditorView.theme styles only what we want.
+	// Scoped theme has higher specificity than globally-injected highlight styles.
+	const extensions = [
+		highlightSpecialChars(),
+		history(),
+		drawSelection(),
+		dropCursor(),
+		lineNumbers(),
+		highlightActiveLine(),
+		keymap.of([...defaultKeymap, ...historyKeymap]),
+		StreamLanguage.define(toml),
+		syntaxHighlighting(classHighlighter),
+		EditorView.theme({
+			"& .tok-comment":  { color: "#6a9955", fontStyle: "normal" },
+			"& .tok-heading":  { color: "#dcd43a", fontWeight: "normal", textDecoration: "none" },
+			"&":               { fontSize: "12.5px", fontFamily: "monospace" },
+			".cm-editor":      { borderRadius: "0.375rem" },
+			".cm-scroller":    { minHeight: "180px", maxHeight: "480px", overflow: "auto" },
+		}),
+	];
 
 	// Auto-dismiss "saved" feedback
 	$effect(() => {
@@ -63,22 +80,8 @@
 				});
 			} else {
 				view = new EditorView({
-					state: EditorState.create({
-						doc: content,
-						extensions: [
-							minimalSetup,
-							lineNumbers(),
-							highlightActiveLine(),
-							StreamLanguage.define(toml),
-							syntaxHighlighting(tomlHighlight),
-							EditorView.theme({
-								"&": { fontSize: "12.5px", fontFamily: "monospace" },
-								".cm-editor": { borderRadius: "0.375rem" },
-								".cm-scroller": { minHeight: "180px", maxHeight: "480px", overflow: "auto" },
-							}),
-						]
-					}),
-					parent: editorEl
+					state: EditorState.create({ doc: content, extensions }),
+					parent: editorEl,
 				});
 			}
 			status = "idle";
