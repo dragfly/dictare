@@ -1,10 +1,10 @@
 export type PresetOption = string | { value: string; label: string };
 
 /** Fields rendered as read-only 'Edit in config file' */
-export const COMPLEX_KEYS = new Set(["agent_types", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter", "pipeline.submit_filter.triggers"]);
+export const COMPLEX_KEYS = new Set(["agent_types", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
 
 /** Fields rendered as TOML textarea with syntax highlighting */
-export const TOML_EDITABLE_KEYS = new Set(["agent_types", "keyboard.shortcuts"]);
+export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
 
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
