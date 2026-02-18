@@ -227,6 +227,7 @@ ExecStart=$VENV_DIR/bin/python -m voxtype engine start
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+Environment=GI_TYPELIB_PATH=/usr/lib/girepository-1.0:/usr/lib/x86_64-linux-gnu/girepository-1.0
 
 [Install]
 WantedBy=default.target

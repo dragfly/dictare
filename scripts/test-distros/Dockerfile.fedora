@@ -1,0 +1,34 @@
+# Test voxtype install on Fedora 40
+FROM fedora:40
+
+RUN useradd -m -s /bin/bash testuser && \
+    echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+COPY --chown=testuser:testuser . /home/testuser/voxtype
+WORKDIR /home/testuser/voxtype
+
+USER testuser
+
+# Fedora: needs python3-devel for building PyGObject from source
+RUN bash -c '\
+    set -euo pipefail && \
+    sudo dnf install -y \
+        portaudio portaudio-devel \
+        espeak-ng \
+        libappindicator-gtk3 \
+        gobject-introspection-devel cairo-devel cairo-gobject-devel \
+        gcc pkg-config python3-devel \
+        xorg-x11-server-Xvfb dbus-x11 && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH" && \
+    uv venv --python 3.11 --seed .venv && \
+    .venv/bin/pip install ./_openvip_sdk && \
+    .venv/bin/pip install -e ".[tts]" && \
+    .venv/bin/pip install PyGObject pycairo && \
+    .venv/bin/python -m voxtype --version && \
+    echo "Testing PyGObject + AppIndicator..." && \
+    .venv/bin/python -c "import gi; gi.require_version(\"Gtk\", \"3.0\"); from gi.repository import Gtk; print(\"PyGObject OK\")" && \
+    .venv/bin/python -c "import gi; gi.require_version(\"AppIndicator3\", \"0.1\"); from gi.repository import AppIndicator3; print(\"AppIndicator OK\")" && \
+    echo "Testing tray module import..." && \
+    .venv/bin/python -c "from voxtype.tray.app import TrayApp; print(\"TrayApp import OK\")" && \
+    echo "SUCCESS: Fedora install test passed"'
