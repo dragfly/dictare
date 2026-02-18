@@ -172,3 +172,44 @@ class TestControllerLoopIntegration:
                 from voxtype.audio.beep import stop_loop
                 stop_loop()
             mock_stop.assert_called_once()
+
+    def test_ready_sound_suppressed_when_no_loop(self):
+        """If typewriter never played (short recording), carriage return is suppressed."""
+        from voxtype.audio.beep import get_sound_for_event, is_looping, play_sound_file_async, stop_loop
+        from voxtype.core.fsm import AppState
+
+        with patch("voxtype.audio.beep.is_looping", return_value=False), \
+             patch("voxtype.audio.beep.stop_loop"), \
+             patch("voxtype.audio.beep.get_sound_for_event", return_value=(True, "/tmp/ready.wav")), \
+             patch("voxtype.audio.beep.play_sound_file_async") as mock_play:
+            old, new = AppState.TRANSCRIBING, AppState.LISTENING
+            from voxtype.audio.beep import is_looping as il, stop_loop as sl
+            was_looping = old == AppState.TRANSCRIBING and il()
+            sl()
+            if new == AppState.LISTENING and old == AppState.TRANSCRIBING:
+                if was_looping:
+                    from voxtype.audio.beep import get_sound_for_event as gse, play_sound_file_async as psa
+                    enabled, path = gse(None, "ready")
+                    if enabled:
+                        psa(path)
+            mock_play.assert_not_called()
+
+    def test_ready_sound_plays_when_loop_was_active(self):
+        """If typewriter played (long recording), carriage return plays after transcription."""
+        from voxtype.core.fsm import AppState
+
+        with patch("voxtype.audio.beep.is_looping", return_value=True), \
+             patch("voxtype.audio.beep.stop_loop"), \
+             patch("voxtype.audio.beep.get_sound_for_event", return_value=(True, "/tmp/ready.wav")), \
+             patch("voxtype.audio.beep.play_sound_file_async") as mock_play:
+            old, new = AppState.TRANSCRIBING, AppState.LISTENING
+            from voxtype.audio.beep import is_looping as il, stop_loop as sl
+            was_looping = old == AppState.TRANSCRIBING and il()
+            sl()
+            if new == AppState.LISTENING and old == AppState.TRANSCRIBING:
+                if was_looping:
+                    from voxtype.audio.beep import get_sound_for_event as gse, play_sound_file_async as psa
+                    enabled, path = gse(None, "ready")
+                    if enabled:
+                        psa(path)
+            mock_play.assert_called_once_with("/tmp/ready.wav")
