@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b122] - 2026-02-18
+
+### Changed
+
+- TOML editor: replaced `basicSetup` with `minimalSetup` + custom `HighlightStyle` —
+  comments green (`#6a9955`), section headers yellow (`#dcd43a`), all other tokens
+  (strings, numbers, booleans) plain text color.
+
 ## [0.1.0b121] - 2026-02-18
 
 ### Changed

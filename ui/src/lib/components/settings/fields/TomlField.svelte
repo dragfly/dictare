@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
 	import { EditorState } from "@codemirror/state";
-	import { EditorView, basicSetup } from "codemirror";
-	import { StreamLanguage } from "@codemirror/language";
+	import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
+	import { StreamLanguage, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 	import { toml } from "@codemirror/legacy-modes/mode/toml";
+	import { tags } from "@lezer/highlight";
+	import { minimalSetup } from "codemirror";
 	import { Button } from "$lib/components/ui/button";
 	import { fetchTomlSection, saveTomlSection } from "$lib/api";
 
@@ -20,10 +22,18 @@
 	let errorMessage = $state("");
 	let originalContent = $state("");
 
-	const isDark = $derived(
-		typeof document !== "undefined" &&
-		document.documentElement.classList.contains("dark")
-	);
+	// Comments: green. Section headers: yellow. Everything else: plain text.
+	const tomlHighlight = HighlightStyle.define([
+		{ tag: tags.comment, color: "#6a9955", fontStyle: "normal" },
+		{ tag: tags.heading, color: "#dcd43a", fontWeight: "normal", textDecoration: "none" },
+		{ tag: tags.string, color: "inherit" },
+		{ tag: tags.number, color: "inherit" },
+		{ tag: tags.atom, color: "inherit" },
+		{ tag: tags.keyword, color: "inherit" },
+		{ tag: tags.operator, color: "inherit" },
+		{ tag: tags.variableName, color: "inherit" },
+		{ tag: tags.propertyName, color: "inherit" },
+	]);
 
 	// Auto-dismiss "saved" feedback
 	$effect(() => {
@@ -56,8 +66,11 @@
 					state: EditorState.create({
 						doc: content,
 						extensions: [
-							basicSetup,
+							minimalSetup,
+							lineNumbers(),
+							highlightActiveLine(),
 							StreamLanguage.define(toml),
+							syntaxHighlighting(tomlHighlight),
 							EditorView.theme({
 								"&": { fontSize: "12.5px", fontFamily: "monospace" },
 								".cm-editor": { borderRadius: "0.375rem" },
