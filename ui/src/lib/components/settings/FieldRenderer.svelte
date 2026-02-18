@@ -49,6 +49,21 @@
 	const error = $derived(settingsStore.getSaveErrors()[field.key]);
 	const label = $derived(humanize(field.key));
 	const size = $derived((SIZE_HINTS[field.key] ?? "normal") as "narrow" | "medium" | "normal");
+
+	/** True when the saved config value differs from the schema default. */
+	const isNonDefault = $derived(
+		!isDirty &&
+		field.default !== null &&
+		field.default !== undefined &&
+		JSON.stringify(currentValue) !== JSON.stringify(field.default)
+	);
+
+	/** Placeholder text for empty string fields — shows the default value. */
+	const placeholder = $derived(
+		field.type === "str" && typeof field.default === "string" && field.default !== ""
+			? field.default
+			: ""
+	);
 </script>
 
 {#if isTomlEditable}
@@ -63,7 +78,10 @@
 >
 	<!-- Left: label + info tooltip -->
 	<div class="flex items-center gap-1.5 min-w-0 shrink-0">
-		<span class="text-sm font-medium whitespace-nowrap">{label}</span>
+		<span class="text-sm font-medium whitespace-nowrap {isNonDefault ? 'text-amber-500 dark:text-amber-400' : ''}">{label}</span>
+		{#if isNonDefault}
+			<span class="size-1.5 rounded-full bg-amber-500 dark:bg-amber-400 shrink-0" title="Custom value (differs from default)"></span>
+		{/if}
 		<Tooltip.Root>
 			<Tooltip.Trigger class="text-muted-foreground hover:text-foreground transition-colors">
 				<Info class="size-3.5" />
@@ -122,6 +140,7 @@
 		{:else}
 			<StringField
 				value={(currentValue as string) ?? ""}
+				{placeholder}
 				{size}
 				onchange={(v) => settingsStore.markDirty(field.key, v)}
 			/>
