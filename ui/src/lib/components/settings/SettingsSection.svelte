@@ -1,6 +1,7 @@
 <script lang="ts">
-	import type { TabDef, SchemaResponse, FieldMeta } from "$lib/types";
+	import type { TabDef, SchemaResponse } from "$lib/types";
 	import FieldRenderer from "./FieldRenderer.svelte";
+	import { ChevronRight } from "lucide-svelte";
 
 	interface Props {
 		tab: TabDef;
@@ -40,24 +41,36 @@
 		No configurable fields in this section.
 	</div>
 {:else if groups()}
-	<!-- Grouped layout from UI hints -->
-	{#each groups()! as group, i (group.label)}
-		{#if i > 0}
-			<div class="h-px bg-border my-4"></div>
-		{/if}
-		<div class="mb-2 px-4">
-			<h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				{group.label}
-			</h3>
-		</div>
-		<div class="space-y-1">
-			{#each group.fields as field (field.key)}
-				<FieldRenderer {field} schema={schema.schema} />
-			{/each}
-		</div>
-	{/each}
+	<!-- Accordion layout for grouped tabs -->
+	<div class="space-y-1">
+		{#each groups()! as group (group.label)}
+			<details class="group/acc rounded-lg border border-transparent hover:border-border transition-colors open:border-border">
+				<summary class="
+					flex items-center gap-2 px-4 py-3 cursor-pointer select-none
+					list-none rounded-lg
+					hover:bg-accent/40 transition-colors
+				">
+					<ChevronRight
+						class="size-3.5 text-muted-foreground transition-transform duration-200 group-open/acc:rotate-90"
+					/>
+					<span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+						{group.label}
+					</span>
+					<span class="ml-auto text-xs text-muted-foreground/50">
+						{group.fields.length} {group.fields.length === 1 ? "field" : "fields"}
+					</span>
+				</summary>
+
+				<div class="pb-2 space-y-1">
+					{#each group.fields as field (field.key)}
+						<FieldRenderer {field} schema={schema.schema} />
+					{/each}
+				</div>
+			</details>
+		{/each}
+	</div>
 {:else}
-	<!-- Flat layout -->
+	<!-- Flat layout for single-section tabs -->
 	<div class="space-y-1">
 		{#each allFields as field (field.key)}
 			<FieldRenderer {field} schema={schema.schema} />
