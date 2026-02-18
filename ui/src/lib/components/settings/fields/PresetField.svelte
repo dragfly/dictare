@@ -3,7 +3,7 @@
 	import { Input } from "$lib/components/ui/input";
 	import { Button } from "$lib/components/ui/button";
 	import { X } from "lucide-svelte";
-	import type { PresetOption } from "$lib/generated/field-config";
+	import type { PresetOption } from "$lib/registry/field-config";
 
 	interface Props {
 		options: PresetOption[];
