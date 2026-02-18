@@ -33,9 +33,12 @@ export interface JsonSchemaDefinition {
 	properties?: Record<string, JsonSchemaProperty>;
 }
 
-export interface TabGroup {
+/** A leaf nav item — shows only its own sections in the content area. */
+export interface NavChild {
+	id: string;
 	label: string;
 	sections: string[];
+	desc: string;
 }
 
 export interface TabDef {
@@ -44,5 +47,6 @@ export interface TabDef {
 	icon: Component;
 	sections: string[];
 	desc: string;
-	groups?: TabGroup[];
+	/** If present, this tab is expandable in the nav and shows children instead of flat content. */
+	children?: NavChild[];
 }
