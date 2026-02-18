@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import type { TabDef } from "$lib/types";
 	import { Separator } from "$lib/components/ui/separator";
 	import { ChevronRight } from "lucide-svelte";
@@ -14,12 +15,17 @@
 	/** Set of expanded parent IDs (expandable tabs whose children are visible). */
 	let expanded = $state<Set<string>>(new Set());
 
-	/** On mount: expand the parent of the initial active item. */
+	/** When activeNavId changes, ensure the parent tab is expanded. */
 	$effect(() => {
 		for (const tab of tabs) {
 			if (tab.children) {
 				if (tab.children.some((c) => c.id === activeNavId) || tab.id === activeNavId) {
-					expanded = new Set([...expanded, tab.id]);
+					// untrack: read expanded without creating a reactive dependency on it
+					// (writing to expanded would otherwise re-trigger this effect → infinite loop)
+					const current = untrack(() => expanded);
+					if (!current.has(tab.id)) {
+						expanded = new Set([...current, tab.id]);
+					}
 				}
 			}
 		}
