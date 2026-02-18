@@ -70,21 +70,52 @@ _SHORTCUTS_HEADER = """\
 # command = "switch-mode"
 """
 
+_SOUNDS_HEADER = """\
+# Audio sound effects — played at key events
+# Set enabled = false to silence a sound.
+# Set path = "/absolute/path/to/file.wav" to use a custom sound.
+#
+# Available events: start, stop, transcribing, ready, sent, agent_announce
+"""
+
+_SUBMIT_FILTER_HEADER = """\
+# Submit filter — detects voice trigger phrases to submit text
+# Triggers are grouped by language code (en, it, es, de, fr, ...).
+# Each trigger is a list of word sequences (alternatives).
+#
+# [pipeline.submit_filter.triggers]
+# en = [["ok", "send"], ["ok", "submit"], ["go", "ahead"]]
+# it = [["ok", "invia"], ["ok", "manda"]]
+"""
+
+_AGENT_FILTER_HEADER = """\
+# Agent filter — voice-controlled agent switching
+# Say a trigger word followed by the agent name to switch.
+# Example: "agent claude", "agent sonnet"
+#
+# triggers = ["agent"]    # words that precede the agent name
+# match_threshold = 0.5   # fuzzy match score (0.0 = loose, 1.0 = exact)
+"""
+
+# Registry for generic sections: section → (dotted_path, header, model_class_name, is_dict_of_models)
+_GENERIC_SECTIONS: dict[str, tuple[str, str, str, bool]] = {
+    "audio.sounds": ("audio.sounds", _SOUNDS_HEADER, "SoundConfig", True),
+    "pipeline.submit_filter": ("pipeline.submit_filter", _SUBMIT_FILTER_HEADER, "SubmitFilterConfig", False),
+    "pipeline.agent_filter": ("pipeline.agent_filter", _AGENT_FILTER_HEADER, "AgentFilterConfig", False),
+}
+
 
 def serialize_section(section: str, config: Config) -> str:
     """Serialize a complex config section as a TOML string with comments."""
     if section == "agent_types":
         return _serialize_agent_types(config)
-    elif section == "keyboard.shortcuts":
+    if section == "keyboard.shortcuts":
         return _serialize_shortcuts(config)
-    elif section == "audio.sounds":
-        return _serialize_sounds(config)
-    elif section == "pipeline.submit_filter":
-        return _serialize_submit_filter(config)
-    elif section == "pipeline.agent_filter":
-        return _serialize_agent_filter(config)
-    else:
+    meta = _GENERIC_SECTIONS.get(section)
+    if meta is None:
         raise KeyError(section)
+    dotted_path, header, _, _ = meta
+    return _serialize_pydantic_section(dotted_path, config, header)
 
 
 def apply_section(section: str, content: str, config_path: Path) -> None:
@@ -97,20 +128,126 @@ def apply_section(section: str, content: str, config_path: Path) -> None:
     """
     if section == "agent_types":
         _apply_agent_types(content, config_path)
-    elif section == "keyboard.shortcuts":
+        return
+    if section == "keyboard.shortcuts":
         _apply_shortcuts(content, config_path)
-    elif section == "audio.sounds":
-        _apply_sounds(content, config_path)
-    elif section == "pipeline.submit_filter":
-        _apply_submit_filter(content, config_path)
-    elif section == "pipeline.agent_filter":
-        _apply_agent_filter(content, config_path)
-    else:
+        return
+    meta = _GENERIC_SECTIONS.get(section)
+    if meta is None:
         raise KeyError(section)
+    dotted_path, _, model_cls_name, is_dict = meta
+    _apply_pydantic_section(dotted_path, model_cls_name, is_dict, content, config_path)
 
 
 # ---------------------------------------------------------------------------
-# agent_types section
+# Generic helpers
+# ---------------------------------------------------------------------------
+
+
+def _navigate_config(config: Config, dotted_path: str):
+    """Navigate config object following a dotted attribute path."""
+    obj = config
+    for part in dotted_path.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
+def _make_toml_table(data: dict, is_super_table: bool = False):
+    """Convert a plain dict to a tomlkit table (block style)."""
+    import tomlkit
+    tbl = tomlkit.table(is_super_table=is_super_table)
+    for k, v in data.items():
+        if isinstance(v, dict):
+            tbl.add(k, _make_toml_table(v))
+        else:
+            tbl.add(k, v)
+    return tbl
+
+
+def _set_nested_table(parent, parts: list[str], data: dict) -> None:
+    """Recursively add a nested tomlkit table at the given path."""
+    import tomlkit
+    if len(parts) == 1:
+        is_super = isinstance(data, dict) and bool(data) and all(isinstance(v, dict) for v in data.values())
+        parent.add(parts[0], _make_toml_table(data, is_super_table=is_super))
+    else:
+        super_tbl = tomlkit.table(is_super_table=True)
+        _set_nested_table(super_tbl, parts[1:], data)
+        parent.add(parts[0], super_tbl)
+
+
+def _serialize_pydantic_section(dotted_path: str, config: Config, header: str) -> str:
+    """Generic serializer: navigate config, dump as TOML under the dotted path."""
+    import tomlkit
+
+    obj = _navigate_config(config, dotted_path)
+    if hasattr(obj, "model_dump"):
+        data = obj.model_dump(exclude_none=True)
+    elif isinstance(obj, dict):
+        data = {
+            k: (v.model_dump(exclude_none=True) if hasattr(v, "model_dump") else v)
+            for k, v in obj.items()
+        }
+    else:
+        return header
+
+    doc = tomlkit.document()
+    _set_nested_table(doc, dotted_path.split("."), data)
+    return header + tomlkit.dumps(doc)
+
+
+def _apply_pydantic_section(
+    dotted_path: str,
+    model_cls_name: str,
+    is_dict_of_models: bool,
+    content: str,
+    config_path: Path,
+) -> None:
+    """Generic apply: parse TOML, validate with Pydantic, write section to config."""
+    import importlib
+
+    import tomlkit
+
+    try:
+        doc = tomlkit.parse(content)
+    except Exception as exc:
+        raise ValueError(f"TOML parse error: {exc}") from exc
+
+    # Extract value at dotted path
+    raw = doc
+    for part in dotted_path.split("."):
+        raw = raw.get(part, {})
+
+    model_cls = getattr(importlib.import_module("voxtype.config"), model_cls_name)
+    if is_dict_of_models:
+        validated: dict = {
+            k: model_cls.model_validate(dict(v)).model_dump(exclude_none=True)
+            for k, v in dict(raw).items()
+        }
+    else:
+        validated = model_cls.model_validate(dict(raw)).model_dump(exclude_none=True)
+
+    # Load existing config (preserve all other sections)
+    if config_path.exists():
+        cfg_doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+    else:
+        cfg_doc = tomlkit.document()
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Navigate to parent section and update the leaf key
+    parts = dotted_path.split(".")
+    parent = cfg_doc
+    for part in parts[:-1]:
+        if part not in parent:
+            parent.add(part, tomlkit.table())
+        parent = parent[part]
+
+    parent[parts[-1]] = validated
+    config_path.write_text(tomlkit.dumps(cfg_doc), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# agent_types section (special: default_agent_type at top level + nested tables)
 # ---------------------------------------------------------------------------
 
 
@@ -123,7 +260,6 @@ def _serialize_agent_types(config: Config) -> str:
 
     for name, at in config.agent_types.items():
         lines.append(f"[agent_types.{name}]")
-        # Use JSON-style array (valid TOML inline array)
         cmd_parts = ", ".join(f'"{c}"' for c in at.command)
         lines.append(f"command = [{cmd_parts}]")
         if at.description:
@@ -138,13 +274,11 @@ def _apply_agent_types(content: str, config_path: Path) -> None:
 
     from voxtype.config import AgentTypeConfig
 
-    # Parse the submitted TOML
     try:
         doc = tomlkit.parse(content)
     except Exception as exc:
         raise ValueError(f"TOML parse error: {exc}") from exc
 
-    # Validate each agent type entry
     raw_agent_types = dict(doc.get("agent_types", {}))
     validated: dict[str, AgentTypeConfig] = {}
     for name, entry in raw_agent_types.items():
@@ -152,20 +286,17 @@ def _apply_agent_types(content: str, config_path: Path) -> None:
 
     default_agent_type = doc.get("default_agent_type", None)
 
-    # Read existing config file (preserve all other sections)
     if config_path.exists():
         cfg_doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
     else:
         cfg_doc = tomlkit.document()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Update default_agent_type at top level
     if default_agent_type is not None:
         cfg_doc["default_agent_type"] = default_agent_type
     elif "default_agent_type" in cfg_doc:
         del cfg_doc["default_agent_type"]
 
-    # Remove old agent_types section entirely, then re-add
     if "agent_types" in cfg_doc:
         del cfg_doc["agent_types"]
 
@@ -183,7 +314,7 @@ def _apply_agent_types(content: str, config_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# keyboard.shortcuts section
+# keyboard.shortcuts section (special: [[array.of.tables]] syntax)
 # ---------------------------------------------------------------------------
 
 
@@ -201,7 +332,6 @@ def _serialize_shortcuts(config: Config) -> str:
                 lines.append(f"args = {args_json}")
             lines.append("")
     else:
-        # Show a commented example when no shortcuts are configured
         lines.append("# [[keyboard.shortcuts]]")
         lines.append('# keys = "ctrl+shift+l"')
         lines.append('# command = "toggle-listening"')
@@ -232,213 +362,24 @@ def _apply_shortcuts(content: str, config_path: Path) -> None:
                 raise ValueError("command must not be empty")
             return v
 
-    # Parse the submitted TOML
     try:
         doc = tomlkit.parse(content)
     except Exception as exc:
         raise ValueError(f"TOML parse error: {exc}") from exc
 
-    # The shortcuts live under [[keyboard.shortcuts]]
-    raw_shortcuts = []
     keyboard_section = doc.get("keyboard", {})
     raw_shortcuts = list(keyboard_section.get("shortcuts", []))
-
-    # Validate each entry
     validated = [ShortcutEntry.model_validate(dict(s)).model_dump(exclude_none=True) for s in raw_shortcuts]
 
-    # Read existing config file (preserve all other sections)
     if config_path.exists():
         cfg_doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
     else:
         cfg_doc = tomlkit.document()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Update keyboard.shortcuts in the config
     if "keyboard" not in cfg_doc:
         cfg_doc.add("keyboard", tomlkit.table())
 
     cfg_doc["keyboard"]["shortcuts"] = validated  # type: ignore[index]
 
-    config_path.write_text(tomlkit.dumps(cfg_doc), encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
-# audio.sounds section
-# ---------------------------------------------------------------------------
-
-_SOUNDS_HEADER = """\
-# Audio sound effects — played at key events
-# Set enabled = false to silence a sound.
-# Set path = "/absolute/path/to/file.wav" to use a custom sound.
-#
-# Available events: start, stop, transcribing, ready, sent, agent_announce
-"""
-
-
-def _serialize_sounds(config: Config) -> str:
-    lines: list[str] = [_SOUNDS_HEADER]
-    for name, sc in config.audio.sounds.items():
-        lines.append(f"[audio.sounds.{name}]")
-        lines.append(f"enabled = {str(sc.enabled).lower()}")
-        if sc.path:
-            lines.append(f'path = "{sc.path}"')
-        lines.append("")
-    return "\n".join(lines)
-
-
-def _apply_sounds(content: str, config_path: Path) -> None:
-    import tomlkit
-    from voxtype.config import SoundConfig
-
-    try:
-        doc = tomlkit.parse(content)
-    except Exception as exc:
-        raise ValueError(f"TOML parse error: {exc}") from exc
-
-    raw_sounds = dict(doc.get("audio", {}).get("sounds", {}))
-    validated: dict = {}
-    for name, entry in raw_sounds.items():
-        validated[name] = SoundConfig.model_validate(dict(entry)).model_dump(exclude_none=True)
-
-    if config_path.exists():
-        cfg_doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
-    else:
-        cfg_doc = tomlkit.document()
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if "audio" not in cfg_doc:
-        cfg_doc.add("audio", tomlkit.table())
-
-    sounds_tbl = tomlkit.table(is_super_table=True)
-    for name, sc in validated.items():
-        entry_tbl = tomlkit.table()
-        entry_tbl.add("enabled", sc["enabled"])
-        if sc.get("path"):
-            entry_tbl.add("path", sc["path"])
-        sounds_tbl.add(name, entry_tbl)
-
-    cfg_doc["audio"]["sounds"] = sounds_tbl  # type: ignore[index]
-    config_path.write_text(tomlkit.dumps(cfg_doc), encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
-# pipeline.submit_filter section
-# ---------------------------------------------------------------------------
-
-_SUBMIT_FILTER_HEADER = """\
-# Submit filter — detects voice trigger phrases to submit text
-# Triggers are grouped by language code (en, it, es, de, fr, ...).
-# Each trigger is a list of word sequences (alternatives).
-#
-# [pipeline.submit_filter.triggers]
-# en = [["ok", "send"], ["ok", "submit"], ["go", "ahead"]]
-# it = [["ok", "invia"], ["ok", "manda"]]
-"""
-
-
-def _serialize_submit_filter(config: Config) -> str:
-    sf = config.pipeline.submit_filter
-    lines: list[str] = [_SUBMIT_FILTER_HEADER]
-    lines.append(f"enabled = {str(sf.enabled).lower()}")
-    lines.append(f"confidence_threshold = {sf.confidence_threshold}")
-    lines.append(f"max_scan_words = {sf.max_scan_words}")
-    lines.append(f"decay_rate = {sf.decay_rate}")
-    lines.append("")
-    lines.append("[pipeline.submit_filter.triggers]")
-    for lang, phrases in sf.triggers.items():
-        inner = ", ".join(
-            "[" + ", ".join(f'"{w}"' for w in phrase) + "]"
-            for phrase in phrases
-        )
-        lines.append(f"{lang} = [{inner}]")
-    return "\n".join(lines)
-
-
-def _apply_submit_filter(content: str, config_path: Path) -> None:
-    import tomlkit
-    from voxtype.config import SubmitFilterConfig
-
-    try:
-        doc = tomlkit.parse(content)
-    except Exception as exc:
-        raise ValueError(f"TOML parse error: {exc}") from exc
-
-    raw = dict(doc.get("pipeline", {}).get("submit_filter", {}))
-    validated = SubmitFilterConfig.model_validate(raw)
-
-    if config_path.exists():
-        cfg_doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
-    else:
-        cfg_doc = tomlkit.document()
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if "pipeline" not in cfg_doc:
-        cfg_doc.add("pipeline", tomlkit.table())
-
-    sf_tbl = tomlkit.table()
-    sf_tbl.add("enabled", validated.enabled)
-    sf_tbl.add("confidence_threshold", validated.confidence_threshold)
-    sf_tbl.add("max_scan_words", validated.max_scan_words)
-    sf_tbl.add("decay_rate", validated.decay_rate)
-    if validated.triggers:
-        triggers_tbl = tomlkit.table()
-        for lang, phrases in validated.triggers.items():
-            triggers_tbl.add(lang, [list(p) for p in phrases])
-        sf_tbl.add("triggers", triggers_tbl)
-
-    cfg_doc["pipeline"]["submit_filter"] = sf_tbl  # type: ignore[index]
-    config_path.write_text(tomlkit.dumps(cfg_doc), encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
-# pipeline.agent_filter section
-# ---------------------------------------------------------------------------
-
-_AGENT_FILTER_HEADER = """\
-# Agent filter — voice-controlled agent switching
-# Say a trigger word followed by the agent name to switch.
-# Example: "agent claude", "agent sonnet"
-#
-# triggers = ["agent"]    # words that precede the agent name
-# match_threshold = 0.5   # fuzzy match score (0.0 = loose, 1.0 = exact)
-"""
-
-
-def _serialize_agent_filter(config: Config) -> str:
-    af = config.pipeline.agent_filter
-    triggers_str = "[" + ", ".join(f'"{t}"' for t in af.triggers) + "]"
-    lines: list[str] = [_AGENT_FILTER_HEADER]
-    lines.append(f"enabled = {str(af.enabled).lower()}")
-    lines.append(f"match_threshold = {af.match_threshold}")
-    lines.append(f"triggers = {triggers_str}")
-    return "\n".join(lines)
-
-
-def _apply_agent_filter(content: str, config_path: Path) -> None:
-    import tomlkit
-    from voxtype.config import AgentFilterConfig
-
-    try:
-        doc = tomlkit.parse(content)
-    except Exception as exc:
-        raise ValueError(f"TOML parse error: {exc}") from exc
-
-    raw = dict(doc.get("pipeline", {}).get("agent_filter", {}))
-    validated = AgentFilterConfig.model_validate(raw)
-
-    if config_path.exists():
-        cfg_doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
-    else:
-        cfg_doc = tomlkit.document()
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if "pipeline" not in cfg_doc:
-        cfg_doc.add("pipeline", tomlkit.table())
-
-    af_tbl = tomlkit.table()
-    af_tbl.add("enabled", validated.enabled)
-    af_tbl.add("match_threshold", validated.match_threshold)
-    af_tbl.add("triggers", validated.triggers)
-
-    cfg_doc["pipeline"]["agent_filter"] = af_tbl  # type: ignore[index]
     config_path.write_text(tomlkit.dumps(cfg_doc), encoding="utf-8")

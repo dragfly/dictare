@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b121] - 2026-02-18
+
+### Changed
+
+- `toml_sections.py`: replaced 3 bespoke serialize/apply function pairs with generic
+  `_serialize_pydantic_section` / `_apply_pydantic_section` helpers + `_GENERIC_SECTIONS`
+  registry. `agent_types` and `keyboard.shortcuts` remain special cases. ~90 lines → ~45.
+
 ## [0.1.0b120] - 2026-02-18
 
 ### Fixed
