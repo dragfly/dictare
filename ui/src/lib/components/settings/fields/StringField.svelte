@@ -4,10 +4,11 @@
 	interface Props {
 		value: string;
 		size?: "narrow" | "medium" | "normal";
+		placeholder?: string;
 		onchange: (value: string) => void;
 	}
 
-	let { value, size = "normal", onchange }: Props = $props();
+	let { value, size = "normal", placeholder = "", onchange }: Props = $props();
 
 	const widthClass = $derived(
 		size === "narrow" ? "w-24" : size === "medium" ? "w-36" : "w-48"
@@ -18,5 +19,6 @@
 	type="text"
 	class={widthClass}
 	{value}
+	{placeholder}
 	onchange={(e) => onchange(e.currentTarget.value)}
 />
