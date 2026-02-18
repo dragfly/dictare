@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@codemirror/commands':
+        specifier: ^6.10.2
+        version: 6.10.2
       '@codemirror/language':
         specifier: ^6.12.1
         version: 6.12.1
@@ -20,6 +23,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.39.14
         version: 6.39.14
+      '@lezer/highlight':
+        specifier: ^1.2.3
+        version: 1.2.3
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
