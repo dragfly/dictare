@@ -200,34 +200,70 @@ def play_sound_file(
 
 
 # ---------------------------------------------------------------------------
-# Loop support — plays a sound repeatedly until stop_loop() is called
+# Loop support — plays a sound repeatedly until stop_loop() is called.
+#
+# The audio is pre-sliced into ~1s chunks so that stop_loop() takes effect
+# within at most 1 second (no need for sd.stop() to interrupt a long play).
 # ---------------------------------------------------------------------------
 
+_LOOP_CHUNK_DURATION: float = 1.0  # seconds per chunk
+
 _loop_active: threading.Event = threading.Event()
-_loop_path: str | None = None
+_loop_chunk_keys: list[str] = []   # cache keys for each 1s slice
+_loop_chunk_pos: int = 0           # next chunk index (wraps around)
 
 
 def _enqueue_loop_next() -> None:
-    """on_complete callback: re-enqueue the loop sound if still active."""
-    if _loop_active.is_set() and _loop_path:
-        _play_queue.put((_loop_path, _enqueue_loop_next))
+    """on_complete callback: schedule the next 1s chunk if still active."""
+    global _loop_chunk_pos
+    if not _loop_active.is_set() or not _loop_chunk_keys:
+        return
+    key = _loop_chunk_keys[_loop_chunk_pos % len(_loop_chunk_keys)]
+    _loop_chunk_pos += 1
+    _play_queue.put((key, _enqueue_loop_next))
 
 
 def start_loop(path: str | Path) -> None:
-    """Start looping *path* until stop_loop() is called.
+    """Start looping *path* in 1-second chunks until stop_loop() is called.
 
-    Non-blocking.  Replaces any previously active loop.
-    The current play finishes before the next one starts (gapless via on_complete).
+    Non-blocking.  Pre-slices the audio into ~1s chunks stored in the sound
+    cache, then kicks off the first chunk via the normal audio worker queue.
     """
-    global _loop_path
-    _loop_path = str(path)
+    global _loop_chunk_keys, _loop_chunk_pos
+
+    path_str = str(path)
+
+    # Load full audio (use cache if available)
+    cached = _sound_cache.get(path_str)
+    if cached is not None:
+        data, sr = cached
+    else:
+        try:
+            import soundfile as sf
+            data, sr = sf.read(path_str)
+            _sound_cache[path_str] = (data, sr)
+        except Exception:
+            logger.debug("start_loop: failed to load %s", path_str, exc_info=True)
+            return
+
+    # Slice into ~1s chunks and register each in the cache under a stable key
+    chunk_size = max(1, int(_LOOP_CHUNK_DURATION * sr))
+    new_keys: list[str] = []
+    for i, start in enumerate(range(0, len(data), chunk_size)):
+        chunk = data[start : start + chunk_size]
+        key = f"__loop_chunk_{i}__"
+        _sound_cache[key] = (chunk, sr)
+        new_keys.append(key)
+
+    _loop_chunk_keys = new_keys
+    _loop_chunk_pos = 0
     _loop_active.set()
     _ensure_worker()
     _enqueue_loop_next()
 
 
 def stop_loop() -> None:
-    """Stop the loop after the current play finishes. No-op if not looping."""
+    """Stop the loop. The current 1s chunk finishes, then playback stops."""
     _loop_active.clear()
 
 

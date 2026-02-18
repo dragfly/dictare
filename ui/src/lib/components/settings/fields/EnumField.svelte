@@ -42,7 +42,7 @@
 </script>
 
 <Select.Root type="single" value={displayValue} onValueChange={(v) => { if (v) handleChange(v); }}>
-	<Select.Trigger class="w-48">
+	<Select.Trigger class="min-w-36 w-auto whitespace-nowrap">
 		{displayLabel}
 	</Select.Trigger>
 	<Select.Content>
