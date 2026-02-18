@@ -9,7 +9,7 @@ RUN useradd -m -s /bin/bash testuser && \
     apt-get install -y sudo curl && \
     echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Install system deps (cacheable) - use system python3-gi since PyGObject needs girepository-2.0
+# Install system deps + python3-gi (PyGObject from PyPI needs girepository-2.0 not in Bookworm)
 RUN apt-get update && apt-get install -y \
     python3 python3-pip python3-venv python3-dev \
     python3-gi python3-gi-cairo gir1.2-ayatanaappindicator3-0.1 \
@@ -18,28 +18,35 @@ RUN apt-get update && apt-get install -y \
     build-essential pkg-config \
     xvfb dbus-x11
 
-# Install uv (cacheable)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Create venv with system-site-packages for python3-gi
+RUN python3 -m venv --system-site-packages /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --upgrade pip
 
-COPY --chown=testuser:testuser . /home/testuser/voxtype
-WORKDIR /home/testuser/voxtype
+# Copy ONLY dependency files first
+COPY pyproject.toml /app/
+COPY _openvip_sdk/ /app/_openvip_sdk/
+
+WORKDIR /app
+
+# Install dependencies (cached if pyproject.toml doesn't change)
+RUN pip install /app/_openvip_sdk && \
+    pip install ".[tts]"
+
+# NOW copy the rest of the code
+COPY --chown=testuser:testuser . /app/
+
+# Install voxtype editable (fast, no deps)
+RUN pip install -e . --no-deps
 
 USER testuser
 
-# Install Python deps with cache mount (use system-site-packages for python3-gi)
-RUN --mount=type=cache,target=/home/testuser/.cache/pip,uid=1000 \
-    bash -c '\
-    python3 -m venv --system-site-packages .venv && \
-    .venv/bin/pip install --upgrade pip && \
-    .venv/bin/pip install ./_openvip_sdk && \
-    .venv/bin/pip install -e ".[tts]"'
-
 # Verify installation
 RUN bash -c '\
-    .venv/bin/python -m voxtype --version && \
+    python -m voxtype --version && \
     echo "Testing PyGObject + AppIndicator..." && \
-    .venv/bin/python -c "import gi; gi.require_version(\"Gtk\", \"3.0\"); from gi.repository import Gtk; print(\"PyGObject OK\")" && \
-    .venv/bin/python -c "import gi; gi.require_version(\"AyatanaAppIndicator3\", \"0.1\"); from gi.repository import AyatanaAppIndicator3; print(\"AppIndicator OK\")" && \
+    python -c "import gi; gi.require_version(\"Gtk\", \"3.0\"); from gi.repository import Gtk; print(\"PyGObject OK\")" && \
+    python -c "import gi; gi.require_version(\"AyatanaAppIndicator3\", \"0.1\"); from gi.repository import AyatanaAppIndicator3; print(\"AppIndicator OK\")" && \
     echo "Testing tray module import..." && \
-    .venv/bin/python -c "from voxtype.tray.app import TrayApp; print(\"TrayApp import OK\")" && \
+    python -c "from voxtype.tray.app import TrayApp; print(\"TrayApp import OK\")" && \
     echo "SUCCESS: Debian install test passed"'

@@ -4,13 +4,13 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Create non-root user (install script requires this)
+# Create non-root user
 RUN useradd -m -s /bin/bash testuser && \
     apt-get update && \
     apt-get install -y sudo curl && \
     echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Install system deps first (cacheable)
+# Install system deps (cached)
 RUN apt-get update && apt-get install -y \
     libportaudio2 portaudio19-dev \
     espeak-ng \
@@ -19,31 +19,37 @@ RUN apt-get update && apt-get install -y \
     build-essential pkg-config \
     xvfb dbus-x11
 
-# Install uv (cacheable)
+# Install uv and create venv (cached)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+RUN uv venv --python 3.11 --seed /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy project
-COPY --chown=testuser:testuser . /home/testuser/voxtype
-WORKDIR /home/testuser/voxtype
+# Copy ONLY dependency files first (like .csproj in .NET)
+COPY pyproject.toml /app/
+COPY _openvip_sdk/ /app/_openvip_sdk/
+
+WORKDIR /app
+
+# Install dependencies (cached if pyproject.toml doesn't change)
+RUN pip install /app/_openvip_sdk && \
+    pip install ".[tts]" && \
+    pip install PyGObject pycairo
+
+# NOW copy the rest of the code
+COPY --chown=testuser:testuser . /app/
+
+# Install voxtype editable (fast, no deps)
+RUN pip install -e . --no-deps
 
 USER testuser
 
-# Install Python deps with cache mount
-RUN --mount=type=cache,target=/home/testuser/.cache/pip,uid=1000 \
-    --mount=type=cache,target=/home/testuser/.cache/uv,uid=1000 \
-    bash -c '\
-    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH" && \
-    uv venv --python 3.11 --seed .venv && \
-    .venv/bin/pip install ./_openvip_sdk && \
-    .venv/bin/pip install -e ".[tts]" && \
-    .venv/bin/pip install PyGObject pycairo'
-
 # Verify installation
 RUN bash -c '\
-    .venv/bin/python -m voxtype --version && \
+    python -m voxtype --version && \
     echo "Testing PyGObject + AppIndicator..." && \
-    .venv/bin/python -c "import gi; gi.require_version(\"Gtk\", \"3.0\"); from gi.repository import Gtk; print(\"PyGObject OK\")" && \
-    .venv/bin/python -c "import gi; gi.require_version(\"AyatanaAppIndicator3\", \"0.1\"); from gi.repository import AyatanaAppIndicator3; print(\"AppIndicator OK\")" && \
+    python -c "import gi; gi.require_version(\"Gtk\", \"3.0\"); from gi.repository import Gtk; print(\"PyGObject OK\")" && \
+    python -c "import gi; gi.require_version(\"AyatanaAppIndicator3\", \"0.1\"); from gi.repository import AyatanaAppIndicator3; print(\"AppIndicator OK\")" && \
     echo "Testing tray module import..." && \
-    .venv/bin/python -c "from voxtype.tray.app import TrayApp; print(\"TrayApp import OK\")" && \
+    python -c "from voxtype.tray.app import TrayApp; print(\"TrayApp import OK\")" && \
     echo "SUCCESS: Ubuntu install test passed"'
