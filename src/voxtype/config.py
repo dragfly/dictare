@@ -621,6 +621,17 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
                 env_var,
             ))
 
+    # agent_types is a dynamic dict — expose as a single "dict" field
+    # so the UI can render it as a TOML editor
+    agent_types_field = Config.model_fields["agent_types"]
+    result.append((
+        "agent_types",
+        "dict",
+        {},
+        agent_types_field.description or "Agent type presets",
+        _key_to_env_var("agent_types"),
+    ))
+
     return result
 
 def create_default_config() -> Path:
