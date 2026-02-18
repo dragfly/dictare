@@ -100,6 +100,10 @@ class AppController:
                 ctrl = eng._controller if eng else None
                 pause = not config.audio.headphones_mode
 
+                # Check loop state before stopping — used to gate the ready sound.
+                # is_looping() will be False after stop_loop(), so capture it first.
+                was_looping = old == AppState.TRANSCRIBING and is_looping()
+
                 # Stop any active loop whenever we leave TRANSCRIBING
                 if old == AppState.TRANSCRIBING:
                     stop_loop()
@@ -129,9 +133,12 @@ class AppController:
                     AppState.TRANSCRIBING,
                     AppState.INJECTING,
                 ):
-                    enabled, path = get_sound_for_event(config.audio, "ready")
-                    if enabled:
-                        play_sound_file_async(path)
+                    # Only play carriage-return if typewriter was playing.
+                    # Both sounds share the same 8s threshold: no typewriter = no ready.
+                    if was_looping:
+                        enabled, path = get_sound_for_event(config.audio, "ready")
+                        if enabled:
+                            play_sound_file_async(path)
 
             def on_agent_change(self, agent_name: str, index: int) -> None:
                 import logging as _logging
