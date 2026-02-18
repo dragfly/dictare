@@ -79,6 +79,34 @@ def _ensure_accessibility(prompt: bool = True) -> bool:
     return trusted
 
 
+def _patch_pystray_appindicator() -> None:
+    """Monkey-patch pystray to save icons with .png extension on Linux.
+
+    AppIndicator's set_icon() needs a proper file path with extension,
+    otherwise it treats the path as an icon theme name and fails.
+    pystray uses tempfile.mktemp() without extension, causing fallback icons.
+    """
+    if sys.platform == "darwin":
+        return
+    try:
+        import tempfile
+
+        import pystray._util.gtk as _gtk
+
+        _original_update_fs_icon = _gtk.GtkIcon._update_fs_icon
+
+        def _update_fs_icon_png(self: _gtk.GtkIcon) -> None:
+            """Update icon file with .png extension."""
+            self._icon_path = tempfile.mktemp(suffix=".png")
+            with open(self._icon_path, "wb") as f:
+                self.icon.save(f, "PNG")
+            self._icon_valid = True
+
+        _gtk.GtkIcon._update_fs_icon = _update_fs_icon_png
+    except Exception:
+        logger.warning("Could not patch pystray for AppIndicator icons", exc_info=True)
+
+
 def _patch_pystray_retina() -> None:
     """Monkey-patch pystray to render icons at full Retina resolution.
 
@@ -601,8 +629,9 @@ class TrayApp:
         """Run the tray application (blocking)."""
         import pystray
 
-        # Patch pystray for crisp Retina rendering
-        _patch_pystray_retina()
+        # Patch pystray for platform-specific fixes
+        _patch_pystray_appindicator()  # Linux: .png extension for temp icons
+        _patch_pystray_retina()  # macOS: crisp Retina rendering
 
         self._icon = pystray.Icon(
             name="voxtype",

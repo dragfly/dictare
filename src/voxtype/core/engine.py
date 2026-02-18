@@ -979,13 +979,16 @@ class VoxtypeEngine:
 
         # Activate this agent if:
         # 1. It's the saved preferred agent from last session, OR
-        # 2. It's the first non-reserved agent and no current agent set
+        # 2. No current agent OR current is internal (like __keyboard__) in agents mode
         if agent.id not in self.RESERVED_AGENT_IDS:
             if self._last_sse_agent_id and agent.id == self._last_sse_agent_id:
                 self._current_agent_id = agent.id
                 logger.info("Activated preferred agent from saved state: %s", agent.id)
-            elif self._current_agent_id is None:
+            elif self._current_agent_id is None or (
+                self.agent_mode and self._current_agent_id in self.RESERVED_AGENT_IDS
+            ):
                 self._current_agent_id = agent.id
+                logger.info("Activated first real agent: %s", agent.id)
 
         bus.publish("agent.registered", agent_id=agent.id)
         self._notify_status()

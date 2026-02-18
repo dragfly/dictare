@@ -743,6 +743,30 @@ class TestRegisterAgent:
         assert engine.current_agent == "varie"
         assert engine._current_agent_id != "__keyboard__"
 
+    def test_agent_becomes_current_when_keyboard_is_current_in_agent_mode(self) -> None:
+        """Regression b111: SSE agent must become current even if __keyboard__ is current.
+
+        Bug scenario:
+        1. Engine starts in agent_mode
+        2. State restore sets _current_agent_id = "__keyboard__" (from stale state)
+        3. SSE agent "voice" connects
+        4. Expected: "voice" becomes current (not stuck on __keyboard__)
+        """
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine.agent_mode = True
+
+        # Simulate stale state: __keyboard__ was saved as active_agent
+        engine._current_agent_id = "__keyboard__"
+
+        # SSE agent connects
+        register_test_agents(engine, ["voice"])
+
+        # voice should become current, not stay on __keyboard__
+        assert engine.current_agent == "voice"
+        assert engine.visible_current_agent == "voice"
+        assert engine._current_agent_id != "__keyboard__"
+
     def test_agents_restart_keeps_current_agent(self) -> None:
         """Regression: restarting both agents must restore current_agent."""
         config = MockConfig()
