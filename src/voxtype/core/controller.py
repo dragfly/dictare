@@ -222,7 +222,7 @@ class StateController:
             return
 
         if self._on_state_change:
-            self._on_state_change(old_state, AppState.TRANSCRIBING, "speech_end")
+            self._on_state_change(old_state, AppState.TRANSCRIBING, f"speech_end:{duration_ms:.0f}")
 
         if self._on_recording_end:
             self._on_recording_end(duration_ms)
