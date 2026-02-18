@@ -50,13 +50,13 @@
 </script>
 
 <nav class="w-52 shrink-0 border-r bg-background/50 h-screen overflow-y-auto p-3 flex flex-col">
-	<div class="px-3 py-2 mb-1">
+	<div class="px-3 pt-8 pb-3 mb-1">
 		<span class="text-sm font-semibold tracking-tight">VoxType</span>
 		{#if version}
 			<span class="text-[11px] text-muted-foreground ml-1.5">{version}</span>
 		{/if}
 	</div>
-	<Separator class="mb-2" />
+	<Separator class="mb-3" />
 
 	<div class="space-y-0.5">
 		{#each tabs as tab (tab.id)}
