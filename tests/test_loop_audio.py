@@ -17,18 +17,28 @@ class TestLoopState:
         from voxtype.audio.beep import is_looping
         assert is_looping() is False
 
+    def _fake_wav(self, duration: float = 2.0, sr: int = 48000):
+        import numpy as np
+        return np.zeros(int(duration * sr)), sr
+
     def test_start_loop_sets_active(self):
+        import numpy as np
         from voxtype.audio.beep import is_looping, start_loop
+        data, sr = self._fake_wav()
         with patch("voxtype.audio.beep._play_queue") as mock_q, \
-             patch("voxtype.audio.beep._ensure_worker"):
+             patch("voxtype.audio.beep._ensure_worker"), \
+             patch("voxtype.audio.beep._sound_cache", {"/tmp/fake.wav": (data, sr)}):
             start_loop("/tmp/fake.wav")
             assert is_looping() is True
             mock_q.put.assert_called_once()
 
     def test_stop_loop_clears_active(self):
+        import numpy as np
         from voxtype.audio.beep import is_looping, start_loop, stop_loop
+        data, sr = self._fake_wav()
         with patch("voxtype.audio.beep._play_queue"), \
-             patch("voxtype.audio.beep._ensure_worker"):
+             patch("voxtype.audio.beep._ensure_worker"), \
+             patch("voxtype.audio.beep._sound_cache", {"/tmp/fake.wav": (data, sr)}):
             start_loop("/tmp/fake.wav")
             stop_loop()
             assert is_looping() is False
@@ -38,14 +48,29 @@ class TestLoopState:
         stop_loop()  # must not raise
         assert is_looping() is False
 
-    def test_start_loop_replaces_path(self):
+    def test_start_loop_creates_chunks(self):
+        """A 2s WAV @ 48kHz with 1s chunks → 2 chunk keys."""
         import voxtype.audio.beep as beep
         from voxtype.audio.beep import start_loop
+        data, sr = self._fake_wav(duration=2.0, sr=48000)
         with patch("voxtype.audio.beep._play_queue"), \
-             patch("voxtype.audio.beep._ensure_worker"):
+             patch("voxtype.audio.beep._ensure_worker"), \
+             patch("voxtype.audio.beep._sound_cache", {"/tmp/a.wav": (data, sr)}):
+            start_loop("/tmp/a.wav")
+            assert len(beep._loop_chunk_keys) == 2
+
+    def test_start_loop_replaces_chunks(self):
+        """Calling start_loop() twice replaces previous chunk keys."""
+        import voxtype.audio.beep as beep
+        from voxtype.audio.beep import start_loop
+        data, sr = self._fake_wav(duration=2.0)
+        cache = {"/tmp/a.wav": (data, sr), "/tmp/b.wav": (data, sr)}
+        with patch("voxtype.audio.beep._play_queue"), \
+             patch("voxtype.audio.beep._ensure_worker"), \
+             patch("voxtype.audio.beep._sound_cache", cache):
             start_loop("/tmp/a.wav")
             start_loop("/tmp/b.wav")
-            assert beep._loop_path == "/tmp/b.wav"
+            assert beep._loop_chunk_pos == 1  # reset and first chunk enqueued
 
 class TestLoopReenqueue:
     """_enqueue_loop_next re-enqueues only while active."""
@@ -53,35 +78,46 @@ class TestLoopReenqueue:
     def setup_method(self):
         import voxtype.audio.beep as beep
         beep._loop_active.clear()
-        beep._loop_path = None
+        beep._loop_chunk_keys = []
+        beep._loop_chunk_pos = 0
 
     def test_enqueue_next_schedules_when_active(self):
         import voxtype.audio.beep as beep
-        beep._loop_path = "/tmp/fake.wav"
+        beep._loop_chunk_keys = ["__loop_chunk_0__"]
         beep._loop_active.set()
         with patch("voxtype.audio.beep._play_queue") as mock_q:
             beep._enqueue_loop_next()
-            # Should put a (path, callback) tuple on the queue
             mock_q.put.assert_called_once()
             args = mock_q.put.call_args[0][0]
-            assert args[0] == "/tmp/fake.wav"
+            assert args[0] == "__loop_chunk_0__"
             assert callable(args[1])
 
     def test_enqueue_next_does_nothing_when_stopped(self):
         import voxtype.audio.beep as beep
-        beep._loop_path = "/tmp/fake.wav"
+        beep._loop_chunk_keys = ["__loop_chunk_0__"]
         beep._loop_active.clear()
         with patch("voxtype.audio.beep._play_queue") as mock_q:
             beep._enqueue_loop_next()
             mock_q.put.assert_not_called()
 
-    def test_enqueue_next_does_nothing_when_no_path(self):
+    def test_enqueue_next_does_nothing_when_no_chunks(self):
         import voxtype.audio.beep as beep
-        beep._loop_path = None
+        beep._loop_chunk_keys = []
         beep._loop_active.set()
         with patch("voxtype.audio.beep._play_queue") as mock_q:
             beep._enqueue_loop_next()
             mock_q.put.assert_not_called()
+
+    def test_chunk_index_wraps_around(self):
+        """After the last chunk, wraps back to chunk 0."""
+        import voxtype.audio.beep as beep
+        beep._loop_chunk_keys = ["__loop_chunk_0__", "__loop_chunk_1__"]
+        beep._loop_chunk_pos = 2  # past end
+        beep._loop_active.set()
+        with patch("voxtype.audio.beep._play_queue") as mock_q:
+            beep._enqueue_loop_next()
+            args = mock_q.put.call_args[0][0]
+            assert args[0] == "__loop_chunk_0__"  # wraps to 2 % 2 = 0
 
 class TestControllerLoopIntegration:
     """on_state_change triggers start_loop / stop_loop correctly."""
