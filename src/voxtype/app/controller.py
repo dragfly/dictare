@@ -114,9 +114,18 @@ class AppController:
                     if enabled:
                         play_audio(path, pause_mic=False)
                 elif new == AppState.TRANSCRIBING:
-                    enabled, path = get_sound_for_event(config.audio, "transcribing")
-                    if enabled:
-                        start_loop(path)
+                    # Only play typewriter loop for long recordings (≥ 8 s of audio).
+                    # Short utterances finish transcribing in < 500 ms — no feedback needed.
+                    audio_ms = 0.0
+                    if trigger.startswith("speech_end:"):
+                        try:
+                            audio_ms = float(trigger.split(":", 1)[1])
+                        except ValueError:
+                            pass
+                    if audio_ms >= 8_000:
+                        enabled, path = get_sound_for_event(config.audio, "transcribing")
+                        if enabled:
+                            start_loop(path)
                 elif new == AppState.LISTENING and old in (
                     AppState.TRANSCRIBING,
                     AppState.INJECTING,
