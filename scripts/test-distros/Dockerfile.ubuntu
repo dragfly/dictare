@@ -5,8 +5,8 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system deps (cached)
-RUN apt-get update && apt-get install -y curl
 RUN apt-get update && apt-get install -y \
+    curl \
     libportaudio2 portaudio19-dev \
     espeak-ng \
     gir1.2-ayatanaappindicator3-0.1 \
@@ -20,7 +20,7 @@ ENV PATH="/root/.local/bin:$PATH"
 RUN uv venv --python 3.11 --seed /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy dependency files + version file (hatch needs pyproject.toml, __init__.py, README.md)
+# Copy dependency files (hatch needs pyproject.toml, __init__.py, README.md)
 COPY pyproject.toml README.md /app/
 COPY src/voxtype/__init__.py /app/src/voxtype/
 COPY _openvip_sdk/ /app/_openvip_sdk/
@@ -32,17 +32,14 @@ RUN pip install /app/_openvip_sdk && \
     pip install ".[tts]" && \
     pip install PyGObject pycairo
 
-# NOW copy the rest of the code
+# Copy the rest of the code
 COPY . /app/
+
+# Make test scripts executable
+RUN chmod +x /app/scripts/test-distros/tests/*.sh
 
 # Install voxtype editable (fast, no deps)
 RUN pip install -e . --no-deps
 
-# Verify installation
-RUN python -m voxtype --version && \
-    echo "Testing PyGObject + AppIndicator..." && \
-    python -c "import gi; gi.require_version(\"Gtk\", \"3.0\"); from gi.repository import Gtk; print(\"PyGObject OK\")" && \
-    python -c "import gi; gi.require_version(\"AyatanaAppIndicator3\", \"0.1\"); from gi.repository import AyatanaAppIndicator3; print(\"AppIndicator OK\")" && \
-    echo "Testing tray module import..." && \
-    python -c "from voxtype.tray.app import TrayApp; print(\"TrayApp import OK\")" && \
-    echo "SUCCESS: Ubuntu install test passed"
+# Run smoke test (verifies imports work)
+RUN /app/scripts/test-distros/tests/smoke.sh
