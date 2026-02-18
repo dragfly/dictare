@@ -1,0 +1,35 @@
+# Test voxtype install on Arch Linux
+FROM archlinux:latest
+
+RUN useradd -m -s /bin/bash testuser && \
+    echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    pacman -Syu --noconfirm sudo
+
+COPY --chown=testuser:testuser . /home/testuser/voxtype
+WORKDIR /home/testuser/voxtype
+
+USER testuser
+
+# Arch uses AppIndicator3 (not Ayatana)
+RUN bash -c '\
+    set -euo pipefail && \
+    sudo pacman -S --noconfirm \
+        portaudio \
+        espeak-ng \
+        libappindicator-gtk3 \
+        gobject-introspection cairo \
+        base-devel pkg-config \
+        xorg-server-xvfb dbus && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH" && \
+    uv venv --python 3.11 --seed .venv && \
+    .venv/bin/pip install ./_openvip_sdk && \
+    .venv/bin/pip install -e ".[tts]" && \
+    .venv/bin/pip install PyGObject pycairo && \
+    .venv/bin/python -m voxtype --version && \
+    echo "Testing PyGObject + AppIndicator..." && \
+    .venv/bin/python -c "import gi; gi.require_version(\"Gtk\", \"3.0\"); from gi.repository import Gtk; print(\"PyGObject OK\")" && \
+    .venv/bin/python -c "import gi; gi.require_version(\"AppIndicator3\", \"0.1\"); from gi.repository import AppIndicator3; print(\"AppIndicator OK\")" && \
+    echo "Testing tray module import..." && \
+    .venv/bin/python -c "from voxtype.tray.app import TrayApp; print(\"TrayApp import OK\")" && \
+    echo "SUCCESS: Arch install test passed"'

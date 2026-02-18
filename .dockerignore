@@ -1,0 +1,22 @@
+# Exclude dev artifacts from test builds
+.venv/
+.git/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Config/data
+.env
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Test outputs
+/scripts/test-distros/*.log

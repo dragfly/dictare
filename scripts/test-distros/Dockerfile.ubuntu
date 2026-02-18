@@ -1,0 +1,41 @@
+# Test voxtype install on Ubuntu 24.04
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Create non-root user (install script requires this)
+RUN useradd -m -s /bin/bash testuser && \
+    apt-get update && \
+    apt-get install -y sudo curl && \
+    echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Copy project and openvip SDK (copied by run.sh)
+COPY --chown=testuser:testuser . /home/testuser/voxtype
+WORKDIR /home/testuser/voxtype
+
+USER testuser
+
+# Install system deps, uv, and voxtype
+RUN bash -c '\
+    set -euo pipefail && \
+    sudo apt-get update && \
+    sudo apt-get install -y \
+        libportaudio2 portaudio19-dev \
+        espeak-ng \
+        gir1.2-ayatanaappindicator3-0.1 \
+        libgirepository-2.0-dev libcairo2-dev \
+        build-essential pkg-config \
+        xvfb dbus-x11 && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH" && \
+    uv venv --python 3.11 --seed .venv && \
+    .venv/bin/pip install ./_openvip_sdk && \
+    .venv/bin/pip install -e ".[tts]" && \
+    .venv/bin/pip install PyGObject pycairo && \
+    .venv/bin/python -m voxtype --version && \
+    echo "Testing PyGObject + AppIndicator..." && \
+    .venv/bin/python -c "import gi; gi.require_version(\"Gtk\", \"3.0\"); from gi.repository import Gtk; print(\"PyGObject OK\")" && \
+    .venv/bin/python -c "import gi; gi.require_version(\"AyatanaAppIndicator3\", \"0.1\"); from gi.repository import AyatanaAppIndicator3; print(\"AppIndicator OK\")" && \
+    echo "Testing tray module import..." && \
+    .venv/bin/python -c "from voxtype.tray.app import TrayApp; print(\"TrayApp import OK\")" && \
+    echo "SUCCESS: Ubuntu install test passed"'
