@@ -69,8 +69,6 @@ ui/.svelte-kit/
 !ui/src/lib/
 !src/voxtype/ui/dist/
 
-# Future / experimental (separate repo)
-_future/
 
 # Claude Code
 .claude/
