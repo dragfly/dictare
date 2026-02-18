@@ -129,3 +129,121 @@ class TestPostSettings:
                 json={"key": "output.mode", "value": "invalid_mode"},
             )
             assert r.status_code == 422
+
+class TestTomlSectionGet:
+    """GET /settings/toml-section/{section}"""
+
+    def test_agent_types_returns_content(self, client):
+        from voxtype.config import AgentTypeConfig, Config
+
+        config = Config(
+            default_agent_type="claude",
+            agent_types={"claude": AgentTypeConfig(command=["claude"])},
+        )
+        with patch("voxtype.config.load_config", return_value=config):
+            r = client.get("/settings/toml-section/agent_types")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["section"] == "agent_types"
+        assert "agent_types" in data["content"]
+        assert "claude" in data["content"]
+
+    def test_shortcuts_returns_content(self, client):
+        r = client.get("/settings/toml-section/keyboard.shortcuts")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["section"] == "keyboard.shortcuts"
+        assert isinstance(data["content"], str)
+
+    def test_unknown_section_returns_404(self, client):
+        r = client.get("/settings/toml-section/nonexistent")
+        assert r.status_code == 404
+
+    def test_content_includes_comments(self, client):
+        r = client.get("/settings/toml-section/agent_types")
+        assert r.status_code == 200
+        assert "#" in r.json()["content"]  # has comments/examples
+
+class TestTomlSectionPost:
+    """POST /settings/toml-section/{section}"""
+
+    def test_save_agent_types(self, client, tmp_path):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")
+        toml_content = """
+default_agent_type = "claude"
+
+[agent_types.claude]
+command = ["claude"]
+description = "Claude Code"
+"""
+        with patch("voxtype.config.get_config_path", return_value=config_file):
+            r = client.post(
+                "/settings/toml-section/agent_types",
+                json={"content": toml_content},
+            )
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+
+        # Verify persisted
+        from voxtype.config import load_config
+        config = load_config(config_file)
+        assert config.default_agent_type == "claude"
+        assert "claude" in config.agent_types
+        assert config.agent_types["claude"].command == ["claude"]
+
+    def test_invalid_toml_returns_422(self, client):
+        r = client.post(
+            "/settings/toml-section/agent_types",
+            json={"content": "[[[ invalid toml ==="},
+        )
+        assert r.status_code == 422
+
+    def test_missing_command_returns_422(self, client, tmp_path):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")
+        toml_content = """
+[agent_types.claude]
+description = "Missing command field"
+"""
+        with patch("voxtype.config.get_config_path", return_value=config_file):
+            r = client.post(
+                "/settings/toml-section/agent_types",
+                json={"content": toml_content},
+            )
+        assert r.status_code == 422
+
+    def test_empty_content_returns_400(self, client):
+        r = client.post(
+            "/settings/toml-section/agent_types",
+            json={"content": "   "},
+        )
+        assert r.status_code == 400
+
+    def test_unknown_section_returns_404(self, client):
+        r = client.post(
+            "/settings/toml-section/nonexistent",
+            json={"content": "foo = 1"},
+        )
+        assert r.status_code == 404
+
+    def test_save_shortcuts(self, client, tmp_path):
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")
+        toml_content = """
+[[keyboard.shortcuts]]
+keys = "ctrl+shift+l"
+command = "toggle-listening"
+"""
+        with patch("voxtype.config.get_config_path", return_value=config_file):
+            r = client.post(
+                "/settings/toml-section/keyboard.shortcuts",
+                json={"content": toml_content},
+            )
+        assert r.status_code == 200
+
+        from voxtype.config import load_config
+        config = load_config(config_file)
+        assert len(config.keyboard.shortcuts) == 1
+        assert config.keyboard.shortcuts[0]["keys"] == "ctrl+shift+l"
+        assert config.keyboard.shortcuts[0]["command"] == "toggle-listening"

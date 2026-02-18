@@ -6,11 +6,12 @@
 	import EnumField from "./fields/EnumField.svelte";
 	import PresetField from "./fields/PresetField.svelte";
 	import ComplexField from "./fields/ComplexField.svelte";
+	import TomlField from "./fields/TomlField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import * as Tooltip from "$lib/components/ui/tooltip";
 	import { Info } from "lucide-svelte";
-	import { COMPLEX_KEYS, FIELD_PRESETS, SIZE_HINTS } from "$lib/generated/field-config";
+	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS } from "$lib/generated/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -41,6 +42,7 @@
 	const fieldSchema = $derived(resolveFieldSchema(field.key, schema));
 	const enumValues = $derived(getEnumValues(fieldSchema));
 	const complex = $derived(isComplex(field));
+	const isTomlEditable = $derived(TOML_EDITABLE_KEYS.has(field.key));
 	const presets = $derived(FIELD_PRESETS[field.key]);
 	const currentValue = $derived(settingsStore.getValue(field.key));
 	const isDirty = $derived(field.key in settingsStore.getDirty());
@@ -49,6 +51,12 @@
 	const size = $derived((SIZE_HINTS[field.key] ?? "normal") as "narrow" | "medium" | "normal");
 </script>
 
+{#if isTomlEditable}
+	<!-- Full-width TOML editor — no inline label/control split -->
+	<div class="px-4">
+		<TomlField section={field.key} label={label} />
+	</div>
+{:else}
 <div
 	class="flex items-center justify-between gap-4 rounded-lg px-4 py-3 transition-colors hover:bg-accent/30
 		{isDirty ? 'bg-accent/20 border-l-2 border-primary' : ''}"
@@ -123,4 +131,5 @@
 
 {#if error}
 	<p class="text-xs text-destructive px-4 -mt-1 mb-1">{error}</p>
+{/if}
 {/if}

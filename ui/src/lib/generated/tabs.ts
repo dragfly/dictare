@@ -1,5 +1,6 @@
 import {
   AudioWaveform,
+  Bot,
   Keyboard,
   Mic,
   MonitorSpeaker,
@@ -43,8 +44,12 @@ export const tabs: TabDef[] = [
     id: "hotkey",
     label: "Hotkey",
     icon: Keyboard,
-    sections: ["hotkey"],
-    desc: "Toggle listening key",
+    sections: ["hotkey", "keyboard"],
+    desc: "Toggle listening key and keyboard shortcuts",
+    groups: [
+      { label: "Hotkey", sections: ["hotkey"] },
+      { label: "Shortcuts", sections: ["keyboard"] },
+    ],
   },
   {
     id: "output",
@@ -52,6 +57,13 @@ export const tabs: TabDef[] = [
     icon: MonitorSpeaker,
     sections: ["output"],
     desc: "Text output mode and typing",
+  },
+  {
+    id: "agents",
+    label: "Agents",
+    icon: Bot,
+    sections: ["agent_types"],
+    desc: "Agent type presets and default agent",
   },
   {
     id: "server",
