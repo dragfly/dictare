@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b133] - 2026-02-18
+
+### Fixed
+
+- Reverted `requires-python` back to `>=3.11,<3.12`: `mlx-whisper` pulls in `torch==2.0.1`
+  which only has `cp311` wheels — Python 3.12 breaks `--extra mlx`. Added comment in
+  `pyproject.toml` explaining the reason so this is not accidentally changed again.
+  To unblock 3.12, upgrade torch to >=2.1 in the mlx extra first.
+
 ## [0.1.0b132] - 2026-02-18
 
 ### Fixed
