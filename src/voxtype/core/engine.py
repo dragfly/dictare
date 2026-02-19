@@ -1131,10 +1131,7 @@ class VoxtypeEngine:
         from pathlib import Path
 
         default_phrases = {
-            "transcription_mode": "transcription mode",
-            "command_mode": "command mode",
             "agent": "agent",
-            "voice": "Samantha",
         }
 
         phrases_path = Path.home() / ".config" / "voxtype" / "tts_phrases.json"

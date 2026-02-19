@@ -107,7 +107,6 @@ OPTIONAL_DEPENDENCIES = {
     # TTS engines
     "piper": ("piper-tts pathvalidate", "Piper neural TTS"),
     "coqui": ("TTS", "Coqui XTTS neural TTS"),
-    "qwen3": ("mlx-audio", "Qwen3 TTS - NOT WORKING with mlx-audio yet"),
     "outetts": ("mlx-audio", "OuteTTS neural TTS (Apple Silicon)"),
     # Hardware acceleration
     "mlx": ("mlx-whisper>=0.4.0", "Apple Silicon MLX acceleration"),
