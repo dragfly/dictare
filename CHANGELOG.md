@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b143] - 2026-02-19
+
+### Fixed
+
+- **TOML editor duplicate-comments bug**: saving a section repeatedly caused
+  comment blocks to accumulate in the file on every save. Root cause: tomlkit
+  leaves orphaned comments when deleting keys. Fix: replaced tomlkit-based
+  deletion in `_write_section_raw` with a line scanner (`_strip_section_lines`)
+  that is the symmetric inverse of `_extract_section_lines` — comments
+  preceding an owned header are removed together with it.
+- **audio.advanced showed [object Object]**: `list_config_keys()` emitted
+  `type="AudioAdvancedConfig"` for nested Pydantic sub-models instead of
+  `"dict"`, causing ComplexField to render instead of the TOML editor.
+  Fixed to use `"dict"` for any `BaseModel` instance value.
+- Rebuilt UI (`src/voxtype/ui/dist/`) to include audio.advanced TOML editor.
+
+### Added
+
+- `tests/test_toml_sections.py`: regression tests for strip/extract symmetry
+  and idempotency (saving same content N times doesn't grow the file).
+
 ## [0.1.0b142] - 2026-02-19
 
 ### Changed
