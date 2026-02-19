@@ -168,6 +168,19 @@ _SECTION_HEADERS: dict[str, str] = {
 
 
 
+def shortcuts_to_toml(shortcuts: list[dict[str, str]]) -> str:
+    """Serialize a list of shortcut dicts to ``[[keyboard.shortcuts]]`` TOML text."""
+    if not shortcuts:
+        return "# No keyboard shortcuts\n"
+    lines: list[str] = []
+    for s in shortcuts:
+        lines.append("[[keyboard.shortcuts]]")
+        lines.append(f'keys = "{s["keys"]}"')
+        lines.append(f'command = "{s["command"]}"')
+        lines.append("")
+    return "\n".join(lines)
+
+
 def serialize_section(section: str, config: Config) -> str:  # noqa: ARG001
     """Return the TOML text for a section.
 

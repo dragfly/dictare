@@ -323,6 +323,42 @@ class OpenVIPServer:
             except (ValueError, ValidationError) as e:
                 raise HTTPException(status_code=422, detail=str(e))
 
+        @app.get("/settings/shortcuts")
+        async def get_shortcuts():
+            """Return keyboard shortcuts as a JSON list."""
+            from voxtype.config import load_config
+
+            config = load_config()
+            shortcuts = [
+                {"keys": str(s.get("keys", "")), "command": str(s.get("command", ""))}
+                for s in config.keyboard.shortcuts
+                if s.get("keys") and s.get("command")
+            ]
+            return {"shortcuts": shortcuts}
+
+        @app.post("/settings/shortcuts")
+        async def save_shortcuts(request: Request):
+            """Save keyboard shortcuts from a JSON list."""
+            from pydantic import ValidationError
+
+            from voxtype.config import get_config_path, load_config
+            from voxtype.core.toml_sections import apply_section, shortcuts_to_toml
+
+            body = await request.json()
+            shortcuts: list[dict[str, str]] = body.get("shortcuts", [])
+            for s in shortcuts:
+                if not s.get("keys") or not s.get("command"):
+                    raise HTTPException(
+                        status_code=422, detail="Each shortcut must have 'keys' and 'command'"
+                    )
+            toml_content = shortcuts_to_toml(shortcuts)
+            try:
+                apply_section("keyboard.shortcuts", toml_content, get_config_path())
+                load_config()
+            except (ValueError, ValidationError) as e:
+                raise HTTPException(status_code=422, detail=str(e))
+            return {"status": "ok"}
+
         @app.get("/settings/toml-section/{section}")
         async def get_toml_section(section: str):
             """Return the current TOML fragment for a complex config section."""

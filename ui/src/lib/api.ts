@@ -44,6 +44,27 @@ export async function saveTomlSection(
 	}
 }
 
+export type Shortcut = { keys: string; command: string };
+
+export async function fetchShortcuts(): Promise<Shortcut[]> {
+	const r = await fetch("/settings/shortcuts");
+	if (!r.ok) throw new Error(`Failed to load shortcuts: ${r.status}`);
+	const data = await r.json();
+	return data.shortcuts as Shortcut[];
+}
+
+export async function saveShortcuts(shortcuts: Shortcut[]): Promise<void> {
+	const r = await fetch("/settings/shortcuts", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ shortcuts }),
+	});
+	if (!r.ok) {
+		const data = await r.json().catch(() => ({}));
+		throw new Error(data.detail || `Save failed: ${r.status}`);
+	}
+}
+
 export async function pingEngine(): Promise<boolean> {
 	try {
 		const r = await fetch("/control", {

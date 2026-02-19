@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b152] - 2026-02-19
+
+### Added
+
+- **`ShortcutsField` structured editor** — replaces the raw TOML accordion for
+  `keyboard.shortcuts` with a table of key-capture + command-dropdown rows.
+  - `+ Add shortcut` appends a new row; `×` deletes a row
+  - `KeyCaptureField` (shortcut mode) for the key combination column
+  - Command dropdown: Toggle listening, Start listening, Stop listening,
+    Next agent, Previous agent, Repeat last
+  - Save/Reset enabled only when dirty; auto-dismiss "Saved" feedback
+  - Accordion (collapsed by default, lazy load on first open) — same UX as TOML sections
+- **`GET /settings/shortcuts`** — returns `{shortcuts: [{keys, command}]}` JSON
+- **`POST /settings/shortcuts`** — accepts JSON list, validates, serializes to TOML and saves
+- **`shortcuts_to_toml()`** helper in `toml_sections.py`
+
+### Changed
+
+- `keyboard.shortcuts` removed from `TOML_EDITABLE_KEYS` — replaced by `ShortcutsField`
+
 ## [0.1.0b151] - 2026-02-19
 
 ### Added
