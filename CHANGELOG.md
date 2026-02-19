@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b136] - 2026-02-19
+
+### Added
+
+- `AgentTypeConfig.continue_args`: optional list of args inserted after `argv[0]` when
+  `--continue` / `-C` is passed to `voxtype agent`. Keeps continue syntax inside the
+  agent type config (Claude uses `["-c"]`, Codex could use `["--resume"]`, etc.).
+- `voxtype agent <name> --type <type> --continue` / `-C` flag: continues the previous
+  session using the type's `continue_args`. If `continue_args` is empty, a warning is
+  printed and the agent runs normally. Silently ignored when using `--` command override.
+
 ## [0.1.0b135] - 2026-02-19
 
 ### Fixed
