@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b134] - 2026-02-19
+
+### Fixed
+
+- Config: agent type names containing dots now use correct TOML quoted-key syntax in
+  examples (`[agent_types."sonnet-4.6"]` not `[agent_types.sonnet-4.6]`). Unquoted dot
+  keys in TOML are parsed as nested tables, causing pydantic `command field required` error.
+- Config: updated agent_types comment to document the `voxtype agent <name> --type <type>`
+  syntax and the fact that multiple sessions can share the same agent type.
+- UI: `--destructive` CSS color raised from lightness 30% to 62% — error messages in the
+  TOML editor were dark red on dark background (unreadable).
+
 ## [0.1.0b133] - 2026-02-18
 
 ### Fixed

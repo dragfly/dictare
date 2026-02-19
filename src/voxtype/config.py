@@ -396,7 +396,7 @@ class Config(BaseModel):
     )
     agent_types: dict[str, AgentTypeConfig] = Field(
         default_factory=dict,
-        description="Agent type presets: [agent_types.claude], [agent_types.sonnet-4.6], etc.",
+        description='Agent type presets. Names with dots must be quoted: [agent_types.claude], [agent_types."sonnet-4.6"]. Multiple sessions can share a type: voxtype agent frontend --type claude',
     )
 
     editor: str = Field(
@@ -822,8 +822,19 @@ def create_default_config() -> Path:
 # triggers = ["agent"]
 # match_threshold = 0.5
 
-# Agent type presets — single-command launch
-# Usage: voxtype agent claude  (or just 'voxtype agent' if default_agent_type is set)
+# Agent type presets — command templates for named agent sessions
+#
+# Usage:
+#   voxtype agent <session-name>                    # uses default_agent_type
+#   voxtype agent <session-name> --type <type>      # uses specified type
+#
+# Multiple sessions can share the same type:
+#   voxtype agent frontend --type claude
+#   voxtype agent backend --type claude
+#
+# IMPORTANT: names containing dots must be quoted in TOML:
+#   [agent_types."sonnet-4.6"]   ← correct (dot requires quotes)
+#   [agent_types.sonnet-4.6]     ← WRONG (parsed as nested tables)
 #
 # default_agent_type = "claude"
 #
@@ -831,11 +842,11 @@ def create_default_config() -> Path:
 # command = ["claude"]
 # description = "Claude Code (default model)"
 #
-# [agent_types.sonnet-4.6]
+# [agent_types."sonnet-4.6"]
 # command = ["claude", "--model", "claude-sonnet-4-6"]
 # description = "Claude Sonnet 4.6"
 #
-# [agent_types.opus-4.6]
+# [agent_types."opus-4.6"]
 # command = ["claude", "--model", "claude-opus-4-6"]
 # description = "Claude Opus 4.6"
 #
