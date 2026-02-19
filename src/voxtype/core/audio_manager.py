@@ -119,9 +119,9 @@ class AudioManager:
 
         # Create audio capture
         self._audio = AudioCapture(
-            sample_rate=self._config.sample_rate,
-            channels=self._config.channels,
-            device=self._config.device,
+            sample_rate=self._config.advanced.sample_rate,
+            channels=self._config.advanced.channels,
+            device=self._config.advanced.device,
         )
 
         # Create device monitor (detects OS-level device changes before PortAudio crashes)
@@ -141,7 +141,7 @@ class AudioManager:
         self._vad = SileroVAD(
             threshold=0.5,
             min_silence_ms=self._config.silence_ms,
-            min_speech_ms=self._config.min_speech_ms,
+            min_speech_ms=self._config.advanced.min_speech_ms,
         )
         # Pre-load the model now (headless mode skips progress indicator)
         self._vad._load_model(with_indicator=not headless, headless=headless)
@@ -154,7 +154,7 @@ class AudioManager:
             max_speech_seconds=self._config.max_duration,
             on_max_speech=on_max_speech,
             on_partial_audio=on_partial_audio,
-            pre_buffer_ms=self._config.pre_buffer_ms,
+            pre_buffer_ms=self._config.advanced.pre_buffer_ms,
         )
 
     def set_reconnect_callbacks(
@@ -282,8 +282,8 @@ class AudioManager:
 
                 # Create new AudioCapture with default device (None)
                 self._audio = AudioCapture(
-                    sample_rate=self._config.sample_rate,
-                    channels=self._config.channels,
+                    sample_rate=self._config.advanced.sample_rate,
+                    channels=self._config.advanced.channels,
                     device=None,  # Always use new default on reconnect
                 )
                 self._audio.start_streaming(on_chunk_callback)
@@ -373,4 +373,4 @@ class AudioManager:
     @property
     def sample_rate(self) -> int:
         """Get audio sample rate."""
-        return self._config.sample_rate
+        return self._config.advanced.sample_rate

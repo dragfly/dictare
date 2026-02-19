@@ -72,7 +72,7 @@ class TestGetSettingsSchema:
         r = client.get("/settings/schema")
         values = r.json()["values"]
         config = Config()
-        assert values["audio"]["sample_rate"] == config.audio.sample_rate
+        assert values["audio"]["advanced"]["sample_rate"] == config.audio.advanced.sample_rate
 
     def test_keys_list_has_entries(self, client):
         r = client.get("/settings/schema")

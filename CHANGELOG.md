@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b142] - 2026-02-19
+
+### Changed
+
+- **Breaking config change**: Advanced audio parameters moved from `[audio]` to
+  `[audio.advanced]` subsection (`sample_rate`, `channels`, `device`,
+  `pre_buffer_ms`, `min_speech_ms`, `transcribing_sound_min_ms`).
+  Introduced `AudioAdvancedConfig` Pydantic sub-model inside `AudioConfig`.
+- Settings UI: `[audio.advanced]` is now a dedicated TOML editor section
+  (pure WYSIWYG), visible in the Audio settings page.
+  Child fields (`audio.advanced.*`) are auto-hidden from the form via the
+  generic `isHiddenByParentToml` pattern — scales to any future `.advanced`
+  sections without code changes.
+- Removed `HIDDEN_FORM_KEYS` from field-config.ts (replaced by the above
+  parent-TOML logic).
+- Config template updated: `[audio]` comments reflect only the form fields;
+  `[audio.advanced]` block added with all 6 parameters.
+
 ## [0.1.0b141] - 2026-02-19
 
 ### Changed

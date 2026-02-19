@@ -78,9 +78,9 @@ class OneShotTranscriber:
         try:
             # Create components
             self._audio_capture = AudioCapture(
-                sample_rate=self.config.audio.sample_rate,
-                channels=self.config.audio.channels,
-                device=self.config.audio.device,
+                sample_rate=self.config.audio.advanced.sample_rate,
+                channels=self.config.audio.advanced.channels,
+                device=self.config.audio.advanced.device,
             )
 
             vad = SileroVAD(
@@ -88,7 +88,7 @@ class OneShotTranscriber:
                 neg_threshold=0.35,
                 min_silence_ms=self.silence_ms,
                 min_speech_ms=250,
-                sample_rate=self.config.audio.sample_rate,
+                sample_rate=self.config.audio.advanced.sample_rate,
             )
 
             streaming_vad = StreamingVAD(
