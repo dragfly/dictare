@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 
 from voxtype.hotkey.base import HotkeyListener
@@ -13,7 +14,7 @@ class PynputHotkeyListener(HotkeyListener):
     Works on macOS and X11 Linux. Does NOT work on Wayland.
     """
 
-    # Mapping from evdev-style key names to pynput keys
+    # Mapping from evdev-style key names to pynput key attribute names
     KEY_MAP = {
         "KEY_SCROLLLOCK": "scroll_lock",
         "KEY_PAUSE": "pause",
@@ -36,6 +37,9 @@ class PynputHotkeyListener(HotkeyListener):
         "KEY_MENU": "menu",
     }
 
+    # Reverse map: pynput key attribute name → evdev key name
+    _EVDEV_MAP: dict[str, str] = {v: k for k, v in KEY_MAP.items()}
+
     def __init__(self, key_name: str = "KEY_SCROLLLOCK") -> None:
         """Initialize pynput hotkey listener.
 
@@ -48,6 +52,8 @@ class PynputHotkeyListener(HotkeyListener):
         self._on_press: Callable[[], None] | None = None
         self._on_release: Callable[[], None] | None = None
         self._on_other_key: Callable[[], None] | None = None
+        self._capture_event: threading.Event | None = None
+        self._captured_key: str | None = None
 
     def _get_pynput_key(self):
         """Convert evdev key name to pynput key."""
@@ -61,8 +67,29 @@ class PynputHotkeyListener(HotkeyListener):
         simple_name = self.key_name.lower().replace("key_", "")
         return getattr(keyboard.Key, simple_name, None)
 
+    def _pynput_to_evdev(self, key) -> str | None:
+        """Convert a pynput key object to an evdev key name."""
+        from pynput import keyboard
+        if isinstance(key, keyboard.Key):
+            attr = key.name  # e.g. "cmd_r", "f12", "scroll_lock"
+            evdev = self._EVDEV_MAP.get(attr)
+            if evdev:
+                return evdev
+            return f"KEY_{attr.upper()}"
+        # keyboard.KeyCode (regular char) — not valid as a hotkey
+        return None
+
     def _handle_press(self, key) -> None:
         """Handle key press event."""
+        # Capture mode: record the next key and signal the waiting thread.
+        cap = self._capture_event
+        if cap is not None:
+            evdev_name = self._pynput_to_evdev(key)
+            if evdev_name:
+                self._captured_key = evdev_name
+                cap.set()
+            return  # swallow event during capture
+
         if key == self._target_key:
             if self._on_press:
                 self._on_press()
@@ -123,6 +150,19 @@ class PynputHotkeyListener(HotkeyListener):
     def is_key_available(self) -> bool:
         """Check if the configured key is available."""
         return self._get_pynput_key() is not None
+
+    def capture_next_key(self, timeout: float = 10.0) -> str | None:
+        """Capture the next physical key press and return its evdev name."""
+        if self._listener is None:
+            return None
+        event = threading.Event()
+        self._captured_key = None
+        self._capture_event = event
+        try:
+            event.wait(timeout=timeout)
+        finally:
+            self._capture_event = None
+        return self._captured_key
 
     def get_key_name(self) -> str:
         """Get human-readable name of the configured key."""

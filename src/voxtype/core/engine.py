@@ -1330,8 +1330,22 @@ class VoxtypeEngine:
             return {"status": "ok"}
         elif command == "ping":
             return {"status": "ok", "pong": True}
+        elif command == "hotkey.capture":
+            timeout = float(body.get("timeout", 10.0))
+            key = self.capture_next_hotkey(timeout=timeout)
+            return {"status": "ok", "key": key}
 
         return {"status": "error", "error": f"Unknown protocol command: {command}"}
+
+    def capture_next_hotkey(self, timeout: float = 10.0) -> str | None:
+        """Capture the next physical key press and return its evdev name.
+
+        Blocks until a key is pressed or timeout expires.
+        Returns None if no listener is running or timed out.
+        """
+        if self._hotkey is None:
+            return None
+        return self._hotkey.capture_next_key(timeout=timeout)
 
     # -------------------------------------------------------------------------
     # Lifecycle

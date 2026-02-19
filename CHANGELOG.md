@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b151] - 2026-02-19
+
+### Added
+
+- **Engine-side hotkey capture** — `POST /control {"command": "hotkey.capture"}` blocks until
+  the next physical key press and returns its evdev name. Works because the engine's global
+  keyboard listener intercepts the key before the browser ever sees it.
+  - `PynputHotkeyListener.capture_next_key()` — intercepts next `_handle_press`, converts
+    pynput key to evdev name via reverse `_EVDEV_MAP`, signals a `threading.Event`
+  - `EvdevHotkeyListener.capture_next_key()` — same via `evdev.ecodes.KEY` lookup in the
+    existing event loop
+  - `Engine.capture_next_hotkey()` — delegates to the active listener
+  - `KeyCaptureField` evdev mode now calls `captureHotkey()` API instead of `window.onkeydown`
+    (shortcut mode still uses browser keydown since modifier combos aren't intercepted)
+  - ESC returns `KEY_ESC` which is treated as cancel (no change)
+
+### Changed
+
+- **Restart banner auto-dismisses** — after clicking "Restart Engine", polls `ping` every 1 s
+  until the engine responds, then hides the banner automatically.
+- **Keyboard tab is a single flat page** — removed Hotkey/Shortcuts sub-navigation.
+  The page now shows `hotkey.key` (capture widget) followed by the Shortcuts TOML accordion.
+
 ## [0.1.0b150] - 2026-02-19
 
 ### Changed

@@ -44,6 +44,35 @@ export async function saveTomlSection(
 	}
 }
 
+export async function pingEngine(): Promise<boolean> {
+	try {
+		const r = await fetch("/control", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ command: "ping" })
+		});
+		return r.ok;
+	} catch {
+		return false;
+	}
+}
+
+export async function captureHotkey(signal?: AbortSignal): Promise<string | null> {
+	try {
+		const r = await fetch("/control", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ command: "hotkey.capture", timeout: 10 }),
+			signal,
+		});
+		if (!r.ok) return null;
+		const data = await r.json();
+		return data.key as string | null;
+	} catch {
+		return null;
+	}
+}
+
 export async function restartEngine(): Promise<void> {
 	try {
 		await fetch("/control", {
