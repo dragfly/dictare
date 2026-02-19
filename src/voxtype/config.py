@@ -288,6 +288,10 @@ class AgentTypeConfig(BaseModel):
         default="",
         description="Human-readable description of this agent type",
     )
+    continue_args: list[str] = Field(
+        default_factory=list,
+        description="Args inserted after argv[0] when --continue is passed (e.g. [\"-c\"] for Claude Code, [\"--resume\"] for Codex)",
+    )
 
 class PipelineConfig(BaseModel):
     """Pipeline filter configuration."""
@@ -796,10 +800,15 @@ def create_default_config() -> Path:
 # Usage:
 #   voxtype agent <session-name>                    # uses default_agent_type
 #   voxtype agent <session-name> --type <type>      # uses specified type
+#   voxtype agent <session-name> --type <type> --continue  # continue previous session
 #
 # Multiple sessions can share the same type:
 #   voxtype agent frontend --type claude
 #   voxtype agent backend --type claude
+#
+# continue_args: args inserted after argv[0] when --continue is passed.
+#   The syntax is tool-specific — set it per type, not in voxtype.
+#   Claude Code uses -c; Codex uses --resume; Aider has no continue flag.
 #
 # IMPORTANT: names containing dots must be quoted in TOML:
 #   [agent_types."sonnet-4.6"]   ← correct (dot requires quotes)
@@ -809,14 +818,17 @@ def create_default_config() -> Path:
 #
 # [agent_types.claude]
 # command = ["claude"]
+# continue_args = ["-c"]
 # description = "Claude Code (default model)"
 #
 # [agent_types."sonnet-4.6"]
 # command = ["claude", "--model", "claude-sonnet-4-6"]
+# continue_args = ["-c"]
 # description = "Claude Sonnet 4.6"
 #
 # [agent_types."opus-4.6"]
 # command = ["claude", "--model", "claude-opus-4-6"]
+# continue_args = ["-c"]
 # description = "Claude Opus 4.6"
 #
 # [agent_types.aider]

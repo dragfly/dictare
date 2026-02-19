@@ -97,6 +97,8 @@ def register(app: typer.Typer) -> None:
         own_flags_to_remove: set[int] = set()
         show_status_bar: bool | None = None
         agent_type_name: str | None = None
+        continue_session: bool = False
+        has_double_dash = False  # tracks whether '--' separator was used
         for i, arg in enumerate(args):
             if arg in ("--verbose", "-v"):
                 verbose = True
@@ -107,6 +109,9 @@ def register(app: typer.Typer) -> None:
             elif arg == "--no-status-bar":
                 show_status_bar = False
                 own_flags_to_remove.add(i)
+            elif arg in ("--continue", "-C"):
+                continue_session = True
+                own_flags_to_remove.add(i)
             elif arg in ("--server", "-s") and i + 1 < len(args):
                 server = args[i + 1]
                 own_flags_to_remove.add(i)
@@ -116,17 +121,29 @@ def register(app: typer.Typer) -> None:
                 own_flags_to_remove.add(i)
                 own_flags_to_remove.add(i + 1)
             elif arg == "--":
+                has_double_dash = True
                 own_flags_to_remove.add(i)
 
         command_override = [arg for i, arg in enumerate(args) if i not in own_flags_to_remove]
 
+        # If there are leftover flag-like args (--foo) without an explicit '--' separator,
+        # they are almost certainly mistyped voxtype options — reject with a clear message.
+        if command_override and not has_double_dash:
+            unknown_flags = [a for a in command_override if a.startswith("-")]
+            if unknown_flags:
+                console.print(f"[red]Error: unrecognized option(s): {' '.join(unknown_flags)}[/]")
+                console.print("[dim]voxtype agent options: --type/-t <type>, --continue/-C, --server/-s <url>, --verbose, --quiet, --no-status-bar[/]")
+                console.print("[dim]To pass flags to the agent command:  voxtype agent <name> -- <command> [flags][/]")
+                raise typer.Exit(1)
+
         # Resolve command: explicit override > --type > default_agent_type > error
+        resolved_agent_type = None
         if command_override:
             command = command_override
         else:
             type_key = agent_type_name or config.default_agent_type
             if type_key is None:
-                console.print(f"[red]Error: no --type given and no default_agent_type set[/]")
+                console.print("[red]Error: no --type given and no default_agent_type set[/]")
                 console.print(f"[dim]  voxtype agent {agent_id} --type <type>[/]")
                 console.print(f"[dim]  voxtype agent {agent_id} -- <command> [args...][/]")
                 if config.agent_types:
@@ -137,8 +154,8 @@ def register(app: typer.Typer) -> None:
                         console.print(f"[dim]  {name}{desc}[/]")
                 raise typer.Exit(1)
 
-            agent_type = config.agent_types.get(type_key)
-            if agent_type is None:
+            resolved_agent_type = config.agent_types.get(type_key)
+            if resolved_agent_type is None:
                 console.print(f"[red]Error: agent type '{type_key}' not found in config[/]")
                 if config.agent_types:
                     console.print()
@@ -148,7 +165,15 @@ def register(app: typer.Typer) -> None:
                         console.print(f"[dim]  {name}{desc}[/]")
                 raise typer.Exit(1)
 
-            command = agent_type.command
+            command = list(resolved_agent_type.command)
+
+        # Apply --continue: insert continue_args after argv[0]
+        if continue_session:
+            if resolved_agent_type is not None and resolved_agent_type.continue_args:
+                command = [command[0]] + resolved_agent_type.continue_args + command[1:]
+            elif resolved_agent_type is not None:
+                console.print("[yellow]Warning: --continue given but agent type has no continue_args configured[/]")
+            # With command override (--), --continue is silently ignored — user controls the full command
 
         # Best-effort: try to start the engine if it's not reachable.
         # Never block — the SSE layer has its own reconnect loop.
