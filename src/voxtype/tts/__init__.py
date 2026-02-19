@@ -10,7 +10,6 @@ from voxtype.tts.coqui import CoquiTTS
 from voxtype.tts.espeak import EspeakTTS
 from voxtype.tts.outetts import OuteTTS
 from voxtype.tts.piper import PiperTTS
-from voxtype.tts.qwen3 import Qwen3TTS
 from voxtype.tts.say import SayTTS
 
 if TYPE_CHECKING:
@@ -22,7 +21,6 @@ __all__ = [
     "EspeakTTS",
     "OuteTTS",
     "PiperTTS",
-    "Qwen3TTS",
     "SayTTS",
     "create_tts_engine",
     "get_cached_tts_engine",
@@ -89,11 +87,6 @@ def create_tts_engine(config: TTSConfig) -> TTSEngine:
             voice=config.voice,
         ),
         "coqui": lambda: CoquiTTS(
-            language=config.language,
-            speed=config.speed,
-            voice=config.voice,
-        ),
-        "qwen3": lambda: Qwen3TTS(
             language=config.language,
             speed=config.speed,
             voice=config.voice,

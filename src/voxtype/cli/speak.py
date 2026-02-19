@@ -29,7 +29,7 @@ def register(app: typer.Typer) -> None:
         ] = None,
         engine: Annotated[
             str | None,
-            typer.Option("--engine", "-e", help="TTS engine: espeak, say, piper, coqui, qwen3, outetts"),
+            typer.Option("--engine", "-e", help="TTS engine: espeak, say, piper, coqui, outetts"),
         ] = None,
         voice: Annotated[
             str | None,
@@ -72,7 +72,6 @@ def register(app: typer.Typer) -> None:
                 ("piper", "Neural TTS", "Many", "pip: piper-tts"),
                 ("coqui", "Neural TTS (XTTS)", "8+", "pip: TTS"),
                 ("outetts", "Neural TTS (MLX)", "24", "Apple Silicon, pip: mlx-audio"),
-                ("qwen3", "VyvoTTS (MLX)", "en only", "Apple Silicon, pip: mlx-audio"),
             ]
             for name, desc, langs, install in engines_info:
                 console.print(f"  [cyan]{name:10}[/] {desc:20} Languages: {langs:8} ({install})")
@@ -99,7 +98,7 @@ def register(app: typer.Typer) -> None:
                 raise typer.Exit(0)
 
         # Validate engine if provided
-        valid_engines = ("espeak", "say", "piper", "coqui", "qwen3", "outetts")
+        valid_engines = ("espeak", "say", "piper", "coqui", "outetts")
         if engine is not None and engine not in valid_engines:
             console.print(f"[red]Error: Unknown TTS engine '{engine}'[/]")
             console.print(f"[dim]Available engines: {', '.join(valid_engines)}[/]")
