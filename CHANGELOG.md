@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b141] - 2026-02-19
+
+### Changed
+
+- Settings UI: Audio page now shows only the commonly-changed fields in the
+  form (audio_feedback, silence_ms, headphones_mode, max_duration).
+  Advanced fine-tuning fields (sample_rate, channels, device, pre_buffer_ms,
+  min_speech_ms, transcribing_sound_min_ms) are hidden from the form and
+  accessible only via `voxtype config edit` or the config.toml directly.
+- The Sounds TOML editor template now includes a note pointing to the
+  advanced [audio] parameters and how to edit them.
+- Introduced `HIDDEN_FORM_KEYS` in field-config.ts: a single place to move
+  any field between the form UI and TOML-only access.
+
 ## [0.1.0b140] - 2026-02-19
 
 ### Added

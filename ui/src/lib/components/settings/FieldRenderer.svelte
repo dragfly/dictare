@@ -9,7 +9,7 @@
 	import TomlField from "./fields/TomlField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS } from "$lib/registry/field-config";
+	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_KEYS } from "$lib/registry/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -41,6 +41,7 @@
 	const enumValues = $derived(getEnumValues(fieldSchema));
 	const complex = $derived(isComplex(field));
 	const isTomlEditable = $derived(TOML_EDITABLE_KEYS.has(field.key));
+	const isHidden = $derived(HIDDEN_FORM_KEYS.has(field.key));
 	const presets = $derived(FIELD_PRESETS[field.key]);
 	const currentValue = $derived(settingsStore.getValue(field.key));
 	const isDirty = $derived(field.key in settingsStore.getDirty());
@@ -64,7 +65,9 @@
 	);
 </script>
 
-{#if isTomlEditable}
+{#if isHidden}
+	<!-- hidden: accessible via TOML editor only -->
+{:else if isTomlEditable}
 	<!-- Full-width TOML editor — no inline label/control split -->
 	<div class="px-4">
 		<TomlField section={field.key} label={label} />

@@ -6,11 +6,23 @@ export const COMPLEX_KEYS = new Set(["agent_types", "audio.sounds", "keyboard.sh
 /** Fields rendered as TOML textarea with syntax highlighting */
 export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
 
+/**
+ * Fields hidden from the form UI — accessible only via the TOML editor.
+ * These are advanced / fine-tuning values that rarely need changing.
+ */
+export const HIDDEN_FORM_KEYS = new Set([
+  "audio.sample_rate",
+  "audio.channels",
+  "audio.device",
+  "audio.pre_buffer_ms",
+  "audio.min_speech_ms",
+  "audio.transcribing_sound_min_ms",
+]);
+
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
   "stt.language": [{ value: "auto", label: "Auto-detect" }, { value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }, { value: "ko", label: "Korean" }, { value: "ru", label: "Russian" }],
   "stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
-  "stt.realtime_model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
   "tts.language": [{ value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }],
 };
 
