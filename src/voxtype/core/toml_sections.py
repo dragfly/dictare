@@ -84,6 +84,10 @@ _SOUNDS_HEADER = """\
 # Set path = "/absolute/path/to/file.wav" to use a custom sound.
 #
 # Available events: start, stop, transcribing, ready, sent, agent_announce
+#
+# Advanced audio settings (sample_rate, channels, device, pre_buffer_ms,
+# min_speech_ms, transcribing_sound_min_ms) live in [audio] in config.toml.
+# Edit them with: voxtype config edit
 """
 
 _SUBMIT_FILTER_HEADER = """\
@@ -112,6 +116,7 @@ _SECTION_HEADERS: dict[str, str] = {
     "pipeline.submit_filter": _SUBMIT_FILTER_HEADER,
     "pipeline.agent_filter": _AGENT_FILTER_HEADER,
 }
+
 
 
 def serialize_section(section: str, config: Config) -> str:  # noqa: ARG001
