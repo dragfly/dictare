@@ -43,6 +43,8 @@ class EvdevHotkeyListener(HotkeyListener):
         self._stop_event = threading.Event()
         self._selected_device_info: tuple[str, str] | None = None  # (path, name)
         self._on_other_key: Callable[[], None] | None = None
+        self._capture_event: threading.Event | None = None
+        self._captured_key: str | None = None
 
     def _find_keyboard_device(self):
         """Find a keyboard device that has the target key.
@@ -169,6 +171,15 @@ class EvdevHotkeyListener(HotkeyListener):
                         break
 
                     if event.type == evdev.ecodes.EV_KEY:
+                        # Capture mode: record any key press and signal waiter.
+                        cap = self._capture_event
+                        if cap is not None and event.value == 1:
+                            key_name = evdev.ecodes.KEY.get(event.code)
+                            if isinstance(key_name, str):
+                                self._captured_key = key_name
+                                cap.set()
+                            continue
+
                         if event.code == target_key:
                             if event.value == 1:  # Key pressed
                                 on_press()
@@ -202,6 +213,19 @@ class EvdevHotkeyListener(HotkeyListener):
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
             self._thread = None
+
+    def capture_next_key(self, timeout: float = 10.0) -> str | None:
+        """Capture the next physical key press and return its evdev name."""
+        if self._thread is None or not self._thread.is_alive():
+            return None
+        event = threading.Event()
+        self._captured_key = None
+        self._capture_event = event
+        try:
+            event.wait(timeout=timeout)
+        finally:
+            self._capture_event = None
+        return self._captured_key
 
     def is_key_available(self) -> bool:
         """Check if the configured key is available on a usable keyboard.

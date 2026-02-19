@@ -46,10 +46,6 @@ export const tabs: TabDef[] = [
     icon: Keyboard,
     sections: ["hotkey", "keyboard"],
     desc: "Hotkey and shortcuts",
-    children: [
-      { id: "keyboard-hotkey", label: "Hotkey", sections: ["hotkey"], desc: "Toggle listening key" },
-      { id: "keyboard-shortcuts", label: "Shortcuts", sections: ["keyboard"], desc: "Keyboard shortcuts" },
-    ],
   },
   {
     id: "output",

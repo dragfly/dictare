@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from "$lib/components/ui/button";
+	import { captureHotkey } from "$lib/api";
 
 	interface Props {
 		format: "evdev" | "shortcut";
@@ -10,6 +11,7 @@
 	let { format, value, onchange }: Props = $props();
 
 	let capturing = $state(false);
+	let abortController: AbortController | null = null;
 
 	// ---------------------------------------------------------------------------
 	// evdev: browser KeyboardEvent.code → KEY_* (kernel evdev names)
@@ -123,23 +125,41 @@
 
 	const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
 
+	// Shortcut mode: browser keydown (engine doesn't intercept modifier combos)
 	function handleKeyDown(e: KeyboardEvent) {
-		if (!capturing) return;
+		if (!capturing || format !== "shortcut") return;
 		e.preventDefault();
 		e.stopPropagation();
+		if (e.key === "Escape") { stopCapture(); return; }
+		const shortcut = eventToShortcut(e);
+		if (!shortcut) return; // pure modifier press, keep waiting
+		onchange(shortcut);
+		stopCapture();
+	}
 
-		if (e.key === "Escape") { capturing = false; return; }
+	function stopCapture() {
+		abortController?.abort();
+		abortController = null;
+		capturing = false;
+	}
+
+	async function startCapture() {
+		if (capturing) { stopCapture(); return; }
+		capturing = true;
 
 		if (format === "evdev") {
-			if (MODIFIER_KEYS.has(e.key)) return; // wait for non-modifier
-			const evdev = codeToEvdev(e.code);
-			onchange(evdev);
-		} else {
-			const shortcut = eventToShortcut(e);
-			if (!shortcut) return; // pure modifier press, keep waiting
-			onchange(shortcut);
+			// Engine-side capture: the global keyboard listener intercepts the key
+			// before the browser sees it, so we ask the engine to capture it for us.
+			abortController = new AbortController();
+			try {
+				const key = await captureHotkey(abortController.signal);
+				if (key && key !== "KEY_ESC") onchange(key);
+			} finally {
+				capturing = false;
+				abortController = null;
+			}
 		}
-		capturing = false;
+		// shortcut mode: capturing=true arms the keydown handler above
 	}
 </script>
 
@@ -165,7 +185,7 @@
 	<Button
 		size="sm"
 		variant={capturing ? "destructive" : "outline"}
-		onclick={() => (capturing = !capturing)}
+		onclick={startCapture}
 	>
 		{capturing ? "Cancel" : "Capture"}
 	</Button>

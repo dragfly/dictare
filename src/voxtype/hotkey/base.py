@@ -46,3 +46,11 @@ class HotkeyListener(ABC):
             Key name string.
         """
         pass
+
+    def capture_next_key(self, timeout: float = 10.0) -> str | None:
+        """Capture the next physical key press and return its evdev name.
+
+        Blocks until a key is pressed or timeout expires.
+        Returns None if the listener is not running or timed out.
+        """
+        return None

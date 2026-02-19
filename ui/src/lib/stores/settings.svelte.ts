@@ -22,6 +22,9 @@ export function getSaveErrors(): Record<string, string> {
 export function getNeedsRestart(): boolean {
 	return needsRestart;
 }
+export function clearNeedsRestart(): void {
+	needsRestart = false;
+}
 export function hasDirtyFields(): boolean {
 	return Object.keys(dirty).length > 0;
 }
