@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b140] - 2026-02-19
+
+### Added
+
+- `audio.transcribing_sound_min_ms` config field (default: 8000 ms): controls the
+  minimum audio duration before the typewriter sound plays during transcription.
+  Previously hardcoded at 8 s; now visible and adjustable in Settings → Audio → SOUNDS.
+- Roadmap section to README: plugin architecture and realtime partial transcription.
+
+### Fixed
+
+- Agent index switching: `app/controller.py` was subtracting 1 from the index
+  before passing it to engine, which also subtracts 1 — double offset caused
+  index 1 to resolve as -1 (always fail).
+- `tts/outetts.py` had a private `_is_apple_silicon()` duplicating `utils/hardware.py`.
+  Now imports `is_apple_silicon` from hardware module.
+
+### Removed
+
+- Partial/realtime transcription scaffolding (`_realtime`, `_partial_*` fields,
+  worker thread, `realtime_model` config). The implementation was incomplete —
+  partial text was computed but never sent anywhere. Concept parked in
+  `docs/notes/realtime-partial-transcription.md`.
+- `create_partial()`, `create_status()`, `create_error()` from `openvip_messages.py`:
+  defined but never called in production code. `create_message(partial=True)` still
+  works for when partial transcription is properly implemented.
+- `realtime` parameter from `create_engine()` and `VoxtypeEngine.__init__()`.
+- `cli/models.py` references to removed `realtime_model` and `qwen3` engine.
+
 ## [0.1.0b139] - 2026-02-19
 
 ### Removed

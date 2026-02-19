@@ -66,19 +66,10 @@ def _get_configured_models(config=None) -> dict[str, str]:
     if stt_key in registry:
         configured[stt_key] = "stt"
 
-    # Realtime STT model
-    realtime_model = config.stt.realtime_model
-    realtime_key = f"whisper-{realtime_model}"
-    if realtime_key in registry:
-        if realtime_key in configured:
-            configured[realtime_key] = "stt+realtime"
-        else:
-            configured[realtime_key] = "realtime"
-
     # TTS model: find model by engine
-    # e.g., "qwen3" -> "vyvotts-4bit", "outetts" -> "outetts"
+    # e.g., "outetts" -> "outetts"
     tts_engine = config.tts.engine
-    if tts_engine in ("qwen3", "outetts"):
+    if tts_engine in ("outetts",):
         for name, info in registry.items():
             if info.get("engine") == tts_engine:
                 configured[name] = "tts"

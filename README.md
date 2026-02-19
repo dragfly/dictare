@@ -180,6 +180,11 @@ uv run --python 3.11 python -m pytest tests/ -x -n auto
 
 > Ghostty users: add `keybind = shift+enter=text:\n` to config. See [TERMINAL_COMPATIBILITY.md](TERMINAL_COMPATIBILITY.md).
 
+## Roadmap
+
+- **Plugin architecture** (post v0.1.0): pipeline filters will be loadable as plugins, each declaring the models they need (STT, TTS, LLM, Translation). See [docs/notes/plugin-filter-llm-vision.md](docs/notes/plugin-filter-llm-vision.md).
+- **Realtime partial transcription**: stream partial results while speaking using a fast small model. See [docs/notes/realtime-partial-transcription.md](docs/notes/realtime-partial-transcription.md).
+
 ## License
 
 MIT

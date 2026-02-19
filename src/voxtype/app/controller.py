@@ -126,7 +126,7 @@ class AppController:
                             audio_ms = float(trigger.split(":", 1)[1])
                         except ValueError:
                             pass
-                    if audio_ms >= 8_000:
+                    if audio_ms >= config.audio.transcribing_sound_min_ms:
                         enabled, path = get_sound_for_event(config.audio, "transcribing")
                         if enabled:
                             start_loop(path)
@@ -340,8 +340,7 @@ class AppController:
         if not self._engine:
             return
 
-        # Engine uses 0-based, users use 1-based
-        self._engine.switch_to_agent_by_index(index - 1)
+        self._engine.switch_to_agent_by_index(index)
 
     def set_output_mode(self, mode: str) -> None:
         """Switch output mode (keyboard <-> agents).

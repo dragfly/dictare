@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from voxtype.core.openvip_messages import (
     OPENVIP_VERSION,
-    create_error,
     create_message,
-    create_partial,
-    create_status,
 )
 
 
@@ -64,60 +61,3 @@ class TestCreateMessage:
         assert x_fields == []
 
 
-class TestCreatePartial:
-    """Test create_partial() convenience function."""
-
-    def test_partial_message(self) -> None:
-        """create_partial() returns a message with partial=True."""
-        msg = create_partial("hel")
-        assert msg["type"] == "transcription"
-        assert msg["text"] == "hel"
-        assert msg["partial"] is True
-
-
-class TestCreateStatus:
-    """Test create_status() for internal status messages."""
-
-    def test_idle_status(self) -> None:
-        """Basic status message."""
-        msg = create_status("idle")
-        assert msg["type"] == "status"
-        assert msg["status"] == "idle"
-        assert msg["openvip"] == OPENVIP_VERSION
-
-    def test_error_status_with_details(self) -> None:
-        """Error status includes error object."""
-        msg = create_status("error", error_message="mic failed", error_code="MIC_ERR")
-        assert msg["status"] == "error"
-        assert msg["error"]["message"] == "mic failed"
-        assert msg["error"]["code"] == "MIC_ERR"
-
-    def test_error_status_without_details(self) -> None:
-        """Error status without details omits error object."""
-        msg = create_status("error")
-        assert msg["status"] == "error"
-        assert "error" not in msg
-
-    def test_all_valid_states(self) -> None:
-        """All defined states produce valid messages."""
-        for state in ("idle", "listening", "recording", "transcribing", "loading", "error"):
-            msg = create_status(state)
-            assert msg["status"] == state
-
-
-class TestCreateError:
-    """Test create_error() convenience function."""
-
-    def test_error_message(self) -> None:
-        """create_error() wraps create_status('error')."""
-        msg = create_error("something broke", code="OOPS")
-        assert msg["type"] == "status"
-        assert msg["status"] == "error"
-        assert msg["error"]["message"] == "something broke"
-        assert msg["error"]["code"] == "OOPS"
-
-    def test_error_without_code(self) -> None:
-        """Error without code still includes message."""
-        msg = create_error("boom")
-        assert msg["error"]["message"] == "boom"
-        assert "code" not in msg["error"]

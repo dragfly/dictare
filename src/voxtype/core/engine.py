@@ -8,7 +8,6 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
 from voxtype import __version__
@@ -82,7 +81,6 @@ class VoxtypeEngine:
         events: EngineEvents | None = None,
         logger: JSONLLogger | None = None,
         agent_mode: bool = False,
-        realtime: bool = False,
         hotkey_enabled: bool = True,
     ) -> None:
         """Initialize the engine.
@@ -92,20 +90,12 @@ class VoxtypeEngine:
             events: Optional event handler for UI callbacks.
             logger: Optional JSONL logger for structured logging.
             agent_mode: Enable agent mode with auto-discovery.
-            realtime: Enable realtime transcription feedback while speaking.
             hotkey_enabled: Enable hotkey listener. Set False for daemon mode
                            (macOS requires main thread for hotkey events).
         """
         self._hotkey_enabled = hotkey_enabled
         self.config = config
         self._events = events
-        self._realtime = realtime
-        self._partial_text = ""
-        self._partial_text_lock = threading.Lock()  # Protects _partial_text access
-        # Partial transcription: queue + single worker (avoids race conditions)
-        self._partial_queue: Queue[Any] = Queue()
-        self._partial_worker: threading.Thread | None = None
-        self._partial_stop = threading.Event()
 
         # Session stats
         self._stats_chars = 0
@@ -167,7 +157,6 @@ class VoxtypeEngine:
         # Initialize components
         self._audio_manager: AudioManager | None = None
         self._stt: STTEngine | None = None
-        self._realtime_stt: STTEngine | None = None  # Separate fast model for realtime
         self._hotkey: HotkeyListener | None = None
         # Status change callback — registered by AppController to push SSE updates.
         # Engine calls this on every status-relevant change (state, agents, mode).
@@ -362,13 +351,6 @@ class VoxtypeEngine:
 
         return engine
 
-    def _create_realtime_stt_engine(self) -> STTEngine:
-        """Create fast STT engine for realtime partial transcriptions.
-
-        Uses a smaller model (default: tiny) for low latency.
-        """
-        return self._create_stt_engine(model_size=self.config.stt.realtime_model)
-
     def _create_hotkey_listener(self) -> HotkeyListener:
         """Create hotkey listener with smart fallback."""
         errors: list[str] = []
@@ -513,10 +495,6 @@ class VoxtypeEngine:
         save_model_load_time(stt_model_id, stt_elapsed)
         logger.debug("STT model loaded in %.1fs", stt_elapsed)
 
-        # Load separate fast model for realtime partial transcriptions
-        if self._realtime:
-            self._realtime_stt = self._create_realtime_stt_engine()
-
         # Note: Agent registration is handled externally by AgentRegistrar.
         # The registrar calls register_agent() to add agents before run().
 
@@ -532,7 +510,7 @@ class VoxtypeEngine:
             on_speech_start=self._on_vad_speech_start,
             on_speech_end=self._on_vad_speech_end,
             on_max_speech=self._on_max_speech_duration,
-            on_partial_audio=self._on_partial_audio if self._realtime else None,
+            on_partial_audio=None,
             headless=headless,
         )
         vad_elapsed = round(time.time() - self._loading_models[1]["start_time"], 1)
@@ -567,16 +545,6 @@ class VoxtypeEngine:
                 tts_engine_name,
             )
 
-        # Start partial transcription worker if realtime mode
-        if self._realtime:
-            self._partial_stop.clear()
-            self._partial_worker = threading.Thread(
-                target=self._partial_worker_loop,
-                daemon=True,
-                name="partial-transcription-worker",
-            )
-            self._partial_worker.start()
-
         # Create hotkey listener for toggle (if available and enabled)
         # Note: hotkey disabled in daemon mode - macOS requires main thread
         if self._hotkey_enabled:
@@ -606,49 +574,6 @@ class VoxtypeEngine:
 
         if self._logger:
             self._logger.log_vad_event("speech_start")
-
-    def _on_partial_audio(self, audio_data: Any) -> None:
-        """Handle partial audio during speech for realtime feedback."""
-        if not self._realtime or self._stt is None:
-            return
-
-        # Put chunk in queue - single worker will process it
-        self._partial_queue.put(audio_data.copy())
-
-    def _partial_worker_loop(self) -> None:
-        """Single worker thread for partial transcriptions.
-
-        Uses the fast realtime STT engine (tiny model) for low latency.
-        No lock needed since _realtime_stt is only used by this thread.
-        """
-        while not self._partial_stop.is_set():
-            try:
-                audio_data = self._partial_queue.get(timeout=0.1)
-            except Empty:
-                continue
-
-            # Drain queue: keep only the latest chunk to avoid lag
-            while True:
-                try:
-                    audio_data = self._partial_queue.get_nowait()
-                except Empty:
-                    break
-
-            # Transcribe the latest chunk with fast realtime model
-            try:
-                if self._realtime_stt is None:
-                    continue
-                result = self._realtime_stt.transcribe(
-                    audio_data,
-                    language=self.config.stt.language,
-                    task="translate" if self.config.stt.translate else "transcribe",
-                )
-                text = result.text
-                if text:
-                    with self._partial_text_lock:
-                        self._partial_text = text
-            except Exception:
-                logger.debug("partial transcription error", exc_info=True)
 
     def _on_vad_speech_end(self, audio_data: Any) -> None:
         """Handle VAD speech end detection."""
@@ -686,10 +611,6 @@ class VoxtypeEngine:
                    goes to the correct agent even if agent switches during transcription.
         """
         # For realtime mode: clear partial text
-        if self._realtime:
-            with self._partial_text_lock:
-                self._partial_text = ""
-
         # Use provided agent (captured at speech-end time)
         captured_agent = agent if agent is not None else self._get_current_agent()
 
@@ -1481,12 +1402,6 @@ class VoxtypeEngine:
         # Force transition to OFF
         self._state_manager.transition(AppState.OFF, force=True)
 
-        # Stop partial transcription worker (daemon thread, don't block long)
-        if self._partial_worker:
-            self._partial_stop.set()
-            self._partial_worker.join(timeout=0.3)
-            self._partial_worker = None
-
         # Close audio/VAD
         if self._audio_manager:
             self._audio_manager.flush_vad()
@@ -1515,7 +1430,6 @@ def create_engine(
     *,
     logger: JSONLLogger | None = None,
     agent_mode: bool | None = None,
-    realtime: bool | None = None,
     hotkey_enabled: bool = True,
 ) -> VoxtypeEngine:
     """Create a VoxtypeEngine.
@@ -1531,23 +1445,19 @@ def create_engine(
         events: Event handler callbacks.
         logger: Optional JSONL logger.
         agent_mode: Override config.output.mode. If None, uses config.
-        realtime: Enable realtime transcription. Defaults to False.
         hotkey_enabled: Enable hotkey listener. Set False for daemon mode
                        (macOS requires main thread for hotkey events).
 
     Returns:
         Configured VoxtypeEngine instance.
     """
-    # Use overrides or fall back to config/defaults
     effective_agent_mode = agent_mode if agent_mode is not None else (config.output.mode == "agents")
-    effective_realtime = realtime if realtime is not None else False  # realtime is CLI-only, default off
 
     engine = VoxtypeEngine(
         config=config,
         events=events,
         logger=logger,
         agent_mode=effective_agent_mode,
-        realtime=effective_realtime,
         hotkey_enabled=hotkey_enabled,
     )
 

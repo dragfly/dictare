@@ -18,14 +18,7 @@ import warnings
 from pathlib import Path
 
 from voxtype.tts.base import TTSEngine
-
-
-def _is_apple_silicon() -> bool:
-    """Check if running on Apple Silicon."""
-    if sys.platform != "darwin":
-        return False
-    import platform
-    return platform.machine() == "arm64"
+from voxtype.utils.hardware import is_apple_silicon
 
 
 def _has_mlx_audio() -> bool:
@@ -102,7 +95,7 @@ class OuteTTS(TTSEngine):
         if self._available is not None:
             return self._available
 
-        if not _is_apple_silicon():
+        if not is_apple_silicon():
             self._available = False
             return False
 
