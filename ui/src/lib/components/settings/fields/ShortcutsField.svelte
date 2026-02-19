@@ -4,6 +4,8 @@
 	import KeyCaptureField from "./KeyCaptureField.svelte";
 	import { fetchShortcuts, saveShortcuts, type Shortcut } from "$lib/api";
 
+	function deepClone<T>(v: T): T { return JSON.parse(JSON.stringify(v)); }
+
 	const COMMANDS: { value: string; label: string }[] = [
 		{ value: "toggle-listening", label: "Toggle listening" },
 		{ value: "listening-on",     label: "Start listening" },
@@ -45,8 +47,8 @@
 		errorMessage = "";
 		try {
 			const data = await fetchShortcuts();
-			originalRows = structuredClone(data);
-			rows = structuredClone(data);
+			originalRows = deepClone(data);
+			rows = deepClone(data);
 			status = "idle";
 		} catch (e) {
 			errorMessage = e instanceof Error ? e.message : "Load failed";
@@ -77,8 +79,8 @@
 		errorMessage = "";
 		try {
 			await saveShortcuts(valid);
-			originalRows = structuredClone(valid);
-			rows = structuredClone(valid);
+			originalRows = deepClone(valid);
+			rows = deepClone(valid);
 			status = "saved";
 		} catch (e) {
 			errorMessage = e instanceof Error ? e.message : "Save failed";
@@ -88,7 +90,7 @@
 
 	function reset() {
 		if (!isDirty) return;
-		rows = structuredClone(originalRows);
+		rows = deepClone(originalRows);
 		status = "idle";
 		errorMessage = "";
 	}
