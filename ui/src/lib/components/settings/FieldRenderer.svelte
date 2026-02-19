@@ -7,6 +7,7 @@
 	import PresetField from "./fields/PresetField.svelte";
 	import ComplexField from "./fields/ComplexField.svelte";
 	import TomlField from "./fields/TomlField.svelte";
+	import ShortcutsField from "./fields/ShortcutsField.svelte";
 	import KeyCaptureField from "./fields/KeyCaptureField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
@@ -78,6 +79,11 @@
 
 {#if HIDDEN_FORM_FIELDS.has(field.key) || isHiddenByParentToml}
 	<!-- hidden: excluded from UI or child of a TOML-editable section -->
+{:else if field.key === "keyboard.shortcuts"}
+	<!-- Structured shortcuts editor -->
+	<div class="px-4">
+		<ShortcutsField />
+	</div>
 {:else if isTomlEditable}
 	<!-- Full-width TOML editor — no inline label/control split -->
 	<div class="px-4">
