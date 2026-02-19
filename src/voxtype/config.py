@@ -733,43 +733,40 @@ def create_default_config() -> Path:
 # headphones_mode = false         # TTS won't pause listening when true
 
 # [audio.advanced]                # Low-level tuning — edit via Settings > Advanced Audio
-# sample_rate = 16000
-# channels = 1
+# sample_rate = 16000             # Sample rate in Hz (Whisper requires 16000)
+# channels = 1                    # Number of audio channels
 # device = ""                     # Audio device name (empty = system default)
-# pre_buffer_ms = 640             # Audio captured before VAD triggers
-# min_speech_ms = 150             # Min speech duration before VAD activates
+# pre_buffer_ms = 640             # Audio captured before VAD triggers (ms)
+# min_speech_ms = 150             # Min speech duration before VAD activates (ms)
 # transcribing_sound_min_ms = 8000  # Min audio length (ms) to trigger typewriter sound
 
-# Per-event sound config — disable individual sounds or set custom paths
-# [audio.sounds.start]            # OFF → LISTENING beep
+# [audio.sounds.*]                # Per-event sounds — edit via Settings > Sounds
+# [audio.sounds.start]            # OFF → LISTENING  (up-beep.wav)
 # enabled = true
 # path = ""                       # Empty = bundled default
-#
-# [audio.sounds.stop]             # → OFF beep
+# [audio.sounds.stop]             # LISTENING → OFF  (down-beep.wav)
 # enabled = true
-#
-# [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING
+# [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING  (typewriter.wav)
 # enabled = true
-#
-# [audio.sounds.ready]            # TRANSCRIBING → LISTENING
+# [audio.sounds.ready]            # TRANSCRIBING → LISTENING  (ready.wav)
 # enabled = true
-#
-# [audio.sounds.sent]             # Text sent beep
+# [audio.sounds.sent]             # Text sent  (up-beep.wav)
 # enabled = true
-#
-# [audio.sounds.agent_announce]   # TTS agent name on switch
+# [audio.sounds.agent_announce]   # TTS announces agent name on switch
 # enabled = true
 
 [stt]
 # model = "large-v3-turbo"        # tiny, base, small, medium, large-v3, large-v3-turbo
 # language = "auto"               # Auto-detect, or "en", "it", "de", "fr", etc.
-# compute_type = "int8"           # int8, float16, float32
-# device = "auto"                 # auto, cpu, cuda
-# beam_size = 5
-# hw_accel = true                 # CUDA on Linux, MLX on macOS
-# hotwords = ""                   # Boost recognition: "voxtype,joshua"
-# max_repetitions = 5             # Anti-hallucination: max consecutive repeats
 # translate = false               # Any language → English
+# hw_accel = true                 # CUDA on Linux, MLX on macOS
+
+# [stt.advanced]                  # Low-level tuning — edit via Settings > Advanced STT
+# device = "auto"                 # auto, cpu, cuda, mlx
+# compute_type = "int8"           # int8 (fastest), float16, float32 (most accurate)
+# beam_size = 5                   # Higher = slower but more accurate
+# hotwords = ""                   # Boost recognition: "voxtype,joshua" (turbo model only)
+# max_repetitions = 5             # Anti-hallucination: max consecutive repeats
 
 [tts]
 # engine = "espeak"               # espeak, say (macOS), piper, outetts (MLX)
