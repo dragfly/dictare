@@ -195,7 +195,8 @@ class TestTomlSectionPost:
         config_file = tmp_path / "config.toml"
         config_file.write_text("")
         toml_content = """
-default_agent_type = "claude"
+[agent_types]
+default = "claude"
 
 [agent_types.claude]
 command = ["claude"]
@@ -212,9 +213,9 @@ description = "Claude Code"
         # Verify persisted
         from voxtype.config import load_config
         config = load_config(config_file)
-        assert config.default_agent_type == "claude"
+        assert config.agent_types.default == "claude"
         assert "claude" in config.agent_types
-        assert config.agent_types["claude"].command == ["claude"]
+        assert config.agent_types.get("claude").command == ["claude"]
 
     def test_save_agent_types_preserves_continue_args(self, client, tmp_path):
         """continue_args must survive a round-trip through the TOML editor."""
@@ -235,7 +236,7 @@ description = "Claude Sonnet"
 
         from voxtype.config import load_config
         config = load_config(config_file)
-        assert config.agent_types["sonnet"].continue_args == ["-c"]
+        assert config.agent_types.get("sonnet").continue_args == ["-c"]
 
     def test_serialize_agent_types_includes_continue_args(self, client, tmp_path):
         """GET agent_types returns continue_args from the raw config file."""

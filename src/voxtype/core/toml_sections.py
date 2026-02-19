@@ -32,15 +32,14 @@ _AGENT_TYPES_HEADER = """\
 # Agent type presets — single-command launch
 # Usage:  voxtype agent <name>
 #         voxtype agent <name> --continue   (continue previous session)
-#         voxtype agent                     (uses default_agent_type)
+#         voxtype agent                     (uses agent_types.default)
 #
 # continue_args: args inserted after argv[0] when --continue/-C is passed.
 #   Claude Code uses ["-c"], Codex uses ["--resume"], Aider has no continue flag.
 #
-# Set the default agent (optional):
-# default_agent_type = "claude"
+# [agent_types]
+# default = "claude"       # optional: used when no --type is given
 #
-# Define named presets:
 # [agent_types.claude]
 # command = ["claude"]
 # continue_args = ["-c"]
@@ -203,8 +202,8 @@ def _extract_section_lines(text: str, section: str) -> str | None:
     # (owned_header_prefixes, owned_toplevel_keys)
     owned_map: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
         "agent_types": (
-            ("[agent_types", '["agent_types'),
-            frozenset({"default_agent_type"}),
+            ("[agent_types",),
+            frozenset(),
         ),
         "keyboard.shortcuts": (
             ("[[keyboard.shortcuts",),
@@ -295,8 +294,8 @@ def _strip_section_lines(text: str, section: str) -> str:
     """
     owned_map: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
         "agent_types": (
-            ("[agent_types", '["agent_types'),
-            frozenset({"default_agent_type"}),
+            ("[agent_types",),
+            frozenset(),
         ),
         "keyboard.shortcuts": (
             ("[[keyboard.shortcuts",),
@@ -400,8 +399,13 @@ def _validate_section(section: str, content: str) -> None:
     if section == "agent_types":
         from voxtype.config import AgentTypeConfig
 
-        for _name, entry in dict(doc.get("agent_types", {})).items():
-            AgentTypeConfig.model_validate(dict(entry))
+        raw = dict(doc.get("agent_types", {}))
+        for _name, entry in raw.items():
+            if _name == "default":
+                if not isinstance(entry, str):
+                    raise ValueError("agent_types.default must be a string")
+            elif isinstance(entry, dict):
+                AgentTypeConfig.model_validate(dict(entry))
 
     elif section == "keyboard.shortcuts":
         from pydantic import BaseModel, field_validator

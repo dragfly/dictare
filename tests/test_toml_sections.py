@@ -82,9 +82,10 @@ command = ["claude"]
         assert "# Top-level comment" in stripped
         assert "# stt comment" in stripped
 
-    def test_strip_removes_default_agent_type(self) -> None:
+    def test_strip_removes_agent_types_default_inside_section(self) -> None:
         text = """\
-default_agent_type = "claude"
+[agent_types]
+default = "claude"
 
 [agent_types.claude]
 command = ["claude"]
@@ -93,7 +94,8 @@ command = ["claude"]
 model = "base"
 """
         stripped = _strip_section_lines(text, "agent_types")
-        assert "default_agent_type" not in stripped
+        assert "[agent_types]" not in stripped
+        assert "default" not in stripped
         assert "[stt]" in stripped
 
     def test_strip_empty_file(self) -> None:
@@ -139,6 +141,9 @@ class TestSaveIdempotency:
         initial = """\
 [stt]
 model = "large-v3-turbo"
+
+[agent_types]
+default = "sonnet"
 
 [agent_types.sonnet]
 command = ["claude", "--model", "claude-sonnet-4-6"]
