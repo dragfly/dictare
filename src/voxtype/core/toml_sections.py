@@ -36,7 +36,9 @@ _AGENT_TYPES_HEADER = """\
 #         voxtype agent                     (uses agent_types.default)
 #
 # continue_args: args inserted after argv[0] when --continue/-C is passed.
-#   Claude Code uses ["-c"], Codex uses ["--resume"], Aider has no continue flag.
+#   Claude Code: ["-c"]
+#   Codex:       ["resume", "--last"]   (resume is a subcommand, not a flag)
+#   Aider:       no continue flag
 
 [agent_types]
 default = "sonnet"
@@ -63,12 +65,12 @@ description = "Claude Opus 4.6 (auto-approve)"
 
 [agent_types.chatgpt]
 command = ["codex"]
-continue_args = ["--resume"]
+continue_args = ["resume", "--last"]
 description = "OpenAI Codex"
 
 [agent_types.chatgpt-danger]
-command = ["codex", "--approval-mode", "full-auto"]
-continue_args = ["--resume"]
+command = ["codex", "--dangerously-bypass-approvals-and-sandbox"]
+continue_args = ["resume", "--last"]
 description = "OpenAI Codex (auto-approve)"
 """
 
