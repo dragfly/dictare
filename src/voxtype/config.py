@@ -196,16 +196,8 @@ class KeyboardConfig(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    """OpenVIP HTTP/SSE server configuration.
+    """OpenVIP HTTP/SSE server configuration."""
 
-    The server is always started in agent mode (--agents flag).
-    Set enabled=true to also start it in keyboard mode (for StatusPanel monitoring).
-    """
-
-    enabled: bool = Field(
-        default=False,
-        description="Enable HTTP server in keyboard mode (always on in agent mode)",
-    )
     host: str = Field(
         default="127.0.0.1",
         description="Host to bind server to (127.0.0.1 = localhost only for security)",
@@ -823,7 +815,6 @@ def create_default_config() -> Path:
 # shortcuts = []                  # Configure via: voxtype config shortcuts
 
 [server]
-# enabled = false                 # HTTP server (always on in agent mode)
 # host = "127.0.0.1"
 # port = 8770
 
