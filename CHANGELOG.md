@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b147] - 2026-02-19
+
+### Added
+
+- **`repeat` shortcut command** — resends last transcription to current agent.
+  Useful when the agent UI misses keyboard input. Works independently of
+  listening state. `engine.resend_last()` → `controller.repeat_last()` →
+  shortcut `command = "repeat"`.
+
+### Changed
+
+- **Shortcut command names renamed** (breaking):
+  - `project-next` → `next-agent`
+  - `project-prev` → `prev-agent`
+  - `switch-to-project` → `switch-to-agent`
+  - `switch-to-project-index` → `switch-to-agent-index`
+- **Removed dead commands**: `switch-mode`, `clear`, `cancel`, `discard`
+  (never implemented; removed from `_BindingCommands` and template)
+- **Shortcuts template** updated to only document real commands with examples
+
 ## [0.1.0b146] - 2026-02-19
 
 ### Fixed

@@ -341,6 +341,13 @@ class AppController:
 
         self._engine.switch_to_agent_by_index(index)
 
+    def repeat_last(self) -> None:
+        """Resend the last transcription to the current agent."""
+        if not self._engine:
+            return
+
+        self._engine.resend_last()
+
     def set_output_mode(self, mode: str) -> None:
         """Switch output mode (keyboard <-> agents).
 
