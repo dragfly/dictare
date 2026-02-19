@@ -110,11 +110,11 @@ class _BindingCommands:
             "listening-on": lambda: self._set_listening(True),
             "listening-off": lambda: self._set_listening(False),
             "toggle-listening": self._controller.toggle_listening,
-            "project-next": self._controller.next_agent,
-            "project-prev": self._controller.prev_agent,
-            "switch-to-project": self._switch_to_project,
-            "switch-to-project-index": self._switch_to_project_index,
-            "discard": self._discard,
+            "next-agent": self._controller.next_agent,
+            "prev-agent": self._controller.prev_agent,
+            "switch-to-agent": self._switch_to_agent,
+            "switch-to-agent-index": self._switch_to_agent_index,
+            "repeat": self._controller.repeat_last,
         }
 
     def execute(self, name: str, args: dict | None = None) -> bool:
@@ -147,15 +147,10 @@ class _BindingCommands:
         if engine:
             engine.set_listening(on)
 
-    def _switch_to_project(self, name: str) -> None:
-        """Switch to project by name."""
+    def _switch_to_agent(self, name: str) -> None:
+        """Switch to agent by name."""
         self._controller.switch_to_agent(name)
 
-    def _switch_to_project_index(self, index: int) -> None:
-        """Switch to project by index."""
+    def _switch_to_agent_index(self, index: int) -> None:
+        """Switch to agent by index."""
         self._controller.switch_to_agent_index(index)
-
-    def _discard(self) -> None:
-        """Discard current recording."""
-        # TODO: Implement discard
-        logger.debug("discard command (not implemented)")

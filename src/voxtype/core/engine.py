@@ -1066,6 +1066,22 @@ class VoxtypeEngine:
 
         return default_phrases
 
+    def resend_last(self) -> bool:
+        """Resend the last transcription to the current agent.
+
+        Useful when the agent UI misses the input.  Works independently of the
+        listening state — the shortcut can be pressed while speaking.
+
+        Returns:
+            True if there was text to resend, False if nothing was sent yet.
+        """
+        if not self._last_text:
+            logger.debug("resend_last: no last text to resend")
+            return False
+        logger.info("resend_last: resending %r", self._last_text)
+        self._inject_text(self._last_text)
+        return True
+
     def speak_text(self, text: str) -> None:
         """Speak text using the pre-loaded TTS engine, optionally pausing the mic.
 
