@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b135] - 2026-02-19
+
+### Fixed
+
+- PTYSession: resolve agent binary with `shutil.which()` before fork — if the command
+  is not found or the resolved path no longer exists (e.g. Homebrew Cask updated and old
+  version removed), raises `FileNotFoundError` with a clear message instead of a cryptic
+  `ENOENT posix_spawn` from inside the child process.
+
 ## [0.1.0b134] - 2026-02-19
 
 ### Fixed
