@@ -340,8 +340,8 @@ class VoxtypeEngine:
 
         engine.load_model(
             model_size or self.config.stt.model,
-            device=self.config.stt.device,
-            compute_type=self.config.stt.compute_type,
+            device=self.config.stt.advanced.device,
+            compute_type=self.config.stt.advanced.compute_type,
             console=None,  # No console in engine
             verbose=self.config.verbose,
             headless=headless,
@@ -406,8 +406,8 @@ class VoxtypeEngine:
 
     def _get_hotwords(self) -> str | None:
         """Build hotwords string from config."""
-        if self.config.stt.hotwords:
-            return self.config.stt.hotwords
+        if self.config.stt.advanced.hotwords:
+            return self.config.stt.advanced.hotwords
         return None
 
     def _create_pipeline(self) -> Pipeline | None:
@@ -483,7 +483,7 @@ class VoxtypeEngine:
 
         # Load STT model
         logger.debug("Loading STT model: %s (device=%s, compute=%s)",
-                      stt_model_id, self.config.stt.device, self.config.stt.compute_type)
+                      stt_model_id, self.config.stt.advanced.device, self.config.stt.advanced.compute_type)
         self._loading_models[0]["start_time"] = time.time()
         self._loading_models[0]["status"] = "loading"
         self._stt = self._create_stt_engine(headless=headless)
@@ -630,8 +630,8 @@ class VoxtypeEngine:
                         audio_data,
                         language=self.config.stt.language,
                         hotwords=self._get_hotwords(),
-                        beam_size=self.config.stt.beam_size,
-                        max_repetitions=self.config.stt.max_repetitions,
+                        beam_size=self.config.stt.advanced.beam_size,
+                        max_repetitions=self.config.stt.advanced.max_repetitions,
                         task=task,
                     )
                 finally:
@@ -1153,7 +1153,7 @@ class VoxtypeEngine:
                 "uptime_seconds": uptime,
                 "stt": {
                     "model_name": self.config.stt.model,
-                    "device": getattr(self._stt, "_device", self.config.stt.device),
+                    "device": getattr(self._stt, "_device", self.config.stt.advanced.device),
                     "last_text": self._last_text,
                 },
                 "output": {
