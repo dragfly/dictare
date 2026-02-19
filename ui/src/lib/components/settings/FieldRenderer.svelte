@@ -7,9 +7,10 @@
 	import PresetField from "./fields/PresetField.svelte";
 	import ComplexField from "./fields/ComplexField.svelte";
 	import TomlField from "./fields/TomlField.svelte";
+	import KeyCaptureField from "./fields/KeyCaptureField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS } from "$lib/registry/field-config";
+	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS } from "$lib/registry/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -50,6 +51,7 @@
 			return false;
 		})()
 	);
+	const keyCaptureFormat = $derived(KEY_CAPTURE_FIELDS[field.key] as "evdev" | "shortcut" | undefined);
 	const presets = $derived(FIELD_PRESETS[field.key]);
 	const currentValue = $derived(settingsStore.getValue(field.key));
 	const isDirty = $derived(field.key in settingsStore.getDirty());
@@ -100,7 +102,13 @@
 
 	<!-- Right: control -->
 	<div class="flex items-center gap-2 shrink-0 mt-0.5">
-		{#if complex}
+		{#if keyCaptureFormat}
+			<KeyCaptureField
+				format={keyCaptureFormat}
+				value={(currentValue as string) ?? ""}
+				onchange={(v) => settingsStore.markDirty(field.key, v)}
+			/>
+		{:else if complex}
 			<ComplexField />
 		{:else if field.type === "bool"}
 			<BoolField
