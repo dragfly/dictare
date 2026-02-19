@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Protocol commands handled by the engine directly
-PROTOCOL_COMMANDS = {"stt.start", "stt.stop", "stt.toggle", "engine.shutdown", "ping"}
+PROTOCOL_COMMANDS = {"stt.start", "stt.stop", "stt.toggle", "engine.shutdown", "ping", "hotkey.capture"}
 
 class OpenVIPServer:
     """FastAPI server implementing OpenVIP protocol endpoints.
