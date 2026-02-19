@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import pty
 import select
+import shutil
 import signal
 import struct
 import sys
@@ -85,6 +86,25 @@ class PTYSession:
 
     def start(self) -> None:
         """Open PTY, set window size, install SIGWINCH handler, fork+exec."""
+        # Resolve the binary before forking — gives a clear error if not in PATH
+        # or if the resolved path no longer exists (e.g. stale Caskroom symlink).
+        binary = self._command[0]
+        if not os.path.isabs(binary):
+            resolved = shutil.which(binary)
+            if resolved is None:
+                raise FileNotFoundError(
+                    f"Command not found: {binary!r}\n"
+                    f"Make sure it is installed and in PATH, or use the full path "
+                    f"in [agent_types.<name>].command"
+                )
+            if not os.path.exists(resolved):
+                raise FileNotFoundError(
+                    f"Command resolved to {resolved!r} but the file does not exist.\n"
+                    f"This usually means a Homebrew Cask was updated and the old "
+                    f"version was removed. Restart your terminal and try again."
+                )
+            self._command = [resolved] + self._command[1:]
+
         master_fd, slave_fd = pty.openpty()
         _set_winsize(slave_fd, self._rows - self._reserve_rows, self._cols)
 
