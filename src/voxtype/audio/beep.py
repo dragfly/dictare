@@ -73,7 +73,7 @@ _preload_sounds()
 # Audio playback queue — serializes all sounddevice output on one thread
 # ---------------------------------------------------------------------------
 
-_play_queue: queue.Queue[tuple[str, Callable[[], None] | None] | None] = queue.Queue()
+_play_queue: queue.Queue[tuple[str, float, Callable[[], None] | None] | None] = queue.Queue()
 _worker_started = False
 _worker_lock = threading.Lock()
 
@@ -105,7 +105,7 @@ def _audio_worker() -> None:
         if item is None:
             break
 
-        path_str, on_complete = item
+        path_str, volume, on_complete = item
         try:
             cached = _sound_cache.get(path_str)
             if cached is not None:
@@ -118,7 +118,7 @@ def _audio_worker() -> None:
 
             import sounddevice as sd
 
-            sd.play(data, sr)
+            sd.play(data * volume if volume != 1.0 else data, sr)
             if on_complete:
                 sd.wait()
         except Exception:
@@ -174,7 +174,7 @@ def get_sound_path(name: str) -> Path:
     return _SOUNDS_DIR / name
 
 def play_sound_file(
-    path: str | Path, *, on_complete: Callable[[], None] | None = None
+    path: str | Path, *, volume: float = 1.0, on_complete: Callable[[], None] | None = None
 ) -> None:
     """Enqueue a sound file for playback on the audio worker thread.
 
@@ -183,11 +183,12 @@ def play_sound_file(
 
     Args:
         path: Path to sound file (wav, etc.)
+        volume: Playback volume multiplier (0.0–1.0, default 1.0).
         on_complete: Optional callback invoked after playback finishes.
             When set, the worker blocks (sd.wait) until done, then calls it.
     """
     _ensure_worker()
-    _play_queue.put((str(path), on_complete))
+    _play_queue.put((str(path), volume, on_complete))
 
 # ---------------------------------------------------------------------------
 # Loop support — plays a sound repeatedly until stop_loop() is called.
@@ -202,6 +203,7 @@ _loop_active: threading.Event = threading.Event()
 _loop_chunk_keys: list[str] = []   # cache keys for each 1s slice
 _loop_chunk_pos: int = 0           # next chunk index (wraps around)
 _loop_pending_timer: threading.Timer | None = None  # delayed start timer
+_loop_volume: float = 1.0          # volume for current loop
 
 def _enqueue_loop_next() -> None:
     """on_complete callback: schedule the next 1s chunk if still active."""
@@ -210,7 +212,7 @@ def _enqueue_loop_next() -> None:
         return
     key = _loop_chunk_keys[_loop_chunk_pos % len(_loop_chunk_keys)]
     _loop_chunk_pos += 1
-    _play_queue.put((key, _enqueue_loop_next))
+    _play_queue.put((key, 1.0, _enqueue_loop_next))  # volume baked into chunk data
 
 def _start_loop_now(path_str: str) -> None:
     """Internal: load, chunk, and kick off the loop immediately."""
@@ -234,8 +236,11 @@ def _start_loop_now(path_str: str) -> None:
 
     chunk_size = max(1, int(_LOOP_CHUNK_DURATION * sr))
     new_keys: list[str] = []
+    volume = _loop_volume
     for i, start in enumerate(range(0, len(data), chunk_size)):
         chunk = data[start : start + chunk_size]
+        if volume != 1.0:
+            chunk = chunk * volume
         key = f"__loop_chunk_{i}__"
         _sound_cache[key] = (chunk, sr)
         new_keys.append(key)
@@ -245,18 +250,23 @@ def _start_loop_now(path_str: str) -> None:
     _ensure_worker()
     _enqueue_loop_next()
 
-def start_loop(path: str | Path) -> None:
+def start_loop(path: str | Path, volume: float = 1.0) -> None:
     """Start looping *path* in 1-second chunks until stop_loop() is called.
 
     Non-blocking.  Caller is responsible for the audio-duration threshold check
     (only call this when the recording was long enough to warrant feedback).
+
+    Args:
+        path: Path to sound file to loop.
+        volume: Playback volume multiplier (0.0–1.0, default 1.0).
     """
-    global _loop_pending_timer
+    global _loop_pending_timer, _loop_volume
 
     if _loop_pending_timer is not None:
         _loop_pending_timer.cancel()
         _loop_pending_timer = None
 
+    _loop_volume = volume
     _loop_active.set()
     _start_loop_now(str(path))
 
@@ -287,7 +297,7 @@ def _play_sound_file_fallback(path_str: str) -> None:
     except Exception:
         pass
 
-def play_sound_file_async(path: str | Path) -> None:
+def play_sound_file_async(path: str | Path, *, volume: float = 1.0) -> None:
     """Play a sound file asynchronously (non-blocking, fire-and-forget).
 
     Alias for play_sound_file() — kept for backward compatibility.
@@ -295,8 +305,9 @@ def play_sound_file_async(path: str | Path) -> None:
 
     Args:
         path: Path to sound file (wav, etc.)
+        volume: Playback volume multiplier (0.0–1.0, default 1.0).
     """
-    play_sound_file(path)
+    play_sound_file(path, volume=volume)
 
 def play_audio(
     source: str | Path | Callable[[], None],
