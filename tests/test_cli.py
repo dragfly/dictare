@@ -106,3 +106,90 @@ class TestCLIConfigCommands:
 
             assert config_path.exists()
             assert result.exit_code == 0
+
+
+class TestAgentContinue:
+    """Tests for --continue / -C flag on 'voxtype agent'."""
+
+    def _make_config(self, continue_args: list[str] | None = None) -> object:
+        from voxtype.config import AgentTypeConfig, ClientConfig, Config
+
+        at = AgentTypeConfig(
+            command=["claude", "--model", "claude-sonnet-4-6"],
+            continue_args=continue_args or [],
+        )
+        cfg = Config()
+        cfg = cfg.model_copy(update={
+            "agent_types": {"sonnet": at},
+            "default_agent_type": "sonnet",
+            "client": ClientConfig(url="http://127.0.0.1:8770", status_bar=False),
+        })
+        return cfg
+
+    def _invoke_agent(self, args: list[str], cfg: object) -> tuple[object, list]:
+        from unittest.mock import patch
+
+        captured: list[list[str]] = []
+
+        def fake_run_agent(agent_id: str, command: list[str], **kwargs: object) -> int:
+            captured.append(command)
+            return 0
+
+        with (
+            patch("voxtype.cli.agent._check_engine", return_value=True),
+            patch("voxtype.config.load_config", return_value=cfg),
+            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
+        ):
+            result = runner.invoke(app, ["agent"] + args)
+
+        return result, captured
+
+    def test_continue_inserts_continue_args_after_argv0(self) -> None:
+        """--continue prepends continue_args after argv[0]."""
+        cfg = self._make_config(continue_args=["-c"])
+        result, captured = self._invoke_agent(["myproject", "--type", "sonnet", "--continue"], cfg)
+        assert result.exit_code == 0
+        assert captured == [["claude", "-c", "--model", "claude-sonnet-4-6"]]
+
+    def test_short_flag_c_works(self) -> None:
+        """-C is an alias for --continue."""
+        cfg = self._make_config(continue_args=["-c"])
+        result, captured = self._invoke_agent(["myproject", "--type", "sonnet", "-C"], cfg)
+        assert result.exit_code == 0
+        assert captured == [["claude", "-c", "--model", "claude-sonnet-4-6"]]
+
+    def test_continue_without_continue_args_warns(self) -> None:
+        """--continue with no continue_args configured shows a warning."""
+        cfg = self._make_config(continue_args=[])
+        result, captured = self._invoke_agent(["myproject", "--type", "sonnet", "--continue"], cfg)
+        assert result.exit_code == 0
+        assert "Warning" in result.output
+        # Command runs unchanged
+        assert captured == [["claude", "--model", "claude-sonnet-4-6"]]
+
+    def test_continue_with_command_override_ignored(self) -> None:
+        """--continue is silently ignored when explicit command is given via --."""
+        cfg = self._make_config(continue_args=["-c"])
+        result, captured = self._invoke_agent(
+            ["myproject", "--continue", "--", "aider", "--model", "gpt-4"], cfg
+        )
+        assert result.exit_code == 0
+        # Command override wins; -c not inserted
+        assert captured == [["aider", "--model", "gpt-4"]]
+
+    def test_agent_type_config_parses_continue_args(self) -> None:
+        """AgentTypeConfig correctly parses continue_args from TOML data."""
+        from voxtype.config import AgentTypeConfig
+
+        at = AgentTypeConfig.model_validate({
+            "command": ["claude"],
+            "continue_args": ["-c"],
+        })
+        assert at.continue_args == ["-c"]
+
+    def test_agent_type_config_continue_args_defaults_empty(self) -> None:
+        """continue_args defaults to [] when not specified."""
+        from voxtype.config import AgentTypeConfig
+
+        at = AgentTypeConfig.model_validate({"command": ["claude"]})
+        assert at.continue_args == []
