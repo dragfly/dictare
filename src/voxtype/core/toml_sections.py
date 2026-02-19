@@ -24,7 +24,11 @@ SUPPORTED_SECTIONS = frozenset([
 _AGENT_TYPES_HEADER = """\
 # Agent type presets — single-command launch
 # Usage:  voxtype agent <name>
-#         voxtype agent          (uses default_agent_type)
+#         voxtype agent <name> --continue   (continue previous session)
+#         voxtype agent                     (uses default_agent_type)
+#
+# continue_args: args inserted after argv[0] when --continue/-C is passed.
+#   Claude Code uses ["-c"], Codex uses ["--resume"], Aider has no continue flag.
 #
 # Set the default agent (optional):
 # default_agent_type = "claude"
@@ -32,15 +36,13 @@ _AGENT_TYPES_HEADER = """\
 # Define named presets:
 # [agent_types.claude]
 # command = ["claude"]
+# continue_args = ["-c"]
 # description = "Claude Code (default model)"
 #
-# [agent_types.sonnet-4.6]
+# [agent_types."sonnet-4.6"]
 # command = ["claude", "--model", "claude-sonnet-4-6"]
+# continue_args = ["-c"]
 # description = "Claude Sonnet 4.6"
-#
-# [agent_types.opus-4.6]
-# command = ["claude", "--model", "claude-opus-4-6"]
-# description = "Claude Opus 4.6"
 #
 # [agent_types.aider]
 # command = ["aider", "--model", "claude-sonnet-4-5"]
@@ -259,9 +261,13 @@ def _serialize_agent_types(config: Config) -> str:
         lines.append("")
 
     for name, at in config.agent_types.items():
-        lines.append(f"[agent_types.{name}]")
+        quoted = f'"{name}"' if "." in name else name
+        lines.append(f"[agent_types.{quoted}]")
         cmd_parts = ", ".join(f'"{c}"' for c in at.command)
         lines.append(f"command = [{cmd_parts}]")
+        if at.continue_args:
+            ca_parts = ", ".join(f'"{c}"' for c in at.continue_args)
+            lines.append(f"continue_args = [{ca_parts}]")
         if at.description:
             lines.append(f'description = "{at.description}"')
         lines.append("")
@@ -305,6 +311,8 @@ def _apply_agent_types(content: str, config_path: Path) -> None:
         for name, at in validated.items():
             entry_tbl = tomlkit.table()
             entry_tbl.add("command", at.command)
+            if at.continue_args:
+                entry_tbl.add("continue_args", at.continue_args)
             if at.description:
                 entry_tbl.add("description", at.description)
             agent_types_tbl.add(name, entry_tbl)

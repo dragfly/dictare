@@ -199,6 +199,43 @@ description = "Claude Code"
         assert "claude" in config.agent_types
         assert config.agent_types["claude"].command == ["claude"]
 
+    def test_save_agent_types_preserves_continue_args(self, client, tmp_path):
+        """continue_args must survive a round-trip through the TOML editor."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")
+        toml_content = """
+[agent_types.sonnet]
+command = ["claude", "--model", "claude-sonnet-4-6"]
+continue_args = ["-c"]
+description = "Claude Sonnet"
+"""
+        with patch("voxtype.config.get_config_path", return_value=config_file):
+            r = client.post(
+                "/settings/toml-section/agent_types",
+                json={"content": toml_content},
+            )
+        assert r.status_code == 200
+
+        from voxtype.config import load_config
+        config = load_config(config_file)
+        assert config.agent_types["sonnet"].continue_args == ["-c"]
+
+    def test_serialize_agent_types_includes_continue_args(self, client):
+        """GET agent_types section shows continue_args in the TOML output."""
+        from voxtype.config import AgentTypeConfig, Config
+
+        config = Config(
+            agent_types={"sonnet": AgentTypeConfig(
+                command=["claude", "--model", "claude-sonnet-4-6"],
+                continue_args=["-c"],
+            )},
+        )
+        with patch("voxtype.config.load_config", return_value=config):
+            r = client.get("/settings/toml-section/agent_types")
+        assert r.status_code == 200
+        assert "continue_args" in r.json()["content"]
+        assert '"-c"' in r.json()["content"]
+
     def test_invalid_toml_returns_422(self, client):
         r = client.post(
             "/settings/toml-section/agent_types",
