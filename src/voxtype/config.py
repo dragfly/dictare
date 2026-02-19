@@ -8,7 +8,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Environment variable prefix
 ENV_PREFIX = "VOXTYPE_"
@@ -301,6 +301,56 @@ class AgentTypeConfig(BaseModel):
         description="Args inserted after argv[0] when --continue is passed (e.g. [\"-c\"] for Claude Code, [\"--resume\"] for Codex)",
     )
 
+class AgentTypesConfig(BaseModel):
+    """Container for agent type presets.
+
+    ``default`` names the preset used when running ``voxtype agent`` without
+    ``--type``.  All other keys are named presets (``AgentTypeConfig``).
+
+    TOML structure::
+
+        [agent_types]
+        default = "claude"
+
+        [agent_types.claude]
+        command = ["claude"]
+        continue_args = ["-c"]
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    default: str | None = Field(
+        default=None,
+        description="Default agent type used when running 'voxtype agent' without --type",
+    )
+
+    def get(self, name: str) -> AgentTypeConfig | None:
+        """Return the named preset, or None if not found."""
+        extras = self.model_extra or {}
+        if name not in extras:
+            return None
+        return AgentTypeConfig.model_validate(extras[name])
+
+    def entries(self) -> dict[str, AgentTypeConfig]:
+        """Return all named presets as a validated dict."""
+        result = {}
+        for k, v in (self.model_extra or {}).items():
+            if isinstance(v, (dict, AgentTypeConfig)):
+                try:
+                    result[k] = AgentTypeConfig.model_validate(v)
+                except Exception:
+                    pass
+        return result
+
+    def items(self):  # type: ignore[override]
+        return self.entries().items()
+
+    def __contains__(self, name: object) -> bool:
+        return name in (self.model_extra or {})
+
+    def __bool__(self) -> bool:
+        return bool(self.model_extra)
+
 class PipelineConfig(BaseModel):
     """Pipeline filter configuration."""
 
@@ -370,13 +420,9 @@ class Config(BaseModel):
     stats: StatsConfig = Field(default_factory=StatsConfig)
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
-    default_agent_type: str | None = Field(
-        default=None,
-        description="Default agent type used when running 'voxtype agent' with no arguments",
-    )
-    agent_types: dict[str, AgentTypeConfig] = Field(
-        default_factory=dict,
-        description='Agent type presets. Names with dots must be quoted: [agent_types.claude], [agent_types."sonnet-4.6"]. Multiple sessions can share a type: voxtype agent frontend --type claude',
+    agent_types: AgentTypesConfig = Field(
+        default_factory=AgentTypesConfig,
+        description='Agent type presets. Set default = "claude" for default type. Names with dots must be quoted: [agent_types."sonnet-4.6"].',
     )
 
     editor: str = Field(
@@ -628,8 +674,8 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
                 env_var,
             ))
 
-    # agent_types is a dynamic dict — expose as a single "dict" field
-    # so the UI can render it as a TOML editor
+    # agent_types has dynamic entries — expose as a single "dict" field
+    # so the UI renders it as a TOML editor
     agent_types_field = Config.model_fields["agent_types"]
     result.append((
         "agent_types",
@@ -800,23 +846,23 @@ def create_default_config() -> Path:
 # Agent type presets — command templates for named agent sessions
 #
 # Usage:
-#   voxtype agent <session-name>                    # uses default_agent_type
-#   voxtype agent <session-name> --type <type>      # uses specified type
-#   voxtype agent <session-name> --type <type> --continue  # continue previous session
+#   voxtype agent <session-name>                         # uses agent_types.default
+#   voxtype agent <session-name> --type <type>           # uses specified type
+#   voxtype agent <session-name> --type <type> --continue
 #
 # Multiple sessions can share the same type:
 #   voxtype agent frontend --type claude
 #   voxtype agent backend --type claude
 #
 # continue_args: args inserted after argv[0] when --continue is passed.
-#   The syntax is tool-specific — set it per type, not in voxtype.
 #   Claude Code uses -c; Codex uses --resume; Aider has no continue flag.
 #
 # IMPORTANT: names containing dots must be quoted in TOML:
 #   [agent_types."sonnet-4.6"]   ← correct (dot requires quotes)
 #   [agent_types.sonnet-4.6]     ← WRONG (parsed as nested tables)
 #
-# default_agent_type = "claude"
+# [agent_types]
+# default = "claude"       # optional: used when no --type is given
 #
 # [agent_types.claude]
 # command = ["claude"]
