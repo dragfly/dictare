@@ -119,33 +119,40 @@ _STT_ADVANCED_HEADER = """\
 """
 
 _SOUNDS_HEADER = """\
-# Sound effects — set enabled = false to silence, path = "/abs/path.wav" for custom file.
+# Sound effects — per-event audio feedback.
 # Default bundled files: start/sent = up-beep.wav, stop = down-beep.wav,
 #                        transcribing = typewriter.wav, ready = ready.wav,
 #                        agent_announce = (TTS speech, no sound file)
+#
+# All values below are defaults — uncomment only what you want to change.
 
 [audio.sounds.start]               # OFF → LISTENING
-enabled = true
-# path = ""                        # up-beep.wav
+# enabled = true
+# path = ""                        # empty = up-beep.wav
+# volume = 1.0                     # 0.0–1.0
 
 [audio.sounds.stop]                # LISTENING → OFF
-enabled = true
-# path = ""                        # down-beep.wav
+# enabled = true
+# path = ""                        # empty = down-beep.wav
+# volume = 1.0
 
 [audio.sounds.transcribing]        # LISTENING → TRANSCRIBING (typewriter loop)
-enabled = true
-# path = ""                        # typewriter.wav
+# enabled = true
+# path = ""                        # empty = typewriter.wav
+# volume = 1.0                     # reduce to 0.3–0.5 for background effect
 
 [audio.sounds.ready]               # TRANSCRIBING → LISTENING (carriage return)
-enabled = true
-# path = ""                        # ready.wav
+# enabled = true
+# path = ""                        # empty = ready.wav
+# volume = 1.0
 
-[audio.sounds.sent]                # Text sent
-enabled = true
-# path = ""                        # up-beep.wav
+[audio.sounds.sent]                # Text sent to agent
+# enabled = true
+# path = ""                        # empty = up-beep.wav
+# volume = 1.0
 
 [audio.sounds.agent_announce]      # TTS announces agent name on switch
-enabled = true
+# enabled = true
 """
 
 _SUBMIT_FILTER_HEADER = """\
