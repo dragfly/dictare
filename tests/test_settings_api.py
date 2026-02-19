@@ -154,19 +154,18 @@ class TestTomlSectionGet:
         assert "claude" in data["content"]
 
     def test_agent_types_returns_template_when_absent(self, client, tmp_path):
-        """Fetch returns the comment-only template when the section is not in the file."""
+        """Fetch returns the default preset template when the section is not in the file."""
         config_file = tmp_path / "config.toml"
         config_file.write_text("")  # no agent_types section
         with patch("voxtype.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
         content = r.json()["content"]
-        # Template is comment-only
-        assert "#" in content
-        assert all(
-            line.startswith("#") or not line.strip()
-            for line in content.splitlines()
-        )
+        # Template includes pre-filled presets
+        assert "[agent_types]" in content
+        assert "sonnet" in content
+        assert "opus" in content
+        assert "chatgpt" in content
 
     def test_shortcuts_returns_content(self, client):
         r = client.get("/settings/toml-section/keyboard.shortcuts")

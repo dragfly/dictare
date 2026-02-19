@@ -92,7 +92,8 @@ class TestLoopReenqueue:
             mock_q.put.assert_called_once()
             args = mock_q.put.call_args[0][0]
             assert args[0] == "__loop_chunk_0__"
-            assert callable(args[1])
+            assert args[1] == 1.0  # volume (baked into chunk data)
+            assert callable(args[2])
 
     def test_enqueue_next_does_nothing_when_stopped(self):
         import voxtype.audio.beep as beep
