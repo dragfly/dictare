@@ -85,7 +85,7 @@ class TestEnginePersistState:
         config.stt.translate = False
         config.audio = MagicMock()
         config.audio.silence_ms = 1200
-        config.audio.sample_rate = 16000
+        config.audio.advanced.sample_rate = 16000
         config.audio.headphones_mode = True
         config.output = MagicMock()
         config.output.mode = "keyboard"
@@ -181,7 +181,7 @@ class TestRegisterAgentPreferred:
         config.stt.translate = False
         config.audio = MagicMock()
         config.audio.silence_ms = 1200
-        config.audio.sample_rate = 16000
+        config.audio.advanced.sample_rate = 16000
         config.audio.headphones_mode = True
         config.output = MagicMock()
         config.output.mode = "agents"

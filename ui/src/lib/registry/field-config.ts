@@ -1,23 +1,10 @@
 export type PresetOption = string | { value: string; label: string };
 
 /** Fields rendered as read-only 'Edit in config file' */
-export const COMPLEX_KEYS = new Set(["agent_types", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
+export const COMPLEX_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
 
 /** Fields rendered as TOML textarea with syntax highlighting */
-export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
-
-/**
- * Fields hidden from the form UI — accessible only via the TOML editor.
- * These are advanced / fine-tuning values that rarely need changing.
- */
-export const HIDDEN_FORM_KEYS = new Set([
-  "audio.sample_rate",
-  "audio.channels",
-  "audio.device",
-  "audio.pre_buffer_ms",
-  "audio.min_speech_ms",
-  "audio.transcribing_sound_min_ms",
-]);
+export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
 
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
@@ -28,12 +15,7 @@ export const FIELD_PRESETS: Record<string, PresetOption[]> = {
 
 /** Input width hints: narrow | medium | normal */
 export const SIZE_HINTS: Record<string, string> = {
-  "audio.channels": "narrow",
-  "audio.device": "normal",
   "audio.max_duration": "narrow",
-  "audio.min_speech_ms": "narrow",
-  "audio.pre_buffer_ms": "narrow",
-  "audio.sample_rate": "narrow",
   "audio.silence_ms": "narrow",
   "client.url": "normal",
   "daemon.idle_timeout": "narrow",

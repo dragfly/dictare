@@ -39,12 +39,29 @@ def _default_sounds() -> dict[str, SoundConfig]:
     }
 
 
-class AudioConfig(BaseModel):
-    """Audio capture configuration."""
+class AudioAdvancedConfig(BaseModel):
+    """Low-level audio tuning parameters (rarely need changing)."""
 
     sample_rate: int = Field(default=16000, description="Sample rate in Hz")
     channels: int = Field(default=1, description="Number of audio channels")
     device: str | None = Field(default=None, description="Audio device name (None = default)")
+    pre_buffer_ms: int = Field(
+        default=640,
+        description="Audio pre-buffer in milliseconds (captures audio before VAD triggers)",
+    )
+    min_speech_ms: int = Field(
+        default=150,
+        description="Minimum speech duration in milliseconds before VAD triggers",
+    )
+    transcribing_sound_min_ms: int = Field(
+        default=8000,
+        description="Minimum audio duration (ms) before the transcribing sound plays. Short clips skip it.",
+    )
+
+
+class AudioConfig(BaseModel):
+    """Audio capture configuration."""
+
     max_duration: int = Field(default=60, description="Max recording duration in seconds")
     audio_feedback: bool = Field(
         default=True,
@@ -58,17 +75,9 @@ class AudioConfig(BaseModel):
         default=False,
         description="Set to true when using headphones (TTS won't pause listening)",
     )
-    pre_buffer_ms: int = Field(
-        default=640,
-        description="Audio pre-buffer in milliseconds (captures audio before VAD triggers)",
-    )
-    min_speech_ms: int = Field(
-        default=150,
-        description="Minimum speech duration in milliseconds before VAD triggers",
-    )
-    transcribing_sound_min_ms: int = Field(
-        default=8000,
-        description="Minimum audio duration (ms) before the transcribing sound plays. Short clips skip it.",
+    advanced: AudioAdvancedConfig = Field(
+        default_factory=AudioAdvancedConfig,
+        description="Low-level audio tuning (sample rate, channels, device, buffers)",
     )
     sounds: dict[str, SoundConfig] = Field(
         default_factory=_default_sounds,
@@ -687,13 +696,15 @@ def create_default_config() -> Path:
 # verbose = false
 
 [audio]
-# sample_rate = 16000
-# channels = 1
-# device = ""                     # Audio device name (empty = system default)
 # max_duration = 60               # Max recording duration (seconds)
 # audio_feedback = true           # Master switch for all audio feedback
 # silence_ms = 1200               # VAD silence to end speech (ms)
 # headphones_mode = false         # TTS won't pause listening when true
+
+# [audio.advanced]                # Low-level tuning — edit via Settings > Advanced Audio
+# sample_rate = 16000
+# channels = 1
+# device = ""                     # Audio device name (empty = system default)
 # pre_buffer_ms = 640             # Audio captured before VAD triggers
 # min_speech_ms = 150             # Min speech duration before VAD activates
 # transcribing_sound_min_ms = 8000  # Min audio length (ms) to trigger typewriter sound

@@ -58,7 +58,7 @@ class MockConfig:
         # Audio config
         self.audio = MagicMock()
         self.audio.silence_ms = 1200
-        self.audio.sample_rate = 16000
+        self.audio.advanced.sample_rate = 16000
         self.audio.max_duration = 30
         self.audio.audio_feedback = False
         self.audio.headphones_mode = True

@@ -126,7 +126,7 @@ class AppController:
                             audio_ms = float(trigger.split(":", 1)[1])
                         except ValueError:
                             pass
-                    if audio_ms >= config.audio.transcribing_sound_min_ms:
+                    if audio_ms >= config.audio.advanced.transcribing_sound_min_ms:
                         enabled, path = get_sound_for_event(config.audio, "transcribing")
                         if enabled:
                             start_loop(path)

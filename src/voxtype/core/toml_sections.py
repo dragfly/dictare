@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 SUPPORTED_SECTIONS = frozenset([
     "agent_types",
     "keyboard.shortcuts",
+    "audio.advanced",
     "audio.sounds",
     "pipeline.submit_filter",
     "pipeline.agent_filter",
@@ -78,6 +79,18 @@ _SHORTCUTS_HEADER = """\
 # command = "switch-mode"
 """
 
+_AUDIO_ADVANCED_HEADER = """\
+# Advanced audio settings — low-level tuning, rarely need changing
+#
+# [audio.advanced]
+# sample_rate = 16000               # Sample rate in Hz (Whisper requires 16000)
+# channels = 1                      # Number of audio channels
+# device = ""                       # Audio device name (empty = system default)
+# pre_buffer_ms = 640               # Audio captured before VAD triggers (ms)
+# min_speech_ms = 150               # Min speech duration before VAD activates (ms)
+# transcribing_sound_min_ms = 8000  # Min audio length (ms) to trigger typewriter sound
+"""
+
 _SOUNDS_HEADER = """\
 # Audio sound effects — played at key events
 # Set enabled = false to silence a sound.
@@ -112,6 +125,7 @@ _AGENT_FILTER_HEADER = """\
 _SECTION_HEADERS: dict[str, str] = {
     "agent_types": _AGENT_TYPES_HEADER,
     "keyboard.shortcuts": _SHORTCUTS_HEADER,
+    "audio.advanced": _AUDIO_ADVANCED_HEADER,
     "audio.sounds": _SOUNDS_HEADER,
     "pipeline.submit_filter": _SUBMIT_FILTER_HEADER,
     "pipeline.agent_filter": _AGENT_FILTER_HEADER,
@@ -194,6 +208,10 @@ def _extract_section_lines(text: str, section: str) -> str | None:
         ),
         "keyboard.shortcuts": (
             ("[[keyboard.shortcuts",),
+            frozenset(),
+        ),
+        "audio.advanced": (
+            ("[audio.advanced",),
             frozenset(),
         ),
         "audio.sounds": (
@@ -346,6 +364,13 @@ def _validate_section(section: str, content: str) -> None:
         keyboard = doc.get("keyboard") or {}
         for s in list(keyboard.get("shortcuts", [])):
             _Shortcut.model_validate(dict(s))
+
+    elif section == "audio.advanced":
+        from voxtype.config import AudioAdvancedConfig
+
+        audio = doc.get("audio") or {}
+        raw = audio.get("advanced") or {}
+        AudioAdvancedConfig.model_validate(dict(raw))
 
     elif section == "audio.sounds":
         from voxtype.config import SoundConfig
