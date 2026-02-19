@@ -73,8 +73,8 @@ class STTService(BaseService):
 
             self._engine.load_model(
                 target_size,
-                device=self.config.stt.device,
-                compute_type=self.config.stt.compute_type,
+                device=self.config.stt.advanced.device,
+                compute_type=self.config.stt.advanced.compute_type,
                 verbose=self.config.verbose,
                 headless=headless,
             )
@@ -108,12 +108,12 @@ class STTService(BaseService):
             Transcribed (or translated) text.
         """
         lang = language if language is not None else self.config.stt.language
-        hw = hotwords if hotwords is not None else (self.config.stt.hotwords or None)
-        beam = beam_size if beam_size is not None else self.config.stt.beam_size
+        hw = hotwords if hotwords is not None else (self.config.stt.advanced.hotwords or None)
+        beam = beam_size if beam_size is not None else self.config.stt.advanced.beam_size
         max_rep = (
             max_repetitions
             if max_repetitions is not None
-            else self.config.stt.max_repetitions
+            else self.config.stt.advanced.max_repetitions
         )
 
         engine = self._ensure_engine(model_size)

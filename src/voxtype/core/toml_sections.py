@@ -24,6 +24,7 @@ SUPPORTED_SECTIONS = frozenset([
     "keyboard.shortcuts",
     "audio.advanced",
     "audio.sounds",
+    "stt.advanced",
     "pipeline.submit_filter",
     "pipeline.agent_filter",
 ])
@@ -90,6 +91,17 @@ _AUDIO_ADVANCED_HEADER = """\
 # transcribing_sound_min_ms = 8000  # Min audio length (ms) to trigger typewriter sound
 """
 
+_STT_ADVANCED_HEADER = """\
+# Advanced STT settings — low-level tuning, rarely need changing
+#
+# [stt.advanced]
+# device = "auto"                # auto, cpu, cuda, mlx
+# compute_type = "int8"         # int8 (fastest), float16, float32 (most accurate)
+# beam_size = 5                 # Higher = slower but more accurate
+# hotwords = ""                 # Boost recognition: "voxtype,joshua" (turbo model only)
+# max_repetitions = 5           # Anti-hallucination: max consecutive repeats
+"""
+
 _SOUNDS_HEADER = """\
 # Audio sound effects — played at key events
 # Set enabled = false to silence a sound.
@@ -126,6 +138,7 @@ _SECTION_HEADERS: dict[str, str] = {
     "keyboard.shortcuts": _SHORTCUTS_HEADER,
     "audio.advanced": _AUDIO_ADVANCED_HEADER,
     "audio.sounds": _SOUNDS_HEADER,
+    "stt.advanced": _STT_ADVANCED_HEADER,
     "pipeline.submit_filter": _SUBMIT_FILTER_HEADER,
     "pipeline.agent_filter": _AGENT_FILTER_HEADER,
 }
@@ -194,43 +207,24 @@ def _extract_section_lines(text: str, section: str) -> str | None:
     """Scan TOML text line by line and return lines owned by ``section``.
 
     Owned lines:
-    - Top-level keys belonging to the section (e.g. ``default_agent_type``).
     - All ``[section.*]`` / ``[[section.*]]`` headers and their content.
     - Comment and blank lines immediately preceding an owned header (flushed
       when the header is found; discarded when a non-owned header appears).
     """
-    # (owned_header_prefixes, owned_toplevel_keys)
-    owned_map: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
-        "agent_types": (
-            ("[agent_types",),
-            frozenset(),
-        ),
-        "keyboard.shortcuts": (
-            ("[[keyboard.shortcuts",),
-            frozenset(),
-        ),
-        "audio.advanced": (
-            ("[audio.advanced",),
-            frozenset(),
-        ),
-        "audio.sounds": (
-            ("[audio.sounds",),
-            frozenset(),
-        ),
-        "pipeline.submit_filter": (
-            ("[pipeline.submit_filter",),
-            frozenset(),
-        ),
-        "pipeline.agent_filter": (
-            ("[pipeline.agent_filter",),
-            frozenset(),
-        ),
+    owned_map: dict[str, tuple[str, ...]] = {
+        "agent_types": ("[agent_types",),
+        "keyboard.shortcuts": ("[[keyboard.shortcuts",),
+        "audio.advanced": ("[audio.advanced",),
+        "audio.sounds": ("[audio.sounds",),
+        "stt.advanced": ("[stt.advanced",),
+        "pipeline.submit_filter": ("[pipeline.submit_filter",),
+        "pipeline.agent_filter": ("[pipeline.agent_filter",),
     }
 
     if section not in owned_map:
         return None
 
-    owned_prefixes, owned_toplevel = owned_map[section]
+    owned_prefixes = owned_map[section]
     result: list[str] = []
     has_content = False
     in_target = False
@@ -255,15 +249,6 @@ def _extract_section_lines(text: str, section: str) -> str | None:
 
         elif in_target:
             result.append(line)
-
-        elif owned_toplevel and stripped and any(
-            stripped.startswith(k) for k in owned_toplevel
-        ):
-            # Top-level owned key (e.g. default_agent_type) outside any section header
-            result.extend(comment_buf)
-            comment_buf = []
-            result.append(line)
-            has_content = True
 
         elif not stripped or stripped.startswith("#"):
             # Comment or blank — may precede an owned section header
@@ -292,37 +277,20 @@ def _strip_section_lines(text: str, section: str) -> str:
     Comment/blank lines that immediately precede an owned header are removed
     together with it, so they never accumulate on repeated saves.
     """
-    owned_map: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
-        "agent_types": (
-            ("[agent_types",),
-            frozenset(),
-        ),
-        "keyboard.shortcuts": (
-            ("[[keyboard.shortcuts",),
-            frozenset(),
-        ),
-        "audio.advanced": (
-            ("[audio.advanced",),
-            frozenset(),
-        ),
-        "audio.sounds": (
-            ("[audio.sounds",),
-            frozenset(),
-        ),
-        "pipeline.submit_filter": (
-            ("[pipeline.submit_filter",),
-            frozenset(),
-        ),
-        "pipeline.agent_filter": (
-            ("[pipeline.agent_filter",),
-            frozenset(),
-        ),
+    owned_map: dict[str, tuple[str, ...]] = {
+        "agent_types": ("[agent_types",),
+        "keyboard.shortcuts": ("[[keyboard.shortcuts",),
+        "audio.advanced": ("[audio.advanced",),
+        "audio.sounds": ("[audio.sounds",),
+        "stt.advanced": ("[stt.advanced",),
+        "pipeline.submit_filter": ("[pipeline.submit_filter",),
+        "pipeline.agent_filter": ("[pipeline.agent_filter",),
     }
 
     if section not in owned_map:
         return text
 
-    owned_prefixes, owned_toplevel = owned_map[section]
+    owned_prefixes = owned_map[section]
     result: list[str] = []
     in_target = False
     comment_buf: list[str] = []  # pending comment/blank lines
@@ -345,12 +313,6 @@ def _strip_section_lines(text: str, section: str) -> str:
 
         elif in_target:
             pass  # skip owned content
-
-        elif owned_toplevel and stripped and any(
-            stripped.startswith(k) for k in owned_toplevel
-        ):
-            # Top-level owned key — discard it and its preceding comments
-            comment_buf = []
 
         elif not stripped or stripped.startswith("#"):
             # Buffer — may precede an owned header
@@ -432,6 +394,13 @@ def _validate_section(section: str, content: str) -> None:
         audio = doc.get("audio") or {}
         raw = audio.get("advanced") or {}
         AudioAdvancedConfig.model_validate(dict(raw))
+
+    elif section == "stt.advanced":
+        from voxtype.config import STTAdvancedConfig
+
+        stt = doc.get("stt") or {}
+        raw = stt.get("advanced") or {}
+        STTAdvancedConfig.model_validate(dict(raw))
 
     elif section == "audio.sounds":
         from voxtype.config import SoundConfig

@@ -85,6 +85,31 @@ class AudioConfig(BaseModel):
     )
 
 
+class STTAdvancedConfig(BaseModel):
+    """Low-level STT tuning parameters (rarely need changing)."""
+
+    device: Literal["auto", "cpu", "cuda", "mlx"] = Field(
+        default="auto",
+        description="Device to use — auto detects best available (cuda, mlx, or cpu)",
+    )
+    compute_type: Literal["int8", "float16", "float32"] = Field(
+        default="int8",
+        description="Compute precision for faster-whisper (int8 = fastest, float32 = most accurate)",
+    )
+    beam_size: int = Field(
+        default=5,
+        description="Beam width for decoding (higher = slower but more accurate)",
+    )
+    hotwords: str = Field(
+        default="",
+        description="Comma-separated words to boost recognition (e.g., 'voxtype,joshua')",
+    )
+    max_repetitions: int = Field(
+        default=5,
+        description="Max consecutive word repetitions before filtering (anti-hallucination)",
+    )
+
+
 class STTConfig(BaseModel):
     """Speech-to-text configuration."""
 
@@ -96,30 +121,17 @@ class STTConfig(BaseModel):
         default="auto",
         description="Language code or 'auto' for auto-detection",
     )
-    compute_type: Literal["int8", "float16", "float32"] = Field(
-        default="int8",
-        description="Compute type for faster-whisper",
+    translate: bool = Field(
+        default=False,
+        description="Translate to English (Whisper task=translate). Any input language → English output.",
     )
-    device: Literal["auto", "cpu", "cuda", "mlx"] = Field(
-        default="auto",
-        description="Device to use - auto detects best available",
-    )
-    beam_size: int = Field(default=5, description="Beam size for decoding")
     hw_accel: bool = Field(
         default=True,
         description="Enable hardware acceleration (CUDA on Linux, MLX on macOS)",
     )
-    hotwords: str = Field(
-        default="",
-        description="Comma-separated words to boost recognition (e.g., 'voxtype,joshua')",
-    )
-    max_repetitions: int = Field(
-        default=5,
-        description="Max consecutive word repetitions before filtering (anti-hallucination)",
-    )
-    translate: bool = Field(
-        default=False,
-        description="Translate to English (Whisper task=translate). Any input language → English output.",
+    advanced: STTAdvancedConfig = Field(
+        default_factory=STTAdvancedConfig,
+        description="Low-level STT tuning (device, compute type, beam size, hotwords)",
     )
 
 

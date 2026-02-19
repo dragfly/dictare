@@ -30,9 +30,9 @@ class TestConfigDefaults:
         config = STTConfig()
         assert config.model == "large-v3-turbo"
         assert config.language == "auto"
-        assert config.device == "auto"
-        assert config.compute_type == "int8"
-        assert config.beam_size == 5
+        assert config.advanced.device == "auto"
+        assert config.advanced.compute_type == "int8"
+        assert config.advanced.beam_size == 5
 
     def test_hotkey_config_defaults(self) -> None:
         """Test HotkeyConfig has correct defaults."""
@@ -97,7 +97,7 @@ language = "en"
             assert config.stt.model == "base"
             assert config.stt.language == "en"
             # Other values should be defaults
-            assert config.stt.device == "auto"
+            assert config.stt.advanced.device == "auto"
             assert config.audio.advanced.sample_rate == 16000
         finally:
             temp_path.unlink()

@@ -220,8 +220,8 @@ def _run_verbose_mode(
         return {"done": "green", "loading": "cyan", "error": "red"}.get(status, "dim")
 
     console.print(f"[dim]Engine starting (verbose mode) — {base_url}[/]")
-    console.print(f"[dim]Device: {config.stt.device}, Model: {config.stt.model}, "
-                  f"Compute: {config.stt.compute_type}[/]")
+    console.print(f"[dim]Device: {config.stt.advanced.device}, Model: {config.stt.model}, "
+                  f"Compute: {config.stt.advanced.compute_type}[/]")
 
     def signal_handler(signum: int, frame: Any) -> None:
         nonlocal shutdown_attempted

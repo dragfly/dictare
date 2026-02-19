@@ -18,21 +18,21 @@ class TestAutoDetectAcceleration:
     def _make_config(self, device: str = "auto") -> Config:
         """Create a Config with stt.device set."""
         config = Config()
-        config.stt.device = device
+        config.stt.advanced.device = device
         return config
 
     def test_cpu_only_forces_cpu(self) -> None:
         """cpu_only=True forces CPU regardless of available hardware."""
         config = self._make_config()
         auto_detect_acceleration(config, cpu_only=True)
-        assert config.stt.device == "cpu"
-        assert config.stt.compute_type == "int8"
+        assert config.stt.advanced.device == "cpu"
+        assert config.stt.advanced.compute_type == "int8"
 
     def test_skips_detection_when_device_not_auto(self) -> None:
         """Does nothing when device is already set (not 'auto')."""
         config = self._make_config(device="cuda")
         auto_detect_acceleration(config)
-        assert config.stt.device == "cuda"
+        assert config.stt.advanced.device == "cuda"
 
     @patch("voxtype.utils.hardware.is_virtualized_macos", return_value=False)
     @patch("voxtype.utils.hardware.is_mlx_available", return_value=True)
@@ -40,7 +40,7 @@ class TestAutoDetectAcceleration:
         """When MLX is available, device must be set to 'mlx' (not left as 'cpu')."""
         config = self._make_config()
         auto_detect_acceleration(config)
-        assert config.stt.device == "mlx"
+        assert config.stt.advanced.device == "mlx"
 
     @patch("voxtype.utils.hardware.is_virtualized_macos", return_value=False)
     @patch("voxtype.utils.hardware.is_mlx_available", return_value=False)
@@ -50,8 +50,8 @@ class TestAutoDetectAcceleration:
         """When CUDA is available, device='cuda' and compute_type='float16'."""
         config = self._make_config()
         auto_detect_acceleration(config)
-        assert config.stt.device == "cuda"
-        assert config.stt.compute_type == "float16"
+        assert config.stt.advanced.device == "cuda"
+        assert config.stt.advanced.compute_type == "float16"
 
     @patch("voxtype.utils.hardware.is_virtualized_macos", return_value=False)
     @patch("voxtype.utils.hardware.is_mlx_available", return_value=False)
@@ -60,14 +60,14 @@ class TestAutoDetectAcceleration:
         """When nothing is available, falls back to CPU."""
         config = self._make_config()
         auto_detect_acceleration(config)
-        assert config.stt.device == "cpu"
+        assert config.stt.advanced.device == "cpu"
 
     @patch("voxtype.utils.hardware.is_virtualized_macos", return_value=True)
     def test_virtualized_macos_forces_cpu(self, _mock_vm) -> None:
         """Virtualized macOS disables hardware acceleration."""
         config = self._make_config()
         auto_detect_acceleration(config)
-        assert config.stt.device == "cpu"
+        assert config.stt.advanced.device == "cpu"
         assert config.stt.hw_accel is False
 
 

@@ -133,8 +133,8 @@ class OneShotTranscriber:
             result = self.stt_engine.transcribe(
                 self._audio_data,
                 language=self.config.stt.language,
-                beam_size=self.config.stt.beam_size,
-                max_repetitions=self.config.stt.max_repetitions,
+                beam_size=self.config.stt.advanced.beam_size,
+                max_repetitions=self.config.stt.advanced.max_repetitions,
             )
 
             return result.text.strip()

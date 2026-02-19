@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b145] - 2026-02-19
+
+### Changed (breaking)
+
+- **`stt.advanced` sub-model** — low-level STT fields moved from `[stt]` into
+  `[stt.advanced]`: `device`, `compute_type`, `beam_size`, `hotwords`,
+  `max_repetitions`. User-facing fields remain in `[stt]`: `model`, `language`,
+  `translate`, `hw_accel`. Edit advanced settings via Settings > STT Advanced.
+- **`owned_toplevel` removed from line scanners** — `_extract_section_lines`
+  and `_strip_section_lines` are now simpler: they only track section headers,
+  no special-casing for top-level floating keys.
+- Config file cleaned: `pre_buffer_ms = 1000` moved to `[audio.advanced]`,
+  `[agent_types]` with `default` key added, stale duplicate comment blocks
+  removed.
+
 ## [0.1.0b144] - 2026-02-19
 
 ### Changed (breaking)

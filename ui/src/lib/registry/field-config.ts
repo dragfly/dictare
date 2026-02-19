@@ -1,10 +1,10 @@
 export type PresetOption = string | { value: string; label: string };
 
 /** Fields rendered as read-only 'Edit in config file' */
-export const COMPLEX_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
+export const COMPLEX_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter", "stt.advanced"]);
 
 /** Fields rendered as TOML textarea with syntax highlighting */
-export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter"]);
+export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter", "stt.advanced"]);
 
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
@@ -29,13 +29,10 @@ export const SIZE_HINTS: Record<string, string> = {
   "server.host": "medium",
   "server.port": "narrow",
   "stats.typing_wpm": "narrow",
-  "stt.beam_size": "narrow",
-  "stt.hotwords": "normal",
-  "stt.max_repetitions": "narrow",
   "tts.speed": "narrow",
   "tts.voice": "normal",
 };
 
 /** Fields with enum/Literal types (fixed options from schema) */
-export const ENUM_FIELDS = new Set(["output.mode", "stt.compute_type", "stt.device", "tts.engine"]);
+export const ENUM_FIELDS = new Set(["output.mode", "tts.engine"]);
 

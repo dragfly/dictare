@@ -203,19 +203,19 @@ def auto_detect_acceleration(config, *, cpu_only: bool = False, console=None) ->
     install instructions.
 
     Args:
-        config: Config object to update (stt.device, stt.compute_type, stt.hw_accel).
+        config: Config object to update (stt.advanced.device, stt.advanced.compute_type, stt.hw_accel).
         cpu_only: Force CPU mode, skip all detection.
         console: Optional Rich console for user-facing messages.
     """
     if cpu_only:
-        config.stt.device = "cpu"
-        config.stt.compute_type = "int8"
+        config.stt.advanced.device = "cpu"
+        config.stt.advanced.compute_type = "int8"
         return
 
     # macOS VM check — MLX doesn't work in VMs
     if is_virtualized_macos():
-        config.stt.device = "cpu"
-        config.stt.compute_type = "int8"
+        config.stt.advanced.device = "cpu"
+        config.stt.advanced.compute_type = "int8"
         config.stt.hw_accel = False
         if console:
             console.print("[yellow]⚠ Virtualized macOS detected - hardware acceleration disabled[/]")
@@ -223,16 +223,16 @@ def auto_detect_acceleration(config, *, cpu_only: bool = False, console=None) ->
         return
 
     # Only auto-detect if device is "auto"
-    if config.stt.device != "auto":
+    if config.stt.advanced.device != "auto":
         return
 
-    config.stt.device = "cpu"
+    config.stt.advanced.device = "cpu"
 
     if is_mlx_available():
-        config.stt.device = "mlx"
+        config.stt.advanced.device = "mlx"
     elif is_cuda_available():
-        config.stt.device = "cuda"
-        config.stt.compute_type = "float16"
+        config.stt.advanced.device = "cuda"
+        config.stt.advanced.compute_type = "float16"
         setup_cuda_library_path()
     elif sys.platform == "linux":
         # GPU might be present but CUDA Python libs not configured
