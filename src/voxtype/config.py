@@ -62,6 +62,10 @@ class AudioConfig(BaseModel):
         default=150,
         description="Minimum speech duration in milliseconds before VAD triggers",
     )
+    transcribing_sound_min_ms: int = Field(
+        default=8000,
+        description="Minimum audio duration (ms) before the transcribing sound plays. Short clips skip it.",
+    )
     sounds: dict[str, SoundConfig] = Field(
         default_factory=_default_sounds,
         description="Per-event sound configuration (start, stop, transcribing, ready, sent, agent_announce)",
@@ -73,10 +77,6 @@ class STTConfig(BaseModel):
     model: str = Field(
         default="large-v3-turbo",
         description="Whisper model (tiny/base/small/medium/large-v3/large-v3-turbo)",
-    )
-    realtime_model: str = Field(
-        default="tiny",
-        description="Whisper model for realtime partial transcriptions (tiny recommended for low latency)",
     )
     language: str = Field(
         default="auto",
@@ -665,6 +665,7 @@ def create_default_config() -> Path:
 # headphones_mode = false         # TTS won't pause listening when true
 # pre_buffer_ms = 640             # Audio captured before VAD triggers
 # min_speech_ms = 150             # Min speech duration before VAD activates
+# transcribing_sound_min_ms = 8000  # Min audio length (ms) to trigger typewriter sound
 
 # Per-event sound config — disable individual sounds or set custom paths
 # [audio.sounds.start]            # OFF → LISTENING beep
@@ -688,7 +689,6 @@ def create_default_config() -> Path:
 
 [stt]
 # model = "large-v3-turbo"        # tiny, base, small, medium, large-v3, large-v3-turbo
-# realtime_model = "tiny"         # Fast model for partial transcriptions
 # language = "auto"               # Auto-detect, or "en", "it", "de", "fr", etc.
 # compute_type = "int8"           # int8, float16, float32
 # device = "auto"                 # auto, cpu, cuda
