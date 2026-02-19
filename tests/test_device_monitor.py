@@ -258,13 +258,13 @@ class TestAudioManagerDeviceMonitor:
         from voxtype.core.audio_manager import AudioManager
 
         config = MagicMock()
-        config.sample_rate = 16000
-        config.channels = 1
-        config.device = None
+        config.advanced.sample_rate = 16000
+        config.advanced.channels = 1
+        config.advanced.device = None
+        config.advanced.pre_buffer_ms = 640
+        config.advanced.min_speech_ms = 100
         config.silence_ms = 1200
-        config.min_speech_ms = 100
         config.max_duration = 60
-        config.pre_buffer_ms = 640
 
         manager = AudioManager(config=config)
         mock_audio = MagicMock(spec=AudioCapture)

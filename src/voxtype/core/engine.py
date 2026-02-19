@@ -580,7 +580,7 @@ class VoxtypeEngine:
         captured_agent = self._get_current_agent()
 
         if self._logger:
-            sample_rate = self._audio_manager.sample_rate if self._audio_manager else self.config.audio.sample_rate
+            sample_rate = self._audio_manager.sample_rate if self._audio_manager else self.config.audio.advanced.sample_rate
             duration_ms = len(audio_data) / sample_rate * 1000
             self._logger.log_vad_event("speech_end", duration_ms=duration_ms)
 
@@ -646,7 +646,7 @@ class VoxtypeEngine:
                     self._last_text = text
 
                     # Update session stats
-                    audio_duration = len(audio_data) / self.config.audio.sample_rate
+                    audio_duration = len(audio_data) / self.config.audio.advanced.sample_rate
                     self._stats_count += 1
                     self._stats_chars += len(text)
                     self._stats_words += len(text.split())

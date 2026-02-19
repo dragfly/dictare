@@ -19,9 +19,9 @@ class TestConfigDefaults:
     def test_audio_config_defaults(self) -> None:
         """Test AudioConfig has correct defaults."""
         config = AudioConfig()
-        assert config.sample_rate == 16000
-        assert config.channels == 1
-        assert config.device is None
+        assert config.advanced.sample_rate == 16000
+        assert config.advanced.channels == 1
+        assert config.advanced.device is None
         assert config.audio_feedback is True
 
     def test_stt_config_defaults(self) -> None:
@@ -64,7 +64,7 @@ class TestConfigLoading:
         """Test loading from nonexistent file returns defaults."""
         config = load_config(Path("/nonexistent/path/config.toml"))
         assert config is not None
-        assert config.audio.sample_rate == 16000
+        assert config.audio.advanced.sample_rate == 16000
 
     def test_load_empty_toml(self) -> None:
         """Test loading from empty TOML file returns defaults."""
@@ -96,7 +96,7 @@ language = "en"
             assert config.stt.language == "en"
             # Other values should be defaults
             assert config.stt.device == "auto"
-            assert config.audio.sample_rate == 16000
+            assert config.audio.advanced.sample_rate == 16000
         finally:
             temp_path.unlink()
 
