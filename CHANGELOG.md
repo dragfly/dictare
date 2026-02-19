@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b148] - 2026-02-19
+
+### Changed
+
+- **TOML editors are now accordions** — collapsed by default, lazy-loaded on
+  first open. Applies to all TOML sections (agent_types, audio.advanced,
+  audio.sounds, stt.advanced, keyboard.shortcuts, pipeline filters).
+- **Save/Reset disabled when not dirty** — buttons only enable when the editor
+  content differs from the last saved value; comparison on every keystroke.
+- **Hide `hotkey.device` from UI form** — field still works via config file
+  (Linux evdev power users), but no longer shown in the settings panel.
+
 ## [0.1.0b147] - 2026-02-19
 
 ### Added

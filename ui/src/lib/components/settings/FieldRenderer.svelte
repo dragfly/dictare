@@ -9,7 +9,7 @@
 	import TomlField from "./fields/TomlField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS } from "$lib/registry/field-config";
+	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS } from "$lib/registry/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -73,8 +73,8 @@
 	);
 </script>
 
-{#if isHiddenByParentToml}
-	<!-- hidden: child of a TOML-editable section -->
+{#if HIDDEN_FORM_FIELDS.has(field.key) || isHiddenByParentToml}
+	<!-- hidden: excluded from UI or child of a TOML-editable section -->
 {:else if isTomlEditable}
 	<!-- Full-width TOML editor — no inline label/control split -->
 	<div class="px-4">
