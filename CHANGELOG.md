@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b137] - 2026-02-19
+
+### Fixed
+
+- TOML editor (agent_types section): `continue_args` was silently stripped on save/reload.
+  Both `_serialize_agent_types` and `_apply_agent_types` now handle `continue_args`.
+- TOML editor: agent type names containing dots are now quoted in the serialized output
+  (`[agent_types."sonnet-4.6"]` instead of `[agent_types.sonnet-4.6]`).
+- Updated `_AGENT_TYPES_HEADER` comment to document `continue_args` syntax.
+
 ## [0.1.0b136] - 2026-02-19
 
 ### Added
