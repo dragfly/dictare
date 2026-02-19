@@ -277,42 +277,98 @@ def _extract_section_lines(text: str, section: str) -> str | None:
 # WYSIWYG write — remove owned keys, append user's literal text
 # ---------------------------------------------------------------------------
 
+def _strip_section_lines(text: str, section: str) -> str:
+    """Return the file text with all lines owned by ``section`` removed.
+
+    Symmetric inverse of ``_extract_section_lines``: the union of both outputs
+    reconstructs the original file (modulo trailing whitespace normalisation).
+    Comment/blank lines that immediately precede an owned header are removed
+    together with it, so they never accumulate on repeated saves.
+    """
+    owned_map: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
+        "agent_types": (
+            ("[agent_types", '["agent_types'),
+            frozenset({"default_agent_type"}),
+        ),
+        "keyboard.shortcuts": (
+            ("[[keyboard.shortcuts",),
+            frozenset(),
+        ),
+        "audio.advanced": (
+            ("[audio.advanced",),
+            frozenset(),
+        ),
+        "audio.sounds": (
+            ("[audio.sounds",),
+            frozenset(),
+        ),
+        "pipeline.submit_filter": (
+            ("[pipeline.submit_filter",),
+            frozenset(),
+        ),
+        "pipeline.agent_filter": (
+            ("[pipeline.agent_filter",),
+            frozenset(),
+        ),
+    }
+
+    if section not in owned_map:
+        return text
+
+    owned_prefixes, owned_toplevel = owned_map[section]
+    result: list[str] = []
+    in_target = False
+    comment_buf: list[str] = []  # pending comment/blank lines
+
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+
+        if stripped.startswith("["):
+            is_owned = any(stripped.startswith(p) for p in owned_prefixes)
+            if is_owned:
+                # Discard buffered comments — they belong to this owned header
+                comment_buf = []
+                in_target = True
+            else:
+                # Non-owned header: flush buffered comments, keep this line
+                result.extend(comment_buf)
+                comment_buf = []
+                result.append(line)
+                in_target = False
+
+        elif in_target:
+            pass  # skip owned content
+
+        elif owned_toplevel and stripped and any(
+            stripped.startswith(k) for k in owned_toplevel
+        ):
+            # Top-level owned key — discard it and its preceding comments
+            comment_buf = []
+
+        elif not stripped or stripped.startswith("#"):
+            # Buffer — may precede an owned header
+            comment_buf.append(line)
+
+        else:
+            # Regular non-owned content: flush buffer and keep
+            result.extend(comment_buf)
+            comment_buf = []
+            result.append(line)
+
+    # Flush any trailing comments/blanks that follow non-owned content
+    result.extend(comment_buf)
+
+    return "".join(result)
+
 def _write_section_raw(section: str, user_content: str, config_path: Path) -> None:
     """Remove the section's owned keys from the config, then append the user's text."""
-    import tomlkit
-
     if config_path.exists():
-        cfg_doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+        text = config_path.read_text(encoding="utf-8")
     else:
-        cfg_doc = tomlkit.document()
+        text = ""
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if section == "agent_types":
-        for key in ("agent_types", "default_agent_type"):
-            if key in cfg_doc:
-                del cfg_doc[key]
-
-    elif section == "keyboard.shortcuts":
-        if "keyboard" in cfg_doc:
-            kb = cfg_doc["keyboard"]
-            if "shortcuts" in kb:
-                del kb["shortcuts"]  # type: ignore[attr-defined]
-            if not dict(kb):
-                del cfg_doc["keyboard"]
-
-    else:
-        # Dotted path: audio.sounds, pipeline.submit_filter, pipeline.agent_filter
-        parts = section.split(".")
-        parent: object = cfg_doc
-        for part in parts[:-1]:
-            if not hasattr(parent, "__contains__") or part not in parent:  # type: ignore[operator]
-                parent = None
-                break
-            parent = parent[part]  # type: ignore[index]
-        if parent is not None and parts[-1] in parent:  # type: ignore[operator]
-            del parent[parts[-1]]  # type: ignore[attr-defined]
-
-    remaining = tomlkit.dumps(cfg_doc).rstrip("\n")
+    remaining = _strip_section_lines(text, section).rstrip("\n")
     user_text = user_content.strip()
     separator = "\n\n" if remaining.strip() else ""
     config_path.write_text(remaining + separator + user_text + "\n", encoding="utf-8")
