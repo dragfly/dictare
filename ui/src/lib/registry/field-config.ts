@@ -1,5 +1,8 @@
 export type PresetOption = string | { value: string; label: string };
 
+/** Fields hidden from the UI form (still configurable via config file) */
+export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device"]);
+
 /** Fields rendered as read-only 'Edit in config file' */
 export const COMPLEX_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter", "stt.advanced"]);
 
