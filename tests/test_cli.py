@@ -109,7 +109,7 @@ class TestAgentContinue:
     """Tests for --continue / -C flag on 'voxtype agent'."""
 
     def _make_config(self, continue_args: list[str] | None = None) -> object:
-        from voxtype.config import AgentTypeConfig, ClientConfig, Config
+        from voxtype.config import AgentTypeConfig, AgentTypesConfig, ClientConfig, Config
 
         at = AgentTypeConfig(
             command=["claude", "--model", "claude-sonnet-4-6"],
@@ -117,8 +117,7 @@ class TestAgentContinue:
         )
         cfg = Config()
         cfg = cfg.model_copy(update={
-            "agent_types": {"sonnet": at},
-            "default_agent_type": "sonnet",
+            "agent_types": AgentTypesConfig(default="sonnet", sonnet=at),
             "client": ClientConfig(url="http://127.0.0.1:8770", status_bar=False),
         })
         return cfg

@@ -141,9 +141,9 @@ def register(app: typer.Typer) -> None:
         if command_override:
             command = command_override
         else:
-            type_key = agent_type_name or config.default_agent_type
+            type_key = agent_type_name or config.agent_types.default
             if type_key is None:
-                console.print("[red]Error: no --type given and no default_agent_type set[/]")
+                console.print("[red]Error: no --type given and no agent_types.default set[/]")
                 console.print(f"[dim]  voxtype agent {agent_id} --type <type>[/]")
                 console.print(f"[dim]  voxtype agent {agent_id} -- <command> [args...][/]")
                 if config.agent_types:
