@@ -614,9 +614,15 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
             key = f"{section_name}.{field_name}"
             value = getattr(section_config, field_name)
             env_var = _key_to_env_var(key)
+            # Nested BaseModel sub-fields are exposed as "dict" so the UI
+            # renders them as TOML editors (e.g. audio.advanced).
+            if isinstance(value, BaseModel):
+                type_name = "dict"
+            else:
+                type_name = type(value).__name__ if value is not None else "str"
             result.append((
                 key,
-                type(value).__name__ if value is not None else "str",
+                type_name,
                 value,
                 field_info.description or "",
                 env_var,
