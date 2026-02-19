@@ -57,26 +57,28 @@ _AGENT_TYPES_HEADER = """\
 """
 
 _SHORTCUTS_HEADER = """\
-# Keyboard shortcuts — trigger voice commands with key combinations
+# Keyboard shortcuts — trigger commands with key combinations.
 # Each shortcut is a [[keyboard.shortcuts]] entry.
 #
 # Available commands:
-#   toggle-listening   — start/stop listening
-#   switch-mode        — toggle keyboard ↔ agent output mode
-#   repeat             — re-type the last transcription
-#   clear              — clear last transcription
-#   cancel             — cancel current action
-#   next-agent         — cycle to next agent
-#   prev-agent         — cycle to previous agent
+#   toggle-listening          — start/stop listening
+#   next-agent                — cycle to next agent
+#   prev-agent                — cycle to previous agent
+#   switch-to-agent           — switch to named agent  (requires: args = {name = "myproject"})
+#   switch-to-agent-index     — switch by position     (requires: args = {index = 1})
+#   repeat                    — resend last transcription (useful when agent misses input)
 #
-# Example:
 # [[keyboard.shortcuts]]
 # keys = "ctrl+shift+l"
 # command = "toggle-listening"
 #
 # [[keyboard.shortcuts]]
-# keys = "ctrl+shift+m"
-# command = "switch-mode"
+# keys = "ctrl+shift+n"
+# command = "next-agent"
+#
+# [[keyboard.shortcuts]]
+# keys = "ctrl+shift+r"
+# command = "repeat"
 """
 
 _AUDIO_ADVANCED_HEADER = """\

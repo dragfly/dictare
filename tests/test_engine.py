@@ -1404,3 +1404,34 @@ class TestSetOutputMode:
         # Second double-tap: should toggle back to agents
         engine._tap_detector._on_double_tap()
         assert engine.agent_mode is True
+
+class TestResendLast:
+    """Test resend_last() — repeat last transcription to current agent."""
+
+    def test_resend_last_sends_last_text(self) -> None:
+        """resend_last() calls _inject_text with the last transcribed text."""
+        from unittest.mock import patch
+
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine._last_text = "hello world"
+
+        with patch.object(engine, "_inject_text") as mock_inject:
+            result = engine.resend_last()
+
+        assert result is True
+        mock_inject.assert_called_once_with("hello world")
+
+    def test_resend_last_returns_false_when_nothing_sent(self) -> None:
+        """resend_last() returns False when no transcription exists yet."""
+        from unittest.mock import patch
+
+        config = MockConfig()
+        engine = VoxtypeEngine(config=config)
+        engine._last_text = ""
+
+        with patch.object(engine, "_inject_text") as mock_inject:
+            result = engine.resend_last()
+
+        assert result is False
+        mock_inject.assert_not_called()
