@@ -128,7 +128,9 @@ class AppController:
                     if audio_ms >= config.audio.advanced.transcribing_sound_min_ms:
                         enabled, path = get_sound_for_event(config.audio, "transcribing")
                         if enabled:
-                            start_loop(path)
+                            scfg = config.audio.sounds.get("transcribing")
+                            vol = scfg.volume if scfg is not None else 1.0
+                            start_loop(path, volume=vol)
                 elif new == AppState.LISTENING and old in (
                     AppState.TRANSCRIBING,
                     AppState.INJECTING,
@@ -138,7 +140,9 @@ class AppController:
                     if was_looping:
                         enabled, path = get_sound_for_event(config.audio, "ready")
                         if enabled:
-                            play_sound_file_async(path)
+                            scfg = config.audio.sounds.get("ready")
+                            vol = scfg.volume if scfg is not None else 1.0
+                            play_sound_file_async(path, volume=vol)
 
             def on_agent_change(self, agent_name: str, index: int) -> None:
                 import logging as _logging

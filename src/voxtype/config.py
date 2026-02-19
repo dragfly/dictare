@@ -23,6 +23,7 @@ class SoundConfig(BaseModel):
 
     enabled: bool = Field(default=True, description="Enable this sound")
     path: str | None = Field(default=None, description="Custom sound file path (None = bundled default)")
+    volume: float = Field(default=1.0, ge=0.0, le=1.0, description="Playback volume (0.0–1.0)")
 
 def _default_sounds() -> dict[str, SoundConfig]:
     """Default sound configurations for all audio feedback events."""
@@ -736,12 +737,15 @@ def create_default_config() -> Path:
 # [audio.sounds.start]            # OFF → LISTENING  (up-beep.wav)
 # enabled = true
 # path = ""                       # Empty = bundled default
+# volume = 1.0                    # 0.0–1.0
 # [audio.sounds.stop]             # LISTENING → OFF  (down-beep.wav)
 # enabled = true
 # [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING  (typewriter.wav)
 # enabled = true
-# [audio.sounds.ready]            # TRANSCRIBING → LISTENING  (ready.wav)
+# volume = 1.0                    # Reduce to 0.3–0.5 for background typewriter effect
+# [audio.sounds.ready]            # TRANSCRIBING → LISTENING  (carriage return)
 # enabled = true
+# volume = 1.0
 # [audio.sounds.sent]             # Text sent  (up-beep.wav)
 # enabled = true
 # [audio.sounds.agent_announce]   # TTS announces agent name on switch
@@ -850,37 +854,44 @@ def create_default_config() -> Path:
 #   voxtype agent <session-name> --type <type> --continue
 #
 # Multiple sessions can share the same type:
-#   voxtype agent frontend --type claude
-#   voxtype agent backend --type claude
+#   voxtype agent frontend --type sonnet
+#   voxtype agent backend --type sonnet
 #
 # continue_args: args inserted after argv[0] when --continue is passed.
 #   Claude Code uses -c; Codex uses --resume; Aider has no continue flag.
-#
-# IMPORTANT: names containing dots must be quoted in TOML:
-#   [agent_types."sonnet-4.6"]   ← correct (dot requires quotes)
-#   [agent_types.sonnet-4.6]     ← WRONG (parsed as nested tables)
-#
-# [agent_types]
-# default = "claude"       # optional: used when no --type is given
-#
-# [agent_types.claude]
-# command = ["claude"]
-# continue_args = ["-c"]
-# description = "Claude Code (default model)"
-#
-# [agent_types."sonnet-4.6"]
-# command = ["claude", "--model", "claude-sonnet-4-6"]
-# continue_args = ["-c"]
-# description = "Claude Sonnet 4.6"
-#
-# [agent_types."opus-4.6"]
-# command = ["claude", "--model", "claude-opus-4-6"]
-# continue_args = ["-c"]
-# description = "Claude Opus 4.6"
-#
-# [agent_types.aider]
-# command = ["aider", "--model", "claude-sonnet-4-5"]
-# description = "Aider with Claude Sonnet"
+
+[agent_types]
+default = "sonnet"
+
+[agent_types.sonnet]
+command = ["claude", "--model", "claude-sonnet-4-6", "--max-turns", "1000"]
+continue_args = ["-c"]
+description = "Claude Sonnet 4.6"
+
+[agent_types.sonnet-danger]
+command = ["claude", "--model", "claude-sonnet-4-6", "--dangerously-skip-permissions", "--max-turns", "1000"]
+continue_args = ["-c"]
+description = "Claude Sonnet 4.6 (auto-approve)"
+
+[agent_types.opus]
+command = ["claude", "--model", "claude-opus-4-6", "--max-turns", "1000"]
+continue_args = ["-c"]
+description = "Claude Opus 4.6"
+
+[agent_types.opus-danger]
+command = ["claude", "--model", "claude-opus-4-6", "--dangerously-skip-permissions", "--max-turns", "1000"]
+continue_args = ["-c"]
+description = "Claude Opus 4.6 (auto-approve)"
+
+[agent_types.chatgpt]
+command = ["codex"]
+continue_args = ["--resume"]
+description = "OpenAI Codex"
+
+[agent_types.chatgpt-danger]
+command = ["codex", "--approval-mode", "full-auto"]
+continue_args = ["--resume"]
+description = "OpenAI Codex (auto-approve)"
 """
 
     with open(config_path, "w") as f:

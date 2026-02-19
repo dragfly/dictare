@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b154] - 2026-02-19
+
+### Added
+- `SoundConfig.volume` (0.0–1.0): per-event playback volume control for audio feedback sounds
+- Agent type presets template: sonnet, sonnet-danger, opus, opus-danger, chatgpt, chatgpt-danger
+
+### Changed
+- `_AGENT_TYPES_HEADER` and `create_default_config()` ship with ready-to-use presets (previously comment-only examples)
+
 ## [0.1.0b153] - 2026-02-19
 
 ### Fixed
