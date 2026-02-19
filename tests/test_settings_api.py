@@ -139,20 +139,34 @@ class TestPostSettings:
 class TestTomlSectionGet:
     """GET /settings/toml-section/{section}"""
 
-    def test_agent_types_returns_content(self, client):
-        from voxtype.config import AgentTypeConfig, Config
-
-        config = Config(
-            default_agent_type="claude",
-            agent_types={"claude": AgentTypeConfig(command=["claude"])},
+    def test_agent_types_returns_content_from_file(self, client, tmp_path):
+        """Fetch returns the raw content from the config file (WYSIWYG)."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            '[agent_types.claude]\ncommand = ["claude"]\n'
         )
-        with patch("voxtype.config.load_config", return_value=config):
+        with patch("voxtype.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
         data = r.json()
         assert data["section"] == "agent_types"
         assert "agent_types" in data["content"]
         assert "claude" in data["content"]
+
+    def test_agent_types_returns_template_when_absent(self, client, tmp_path):
+        """Fetch returns the comment-only template when the section is not in the file."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")  # no agent_types section
+        with patch("voxtype.config.get_config_path", return_value=config_file):
+            r = client.get("/settings/toml-section/agent_types")
+        assert r.status_code == 200
+        content = r.json()["content"]
+        # Template is comment-only
+        assert "#" in content
+        assert all(
+            line.startswith("#") or not line.strip()
+            for line in content.splitlines()
+        )
 
     def test_shortcuts_returns_content(self, client):
         r = client.get("/settings/toml-section/keyboard.shortcuts")
@@ -165,10 +179,13 @@ class TestTomlSectionGet:
         r = client.get("/settings/toml-section/nonexistent")
         assert r.status_code == 404
 
-    def test_content_includes_comments(self, client):
-        r = client.get("/settings/toml-section/agent_types")
+    def test_content_includes_comments(self, client, tmp_path):
+        """Template header (when no section in file) contains comments."""
+        config_file = tmp_path / "nonexistent_config.toml"
+        with patch("voxtype.config.get_config_path", return_value=config_file):
+            r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
-        assert "#" in r.json()["content"]  # has comments/examples
+        assert "#" in r.json()["content"]
 
 
 class TestTomlSectionPost:
@@ -220,21 +237,32 @@ description = "Claude Sonnet"
         config = load_config(config_file)
         assert config.agent_types["sonnet"].continue_args == ["-c"]
 
-    def test_serialize_agent_types_includes_continue_args(self, client):
-        """GET agent_types section shows continue_args in the TOML output."""
-        from voxtype.config import AgentTypeConfig, Config
-
-        config = Config(
-            agent_types={"sonnet": AgentTypeConfig(
-                command=["claude", "--model", "claude-sonnet-4-6"],
-                continue_args=["-c"],
-            )},
+    def test_serialize_agent_types_includes_continue_args(self, client, tmp_path):
+        """GET agent_types returns continue_args from the raw config file."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            '[agent_types.sonnet]\n'
+            'command = ["claude", "--model", "claude-sonnet-4-6"]\n'
+            'continue_args = ["-c"]\n'
         )
-        with patch("voxtype.config.load_config", return_value=config):
+        with patch("voxtype.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
         assert "continue_args" in r.json()["content"]
         assert '"-c"' in r.json()["content"]
+
+    def test_fetch_preserves_user_comments(self, client, tmp_path):
+        """GET agent_types preserves comments the user added to the file."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(
+            "# my custom comment\n"
+            "[agent_types.sonnet]\n"
+            'command = ["claude"]\n'
+        )
+        with patch("voxtype.config.get_config_path", return_value=config_file):
+            r = client.get("/settings/toml-section/agent_types")
+        assert r.status_code == 200
+        assert "my custom comment" in r.json()["content"]
 
     def test_invalid_toml_returns_422(self, client):
         r = client.post(
