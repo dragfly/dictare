@@ -321,18 +321,7 @@ class DaemonConfig(BaseModel):
         from voxtype.utils.platform import get_socket_dir
 
         return str(get_socket_dir() / "daemon.sock")
-    preload_tts: bool = Field(
-        default=True,
-        description="Preload TTS engine on daemon start",
-    )
-    preload_stt: bool = Field(
-        default=False,
-        description="Preload STT engine on daemon start",
-    )
-    idle_timeout: int = Field(
-        default=0,
-        description="Shutdown daemon after N seconds of inactivity (0 = never)",
-    )
+
     restore_listening: bool = Field(
         default=False,
         description="Restore listening state on restart (false = always start idle)",
@@ -341,7 +330,7 @@ class DaemonConfig(BaseModel):
 class TTSConfig(BaseModel):
     """Text-to-speech configuration."""
 
-    engine: Literal["espeak", "say", "piper", "coqui", "qwen3", "outetts"] = Field(
+    engine: Literal["espeak", "say", "piper", "coqui", "outetts"] = Field(
         default="say" if sys.platform == "darwin" else "espeak",
         description="TTS engine: espeak, say (macOS), piper, coqui, outetts (MLX)",
     )
@@ -747,9 +736,6 @@ def create_default_config() -> Path:
 
 # [daemon]
 # socket_path = ""
-# preload_tts = true
-# preload_stt = false
-# idle_timeout = 0                # Auto-shutdown after N seconds (0 = never)
 
 [pipeline]
 # enabled = true

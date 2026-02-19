@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b139] - 2026-02-19
+
+### Removed
+
+- `qwen3` TTS engine: it was an LLM (Qwen3), not a TTS engine — deleted `tts/qwen3.py`,
+  removed from `TTSConfig.engine` Literal, `tts/__init__.py`, `install_info.py`, and `speak.py`.
+- Dead TTS phrase keys from `engine.py`: `transcription_mode`, `command_mode`, `voice` —
+  superseded by the pipeline architecture. Only `agent` phrase remains.
+- `daemon.preload_tts`, `daemon.preload_stt`, `daemon.idle_timeout` config fields: never
+  read anywhere in the codebase; removed from `DaemonConfig` and config template.
+- `src/voxtype/ui/__init__.py`: phantom package (0 bytes, no imports, no purpose).
+- Added `docs/notes/plugin-filter-llm-vision.md`: architecture vision for plugin/filter/LLM
+  integration (four model categories: STT, TTS, LLM, Translation).
+
 ## [0.1.0b138] - 2026-02-19
 
 ### Changed
