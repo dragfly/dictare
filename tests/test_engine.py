@@ -45,12 +45,12 @@ class MockConfig:
         self.stt = MagicMock()
         self.stt.hw_accel = False
         self.stt.model = "tiny"
-        self.stt.device = "cpu"
-        self.stt.compute_type = "int8"
+        self.stt.advanced.device = "cpu"
+        self.stt.advanced.compute_type = "int8"
         self.stt.language = "en"
-        self.stt.hotwords = None
-        self.stt.beam_size = 5
-        self.stt.max_repetitions = 3
+        self.stt.advanced.hotwords = ""
+        self.stt.advanced.beam_size = 5
+        self.stt.advanced.max_repetitions = 3
 
         # Audio config
         self.audio = MagicMock()
@@ -550,7 +550,7 @@ class TestHotwords:
     def test_get_hotwords_from_config(self) -> None:
         """Hotwords from config."""
         config = MockConfig()
-        config.stt.hotwords = "voxtype,hey claude"
+        config.stt.advanced.hotwords = "voxtype,hey claude"
         engine = VoxtypeEngine(config=config)
 
         result = engine._get_hotwords()
@@ -559,7 +559,7 @@ class TestHotwords:
     def test_get_hotwords_none(self) -> None:
         """No hotwords returns None."""
         config = MockConfig()
-        config.stt.hotwords = None
+        config.stt.advanced.hotwords = ""
         engine = VoxtypeEngine(config=config)
 
         result = engine._get_hotwords()
