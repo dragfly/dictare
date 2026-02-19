@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b138] - 2026-02-19
+
+### Changed
+
+- TOML editor: full WYSIWYG + validation redesign.
+  - **Fetch**: reads the raw section text from the config file verbatim (line-based
+    scanner). User comments, blank lines, and formatting are preserved exactly.
+    Falls back to a comment-only template when the section is absent from the file.
+  - **Save**: validates structure with Pydantic (fields, types), then writes the
+    user's literal text to the config file — the model is never used to regenerate
+    the stored text.
+  - Previous behaviour regenerated the TOML from the Pydantic model on every save,
+    discarding user comments and reformatting values.
+
 ## [0.1.0b137] - 2026-02-19
 
 ### Fixed
