@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b146] - 2026-02-19
+
+### Fixed
+
+- **audio.advanced template**: now starts with actual `[audio.advanced]` header
+  and includes all 6 options commented out with defaults — visible in TOML editor
+- **stt.advanced template**: same fix — starts with `[stt.advanced]` header
+- **audio.sounds template**: replaced generic docs with actual `[audio.sounds.*]`
+  entries (`enabled = true`, `# path = ""`), default bundled filenames in
+  comments. Removed wrong reference to `[audio]` for advanced settings.
+- **`create_default_config()` template**: updated `[stt]` block to only show
+  user-facing fields; added `# [stt.advanced]` comment block
+
 ## [0.1.0b145] - 2026-02-19
 
 ### Changed (breaking)

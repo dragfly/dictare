@@ -80,9 +80,7 @@ _SHORTCUTS_HEADER = """\
 """
 
 _AUDIO_ADVANCED_HEADER = """\
-# Advanced audio settings — low-level tuning, rarely need changing
-#
-# [audio.advanced]
+[audio.advanced]
 # sample_rate = 16000               # Sample rate in Hz (Whisper requires 16000)
 # channels = 1                      # Number of audio channels
 # device = ""                       # Audio device name (empty = system default)
@@ -92,9 +90,7 @@ _AUDIO_ADVANCED_HEADER = """\
 """
 
 _STT_ADVANCED_HEADER = """\
-# Advanced STT settings — low-level tuning, rarely need changing
-#
-# [stt.advanced]
+[stt.advanced]
 # device = "auto"                # auto, cpu, cuda, mlx
 # compute_type = "int8"         # int8 (fastest), float16, float32 (most accurate)
 # beam_size = 5                 # Higher = slower but more accurate
@@ -103,15 +99,33 @@ _STT_ADVANCED_HEADER = """\
 """
 
 _SOUNDS_HEADER = """\
-# Audio sound effects — played at key events
-# Set enabled = false to silence a sound.
-# Set path = "/absolute/path/to/file.wav" to use a custom sound.
-#
-# Available events: start, stop, transcribing, ready, sent, agent_announce
-#
-# Advanced audio settings (sample_rate, channels, device, pre_buffer_ms,
-# min_speech_ms, transcribing_sound_min_ms) live in [audio] in config.toml.
-# Edit them with: voxtype config edit
+# Sound effects — set enabled = false to silence, path = "/abs/path.wav" for custom file.
+# Default bundled files: start/sent = up-beep.wav, stop = down-beep.wav,
+#                        transcribing = typewriter.wav, ready = ready.wav,
+#                        agent_announce = (TTS speech, no sound file)
+
+[audio.sounds.start]               # OFF → LISTENING
+enabled = true
+# path = ""                        # up-beep.wav
+
+[audio.sounds.stop]                # LISTENING → OFF
+enabled = true
+# path = ""                        # down-beep.wav
+
+[audio.sounds.transcribing]        # LISTENING → TRANSCRIBING (typewriter loop)
+enabled = true
+# path = ""                        # typewriter.wav
+
+[audio.sounds.ready]               # TRANSCRIBING → LISTENING (carriage return)
+enabled = true
+# path = ""                        # ready.wav
+
+[audio.sounds.sent]                # Text sent
+enabled = true
+# path = ""                        # up-beep.wav
+
+[audio.sounds.agent_announce]      # TTS announces agent name on switch
+enabled = true
 """
 
 _SUBMIT_FILTER_HEADER = """\
