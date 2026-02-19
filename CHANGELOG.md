@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b149] - 2026-02-19
+
+### Added
+
+- **`KeyCaptureField` — key capture widget** for hotkey and shortcut fields.
+  Two modes driven by a `format` prop:
+  - `"evdev"`: captures a single physical key → stores as `KEY_RIGHTMETA`,
+    `KEY_SCROLLLOCK`, `KEY_F12`, etc. Used for `hotkey.key`.
+  - `"shortcut"`: captures a modifier + key combination → stores as
+    `shift+enter`, `ctrl+enter`, etc. Used for `output.submit_keys` and
+    `output.newline_keys`.
+  Click "Capture", press the key/combination, ESC to cancel.
+  Displays a human-friendly label (`Right ⌘`, `⇧ Return`, etc.) instead of
+  the raw evdev/shortcut string.
+
 ## [0.1.0b148] - 2026-02-19
 
 ### Changed
