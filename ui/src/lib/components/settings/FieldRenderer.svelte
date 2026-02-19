@@ -10,7 +10,7 @@
 	import KeyCaptureField from "./fields/KeyCaptureField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS } from "$lib/registry/field-config";
+	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS } from "$lib/registry/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -58,6 +58,7 @@
 	const error = $derived(settingsStore.getSaveErrors()[field.key]);
 	const label = $derived(humanize(field.key));
 	const size = $derived((SIZE_HINTS[field.key] ?? "normal") as "narrow" | "medium" | "normal");
+	const align = $derived(RIGHT_ALIGN_FIELDS.has(field.key) ? "right" as const : "left" as const);
 
 	/** True when the saved config value differs from the schema default. */
 	const isNonDefault = $derived(
@@ -141,6 +142,7 @@
 				value={(currentValue as string) ?? ""}
 				{placeholder}
 				{size}
+				{align}
 				onchange={(v) => settingsStore.markDirty(field.key, v)}
 			/>
 		{/if}

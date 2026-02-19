@@ -3,6 +3,9 @@ export type PresetOption = string | { value: string; label: string };
 /** Fields hidden from the UI form (still configurable via config file) */
 export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device"]);
 
+/** Fields whose text input should be right-aligned */
+export const RIGHT_ALIGN_FIELDS = new Set(["server.host"]);
+
 /** Fields rendered as key-capture widgets */
 export const KEY_CAPTURE_FIELDS: Record<string, "evdev" | "shortcut"> = {
 	"hotkey.key": "evdev",
@@ -36,7 +39,7 @@ export const SIZE_HINTS: Record<string, string> = {
   "output.newline_keys": "medium",
   "output.submit_keys": "medium",
   "output.typing_delay_ms": "narrow",
-  "server.host": "medium",
+  "server.host": "narrow",
   "server.port": "narrow",
   "stats.typing_wpm": "narrow",
   "tts.speed": "narrow",
