@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import plistlib
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 LABEL = "com.dragfly.voxtype"
 TRAY_LABEL = "com.dragfly.voxtype.tray"
@@ -62,9 +67,9 @@ def install() -> None:
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     plist_path.write_text(generate_plist(sys.executable))
 
-    # Unload first if already running so the updated plist takes effect.
+    # Stop existing service and verify it's dead before loading the new one.
     if is_loaded():
-        subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
+        _stop_service()
     subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
     # Also install tray auto-start
@@ -81,7 +86,8 @@ def uninstall() -> None:
 
     plist_path = get_plist_path()
     if plist_path.exists():
-        subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
+        if is_loaded():
+            _stop_service()
         plist_path.unlink(missing_ok=True)
     remove_app_bundle()
 
@@ -113,10 +119,62 @@ def start() -> None:
 
 def stop() -> None:
     """Unload the LaunchAgent (stops the process and disables KeepAlive)."""
-    plist_path = get_plist_path()
     if not is_loaded():
         return  # Already unloaded
-    subprocess.run(["launchctl", "unload", str(plist_path)], check=True)
+    _stop_service()
+
+
+def _get_service_pid() -> int | None:
+    """Get the PID of the running service from launchctl."""
+    result = subprocess.run(
+        ["launchctl", "list", LABEL],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+    # launchctl list <label> output: "PID" = 12345;
+    for line in result.stdout.splitlines():
+        if '"PID"' in line:
+            try:
+                pid_str = line.split("=")[1].strip().rstrip(";").strip()
+                return int(pid_str)
+            except (IndexError, ValueError):
+                pass
+    return None
+
+
+def _wait_for_process_exit(pid: int, timeout: float = 3.0) -> bool:
+    """Wait for a process to exit. Returns True if it exited within timeout."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)  # Check if alive (signal 0 = no-op)
+        except ProcessLookupError:
+            return True  # Process is gone
+        except PermissionError:
+            return True  # Can't signal it — treat as gone
+        time.sleep(0.1)
+    return False
+
+
+def _stop_service() -> None:
+    """Unload the LaunchAgent and verify the process actually dies.
+
+    launchctl unload sends SIGTERM, but NSApplication-based processes may not
+    exit immediately.  If the process survives, we escalate to SIGKILL.
+    """
+    plist_path = get_plist_path()
+    pid = _get_service_pid()
+
+    subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
+
+    if pid is not None:
+        if not _wait_for_process_exit(pid):
+            logger.warning("Service PID %d survived unload — sending SIGKILL", pid)
+            try:
+                os.kill(pid, 9)  # SIGKILL
+            except ProcessLookupError:
+                pass  # Already gone
 
 
 # --------------------------------------------------------------------------
