@@ -239,13 +239,31 @@ class TestSystemdIsInstalled:
 class TestDaemonPidWrite:
     """Test that _run_daemon writes and cleans up the PID file."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_voxtype_logger(self):
+        """Clear voxtype logger handlers before and after each test.
+
+        _run_daemon calls setup_logging() which attaches a FileHandler to the
+        global voxtype logger. Without cleanup, that handler persists across
+        test modules and writes subsequent log output to the (now deleted) temp file.
+        """
+        import logging
+        voxtype_logger = logging.getLogger("voxtype")
+        original_handlers = voxtype_logger.handlers[:]
+        yield
+        for h in voxtype_logger.handlers[:]:
+            h.close()
+        voxtype_logger.handlers[:] = original_handlers
+
     def test_pid_written_and_cleaned_up(self, tmp_path):
         from voxtype.cli.engine import _run_daemon
 
         pid_file = tmp_path / "engine.pid"
+        log_file = tmp_path / "engine.jsonl"
 
         # Mock get_pid_path at the source module (imported locally inside _run_daemon)
-        with patch("voxtype.utils.paths.get_pid_path", return_value=pid_file):
+        with patch("voxtype.utils.paths.get_pid_path", return_value=pid_file), \
+             patch("voxtype.logging.setup.get_default_log_path", return_value=log_file):
             controller = MagicMock()
             controller.run.side_effect = KeyboardInterrupt
 
@@ -271,8 +289,10 @@ class TestDaemonPidWrite:
         from voxtype.cli.engine import _run_daemon
 
         pid_file = tmp_path / "engine.pid"
+        log_file = tmp_path / "engine.jsonl"
 
-        with patch("voxtype.utils.paths.get_pid_path", return_value=pid_file):
+        with patch("voxtype.utils.paths.get_pid_path", return_value=pid_file), \
+             patch("voxtype.logging.setup.get_default_log_path", return_value=log_file):
             controller = MagicMock()
             controller.start.side_effect = RuntimeError("boom")
 
