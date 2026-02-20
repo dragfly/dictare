@@ -27,9 +27,10 @@ if CommandLine.arguments.contains("--check-permissions") {
     let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
     let microphone = (micStatus == .authorized)
 
-    let inputMonitoring = CGPreflightListenEventAccess()
-
-    let json = "{\"accessibility\": \(accessibility), \"microphone\": \(microphone), \"input_monitoring\": \(inputMonitoring)}"
+    // NOTE: CGPreflightListenEventAccess() is unreliable from launchd on Sequoia
+    // (always returns false even when granted).  Input Monitoring status is reported
+    // via ~/.voxtype/hotkey_status written by setupEventTap() at runtime.
+    let json = "{\"accessibility\": \(accessibility), \"microphone\": \(microphone)}"
     print(json)
     exit(0)
 }
@@ -143,16 +144,10 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
 
     // --- CGEventTap (global hotkey) ---
     func setupEventTap() {
-        // CGPreflightListenEventAccess() is the reliable check for Input Monitoring.
-        // CGEvent.tapCreate() may SUCCEED even without permission (Sequoia) but the
-        // tap silently receives no events, leading to a false "active" status.
-        if !CGPreflightListenEventAccess() {
-            fputs("Warning: Input Monitoring not granted — hotkey disabled\n", stderr)
-            fputs("Grant Input Monitoring in System Settings\n", stderr)
-            writeHotkeyStatus("failed")
-            return
-        }
-
+        // NOTE: Do NOT use CGPreflightListenEventAccess() here — it returns false
+        // from launchd on Sequoia even when Input Monitoring IS granted (same bug
+        // as AXIsProcessTrusted()).  CGEvent.tapCreate() itself is reliable: returns
+        // nil when permission is missing, non-nil when granted.
         let eventMask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
 
         guard let tap = CGEvent.tapCreate(
