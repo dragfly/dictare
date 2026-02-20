@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b184] - 2026-02-20
+
+### Fixed
+- **`voxtype service install` is now idempotent** — removed the "already installed"
+  early-exit guard that prevented the b183 brew-Python-app fix from taking effect when
+  the service was already installed. `service install` always rewrites the plist/unit
+  and reloads the service.
+- **`launchd.install()` unloads before reloading** so the updated plist takes effect
+  even when the service is already running.
+
 ## [0.1.0b183] - 2026-02-20
 
 ### Fixed

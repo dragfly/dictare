@@ -126,6 +126,10 @@ def install() -> None:
     plist_path = get_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     plist_path.write_text(generate_plist(bundle_python, pythonpath=pythonpath))
+
+    # Unload first if already running so the updated plist takes effect.
+    if is_loaded():
+        subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
     subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
     # Also install tray auto-start
