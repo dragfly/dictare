@@ -1,13 +1,8 @@
 /// Voxtype native launcher for macOS .app bundle.
 ///
 /// This compiled binary is the CFBundleExecutable of Voxtype.app.
-/// It requests Microphone permission (showing "Voxtype" in dialogs, not
-/// "Python"), then spawns the Python engine as a child process.
-///
-/// Note: Accessibility (CGEventTap) is NOT requested here because it does not
-/// work from launchd-spawned processes on macOS Sequoia.  AXIsProcessTrusted()
-/// always returns false in that context regardless of TCC entries.  The global
-/// hotkey only works when `voxtype serve` runs in a foreground Terminal session.
+/// It requests Accessibility and Microphone permissions (showing "Voxtype"
+/// in dialogs, not "Python"), then spawns the Python engine as a child process.
 ///
 /// Usage:
 ///   Voxtype                    — Normal mode: request permissions, launch engine
@@ -32,6 +27,15 @@ if CommandLine.arguments.contains("--check-permissions") {
     print(json)
     exit(0)
 }
+
+// --- Activate Accessibility trust context ---
+// Calling AXIsProcessTrustedWithOptions from the Voxtype.app bundle process
+// establishes the accessibility session that child processes (Python) inherit.
+// Without this call, CGEventTap in the Python child silently fails.
+// prompt=false: no dialog (user grants via System Settings if needed).
+let axKey = kAXTrustedCheckOptionPrompt.takeRetainedValue() as String
+let axOptions = [axKey: false] as CFDictionary
+let _ = AXIsProcessTrustedWithOptions(axOptions)
 
 // --- Request Microphone permission ---
 // This makes macOS show "Voxtype" in the Microphone dialog and list.
