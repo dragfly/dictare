@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b172] - 2026-02-20
+
+### Added
+- Settings UI: permanent "Engine" section at the bottom of the Advanced tab with a
+  "Restart Engine" button — always available without needing to save settings first
+- Settings UI: after clicking "Restart Engine" (from either the banner or the new section),
+  the banner shows "Engine is restarting…" and polls `/status` every 1.5 s; when the engine
+  comes back online, the page reloads automatically and the banner disappears
+
 ## [0.1.0b171] - 2026-02-20
 
 ### Fixed
