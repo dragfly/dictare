@@ -17,6 +17,7 @@ from voxtype.cli import (
     config,
     dependencies,
     engine,
+    logs,
     misc,
     models,
     service,
@@ -48,6 +49,7 @@ app.add_typer(service.app, name="service")
 speak.register(app)
 agent.register(app)
 setup.register(app)
+logs.register(app)
 
 
 def version_callback(value: bool) -> None:
