@@ -1,12 +1,17 @@
-"""STT engine using NVIDIA Parakeet via onnx-asr (ONNX runtime, no PyTorch)."""
+"""STT engine using NVIDIA Parakeet via onnx-asr (ONNX runtime, no PyTorch).
+
+Runtime stack:
+  onnx-asr  →  onnxruntime  →  Parakeet ONNX weights (downloaded from HuggingFace)
+
+onnxruntime (~15 MB) is lighter than ctranslate2 (~30 MB, used by faster-whisper)
+and far lighter than PyTorch (~2 GB, used by the original NeMo/Whisper).
+Model weights (~670 MB) are downloaded on first use.
+"""
 
 from __future__ import annotations
 
-import importlib
 import logging
 import os
-import subprocess
-import sys
 import tempfile
 from typing import TYPE_CHECKING
 
@@ -18,80 +23,15 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 # onnx-asr model identifiers for Parakeet
-# Multilingual Parakeet V3: 25 European languages, auto language detection
-# ~670 MB ONNX weights downloaded from HuggingFace on first use
+# nemo-parakeet-tdt-0.6b-v3: 25 European languages, auto language detection
+# Weights: ~670 MB (int8 quantized ONNX), downloaded from HuggingFace on first use
 PARAKEET_MODELS: dict[str, str] = {
     "parakeet-v3": "nemo-parakeet-tdt-0.6b-v3",
 }
 
-_INSTALL_PACKAGE = "onnx-asr"
-_INSTALL_EXTRA = "parakeet"  # pip install 'voxtype[parakeet]'
-
 def is_parakeet_model(model_size: str) -> bool:
     """Return True if *model_size* should use the Parakeet engine."""
     return model_size.startswith("parakeet")
-
-def _is_onnx_asr_installed() -> bool:
-    """Check if onnx-asr is importable."""
-    try:
-        import onnx_asr  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-def _install_onnx_asr(console=None) -> None:
-    """Install onnx-asr with user confirmation.
-
-    Args:
-        console: Rich Console for interactive prompts. If None, uses plain input().
-
-    Raises:
-        RuntimeError: If user declines or install fails.
-    """
-    pkg_info = f"[bold]{_INSTALL_PACKAGE}[/bold] (~122 kB + ~670 MB model weights)"
-
-    if console:
-        from rich.prompt import Confirm
-
-        console.print()
-        console.print(f"[yellow]Parakeet V3 requires {pkg_info}[/]")
-        console.print("[dim]ONNX runtime — no PyTorch required[/]")
-        console.print()
-
-        confirmed = Confirm.ask("Install now?", default=True, console=console)
-    else:
-        print(f"\nParakeet V3 requires {_INSTALL_PACKAGE} (~122 kB + ~670 MB model).")
-        answer = input("Install now? [Y/n] ").strip().lower()
-        confirmed = answer in ("", "y", "yes")
-
-    if not confirmed:
-        raise RuntimeError(
-            f"Parakeet requires {_INSTALL_PACKAGE}.\n"
-            f"Install with:  pip install 'voxtype[{_INSTALL_EXTRA}]'"
-        )
-
-    if console:
-        console.print()
-
-    result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", _INSTALL_PACKAGE],
-        check=False,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Install failed.\n"
-            f"Try manually:  pip install 'voxtype[{_INSTALL_EXTRA}]'"
-        )
-
-    # Make newly installed package importable in the current process
-    importlib.invalidate_caches()
-
-    if console:
-        console.print()
-        console.print(f"[green]✓ {_INSTALL_PACKAGE} installed[/]")
-        console.print()
 
 class ParakeetEngine(STTEngine):
     """STT engine using NVIDIA Parakeet via onnx-asr.
@@ -100,9 +40,8 @@ class ParakeetEngine(STTEngine):
     Spanish, French, …) with automatic language detection. Runs via ONNX
     runtime — no PyTorch required.
 
-    The onnx-asr Python package (~122 kB) is installed on first use with user
-    confirmation. Model weights (~670 MB) are downloaded from HuggingFace
-    automatically on first transcription.
+    Model weights (~670 MB) are downloaded from HuggingFace automatically on
+    first use (same pattern as faster-whisper).
 
     Set in ``[stt]``::
 
@@ -122,29 +61,14 @@ class ParakeetEngine(STTEngine):
     ) -> None:
         """Load the Parakeet model.
 
-        If onnx-asr is not installed and a console is available, prompts the
-        user to install it. In headless mode, raises RuntimeError with install
-        instructions.
+        Model weights (~670 MB) are downloaded from HuggingFace on first use.
 
         Args:
             model_size: "parakeet-v3" (default, multilingual TDT 0.6B).
-            console: Rich Console for interactive prompts and progress output.
-            headless: If True, suppress interactive prompts (daemon mode).
+            console: Rich Console for progress output.
+            headless: If True, suppress console output (daemon mode).
             **kwargs: Ignored (accepted for API compatibility with other engines).
-
-        Raises:
-            RuntimeError: If onnx-asr is not installed (headless mode or user
-                declined install), or if model download fails.
         """
-        # Ensure onnx-asr is installed
-        if not _is_onnx_asr_installed():
-            if headless:
-                raise RuntimeError(
-                    f"Parakeet requires {_INSTALL_PACKAGE}.\n"
-                    f"Run:  voxtype stt install {model_size}"
-                )
-            _install_onnx_asr(console=console)
-
         model_name = PARAKEET_MODELS.get(model_size, PARAKEET_MODELS["parakeet-v3"])
 
         if not headless and console:
@@ -154,7 +78,7 @@ class ParakeetEngine(STTEngine):
                 "on first use.[/]"
             )
 
-        # Suppress onnx-asr / onnxruntime noise
+        # Suppress onnxruntime noise
         logging.getLogger("onnxruntime").setLevel(logging.WARNING)
 
         from onnx_asr import load_model as _load_model
@@ -200,7 +124,7 @@ class ParakeetEngine(STTEngine):
         if audio.dtype != np.float32:
             audio = audio.astype(np.float32)
 
-        # onnx-asr accepts file paths; write to a temporary WAV for safety
+        # onnx-asr accepts file paths; write to a temporary WAV
         fd, tmp_path = tempfile.mkstemp(suffix=".wav")
         try:
             os.close(fd)
