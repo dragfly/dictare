@@ -39,11 +39,58 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     var childProcess: Process?
     var keyDownTime: Date?
     let tapThreshold: TimeInterval = 0.5  // Max press duration for a "tap"
+    var sigTermSource: DispatchSourceSignal?
+    var sigIntSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestMicrophonePermission()
         spawnPythonEngine()
+        setupSignalHandling()
         setupEventTap()
+    }
+
+    // --- Signal handling ---
+    // DispatchSource for reliable signal handling inside NSApplication run loop.
+    // C signal() handlers don't fire reliably when NSApplication.run() owns the
+    // main thread.  DispatchSource integrates with GCD and always fires.
+    func setupSignalHandling() {
+        // Ignore default C handlers — DispatchSource takes over
+        signal(SIGTERM, SIG_IGN)
+        signal(SIGINT, SIG_IGN)
+
+        let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        termSource.setEventHandler {
+            fputs("SIGTERM received — shutting down\n", stderr)
+            NSApplication.shared.terminate(nil)
+        }
+        termSource.resume()
+        sigTermSource = termSource
+
+        let intSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+        intSource.setEventHandler {
+            fputs("SIGINT received — shutting down\n", stderr)
+            NSApplication.shared.terminate(nil)
+        }
+        intSource.resume()
+        sigIntSource = intSource
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        terminateChild()
+        return .terminateNow
+    }
+
+    func terminateChild() {
+        guard let process = childProcess, process.isRunning else { return }
+        kill(process.processIdentifier, SIGTERM)
+        // Give child 2 seconds to clean up, then force kill
+        let deadline = Date().addingTimeInterval(2.0)
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if process.isRunning {
+            kill(process.processIdentifier, SIGKILL)
+        }
     }
 
     // --- Microphone ---
@@ -75,11 +122,10 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         process.arguments = ["-m", "voxtype", "serve"]
         process.environment = ProcessInfo.processInfo.environment
 
-        // When child exits, terminate the launcher too
+        // When child exits unexpectedly, terminate the launcher too
         process.terminationHandler = { proc in
-            // Small delay to let cleanup happen
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                exit(proc.terminationStatus)
+                NSApplication.shared.terminate(nil)
             }
         }
 
@@ -91,25 +137,6 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             fputs("Error starting engine: \(error)\n", stderr)
             NSApplication.shared.terminate(nil)
         }
-
-        // Forward SIGTERM/SIGINT to child
-        signal(SIGTERM) { _ in
-            // Can't capture self in C signal handler, so use the global reference
-            LauncherDelegate.forwardSignal(SIGTERM)
-        }
-        signal(SIGINT) { _ in
-            LauncherDelegate.forwardSignal(SIGINT)
-        }
-    }
-
-    // Static reference for signal forwarding (C signal handlers can't capture self)
-    static weak var shared: LauncherDelegate?
-
-    static func forwardSignal(_ sig: Int32) {
-        if let pid = shared?.childProcess?.processIdentifier, pid > 0 {
-            kill(pid, sig)
-        }
-        exit(0)
     }
 
     // --- CGEventTap (global hotkey) ---
@@ -189,7 +216,6 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)  // No Dock icon (like LSUIElement)
 
 let delegate = LauncherDelegate()
-LauncherDelegate.shared = delegate
 app.delegate = delegate
 
 app.run()
