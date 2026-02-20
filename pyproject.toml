@@ -82,7 +82,7 @@ tts = [
     "pathvalidate>=3.0.0",  # Missing piper-tts dependency
 ]
 parakeet = [
-    "nemo_toolkit[asr]>=2.0.0",  # NVIDIA NeMo ASR — large (~2 GB with deps)
+    "onnx-asr>=0.1.0",  # ONNX runtime for Parakeet V3 — no PyTorch (~122 kB package + ~670 MB model)
 ]
 
 [project.scripts]
