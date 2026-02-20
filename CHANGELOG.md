@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b165] - 2026-02-20
+
+### Fixed
+- Parakeet transcription now works — `TextResultsAsrAdapter` API is `.recognize()`, not `.transcribe()`
+- Simplified transcription path: pass numpy array directly (no temp WAV file needed)
+
 ## [0.1.0b164] - 2026-02-20
 
 ### Fixed
