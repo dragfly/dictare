@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b167] - 2026-02-20
+
+### Changed
+- Default STT model changed from `large-v3-turbo` to `parakeet-v3`
+  - Better quality on European languages (Italian, German, Spanish, French, ...)
+  - Similar size (~670 MB vs ~800 MB for large-v3-turbo)
+  - Runs on CPU via ONNX — no MLX/CUDA required
+
 ## [0.1.0b166] - 2026-02-20
 
 ### Added
