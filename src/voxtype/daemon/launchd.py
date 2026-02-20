@@ -15,12 +15,17 @@ def get_plist_path() -> Path:
     """Return the LaunchAgent plist path."""
     return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 
-def generate_plist(python_path: str) -> str:
+def generate_plist(python_path: str, pythonpath: str | None = None) -> str:
     """Generate the LaunchAgent plist XML for the given python executable.
 
     If a .app bundle exists, ProgramArguments points to its executable
     so macOS associates permissions with the bundle (shows "Voxtype" in
     system dialogs). Otherwise falls back to the raw python path.
+
+    Args:
+        python_path: Path to the Python interpreter.
+        pythonpath: Optional PYTHONPATH to inject (needed when the service
+            uses the Python.app binary instead of the venv's symlink).
     """
     from voxtype.daemon.app_bundle import get_app_path, get_executable_path
 
@@ -39,6 +44,8 @@ def generate_plist(python_path: str) -> str:
         "StandardOutPath": str(LOG_DIR / "stdout.log"),
         "StandardErrorPath": str(LOG_DIR / "stderr.log"),
     }
+    if pythonpath:
+        plist["EnvironmentVariables"] = {"PYTHONPATH": pythonpath}
     return plistlib.dumps(plist).decode()
 
 def _find_framework_python_app() -> str | None:
@@ -78,14 +85,28 @@ def install() -> None:
     """
     from voxtype.daemon.app_bundle import create_app_bundle
 
+    bundle_python = sys.executable
+    pythonpath: str | None = None
+
     # Use the Python.app binary (the one registered in TCC) when available.
-    # Falls back to sys.executable for non-framework builds.
-    bundle_python = _find_framework_python_app() or sys.executable
+    # The Python.app binary is a separate file from the venv's Python, so we
+    # must inject PYTHONPATH for it to find the installed packages.
+    app_python = _find_framework_python_app()
+    if app_python and app_python != sys.executable:
+        try:
+            import site
+
+            venv_site = site.getsitepackages()[0]
+        except Exception:
+            venv_site = None
+        if venv_site:
+            bundle_python = app_python
+            pythonpath = venv_site
 
     create_app_bundle(bundle_python)
     plist_path = get_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    plist_path.write_text(generate_plist(bundle_python))
+    plist_path.write_text(generate_plist(bundle_python, pythonpath=pythonpath))
 
     # Unload first if already running so the updated plist takes effect.
     if is_loaded():
