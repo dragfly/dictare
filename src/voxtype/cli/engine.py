@@ -110,6 +110,9 @@ def _run_daemon(controller, config, os) -> None:
         saved = load_state()
         start_listening = saved.get("listening", False)
 
+    import logging as _logging
+    _logger = _logging.getLogger("voxtype.engine.daemon")
+
     try:
         controller.start(
             start_listening=start_listening,
@@ -117,6 +120,7 @@ def _run_daemon(controller, config, os) -> None:
             with_bindings=False,  # No keyboard bindings in daemon mode
         )
     except Exception as e:
+        _logger.error("Engine startup failed: %s", e, exc_info=True)
         pid_path.unlink(missing_ok=True)
         console.print(f"[red]Failed to start engine: {e}[/]")
         raise typer.Exit(1)

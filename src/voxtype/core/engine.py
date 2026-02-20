@@ -484,40 +484,47 @@ class VoxtypeEngine:
         ]
 
         # Load STT model
-        logger.debug("Loading STT model: %s (device=%s, compute=%s)",
-                      stt_model_id, self.config.stt.advanced.device, self.config.stt.advanced.compute_type)
+        logger.info("Loading STT model: %s", stt_model_id)
         self._loading_models[0]["start_time"] = time.time()
         self._loading_models[0]["status"] = "loading"
-        self._stt = self._create_stt_engine(headless=headless)
+        try:
+            self._stt = self._create_stt_engine(headless=headless)
+        except Exception as exc:
+            logger.error("STT model loading failed: %s", exc, exc_info=True)
+            raise
         stt_elapsed = round(time.time() - self._loading_models[0]["start_time"], 1)
         self._loading_models[0]["elapsed"] = stt_elapsed
         self._loading_models[0]["status"] = "done"
         save_model_load_time(stt_model_id, stt_elapsed)
-        logger.debug("STT model loaded in %.1fs", stt_elapsed)
+        logger.info("STT model loaded in %.1fs", stt_elapsed)
 
         # Note: Agent registration is handled externally by AgentRegistrar.
         # The registrar calls register_agent() to add agents before run().
 
         # Create audio manager with VAD
-        logger.debug("Loading VAD model: %s", vad_model_id)
+        logger.info("Loading VAD model: %s", vad_model_id)
         self._loading_models[1]["start_time"] = time.time()
         self._loading_models[1]["status"] = "loading"
-        self._audio_manager = AudioManager(
-            config=self.config.audio,
-            verbose=self.config.verbose,
-        )
-        self._audio_manager.initialize(
-            on_speech_start=self._on_vad_speech_start,
-            on_speech_end=self._on_vad_speech_end,
-            on_max_speech=self._on_max_speech_duration,
-            on_partial_audio=None,
-            headless=headless,
-        )
+        try:
+            self._audio_manager = AudioManager(
+                config=self.config.audio,
+                verbose=self.config.verbose,
+            )
+            self._audio_manager.initialize(
+                on_speech_start=self._on_vad_speech_start,
+                on_speech_end=self._on_vad_speech_end,
+                on_max_speech=self._on_max_speech_duration,
+                on_partial_audio=None,
+                headless=headless,
+            )
+        except Exception as exc:
+            logger.error("VAD model loading failed: %s", exc, exc_info=True)
+            raise
         vad_elapsed = round(time.time() - self._loading_models[1]["start_time"], 1)
         self._loading_models[1]["elapsed"] = vad_elapsed
         self._loading_models[1]["status"] = "done"
         save_model_load_time(vad_model_id, vad_elapsed)
-        logger.debug("VAD model loaded in %.1fs", vad_elapsed)
+        logger.info("VAD model loaded in %.1fs", vad_elapsed)
 
         # Load TTS engine (optional — engine continues if unavailable)
         logger.debug("Loading TTS engine: %s", tts_engine_name)
