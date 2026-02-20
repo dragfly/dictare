@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b188] - 2026-02-20
+
+### Fixed
+- **Restore `AXIsProcessTrustedWithOptions` call in Swift launcher** (with
+  `prompt: false`). This call activates the accessibility trust context in
+  the parent process; without it, child processes (Python/pynput) cannot
+  create a working CGEventTap. No dialog is shown — user grants Accessibility
+  via System Settings if needed.
+
 ## [0.1.0b187] - 2026-02-20
 
 ### Fixed
