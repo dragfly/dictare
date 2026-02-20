@@ -249,6 +249,16 @@ fi
 VERSION=$("$VENV_DIR/bin/python" -m voxtype --version 2>&1 || echo "unknown")
 ok "voxtype installed: $VERSION"
 
+# ─── Symlink to ~/.local/bin so 'voxtype' works from any shell ─────────
+mkdir -p "$HOME/.local/bin"
+ln -sf "$VENV_DIR/bin/voxtype" "$HOME/.local/bin/voxtype"
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    warn "'~/.local/bin' is not in your PATH."
+    printf "  Add this to your ~/.bashrc or ~/.zshrc:\n"
+    printf "    export PATH=\"\$HOME/.local/bin:\$PATH\"\n\n"
+fi
+ok "voxtype symlinked to ~/.local/bin/voxtype"
+
 # ─── 7. Install systemd service ────────────────────────────────────────
 info "Installing systemd user service..."
 
