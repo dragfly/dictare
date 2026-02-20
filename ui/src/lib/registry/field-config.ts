@@ -8,9 +8,9 @@ export const RIGHT_ALIGN_FIELDS = new Set(["server.host"]);
 
 /** Fields rendered as key-capture widgets */
 export const KEY_CAPTURE_FIELDS: Record<string, "evdev" | "shortcut"> = {
-	"hotkey.key": "evdev",
-	"output.submit_keys": "shortcut",
-	"output.newline_keys": "shortcut",
+  "hotkey.key": "evdev",
+  "output.newline_keys": "shortcut",
+  "output.submit_keys": "shortcut",
 };
 
 /** Fields rendered as read-only 'Edit in config file' */
@@ -31,7 +31,6 @@ export const SIZE_HINTS: Record<string, string> = {
   "audio.max_duration": "narrow",
   "audio.silence_ms": "narrow",
   "client.url": "normal",
-  "daemon.idle_timeout": "narrow",
   "daemon.socket_path": "normal",
   "hotkey.device": "medium",
   "hotkey.key": "medium",
