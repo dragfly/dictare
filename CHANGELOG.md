@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b186] - 2026-02-20
+
+### Fixed
+- **Hotkey works again from launchd service.** b185 regressed the hotkey by
+  removing the Python.app binary detection. Brew Python ships two separate
+  binaries with different inodes and different TCC identities:
+  `bin/python3.11` (CLI) and `Python.app/.../Python` (the one shown as "Python"
+  in Accessibility / Input Monitoring). The service was spawning the CLI binary,
+  which is NOT in TCC — pynput's CGEventTap silently failed.
+  New `_find_framework_python_app()` derives the `.app` binary from the
+  framework directory structure (works for any framework Python, not just brew).
+- **`create_app_bundle` updates `python_path` without recompiling the launcher**
+  when only the path changed. Previously any path change triggered a full bundle
+  recreation, which invalidated macOS TCC trust.
+
 ## [0.1.0b185] - 2026-02-20
 
 ### Fixed
