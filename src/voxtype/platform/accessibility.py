@@ -117,5 +117,5 @@ def _check_ax_trusted(prompt: bool) -> bool:
 
         return bool(trusted)
     except Exception:
-        logger.warning("Could not check Accessibility permission", exc_info=True)
+        logger.debug("Could not check Accessibility permission", exc_info=True)
         return False
