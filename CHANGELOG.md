@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b194] - 2026-02-20
+
+### Fixed
+- **Input Monitoring detection uses `CGPreflightListenEventAccess()`.** On Sequoia,
+  `CGEvent.tapCreate()` succeeds even without Input Monitoring permission — the tap
+  is created but silently receives no events, causing a false "active" hotkey status.
+  Now the launcher checks `CGPreflightListenEventAccess()` first and writes "failed"
+  immediately if the permission is not granted. Also added `input_monitoring` to the
+  `--check-permissions` JSON output.
+
 ## [0.1.0b193] - 2026-02-20
 
 ### Fixed
