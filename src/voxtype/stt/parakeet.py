@@ -80,12 +80,15 @@ class ParakeetEngine(STTEngine):
         # Suppress onnxruntime noise
         logging.getLogger("onnxruntime").setLevel(logging.WARNING)
 
+        import sys
+
         from onnx_asr import load_model as _load_model
 
-        # CoreMLExecutionProvider fails with ONNX external data files (.onnx.data).
-        # NemoConformerTdt (used by Parakeet) does not exclude CoreML unlike NemoConformerAED.
-        # Force CPU provider to avoid the "model_path must not be empty" ONNXRuntimeError.
-        self._model = _load_model(model_name, providers=["CPUExecutionProvider"])
+        # On macOS, CoreMLExecutionProvider crashes with ONNX external data files (.onnx.data).
+        # NemoConformerTdt does not exclude CoreML unlike NemoConformerAED, so we must force CPU.
+        # On Linux, let onnxruntime pick automatically (CUDA if available, CPU fallback).
+        providers = ["CPUExecutionProvider"] if sys.platform == "darwin" else None
+        self._model = _load_model(model_name, providers=providers)
         self._model_size = model_size
         self._device = "onnx"
 
