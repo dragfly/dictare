@@ -278,11 +278,13 @@ cat > "$SERVICE_DIR/voxtype.service" << EOF
 [Unit]
 Description=Voxtype Engine — voice-first control for AI coding agents
 After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
 ExecStart=$VENV_DIR/bin/python -m voxtype engine start
-Restart=on-failure
+Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 Environment=GI_TYPELIB_PATH=${GI_TYPELIB_PATH_VAL}
