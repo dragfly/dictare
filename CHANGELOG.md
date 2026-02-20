@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b195] - 2026-02-20
+
+### Fixed
+- **Revert `CGPreflightListenEventAccess()` — unreliable from launchd on
+  Sequoia** (always returns false even when Input Monitoring IS granted, same
+  class of bug as `AXIsProcessTrusted()`).  Back to using `CGEvent.tapCreate()`
+  return value as the sole indicator: nil = no permission, non-nil = works.
+  This was the proven approach from the PoC.
+
 ## [0.1.0b194] - 2026-02-20
 
 ### Fixed
