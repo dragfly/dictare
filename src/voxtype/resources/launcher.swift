@@ -44,6 +44,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     let tapThreshold: TimeInterval = 0.5  // Max press duration for a "tap"
     var sigTermSource: DispatchSourceSignal?
     var sigIntSource: DispatchSourceSignal?
+    var eventTap: CFMachPort?  // Stored for re-enable after system disable
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestMicrophonePermission()
@@ -156,6 +157,20 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             options: .listenOnly,
             eventsOfInterest: eventMask,
             callback: { proxy, type, event, refcon -> Unmanaged<CGEvent>? in
+                // macOS may disable the tap after a timeout or system event.
+                // We MUST re-enable it or the hotkey stops working permanently.
+                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    if let refcon = refcon {
+                        let delegate = Unmanaged<LauncherDelegate>.fromOpaque(refcon)
+                            .takeUnretainedValue()
+                        if let tap = delegate.eventTap {
+                            CGEvent.tapEnable(tap: tap, enable: true)
+                            fputs("CGEventTap re-enabled after system disable\n", stderr)
+                        }
+                    }
+                    return Unmanaged.passRetained(event)
+                }
+
                 guard let refcon = refcon else {
                     return Unmanaged.passRetained(event)
                 }
@@ -172,6 +187,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        self.eventTap = tap
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
