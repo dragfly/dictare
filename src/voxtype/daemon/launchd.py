@@ -67,6 +67,10 @@ def install() -> None:
     # Stop existing service and verify it's dead before loading the new one.
     if is_loaded():
         _stop_service()
+    # Kill orphan processes that survived a previous stop (e.g., old launcher
+    # without proper SIGTERM handling).  This runs ALWAYS — is_loaded() may
+    # return False even though the old process is still alive.
+    _kill_orphan_processes()
     subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
     # Also install tray auto-start
@@ -164,6 +168,31 @@ def _stop_service() -> None:
                 os.kill(pid, 9)  # SIGKILL
             except ProcessLookupError:
                 pass  # Already gone
+
+def _kill_orphan_processes() -> None:
+    """Kill orphaned Voxtype processes that survived a previous launchctl unload.
+
+    When upgrading from a version with broken SIGTERM handling (pre-b191),
+    the old launcher + engine may still be alive even after launchctl unload.
+    This function kills them by PID file and by binary path pattern.
+    """
+    # 1. Kill engine via PID file
+    pid_file = Path.home() / ".voxtype" / "engine.pid"
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text().strip())
+            os.kill(pid, 0)  # Check alive
+            logger.warning("Orphaned engine PID %d — killing", pid)
+            os.kill(pid, 9)  # SIGKILL
+            pid_file.unlink(missing_ok=True)
+        except (ValueError, OSError):
+            pass
+
+    # 2. Kill Voxtype.app launcher by binary path
+    subprocess.run(
+        ["pkill", "-9", "-f", "Voxtype.app/Contents/MacOS/Voxtype"],
+        capture_output=True,
+    )
 
 # --------------------------------------------------------------------------
 # Tray LaunchAgent
