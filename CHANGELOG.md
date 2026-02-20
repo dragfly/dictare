@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b176] - 2026-02-20
+
+### Fixed
+- Engine: state (listening/agent/mode) is now saved to disk before shutdown so restart
+  restores the exact pre-restart state. Previously `_persist_state()` was skipped during
+  shutdown (because `_running=False`), leaving a stale `listening=true` in the state file
+  even when the engine was idle — causing every "Restart Engine" to come back in listening mode.
+- Engine: shutdown watchdog now exits with code 1 (was 0) so `Restart=on-failure` systemd
+  services (pre-b171 install) also restart after a hung shutdown, not just `Restart=always`.
+
 ## [0.1.0b175] - 2026-02-20
 
 ### Fixed
