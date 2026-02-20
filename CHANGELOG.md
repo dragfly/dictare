@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b181] - 2026-02-20
+
+### Fixed
+- **`_find_launcher` now checks service-installed bundle first** (`~/Applications/Voxtype.app`).
+  The brew Cellar path was checked first but has a different TCC identity — calling
+  `AXIsProcessTrusted()` from it returns `false` in a launchd service context where the
+  Terminal session is not present. The service-installed bundle is the one the user
+  granted Accessibility permission to, so it must be checked first.
+  Fixes `accessibility: false` in `/status` and fixes hotkey not working after the engine
+  runs as a launchd service.
+
 ## [0.1.0b180] - 2026-02-20
 
 ### Fixed
