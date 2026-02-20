@@ -20,6 +20,9 @@ from voxtype.daemon.app_bundle import (
 )
 from voxtype.daemon.launchd import (
     LABEL,
+    _get_service_pid,
+    _stop_service,
+    _wait_for_process_exit,
     generate_plist,
     get_plist_path,
     is_installed,
@@ -167,6 +170,82 @@ class TestLaunchdIsInstalled:
             lambda: plist,
         )
         assert is_installed() is True
+
+# ---------------------------------------------------------------------------
+# launchd stop / kill verification
+# ---------------------------------------------------------------------------
+
+class TestGetServicePid:
+    def test_parses_pid_from_launchctl_output(self):
+        launchctl_output = (
+            '{\n'
+            '\t"StandardOutPath" = "/Users/x/Library/Logs/voxtype/stdout.log";\n'
+            '\t"Label" = "com.dragfly.voxtype";\n'
+            '\t"OnDemand" = false;\n'
+            '\t"PID" = 12345;\n'
+            '};\n'
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = SimpleNamespace(
+                returncode=0, stdout=launchctl_output, stderr=""
+            )
+            assert _get_service_pid() == 12345
+
+    def test_returns_none_when_not_loaded(self):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = SimpleNamespace(
+                returncode=113, stdout="", stderr=""
+            )
+            assert _get_service_pid() is None
+
+    def test_returns_none_when_no_pid_line(self):
+        launchctl_output = (
+            '{\n'
+            '\t"Label" = "com.dragfly.voxtype";\n'
+            '\t"LastExitStatus" = 0;\n'
+            '};\n'
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = SimpleNamespace(
+                returncode=0, stdout=launchctl_output, stderr=""
+            )
+            assert _get_service_pid() is None
+
+class TestWaitForProcessExit:
+    def test_returns_true_when_process_gone(self):
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert _wait_for_process_exit(99999, timeout=0.5) is True
+
+    def test_returns_true_on_permission_error(self):
+        with patch("os.kill", side_effect=PermissionError):
+            assert _wait_for_process_exit(99999, timeout=0.5) is True
+
+    def test_returns_false_when_process_survives(self):
+        with patch("os.kill"):  # no exception = process alive
+            assert _wait_for_process_exit(99999, timeout=0.3) is False
+
+class TestStopService:
+    def test_unloads_and_waits(self):
+        with patch("voxtype.daemon.launchd._get_service_pid", return_value=42), \
+             patch("subprocess.run") as mock_run, \
+             patch("voxtype.daemon.launchd._wait_for_process_exit", return_value=True):
+            _stop_service()
+            mock_run.assert_called_once()
+            assert "unload" in mock_run.call_args[0][0]
+
+    def test_force_kills_surviving_process(self):
+        with patch("voxtype.daemon.launchd._get_service_pid", return_value=42), \
+             patch("subprocess.run"), \
+             patch("voxtype.daemon.launchd._wait_for_process_exit", return_value=False), \
+             patch("os.kill") as mock_kill:
+            _stop_service()
+            mock_kill.assert_called_once_with(42, 9)
+
+    def test_handles_no_pid(self):
+        with patch("voxtype.daemon.launchd._get_service_pid", return_value=None), \
+             patch("subprocess.run") as mock_run:
+            _stop_service()
+            mock_run.assert_called_once()
 
 # ---------------------------------------------------------------------------
 # systemd

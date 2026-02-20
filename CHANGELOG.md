@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b191] - 2026-02-20
+
+### Fixed
+- **Service stop/restart now reliably kills the old process.** Root cause: the
+  Swift launcher's C `signal()` handlers didn't fire inside `NSApplication.run()`'s
+  main thread, so `launchctl unload` (SIGTERM) left the old process alive. Fix:
+  replaced C signal handlers with GCD `DispatchSource` (integrates with the run
+  loop) and added `applicationShouldTerminate` delegate method for clean child
+  termination. Python-side `stop()` now reads the PID before unloading, waits up
+  to 3 seconds, and escalates to SIGKILL if the process survives.
+
 ## [0.1.0b190] - 2026-02-20
 
 ### Added
