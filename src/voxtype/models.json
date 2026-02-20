@@ -1,4 +1,13 @@
 {
+  "parakeet-v3": {
+    "type": "stt",
+    "repo": "istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "size_gb": 0.67,
+    "check_file": "model_fp16.onnx",
+    "runtime": "onnx-asr",
+    "onnx_asr_model": "nemo-parakeet-tdt-0.6b-v3",
+    "description": "Parakeet V3 (ONNX, 25 languages, ~10x faster than Whisper)"
+  },
   "whisper-tiny": {
     "type": "stt",
     "repo": "Systran/faster-whisper-tiny",

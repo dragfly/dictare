@@ -3,6 +3,7 @@
 	import SettingsSection from "./SettingsSection.svelte";
 	import RestartBanner from "./RestartBanner.svelte";
 	import SaveBar from "./SaveBar.svelte";
+	import ModelsPage from "$lib/components/models/ModelsPage.svelte";
 	import type { TabDef, NavChild } from "$lib/types";
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import { onMount } from "svelte";
@@ -54,7 +55,13 @@
 	<main class="flex-1 overflow-y-auto">
 		<div class="max-w-2xl mx-auto pt-14 pb-8">
 			<RestartBanner />
-			{#if activeView() && schema}
+			{#if activeNavId === "models"}
+				<div class="px-4 mb-8">
+					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
+					<p class="text-sm text-muted-foreground">{activeDesc}</p>
+				</div>
+				<ModelsPage />
+			{:else if activeView() && schema}
 				<div class="px-4 mb-8">
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
 					<p class="text-sm text-muted-foreground">{activeDesc}</p>

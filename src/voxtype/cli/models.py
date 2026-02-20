@@ -56,11 +56,15 @@ def _get_configured_models(config=None) -> dict[str, str]:
     registry = _get_model_registry()
 
     # STT model: map config value to registry key
-    # e.g., "large-v3-turbo" -> "whisper-large-v3-turbo"
+    # Parakeet: "parakeet-v3" -> "parakeet-v3"
+    # Whisper:  "large-v3-turbo" -> "whisper-large-v3-turbo"
     stt_model = config.stt.model
-    stt_key = f"whisper-{stt_model}"
-    if stt_key in registry:
-        configured[stt_key] = "stt"
+    if stt_model in registry:
+        configured[stt_model] = "stt"
+    else:
+        stt_key = f"whisper-{stt_model}"
+        if stt_key in registry:
+            configured[stt_key] = "stt"
 
     # TTS model: find model by engine
     # e.g., "outetts" -> "outetts"
