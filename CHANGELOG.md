@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b177] - 2026-02-20
+
+### Added
+- Engine: new `engine.restart` protocol command that saves state, then spawns a detached
+  bootstrap subprocess which waits for the current engine PID to exit and starts a fresh
+  instance via `voxtype engine start -d`. This makes "Restart Engine" in the web UI work
+  correctly even when the engine was started manually or via the tray (not via the service
+  manager). Includes a 6-second watchdog that exits with code 0 (avoiding double-start when
+  `Restart=always` is active).
+- Web UI: `restartEngine()` now sends `engine.restart` instead of `engine.shutdown`, so
+  the engine always comes back after clicking Restart — regardless of how it was started.
+
 ## [0.1.0b176] - 2026-02-20
 
 ### Fixed

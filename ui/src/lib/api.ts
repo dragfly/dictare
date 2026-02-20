@@ -133,9 +133,9 @@ export async function restartEngine(): Promise<void> {
 		await fetch("/control", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ command: "engine.shutdown" })
+			body: JSON.stringify({ command: "engine.restart" })
 		});
 	} catch {
-		// Expected: engine shuts down, connection drops
+		// Expected: engine shuts down mid-restart, connection drops
 	}
 }
