@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b189] - 2026-02-20
+
+### Fixed
+- **Global hotkey works from launchd service (macOS Sequoia).** Root cause:
+  CGEventTap created by a Python process spawned by launchd never receives
+  events on Sequoia — the tap is created but non-functional. Fix: move the
+  CGEventTap to the Swift launcher (Voxtype.app), which runs as an
+  NSApplication with `.accessory` activation policy. The launcher detects
+  Right Cmd taps and sends SIGUSR1 to the child Python engine, which toggles
+  listening. Requires Voxtype.app to be granted both **Accessibility** and
+  **Input Monitoring** in System Settings.
+
+### Changed
+- Removed Python.app binary detection and PYTHONPATH injection from launchd
+  install — no longer needed since the Swift launcher handles the hotkey.
+- `generate_plist()` no longer accepts `pythonpath` parameter.
+
 ## [0.1.0b188] - 2026-02-20
 
 ### Fixed

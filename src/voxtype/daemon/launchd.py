@@ -17,17 +17,13 @@ def get_plist_path() -> Path:
     return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 
 
-def generate_plist(python_path: str, pythonpath: str | None = None) -> str:
+def generate_plist(python_path: str) -> str:
     """Generate the LaunchAgent plist XML for the given python executable.
 
     If a .app bundle exists, ProgramArguments points to its executable
     so macOS associates permissions with the bundle (shows "Voxtype" in
-    system dialogs). Otherwise falls back to the raw python path.
-
-    Args:
-        python_path: Path to the Python interpreter.
-        pythonpath: Optional PYTHONPATH to inject (needed when the service
-            uses the Python.app binary instead of the venv's symlink).
+    system dialogs, and the bundle's CGEventTap can capture global hotkeys).
+    Otherwise falls back to the raw python path.
     """
     from voxtype.daemon.app_bundle import get_app_path, get_executable_path
 
@@ -46,71 +42,25 @@ def generate_plist(python_path: str, pythonpath: str | None = None) -> str:
         "StandardOutPath": str(LOG_DIR / "stdout.log"),
         "StandardErrorPath": str(LOG_DIR / "stderr.log"),
     }
-    if pythonpath:
-        plist["EnvironmentVariables"] = {"PYTHONPATH": pythonpath}
     return plistlib.dumps(plist).decode()
-
-
-def _find_framework_python_app() -> str | None:
-    """Find the Python.app binary for the current Python interpreter.
-
-    On macOS, brew (and any framework build) ships two separate binaries:
-      - ``bin/python3.11``  — the CLI binary (what symlinks resolve to)
-      - ``Python.app/Contents/MacOS/Python`` — the .app bundle binary
-
-    These have different inodes and different TCC identities.  macOS shows
-    the .app binary as "Python" in Accessibility / Input Monitoring.  If we
-    spawn ``bin/python3.11`` instead, pynput's CGEventTap silently fails
-    because that binary is NOT in TCC.
-    """
-    import os
-
-    real = os.path.realpath(sys.executable)
-    parts = real.split(os.sep)
-    for i, part in enumerate(parts):
-        if (
-            part == "Python.framework"
-            and i + 2 < len(parts)
-            and parts[i + 1] == "Versions"
-        ):
-            version_dir = os.sep + os.path.join(*parts[: i + 3])
-            app = os.path.join(
-                version_dir, "Resources", "Python.app", "Contents", "MacOS", "Python",
-            )
-            if os.path.exists(app):
-                return app
-    return None
 
 
 def install() -> None:
     """Create .app bundle, write plist, and load the LaunchAgent.
 
+    The .app bundle contains a Swift launcher that:
+    1. Requests Microphone permission (shows "Voxtype" in dialog)
+    2. Captures global hotkey via CGEventTap (needs Accessibility + Input Monitoring)
+    3. Spawns the Python engine and sends SIGUSR1 on hotkey tap
+
     Also installs and starts the tray LaunchAgent.
     """
     from voxtype.daemon.app_bundle import create_app_bundle
 
-    bundle_python = sys.executable
-    pythonpath: str | None = None
-
-    # Use the Python.app binary (the one registered in TCC) when available.
-    # The Python.app binary is a separate file from the venv's Python, so we
-    # must inject PYTHONPATH for it to find the installed packages.
-    app_python = _find_framework_python_app()
-    if app_python and app_python != sys.executable:
-        try:
-            import site
-
-            venv_site = site.getsitepackages()[0]
-        except Exception:
-            venv_site = None
-        if venv_site:
-            bundle_python = app_python
-            pythonpath = venv_site
-
-    create_app_bundle(bundle_python)
+    create_app_bundle(sys.executable)
     plist_path = get_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    plist_path.write_text(generate_plist(bundle_python, pythonpath=pythonpath))
+    plist_path.write_text(generate_plist(sys.executable))
 
     # Unload first if already running so the updated plist takes effect.
     if is_loaded():

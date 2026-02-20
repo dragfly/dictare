@@ -63,24 +63,33 @@ def create_app_bundle(
     macos_dir = contents / "MacOS"
     resources_dir = contents / "Resources"
 
-    # Skip recreation if the bundle already exists with the same Python path.
-    # Recreating the binary invalidates macOS TCC trust (Accessibility / Mic),
-    # forcing the user to re-grant permissions on every reinstall.
+    # Skip recreation if the bundle already exists with same Python path AND
+    # same launcher source.  Recreating the binary invalidates macOS TCC trust
+    # (Accessibility / Input Monitoring), forcing re-grant.
+    launcher_hash = _get_launcher_source_hash()
     if app_path.exists():
         existing_python_file = macos_dir / "python_path"
         existing_launcher = macos_dir / APP_NAME
+        existing_hash_file = macos_dir / "launcher_hash"
         if existing_launcher.exists():
-            if (
+            same_python = (
                 existing_python_file.exists()
                 and existing_python_file.read_text().strip() == python_path
-            ):
+            )
+            same_launcher = (
+                existing_hash_file.exists()
+                and existing_hash_file.read_text().strip() == launcher_hash
+            )
+            if same_python and same_launcher:
                 logger.debug("App bundle already up to date, skipping recreation")
                 return app_path
-            # Only python_path changed — update the companion file without
-            # recompiling the launcher (preserves TCC trust).
-            existing_python_file.write_text(python_path)
-            logger.debug("Updated python_path in existing bundle")
-            return app_path
+            if same_launcher and not same_python:
+                # Only python_path changed — update without recompiling
+                existing_python_file.write_text(python_path)
+                logger.debug("Updated python_path in existing bundle")
+                return app_path
+            # Launcher source changed — must rebuild (TCC re-grant needed)
+            logger.info("Launcher source changed — rebuilding app bundle")
 
         # Bundle needs update — remove it first.
         # Use subprocess rm -rf because shutil.rmtree fails on macOS when the
@@ -119,6 +128,9 @@ def create_app_bundle(
     launcher_path = macos_dir / APP_NAME
     if not _build_native_launcher(launcher_path):
         _write_bash_launcher(launcher_path, python_path)
+
+    # Store launcher source hash for skip-if-unchanged logic
+    (macos_dir / "launcher_hash").write_text(launcher_hash)
 
     # Copy icns icon
     _copy_icns(resources_dir / f"{APP_NAME}.icns")
@@ -166,6 +178,19 @@ def _write_bash_launcher(dest: Path, python_path: str) -> None:
     )
     dest.write_text(launcher_script)
     dest.chmod(dest.stat().st_mode | stat.S_IEXEC)
+
+
+def _get_launcher_source_hash() -> str:
+    """Return a short hash of the launcher.swift source for change detection."""
+    import hashlib
+
+    try:
+        swift_src = importlib.resources.files("voxtype.resources") / "launcher.swift"
+        with importlib.resources.as_file(swift_src) as src_path:
+            data = src_path.read_bytes()
+            return hashlib.sha256(data).hexdigest()[:16]
+    except Exception:
+        return "unknown"
 
 
 def _get_version() -> str:
