@@ -195,9 +195,14 @@ class TestSystemdGenerateUnit:
         unit = generate_unit("/usr/bin/python3")
         assert "WantedBy=default.target" in unit
 
-    def test_restart_on_failure(self):
+    def test_restart_always(self):
         unit = generate_unit("/usr/bin/python3")
-        assert "Restart=on-failure" in unit
+        assert "Restart=always" in unit
+
+    def test_restart_burst_limit(self):
+        unit = generate_unit("/usr/bin/python3")
+        assert "StartLimitIntervalSec=60" in unit
+        assert "StartLimitBurst=5" in unit
 
 
 class TestSystemdPaths:

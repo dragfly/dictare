@@ -20,11 +20,13 @@ def generate_unit(python_path: str) -> str:
         [Unit]
         Description=Voxtype voice engine
         After=network.target
+        StartLimitIntervalSec=60
+        StartLimitBurst=5
 
         [Service]
         Type=simple
         ExecStart={python_path} -m voxtype engine start -d
-        Restart=on-failure
+        Restart=always
         RestartSec=5
 
         [Install]
