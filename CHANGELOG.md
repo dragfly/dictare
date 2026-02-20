@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b183] - 2026-02-20
+
+### Fixed
+- **macOS service now uses brew Python.app when current Python is not TCC-trusted.**
+  When `voxtype service install` is run from a uv-managed venv (standalone CPython
+  binary with no `.app` bundle), the engine's `python_path` is automatically swapped
+  to the brew Python.app binary (`/opt/homebrew/Cellar/python@3.11/.../Python.app`),
+  which ships as a proper macOS `.app` bundle and is already trusted in TCC on most
+  developer systems. The venv's `site-packages` are injected via `PYTHONPATH` in the
+  launchd plist so all installed packages (including the editable voxtype install)
+  remain accessible. This allows pynput's `CGEventTap` to succeed, making the push-to-
+  talk hotkey work from the launchd service.
+- **`permissions.py` accessibility check now uses Python-direct ctypes call** instead of
+  the Voxtype.app subprocess approach. The subprocess check (`Voxtype --check-permissions
+  → AXIsProcessTrusted()`) gave wrong results in a launchd agent context: spawned
+  subprocesses lack a window-server session, so `AXIsProcessTrusted()` in the subprocess
+  returned `false` even for a genuinely trusted binary. Checking directly via ctypes in
+  the engine process is the authoritative answer (it's the same process that runs pynput).
+  Microphone still checked via the launcher (Voxtype.app registered with AVFoundation).
+
 ## [0.1.0b182] - 2026-02-20
 
 ### Fixed

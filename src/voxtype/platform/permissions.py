@@ -10,6 +10,7 @@ Results are cached for 5 seconds (polling interval is 500ms).
 
 from __future__ import annotations
 
+import ctypes
 import json
 import logging
 import subprocess
@@ -99,44 +100,50 @@ def _find_launcher() -> str | None:
 
     return None
 
-def _check_via_launcher() -> dict[str, bool]:
-    """Call the native launcher with --check-permissions."""
+def _check_ax_direct() -> bool:
+    """Check Accessibility trust for the current Python process via ctypes.
+
+    This is the authoritative check for whether pynput/CGEventTap will work:
+    the CGEventTap runs in *this* Python process, so Python's own TCC status
+    is what matters — not the Voxtype.app launcher binary's status.
+
+    The launcher-subprocess approach (spawning Voxtype --check-permissions)
+    gives misleading results when called from inside a launchd agent because
+    the spawned subprocess lacks a window-server session context and
+    AXIsProcessTrusted() returns False even for a genuinely trusted binary.
+    """
+    try:
+        as_lib = ctypes.cdll.LoadLibrary(
+            "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices"
+        )
+        as_lib.AXIsProcessTrusted.restype = ctypes.c_bool
+        return bool(as_lib.AXIsProcessTrusted())
+    except Exception:
+        return True  # assume trusted if check fails
+
+def _check_mic_via_launcher() -> bool:
+    """Check microphone permission via the native Voxtype.app launcher.
+
+    The launcher binary registered with AVFoundation, so it is the correct
+    process to query for microphone status.  Falls back to True on failure.
+    """
     launcher = _find_launcher()
     if not launcher:
-        # No launcher found — fall back to Python-level checks
-        return _check_fallback()
-
+        return _check_mic_fallback()
     try:
         result = subprocess.run(
             [launcher, "--check-permissions"],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0:
-            return json.loads(result.stdout.strip())
+            return json.loads(result.stdout.strip()).get("microphone", True)
     except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as e:
-        logger.warning("Launcher permission check failed: %s", e)
+        logger.warning("Launcher mic check failed: %s", e)
+    return _check_mic_fallback()
 
-    return _check_fallback()
-
-def _check_fallback() -> dict[str, bool]:
-    """Fallback: check permissions from Python (may give false negatives)."""
-    accessibility = True
-    microphone = True
-
+def _check_mic_fallback() -> bool:
+    """Check microphone permission from Python via objc (fallback)."""
     try:
-        import ctypes
-
-        as_lib = ctypes.cdll.LoadLibrary(
-            "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices"
-        )
-        as_lib.AXIsProcessTrusted.restype = ctypes.c_bool
-        accessibility = bool(as_lib.AXIsProcessTrusted())
-    except Exception:
-        pass
-
-    try:
-        import ctypes
-
         ctypes.cdll.LoadLibrary(
             "/System/Library/Frameworks/AVFoundation.framework/AVFoundation"
         )
@@ -144,8 +151,24 @@ def _check_fallback() -> dict[str, bool]:
 
         av_device = objc.lookUpClass("AVCaptureDevice")
         status = av_device.authorizationStatusForMediaType_("soun")
-        microphone = status == 3
+        return status == 3
     except Exception:
-        pass
+        return True
 
-    return {"accessibility": accessibility, "microphone": microphone}
+def _check_via_launcher() -> dict[str, bool]:
+    """Assemble the permissions dict.
+
+    Accessibility is checked in the calling Python process directly (ctypes).
+    Microphone is checked via the Voxtype.app launcher subprocess.
+    """
+    return {
+        "accessibility": _check_ax_direct(),
+        "microphone": _check_mic_via_launcher(),
+    }
+
+def _check_fallback() -> dict[str, bool]:
+    """Full Python-only fallback (used when launcher is unavailable)."""
+    return {
+        "accessibility": _check_ax_direct(),
+        "microphone": _check_mic_fallback(),
+    }
