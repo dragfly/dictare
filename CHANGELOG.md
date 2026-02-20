@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b170] - 2026-02-20
+
+### Fixed
+- Engine: enforce single instance via PID file (`~/.voxtype/engine.pid`); starting a second
+  engine while one is already running now fails immediately with a clear error message
+- Engine: hard-exit if HTTP server fails to bind the port (e.g. port already in use); previously
+  the engine would continue running without an HTTP server, silently grabbing the microphone
+  alongside an existing instance — causing the dual-output bug (one engine typed via keyboard,
+  another sent to agents)
+
 ## [0.1.0b169] - 2026-02-20
 
 ### Fixed

@@ -287,3 +287,21 @@ class TestServerLifecycle:
     def test_stop_without_start(self, server: OpenVIPServer) -> None:
         """Stopping without starting is safe."""
         server.stop()  # Should not raise
+
+    def test_wait_started_returns_false_on_start_error(self, server: OpenVIPServer) -> None:
+        """wait_started() returns False when _start_error is set."""
+        server._start_error = OSError("port in use")
+        server._started.set()
+        assert server.wait_started(timeout=1.0) is False
+
+    def test_wait_started_returns_true_when_no_error(self, server: OpenVIPServer) -> None:
+        """wait_started() returns True when no error was recorded."""
+        server._start_error = None
+        server._started.set()
+        assert server.wait_started(timeout=1.0) is True
+
+    def test_wait_started_returns_false_on_timeout(self, server: OpenVIPServer) -> None:
+        """wait_started() returns False when event never fires within timeout."""
+        # _started is not set — simulates server that never started
+        result = server.wait_started(timeout=0.01)
+        assert result is False

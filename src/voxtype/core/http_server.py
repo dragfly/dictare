@@ -77,6 +77,7 @@ class OpenVIPServer:
         self._server: Any = None  # uvicorn.Server
         self._running = False
         self._started = threading.Event()
+        self._start_error: Exception | None = None  # Set if server failed to start
 
         # FastAPI app
         self._app = self._create_app()
@@ -624,8 +625,20 @@ class OpenVIPServer:
 
         try:
             self._loop.run_until_complete(_run())
-        except Exception:
+        except OSError as e:
+            import errno
+            if getattr(e, "errno", None) == errno.EADDRINUSE:
+                logger.error(
+                    "Port %d already in use — another voxtype engine is running. "
+                    "Stop it first: voxtype engine stop",
+                    self._port,
+                )
+            else:
+                logger.exception("OpenVIP server OS error")
+            self._start_error = e
+        except Exception as e:
             logger.exception("OpenVIP server error")
+            self._start_error = e
         finally:
             self._started.set()  # Ensure event fires even on error
             self._loop.close()
@@ -658,8 +671,15 @@ class OpenVIPServer:
         return self._port
 
     def wait_started(self, timeout: float = 5.0) -> bool:
-        """Block until server is ready to accept connections."""
-        return self._started.wait(timeout)
+        """Block until server is ready to accept connections.
+
+        Returns:
+            True if server started successfully, False if it failed or timed out.
+        """
+        fired = self._started.wait(timeout)
+        if not fired:
+            return False
+        return self._start_error is None
 
     def put_message(self, agent_id: str, message: dict) -> bool:
         """Thread-safe: put a message into an agent's SSE queue.
