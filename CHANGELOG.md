@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b164] - 2026-02-20
+
+### Fixed
+- Parakeet model loading now works on macOS Apple Silicon — CoreMLExecutionProvider was
+  causing `[ONNXRuntimeError]: model_path must not be empty` when loading ONNX models
+  with external data files (`.onnx.data`). Fix: force `providers=["CPUExecutionProvider"]`
+- `stt_model_id` in log output now shows correct ID for Parakeet (`nemo-parakeet-tdt-0.6b-v3`)
+  instead of wrong `mlx-community/whisper-parakeet-v3`
+- Panel status now shows `ONNX` (not `MLX`) as the compute device for Parakeet engine
+
 ## [0.1.0b163] - 2026-02-20
 
 ### Fixed

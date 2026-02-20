@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from voxtype.stt.base import STTEngine, STTResult
 from voxtype.stt.faster_whisper import _filter_repetitions
@@ -49,8 +49,9 @@ class ParakeetEngine(STTEngine):
     """
 
     def __init__(self) -> None:
-        self._model = None
+        self._model: Any | None = None
         self._model_size: str | None = None
+        self._device: str | None = None
 
     def load_model(
         self,
@@ -83,8 +84,12 @@ class ParakeetEngine(STTEngine):
 
         from onnx_asr import load_model as _load_model
 
-        self._model = _load_model(model_name)
+        # CoreMLExecutionProvider fails with ONNX external data files (.onnx.data).
+        # NemoConformerTdt (used by Parakeet) does not exclude CoreML unlike NemoConformerAED.
+        # Force CPU provider to avoid the "model_path must not be empty" ONNXRuntimeError.
+        self._model = _load_model(model_name, providers=["CPUExecutionProvider"])
         self._model_size = model_size
+        self._device = "onnx"
 
         if not headless and console:
             console.print("[green]✓ Parakeet model ready[/]")

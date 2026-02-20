@@ -245,7 +245,7 @@ class StatusPanel:
 
         # Device from engine status (reflects actual device after fallback)
         stt_device = stt.get("device", "cpu")
-        device_map = {"cuda": "CUDA", "cpu": "CPU", "mlx": "MLX"}
+        device_map = {"cuda": "CUDA", "cpu": "CPU", "mlx": "MLX", "onnx": "ONNX"}
         device = device_map.get(stt_device, stt_device.upper())
 
         # Warn if GPU was expected but fell back to CPU

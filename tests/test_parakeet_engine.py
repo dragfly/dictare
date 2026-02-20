@@ -108,3 +108,20 @@ class TestParakeetEngine:
             engine.load_model("parakeet-v3", headless=True)
         assert engine._model_size == "parakeet-v3"
         assert engine.is_loaded()
+
+    def test_load_model_sets_device_onnx(self):
+        engine = ParakeetEngine()
+        mock_load = MagicMock(return_value=MagicMock())
+        with patch.dict("sys.modules", {"onnx_asr": MagicMock(load_model=mock_load)}):
+            engine.load_model("parakeet-v3", headless=True)
+        assert engine._device == "onnx"
+
+    def test_load_model_uses_cpu_provider(self):
+        """CoreML fails with ONNX external data; must force CPUExecutionProvider."""
+        engine = ParakeetEngine()
+        mock_load = MagicMock(return_value=MagicMock())
+        with patch.dict("sys.modules", {"onnx_asr": MagicMock(load_model=mock_load)}):
+            engine.load_model("parakeet-v3", headless=True)
+        mock_load.assert_called_once_with(
+            "nemo-parakeet-tdt-0.6b-v3", providers=["CPUExecutionProvider"]
+        )
