@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b180] - 2026-02-20
+
+### Fixed
+- **Tray no longer prompts for Accessibility permission.** The tray process does not need
+  Accessibility — the engine (running inside `Voxtype.app` via the Swift launcher) handles
+  all keyboard injection and hotkey listening. The tray reads permission state from the
+  engine's `/status` endpoint. Removed `_ensure_accessibility()` from tray startup.
+- **`create_app_bundle` skips recreation when bundle is unchanged** (same Python path +
+  launcher binary). Recreating the `.app` binary invalidates macOS TCC trust, causing
+  repeated Accessibility permission dialogs after reinstall.
+- **`is_accessibility_granted()` now reports Voxtype.app's trust, not Python's.** Calls
+  `Voxtype --check-permissions` (Swift launcher) which runs `AXIsProcessTrusted()` from
+  the bundle's process context. Falls back to ctypes for dev/non-bundle environments.
+
 ## [0.1.0b179] - 2026-02-20
 
 ### Changed (breaking)
