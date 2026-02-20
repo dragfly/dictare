@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b157] - 2026-02-20
+
+### Added
+- Parakeet V3 STT engine (`ParakeetEngine`) via NVIDIA NeMo ASR
+- Model selection: `model = "parakeet-v3"` (TDT 0.6B, 25 European languages) or `"parakeet-ctc"` (CTC 1.1B)
+- Optional dependency: `pip install 'voxtype[parakeet]'` installs `nemo_toolkit[asr]`
+- Engine auto-selection: any model name starting with `"parakeet"` routes to `ParakeetEngine`
+- `is_parakeet_model()` helper for engine routing
+- STT advanced template updated with Parakeet install instructions
+
 ## [0.1.0b156] - 2026-02-19
 
 ### Changed

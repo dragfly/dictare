@@ -116,6 +116,11 @@ _STT_ADVANCED_HEADER = """\
 # beam_size = 5                 # Higher = slower but more accurate
 # hotwords = ""                 # Boost recognition: "voxtype,joshua" (turbo model only)
 # max_repetitions = 5           # Anti-hallucination: max consecutive repeats
+#
+# Parakeet V3 (alternative to Whisper — 10-20x faster on Apple Silicon):
+#   Install: pip install 'nemo_toolkit[asr]'
+#   Then in [stt]: model = "parakeet-v3"
+#   Supports 25 European languages with auto language detection.
 """
 
 _SOUNDS_HEADER = """\

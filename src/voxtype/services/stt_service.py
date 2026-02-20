@@ -58,11 +58,14 @@ class STTService(BaseService):
             self._engine = None
 
         if self._engine is None:
+            from voxtype.stt.parakeet import is_parakeet_model
             from voxtype.utils.hardware import is_mlx_available
 
-            use_mlx = self.config.stt.hw_accel and is_mlx_available()
+            if is_parakeet_model(target_size):
+                from voxtype.stt.parakeet import ParakeetEngine
 
-            if use_mlx:
+                self._engine = ParakeetEngine()
+            elif self.config.stt.hw_accel and is_mlx_available():
                 from voxtype.stt.mlx_whisper import MLXWhisperEngine
 
                 self._engine = MLXWhisperEngine()

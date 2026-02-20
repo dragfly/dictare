@@ -327,13 +327,15 @@ class VoxtypeEngine:
             model_size: Model size to load. If None, uses config.stt.model.
             headless: If True, skip all console output (for Engine/daemon mode).
         """
+        from voxtype.stt.parakeet import is_parakeet_model
         from voxtype.utils.hardware import is_mlx_available
 
-        # Auto-detect MLX on Apple Silicon
-        use_mlx = self.config.stt.hw_accel and is_mlx_available()
-
+        target_model = model_size or self.config.stt.model
         engine: STTEngine
-        if use_mlx:
+        if is_parakeet_model(target_model):
+            from voxtype.stt.parakeet import ParakeetEngine
+            engine = ParakeetEngine()
+        elif self.config.stt.hw_accel and is_mlx_available():
             from voxtype.stt.mlx_whisper import MLXWhisperEngine
             engine = MLXWhisperEngine()
         else:
