@@ -323,6 +323,7 @@ class OpenVIPServer:
                 set_config_value(key, str(value))
                 config = load_config()
                 current = get_config_value(key, config)
+                logger.info("settings.change key=%s value=%r", key, current)
                 return {"status": "ok", "key": key, "value": current}
             except KeyError as e:
                 raise HTTPException(status_code=404, detail=str(e))
@@ -393,6 +394,7 @@ class OpenVIPServer:
             try:
                 apply_section(section, content, get_config_path())
                 load_config()  # re-validate after save
+                logger.info("settings.change section=%s (toml)", section)
             except KeyError:
                 raise HTTPException(status_code=404, detail=f"Unknown section: {section}")
             except (ValueError, ValidationError) as e:

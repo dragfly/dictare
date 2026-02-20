@@ -80,8 +80,7 @@ class AppController:
                     raise RuntimeError(
                         f"Voxtype engine already running (PID {existing_pid}).\n"
                         "Stop it first:\n"
-                        "  voxtype engine stop\n"
-                        "  # or: voxtype service stop"
+                        "  voxtype service stop"
                     )
                 except ProcessLookupError:
                     # Stale PID — process no longer exists

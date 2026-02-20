@@ -63,10 +63,23 @@ def create_app_bundle(
     macos_dir = contents / "MacOS"
     resources_dir = contents / "Resources"
 
-    # Clean up any existing bundle.
-    # Use subprocess rm -rf because shutil.rmtree fails on macOS when the
-    # bundle has been launched (code signing / app translocation protection).
+    # Skip recreation if the bundle already exists with the same Python path.
+    # Recreating the binary invalidates macOS TCC trust (Accessibility / Mic),
+    # forcing the user to re-grant permissions on every reinstall.
     if app_path.exists():
+        existing_python_file = macos_dir / "python_path"
+        existing_launcher = macos_dir / APP_NAME
+        if (
+            existing_python_file.exists()
+            and existing_python_file.read_text().strip() == python_path
+            and existing_launcher.exists()
+        ):
+            logger.debug("App bundle already up to date, skipping recreation")
+            return app_path
+
+        # Bundle needs update — remove it first.
+        # Use subprocess rm -rf because shutil.rmtree fails on macOS when the
+        # bundle has been launched (code signing / app translocation protection).
         subprocess.run(
             ["rm", "-rf", str(app_path)],
             check=False, capture_output=True,
