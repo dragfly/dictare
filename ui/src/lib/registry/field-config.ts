@@ -22,7 +22,7 @@ export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "aud
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
   "stt.language": [{ value: "auto", label: "Auto-detect" }, { value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }, { value: "ko", label: "Korean" }, { value: "ru", label: "Russian" }],
-  "stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"],
+  "stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo", "parakeet-v3"],
   "tts.language": [{ value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }],
 };
 
