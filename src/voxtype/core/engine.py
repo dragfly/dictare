@@ -467,7 +467,10 @@ class VoxtypeEngine:
 
         # Build model IDs for historical load time lookup
         model = self.config.stt.model
-        if self.config.stt.hw_accel and is_mlx_available():
+        from voxtype.stt.parakeet import PARAKEET_MODELS, is_parakeet_model
+        if is_parakeet_model(model):
+            stt_model_id = PARAKEET_MODELS.get(model, model)
+        elif self.config.stt.hw_accel and is_mlx_available():
             stt_model_id = f"mlx-community/whisper-{model}"
         else:
             stt_model_id = f"faster-whisper-{model}"
