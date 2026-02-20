@@ -1,9 +1,12 @@
-"""STT engine using NVIDIA Parakeet via NeMo ASR."""
+"""STT engine using NVIDIA Parakeet via onnx-asr (ONNX runtime, no PyTorch)."""
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
+import subprocess
+import sys
 import tempfile
 from typing import TYPE_CHECKING
 
@@ -15,17 +18,15 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-# Model registry
+# onnx-asr model identifiers for Parakeet
+# Multilingual Parakeet V3: 25 European languages, auto language detection
+# ~670 MB ONNX weights downloaded from HuggingFace on first use
 PARAKEET_MODELS: dict[str, str] = {
-    "parakeet-v3": "nvidia/parakeet-tdt-0.6b-v3",
-    "parakeet-ctc": "nvidia/parakeet-ctc-1.1b",
+    "parakeet-v3": "nemo-parakeet-tdt-0.6b-v3",
 }
 
-# Approximate model sizes in MB for display
-_MODEL_SIZES_MB: dict[str, int] = {
-    "parakeet-v3": 2400,
-    "parakeet-ctc": 4400,
-}
+_INSTALL_PACKAGE = "onnx-asr"
+_INSTALL_EXTRA = "parakeet"  # pip install 'voxtype[parakeet]'
 
 
 def is_parakeet_model(model_size: str) -> bool:
@@ -33,18 +34,82 @@ def is_parakeet_model(model_size: str) -> bool:
     return model_size.startswith("parakeet")
 
 
+def _is_onnx_asr_installed() -> bool:
+    """Check if onnx-asr is importable."""
+    try:
+        import onnx_asr  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _install_onnx_asr(console=None) -> None:
+    """Install onnx-asr with user confirmation.
+
+    Args:
+        console: Rich Console for interactive prompts. If None, uses plain input().
+
+    Raises:
+        RuntimeError: If user declines or install fails.
+    """
+    pkg_info = f"[bold]{_INSTALL_PACKAGE}[/bold] (~122 kB + ~670 MB model weights)"
+
+    if console:
+        from rich.prompt import Confirm
+
+        console.print()
+        console.print(f"[yellow]Parakeet V3 requires {pkg_info}[/]")
+        console.print("[dim]ONNX runtime — no PyTorch required[/]")
+        console.print()
+
+        confirmed = Confirm.ask("Install now?", default=True, console=console)
+    else:
+        print(f"\nParakeet V3 requires {_INSTALL_PACKAGE} (~122 kB + ~670 MB model).")
+        answer = input("Install now? [Y/n] ").strip().lower()
+        confirmed = answer in ("", "y", "yes")
+
+    if not confirmed:
+        raise RuntimeError(
+            f"Parakeet requires {_INSTALL_PACKAGE}.\n"
+            f"Install with:  pip install 'voxtype[{_INSTALL_EXTRA}]'"
+        )
+
+    if console:
+        console.print()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", _INSTALL_PACKAGE],
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Install failed.\n"
+            f"Try manually:  pip install 'voxtype[{_INSTALL_EXTRA}]'"
+        )
+
+    # Make newly installed package importable in the current process
+    importlib.invalidate_caches()
+
+    if console:
+        console.print()
+        console.print(f"[green]✓ {_INSTALL_PACKAGE} installed[/]")
+        console.print()
+
+
 class ParakeetEngine(STTEngine):
-    """STT engine using NVIDIA Parakeet (NeMo ASR).
+    """STT engine using NVIDIA Parakeet via onnx-asr.
 
-    Parakeet-TDT-0.6B-v3 is 10-20× faster than Whisper-large-v3-turbo on
-    Apple Silicon while supporting 25 European languages (Italian, German,
-    Spanish, French, …) with auto language detection.
+    Parakeet-TDT-0.6B-v3 supports 25 European languages (Italian, German,
+    Spanish, French, …) with automatic language detection. Runs via ONNX
+    runtime — no PyTorch required.
 
-    Install NeMo before use::
+    The onnx-asr Python package (~122 kB) is installed on first use with user
+    confirmation. Model weights (~670 MB) are downloaded from HuggingFace
+    automatically on first transcription.
 
-        pip install 'nemo_toolkit[asr]'
-
-    Then set in ``[stt]``::
+    Set in ``[stt]``::
 
         model = "parakeet-v3"
     """
@@ -60,44 +125,50 @@ class ParakeetEngine(STTEngine):
         headless: bool = False,
         **kwargs,
     ) -> None:
-        """Load the Parakeet model from Hugging Face via NeMo.
+        """Load the Parakeet model.
+
+        If onnx-asr is not installed and a console is available, prompts the
+        user to install it. In headless mode, raises RuntimeError with install
+        instructions.
 
         Args:
-            model_size: One of "parakeet-v3" (default) or "parakeet-ctc".
-            console: Optional Rich console for progress messages.
-            headless: If True, suppress all console output.
+            model_size: "parakeet-v3" (default, multilingual TDT 0.6B).
+            console: Rich Console for interactive prompts and progress output.
+            headless: If True, suppress interactive prompts (daemon mode).
             **kwargs: Ignored (accepted for API compatibility with other engines).
 
         Raises:
-            RuntimeError: If NeMo is not installed or model download fails.
+            RuntimeError: If onnx-asr is not installed (headless mode or user
+                declined install), or if model download fails.
         """
-        try:
-            import nemo.collections.asr as nemo_asr
-        except ImportError as exc:
-            raise RuntimeError(
-                "Parakeet requires the NeMo ASR toolkit.\n"
-                "Install with:  pip install 'nemo_toolkit[asr]'\n"
-                "Note: NeMo is a large package (~2 GB with dependencies)."
-            ) from exc
+        # Ensure onnx-asr is installed
+        if not _is_onnx_asr_installed():
+            if headless:
+                raise RuntimeError(
+                    f"Parakeet requires {_INSTALL_PACKAGE}.\n"
+                    f"Run:  voxtype stt install {model_size}"
+                )
+            _install_onnx_asr(console=console)
 
         model_name = PARAKEET_MODELS.get(model_size, PARAKEET_MODELS["parakeet-v3"])
-        size_mb = _MODEL_SIZES_MB.get(model_size, 2400)
 
         if not headless and console:
+            console.print(f"[cyan]Loading Parakeet model '{model_size}'...[/]")
             console.print(
-                f"[cyan]Loading Parakeet model '{model_size}' (~{size_mb} MB)...[/]"
+                "[dim]Model weights (~670 MB) will be downloaded from HuggingFace "
+                "on first use.[/]"
             )
-            console.print(f"[dim]Source: huggingface.co/{model_name}[/]")
 
-        # NeMo is very verbose — quiet it down
-        for noisy in ("nemo_logger", "nemo", "pytorch_lightning", "lightning"):
-            logging.getLogger(noisy).setLevel(logging.WARNING)
+        # Suppress onnx-asr / onnxruntime noise
+        logging.getLogger("onnxruntime").setLevel(logging.WARNING)
 
-        self._model = nemo_asr.models.ASRModel.from_pretrained(model_name)
+        from onnx_asr import load_model as _load_model
+
+        self._model = _load_model(model_name)
         self._model_size = model_size
 
         if not headless and console:
-            console.print("[green]✓ Parakeet model loaded[/]")
+            console.print("[green]✓ Parakeet model ready[/]")
 
     def transcribe(
         self,
@@ -112,16 +183,15 @@ class ParakeetEngine(STTEngine):
 
         Args:
             audio: Audio samples (float32, mono, 16 kHz).
-            language: Ignored — Parakeet auto-detects language.
-            hotwords: Ignored — not supported by NeMo.
-            beam_size: Ignored — not configurable via basic NeMo API.
+            language: Ignored — Parakeet V3 auto-detects language.
+            hotwords: Ignored — not supported by onnx-asr.
+            beam_size: Ignored — not configurable via onnx-asr.
             max_repetitions: Max consecutive word repetitions before filtering.
             task: Ignored — Parakeet only transcribes (no translate mode).
 
         Returns:
-            STTResult with transcribed text. Language is always None because
-            NeMo does not expose language ID through the basic ``transcribe``
-            interface.
+            STTResult with transcribed text. language is always None because
+            onnx-asr does not expose language ID through its transcribe API.
 
         Raises:
             RuntimeError: If model is not loaded.
@@ -135,23 +205,25 @@ class ParakeetEngine(STTEngine):
         if audio.dtype != np.float32:
             audio = audio.astype(np.float32)
 
-        # NeMo expects file paths — write to a temporary WAV file
+        # onnx-asr accepts file paths; write to a temporary WAV for safety
         fd, tmp_path = tempfile.mkstemp(suffix=".wav")
         try:
             os.close(fd)
             sf.write(tmp_path, audio, 16000)
-            output = self._model.transcribe([tmp_path])
+            result = self._model.transcribe(tmp_path)
         finally:
             try:
                 os.unlink(tmp_path)
             except OSError:
                 pass
 
-        # TDT models return Hypothesis objects (.text); CTC returns plain strings
-        text = ""
-        if output:
-            first = output[0]
-            text = first.text if hasattr(first, "text") else str(first)
+        # onnx-asr may return a string or an object with a .text attribute
+        if isinstance(result, str):
+            text = result
+        elif hasattr(result, "text"):
+            text = result.text
+        else:
+            text = str(result)
 
         text = text.strip()
         filtered = _filter_repetitions(text, max_repeats=max_repetitions)

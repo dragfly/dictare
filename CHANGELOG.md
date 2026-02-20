@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b158] - 2026-02-20
+
+### Changed
+- `ParakeetEngine`: switched from `nemo_toolkit[asr]` (~2 GB) to `onnx-asr` (~122 kB package, no PyTorch)
+- `voxtype[parakeet]` optional dep is now `onnx-asr>=0.1.0` — installs in seconds, not minutes
+- Model: `nemo-parakeet-tdt-0.6b-v3` (25 European languages: IT, DE, ES, FR, …, auto language detection)
+
+### Added
+- Guided install UX: when `onnx-asr` is missing and a console is available, prompts "Install now? [Y/n]"
+  then runs `pip install onnx-asr` with real output. In headless/daemon mode: clear error with `voxtype stt install parakeet-v3`
+
 ## [0.1.0b157] - 2026-02-20
 
 ### Added
