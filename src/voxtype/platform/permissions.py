@@ -1,13 +1,12 @@
 """macOS permission checks for Voxtype.
 
-Accessibility is always reported as True because it cannot be reliably checked:
-- From a launchd service, AXIsProcessTrusted() always returns False regardless
-  of TCC entries (macOS Sequoia limitation — CGEventTap doesn't work from
-  launchd-spawned processes at all).
-- From a Terminal session, it returns True because the *terminal app* is the
-  trusted process, not the Python binary.
-The global hotkey (CGEventTap) only works in foreground Terminal sessions.
-Users toggle listening via tray menu when running as a service.
+Accessibility is always reported as True — not needed for the current
+architecture (the Swift launcher handles CGEventTap, not Python).
+
+Input Monitoring is checked via a status file written by the Swift launcher.
+The launcher writes ~/.voxtype/hotkey_status ("active" or "failed") after
+attempting to create the CGEventTap.  If the file is missing, we assume OK
+(engine running from terminal, where pynput handles the hotkey directly).
 
 Microphone is checked via the native Voxtype.app launcher binary, which IS
 the process registered with AVFoundation in the TCC database.
@@ -32,6 +31,9 @@ ACCESSIBILITY_SETTINGS_URL = (
 MICROPHONE_SETTINGS_URL = (
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
 )
+INPUT_MONITORING_SETTINGS_URL = (
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+)
 
 # Cache: {"accessibility": bool, "microphone": bool}
 _cache: dict[str, bool] | None = None
@@ -41,11 +43,11 @@ _CACHE_TTL = 5.0  # seconds
 def get_permissions() -> dict[str, bool]:
     """Get all permission statuses.
 
-    Returns dict with "accessibility" and "microphone" booleans.
+    Returns dict with "accessibility", "microphone", and "input_monitoring" booleans.
     On non-macOS, returns all True. Cached for 5 seconds.
     """
     if sys.platform != "darwin":
-        return {"accessibility": True, "microphone": True}
+        return {"accessibility": True, "microphone": True, "input_monitoring": True}
 
     global _cache, _cache_time  # noqa: PLW0603
     now = time.monotonic()
@@ -76,6 +78,16 @@ def open_microphone_settings() -> None:
     if sys.platform != "darwin":
         return
     subprocess.Popen(["open", MICROPHONE_SETTINGS_URL])
+
+def is_input_monitoring_granted() -> bool:
+    """Check if Input Monitoring permission is granted."""
+    return get_permissions().get("input_monitoring", True)
+
+def open_input_monitoring_settings() -> None:
+    """Open macOS System Settings → Input Monitoring pane."""
+    if sys.platform != "darwin":
+        return
+    subprocess.Popen(["open", INPUT_MONITORING_SETTINGS_URL])
 
 def _find_launcher() -> str | None:
     """Find the Voxtype launcher binary.
@@ -141,15 +153,33 @@ def _check_mic_fallback() -> bool:
     except Exception:
         return True
 
+def _check_input_monitoring() -> bool:
+    """Check Input Monitoring by reading the launcher's hotkey_status file.
+
+    The Swift launcher writes ~/.voxtype/hotkey_status after attempting to
+    create the CGEventTap.  "active" = granted, "failed" = not granted.
+    Missing file = assume OK (terminal mode, or launcher hasn't run yet).
+    """
+    from pathlib import Path
+
+    status_file = Path.home() / ".voxtype" / "hotkey_status"
+    try:
+        content = status_file.read_text().strip()
+        return content == "active"
+    except FileNotFoundError:
+        return True  # No status file = running from terminal, assume OK
+
 def _check_via_launcher() -> dict[str, bool]:
     """Assemble the permissions dict.
 
     Accessibility is always True — not checkable from launchd (see module
     docstring). Microphone is checked via the Voxtype.app launcher subprocess.
+    Input Monitoring is checked via the hotkey_status file written by Swift.
     """
     return {
         "accessibility": True,
         "microphone": _check_mic_via_launcher(),
+        "input_monitoring": _check_input_monitoring(),
     }
 
 def _check_fallback() -> dict[str, bool]:
@@ -157,4 +187,5 @@ def _check_fallback() -> dict[str, bool]:
     return {
         "accessibility": True,
         "microphone": _check_mic_fallback(),
+        "input_monitoring": _check_input_monitoring(),
     }

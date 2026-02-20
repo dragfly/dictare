@@ -133,7 +133,8 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             fputs("Warning: CGEventTap creation failed — hotkey disabled\n", stderr)
-            fputs("Grant Accessibility + Input Monitoring in System Settings\n", stderr)
+            fputs("Grant Input Monitoring in System Settings\n", stderr)
+            writeHotkeyStatus("failed")
             return
         }
 
@@ -141,6 +142,15 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         fputs("Hotkey listener active (Right Cmd)\n", stderr)
+        writeHotkeyStatus("active")
+    }
+
+    func writeHotkeyStatus(_ status: String) {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".voxtype")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("hotkey_status")
+        try? status.write(to: file, atomically: true, encoding: .utf8)
     }
 
     func handleFlagsChanged(event: CGEvent) {
