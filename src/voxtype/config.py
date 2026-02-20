@@ -108,8 +108,8 @@ class STTConfig(BaseModel):
     """Speech-to-text configuration."""
 
     model: str = Field(
-        default="large-v3-turbo",
-        description="Whisper model (tiny/base/small/medium/large-v3/large-v3-turbo)",
+        default="parakeet-v3",
+        description="STT model: parakeet-v3 (default), or Whisper: tiny/base/small/medium/large-v3/large-v3-turbo",
     )
     language: str = Field(
         default="auto",
@@ -752,7 +752,8 @@ def create_default_config() -> Path:
 # enabled = true
 
 [stt]
-# model = "large-v3-turbo"        # tiny, base, small, medium, large-v3, large-v3-turbo
+# model = "parakeet-v3"           # Default: parakeet-v3 (25 European languages, ~670 MB, ONNX)
+#                                 # Whisper: tiny, base, small, medium, large-v3, large-v3-turbo
 # language = "auto"               # Auto-detect, or "en", "it", "de", "fr", etc.
 # translate = false               # Any language → English
 # hw_accel = true                 # CUDA on Linux, MLX on macOS
