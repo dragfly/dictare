@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b178] - 2026-02-20
+
+### Fixed
+- Tray: removed "try brew services first" fallback from `_on_restart_engine()`. The tray
+  now always uses the native service backend (`launchd` on macOS, `systemd` on Linux),
+  which manages `com.voxtype.engine` — the same label used by `voxtype service install`.
+  Previously the tray would silently restart via `homebrew.mxcl.voxtype` if brew was
+  managing the service, creating two separate launchd entries with different labels and
+  causing confusion about which service was actually running.
+
 ## [0.1.0b177] - 2026-02-20
 
 ### Added
