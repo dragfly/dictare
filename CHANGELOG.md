@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b192] - 2026-02-20
+
+### Fixed
+- **Service install kills orphan processes from previous versions.** The b191
+  fix only worked for NEW launchers — when upgrading from pre-b191, the OLD
+  `stop()` ran (without kill verification), leaving the old process alive.
+  `install()` now always runs `_kill_orphan_processes()` which reads the engine
+  PID file (`~/.voxtype/engine.pid`) and pkills the Voxtype.app launcher binary,
+  regardless of launchd state.
+
 ## [0.1.0b191] - 2026-02-20
 
 ### Fixed
