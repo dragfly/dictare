@@ -58,7 +58,7 @@ def load_state() -> dict[str, Any]:
             "listening": data.get("listening", False),
         }
     except (OSError, json.JSONDecodeError, KeyError) as e:
-        logger.warning("Failed to load state: %s", e)
+        logger.debug("Failed to load state: %s", e)
         return defaults
 
 def clear_state() -> None:

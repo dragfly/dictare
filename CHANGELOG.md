@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b173] - 2026-02-20
+
+### Fixed
+- Engine: shutdown watchdog — if `stop()` hangs (e.g. audio deadlock during restart), a daemon
+  thread force-exits the process after 6 s so launchd/systemd can restart it cleanly
+- Engine: duplicate PID file write in `_run_daemon` caused `engine start -d` to fail immediately
+  with "already running" after `kill -9` (the PID was written before `_check_single_instance()`
+  ran, which then found its own PID and refused to start)
+- Settings: all config changes via web UI are now logged (`settings.change key=… value=…`)
+- Settings UI: `agent_types` no longer appears in the General tab (it's a dict/complex field
+  that belongs to the Agents tab; General now only shows top-level scalar fields)
+
 ## [0.1.0b172] - 2026-02-20
 
 ### Added
