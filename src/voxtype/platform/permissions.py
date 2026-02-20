@@ -70,23 +70,32 @@ def open_microphone_settings() -> None:
     subprocess.Popen(["open", MICROPHONE_SETTINGS_URL])
 
 def _find_launcher() -> str | None:
-    """Find the Voxtype launcher binary."""
+    """Find the Voxtype launcher binary.
+
+    Priority order matters: we must use the binary that is registered in the
+    macOS TCC database (the one the user granted Accessibility permission to).
+    The service-installed bundle (~/Applications) is the one in TCC, so it is
+    checked first. The brew Cellar path is a different TCC identity and may
+    report false negatives when called from within a launchd service context.
+    """
+    from voxtype.daemon.app_bundle import get_executable_path
+
+    # 1. Use the service-installed bundle (the one registered in TCC)
+    service_path = get_executable_path()
+    if service_path and __import__("os").path.exists(service_path):
+        return service_path
+
+    # 2. Check /Applications (system-wide install)
     from pathlib import Path
 
-    # Check brew Cellar (opt_prefix symlink)
-    brew_path = Path("/opt/homebrew/opt/voxtype/Voxtype.app/Contents/MacOS/Voxtype")
-    if brew_path.exists():
-        return str(brew_path)
-
-    # Check ~/Applications
-    home_path = Path.home() / "Applications/Voxtype.app/Contents/MacOS/Voxtype"
-    if home_path.exists():
-        return str(home_path)
-
-    # Check /Applications
     sys_path = Path("/Applications/Voxtype.app/Contents/MacOS/Voxtype")
     if sys_path.exists():
         return str(sys_path)
+
+    # 3. Brew Cellar fallback (different TCC identity — may return false negatives)
+    brew_path = Path("/opt/homebrew/opt/voxtype/Voxtype.app/Contents/MacOS/Voxtype")
+    if brew_path.exists():
+        return str(brew_path)
 
     return None
 
