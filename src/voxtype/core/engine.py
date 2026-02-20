@@ -1338,7 +1338,25 @@ class VoxtypeEngine:
             self.toggle_listening()
             return {"status": "ok"}
         elif command == "engine.shutdown":
+            # Persist current state before shutdown (bypasses the _running guard in
+            # _persist_state so the correct listening/agent state is saved for restore)
+            from voxtype.utils.state import save_state
+            save_state(
+                active_agent=self._current_agent_id,
+                output_mode="agents" if self.agent_mode else "keyboard",
+                listening=self.is_listening,
+            )
             self._running = False
+            # Watchdog: force-exit if graceful stop() hangs (e.g. audio deadlock).
+            # Exit code 1 so both Restart=always and Restart=on-failure trigger a restart.
+            import os as _os
+            import threading as _threading
+            def _force_exit() -> None:
+                import time
+                time.sleep(6)
+                logger.warning("Graceful shutdown timed out — forcing exit")
+                _os._exit(1)
+            _threading.Thread(target=_force_exit, daemon=True, name="shutdown-watchdog").start()
             return {"status": "ok"}
         elif command == "ping":
             return {"status": "ok", "pong": True}
