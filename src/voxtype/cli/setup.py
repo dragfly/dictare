@@ -84,16 +84,6 @@ def register(app: typer.Typer) -> None:
             console.print(f"[yellow]Service install failed: {e}[/]")
             console.print("[dim]You can install manually: voxtype service install[/]")
 
-        # Step 4: macOS Accessibility permission
-        if sys.platform == "darwin":
-            from voxtype.tray.app import _ensure_accessibility
-
-            console.print("[dim]Checking Accessibility permission...[/]")
-            if _ensure_accessibility(prompt=True):
-                console.print("[green]✓[/] Accessibility permission granted")
-            else:
-                console.print("[yellow]![/] Grant Accessibility permission in System Settings")
-
         console.print()
         console.print("[bold green]Setup complete![/]")
         console.print()

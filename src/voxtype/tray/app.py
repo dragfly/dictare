@@ -170,7 +170,6 @@ class TrayApp:
         self._load_output_mode()
 
         # Permissions state (from engine /status polling)
-        self._accessibility_granted = True
         self._microphone_granted = True
 
         # Status polling
@@ -214,13 +213,6 @@ class TrayApp:
                     pystray.MenuItem(
                         "Grant Microphone Permission",
                         self._on_open_microphone_settings,
-                    ),
-                )
-            if not self._accessibility_granted:
-                items.append(
-                    pystray.MenuItem(
-                        "Grant Accessibility Permission",
-                        self._on_open_accessibility_settings,
                     ),
                 )
 
@@ -439,7 +431,7 @@ class TrayApp:
                 "listening": "voxtype_active",
             }.get(self._state, "voxtype_muted")
 
-            if (not self._accessibility_granted or not self._microphone_granted) and self._state not in ("disconnected", "restarting", "loading"):
+            if not self._microphone_granted and self._state not in ("disconnected", "restarting", "loading"):
                 icon_name = "voxtype_muted"
 
             self._icon.icon = _load_icon(icon_name)
@@ -569,10 +561,8 @@ class TrayApp:
 
                     # Update permissions state
                     perms = platform.get("permissions", {})
-                    ax_granted = perms.get("accessibility", True)
                     mic_granted = perms.get("microphone", True)
-                    if ax_granted != self._accessibility_granted or mic_granted != self._microphone_granted:
-                        self._accessibility_granted = ax_granted
+                    if mic_granted != self._microphone_granted:
                         self._microphone_granted = mic_granted
                         self._update_menu()
                         self._update_icon()

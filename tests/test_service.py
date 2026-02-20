@@ -144,15 +144,10 @@ class TestLaunchdGeneratePlist:
         assert "stdout.log" in parsed["StandardOutPath"]
         assert "stderr.log" in parsed["StandardErrorPath"]
 
-    def test_no_env_vars_by_default(self):
+    def test_no_env_vars(self):
         xml = generate_plist("/usr/bin/python3")
         parsed = plistlib.loads(xml.encode())
         assert "EnvironmentVariables" not in parsed
-
-    def test_pythonpath_in_env_vars(self):
-        xml = generate_plist("/usr/bin/python3", pythonpath="/path/to/site-packages")
-        parsed = plistlib.loads(xml.encode())
-        assert parsed["EnvironmentVariables"]["PYTHONPATH"] == "/path/to/site-packages"
 
 
 class TestLaunchdPaths:

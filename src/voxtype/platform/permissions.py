@@ -1,9 +1,16 @@
-"""macOS permission checks via the native Voxtype launcher binary.
+"""macOS permission checks for Voxtype.
 
-The launcher binary (Voxtype.app/Contents/MacOS/Voxtype) IS the trusted process
-in TCC (Accessibility, Microphone). Checking from Python gives false negatives
-because Python is a different binary. So we shell out to the launcher with
---check-permissions and parse its JSON output.
+Accessibility is always reported as True because it cannot be reliably checked:
+- From a launchd service, AXIsProcessTrusted() always returns False regardless
+  of TCC entries (macOS Sequoia limitation — CGEventTap doesn't work from
+  launchd-spawned processes at all).
+- From a Terminal session, it returns True because the *terminal app* is the
+  trusted process, not the Python binary.
+The global hotkey (CGEventTap) only works in foreground Terminal sessions.
+Users toggle listening via tray menu when running as a service.
+
+Microphone is checked via the native Voxtype.app launcher binary, which IS
+the process registered with AVFoundation in the TCC database.
 
 Results are cached for 5 seconds (polling interval is 500ms).
 """
@@ -107,28 +114,6 @@ def _find_launcher() -> str | None:
     return None
 
 
-def _check_ax_direct() -> bool:
-    """Check Accessibility trust for the current Python process via ctypes.
-
-    This is the authoritative check for whether pynput/CGEventTap will work:
-    the CGEventTap runs in *this* Python process, so Python's own TCC status
-    is what matters — not the Voxtype.app launcher binary's status.
-
-    The launcher-subprocess approach (spawning Voxtype --check-permissions)
-    gives misleading results when called from inside a launchd agent because
-    the spawned subprocess lacks a window-server session context and
-    AXIsProcessTrusted() returns False even for a genuinely trusted binary.
-    """
-    try:
-        as_lib = ctypes.cdll.LoadLibrary(
-            "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices"
-        )
-        as_lib.AXIsProcessTrusted.restype = ctypes.c_bool
-        return bool(as_lib.AXIsProcessTrusted())
-    except Exception:
-        return True  # assume trusted if check fails
-
-
 def _check_mic_via_launcher() -> bool:
     """Check microphone permission via the native Voxtype.app launcher.
 
@@ -168,11 +153,11 @@ def _check_mic_fallback() -> bool:
 def _check_via_launcher() -> dict[str, bool]:
     """Assemble the permissions dict.
 
-    Accessibility is checked in the calling Python process directly (ctypes).
-    Microphone is checked via the Voxtype.app launcher subprocess.
+    Accessibility is always True — not checkable from launchd (see module
+    docstring). Microphone is checked via the Voxtype.app launcher subprocess.
     """
     return {
-        "accessibility": _check_ax_direct(),
+        "accessibility": True,
         "microphone": _check_mic_via_launcher(),
     }
 
@@ -180,6 +165,6 @@ def _check_via_launcher() -> dict[str, bool]:
 def _check_fallback() -> dict[str, bool]:
     """Full Python-only fallback (used when launcher is unavailable)."""
     return {
-        "accessibility": _check_ax_direct(),
+        "accessibility": True,
         "microphone": _check_mic_fallback(),
     }
