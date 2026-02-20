@@ -141,7 +141,7 @@ def _write_bash_launcher(dest: Path, python_path: str) -> None:
     """Write a bash launcher script (fallback when swiftc unavailable)."""
     launcher_script = (
         f"#!/bin/bash\n"
-        f'{python_path} -m voxtype engine start -d &\n'
+        f'{python_path} -m voxtype serve &\n'
         f'CHILD=$!\n'
         f'trap "kill $CHILD 2>/dev/null" SIGTERM SIGINT\n'
         f'wait $CHILD\n'

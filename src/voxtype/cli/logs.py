@@ -96,7 +96,7 @@ def register(app: typer.Typer) -> None:
 
         if not log_path.exists():
             typer.echo(f"No log file found: {log_path}", err=True)
-            typer.echo("Start the engine first: voxtype engine start", err=True)
+            typer.echo("Start the engine first: voxtype serve", err=True)
             raise typer.Exit(1)
 
         use_rich = not raw and sys.stdout.isatty()

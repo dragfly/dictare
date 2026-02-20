@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b179] - 2026-02-20
+
+### Changed (breaking)
+- **`voxtype engine` subcommand group removed entirely.** Use `voxtype serve` instead.
+  - `voxtype engine start` → `voxtype serve`
+  - `voxtype engine start -d` → `voxtype service install` (for service) or `voxtype serve` (for dev)
+  - `voxtype engine stop` → `voxtype service stop`
+  - `voxtype engine status` → `voxtype service status`
+- **`voxtype serve`** is now a top-level command (Ollama-style). Runs in foreground and logs
+  to both the JSONL file (`~/.local/share/voxtype/logs/engine.jsonl`, used by `voxtype logs -f`)
+  and stdout (captured by systemd/launchd; visible in terminal during dev). `--verbose` enables
+  DEBUG-level output. The service manager handles backgrounding and `Restart=always`.
+- Service templates updated: systemd `ExecStart` and launchd plist fallback now call
+  `voxtype serve` instead of `voxtype engine start -d`.
+- Swift launcher (macOS .app bundle) updated to call `voxtype serve`.
+- `engine.restart` protocol command simplified: no longer spawns a bootstrap subprocess
+  (which broke systemd/launchd PID tracking). Now just exits; the service manager restarts.
+- Homebrew formula: removed `service do` block. Service is managed via `voxtype service install`,
+  not `brew services`. Caveats updated accordingly.
+- `scripts/macos-install.sh`: replaced `brew services start/stop` with `voxtype service start/stop`.
+
 ## [0.1.0b178] - 2026-02-20
 
 ### Fixed
