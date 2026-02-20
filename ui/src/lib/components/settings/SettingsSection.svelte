@@ -16,7 +16,7 @@
 	const fields = $derived(
 		schema.keys.filter((k) => {
 			if (SKIP_KEYS.has(k.key)) return false;
-			if (isGeneral) return !k.key.includes(".");
+			if (isGeneral) return !k.key.includes(".") && k.type !== "dict";
 			const section = k.key.split(".")[0];
 			return sections.includes(section);
 		})
