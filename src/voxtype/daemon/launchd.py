@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import plistlib
 import subprocess
+import sys
 from pathlib import Path
 
 LABEL = "com.dragfly.voxtype"
@@ -40,19 +41,51 @@ def generate_plist(python_path: str) -> str:
     }
     return plistlib.dumps(plist).decode()
 
+def _find_framework_python_app() -> str | None:
+    """Find the Python.app binary for the current Python interpreter.
+
+    On macOS, brew (and any framework build) ships two separate binaries:
+      - ``bin/python3.11``  — the CLI binary (what symlinks resolve to)
+      - ``Python.app/Contents/MacOS/Python`` — the .app bundle binary
+
+    These have different inodes and different TCC identities.  macOS shows
+    the .app binary as "Python" in Accessibility / Input Monitoring.  If we
+    spawn ``bin/python3.11`` instead, pynput's CGEventTap silently fails
+    because that binary is NOT in TCC.
+    """
+    import os
+
+    real = os.path.realpath(sys.executable)
+    parts = real.split(os.sep)
+    for i, part in enumerate(parts):
+        if (
+            part == "Python.framework"
+            and i + 2 < len(parts)
+            and parts[i + 1] == "Versions"
+        ):
+            version_dir = os.sep + os.path.join(*parts[: i + 3])
+            app = os.path.join(
+                version_dir, "Resources", "Python.app", "Contents", "MacOS", "Python",
+            )
+            if os.path.exists(app):
+                return app
+    return None
+
 def install() -> None:
     """Create .app bundle, write plist, and load the LaunchAgent.
 
     Also installs and starts the tray LaunchAgent.
     """
-    import sys
-
     from voxtype.daemon.app_bundle import create_app_bundle
 
-    create_app_bundle(sys.executable)
+    # Use the Python.app binary (the one registered in TCC) when available.
+    # Falls back to sys.executable for non-framework builds.
+    bundle_python = _find_framework_python_app() or sys.executable
+
+    create_app_bundle(bundle_python)
     plist_path = get_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    plist_path.write_text(generate_plist(sys.executable))
+    plist_path.write_text(generate_plist(bundle_python))
 
     # Unload first if already running so the updated plist takes effect.
     if is_loaded():
