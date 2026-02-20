@@ -25,10 +25,10 @@ class TestIsParakeetModel:
 
 
 class TestParakeetEngine:
-    def _make_engine(self, transcribe_result="hello world"):
+    def _make_engine(self, recognize_result="hello world"):
         """Return a ParakeetEngine with a pre-loaded mock model."""
         mock_model = MagicMock()
-        mock_model.transcribe.return_value = transcribe_result
+        mock_model.recognize.return_value = recognize_result
         engine = ParakeetEngine()
         engine._model = mock_model
         engine._model_size = "parakeet-v3"
@@ -50,28 +50,11 @@ class TestParakeetEngine:
     # --- transcribe: string result ---
 
     def test_transcribe_string_result(self):
-        engine, _ = self._make_engine("ciao mondo")
+        engine, mock_model = self._make_engine("ciao mondo")
         audio = np.zeros(16000, dtype=np.float32)
-        with patch("soundfile.write"), \
-             patch("os.unlink"), \
-             patch("tempfile.mkstemp", return_value=(0, "/tmp/t.wav")), \
-             patch("os.close"):
-            result = engine.transcribe(audio)
+        result = engine.transcribe(audio)
         assert result.text == "ciao mondo"
-
-    # --- transcribe: object with .text ---
-
-    def test_transcribe_hypothesis_object(self):
-        hyp = MagicMock()
-        hyp.text = "buongiorno"
-        engine, _ = self._make_engine(hyp)
-        audio = np.zeros(16000, dtype=np.float32)
-        with patch("soundfile.write"), \
-             patch("os.unlink"), \
-             patch("tempfile.mkstemp", return_value=(0, "/tmp/t.wav")), \
-             patch("os.close"):
-            result = engine.transcribe(audio)
-        assert result.text == "buongiorno"
+        mock_model.recognize.assert_called_once_with(audio, sample_rate=16_000)
 
     # --- transcribe: edge cases ---
 
@@ -81,25 +64,11 @@ class TestParakeetEngine:
             engine.transcribe(np.zeros(16000, dtype=np.float32))
 
     def test_transcribe_converts_int16_to_float32(self):
-        engine, _ = self._make_engine("test")
+        engine, mock_model = self._make_engine("test")
         audio = np.zeros(16000, dtype=np.int16)
-        with patch("soundfile.write") as mock_write, \
-             patch("os.unlink"), \
-             patch("tempfile.mkstemp", return_value=(0, "/tmp/t.wav")), \
-             patch("os.close"):
-            engine.transcribe(audio)
-            written_audio = mock_write.call_args[0][1]
-            assert written_audio.dtype == np.float32
-
-    def test_transcribe_cleans_up_tempfile(self):
-        engine, _ = self._make_engine("text")
-        audio = np.zeros(16000, dtype=np.float32)
-        with patch("soundfile.write"), \
-             patch("os.unlink") as mock_unlink, \
-             patch("tempfile.mkstemp", return_value=(0, "/tmp/t.wav")), \
-             patch("os.close"):
-            engine.transcribe(audio)
-            mock_unlink.assert_called_once_with("/tmp/t.wav")
+        engine.transcribe(audio)
+        called_audio = mock_model.recognize.call_args[0][0]
+        assert called_audio.dtype == np.float32
 
     # --- load_model ---
 

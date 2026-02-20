@@ -11,8 +11,6 @@ Model weights (~670 MB) are downloaded on first use.
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
 from typing import TYPE_CHECKING, Any
 
 from voxtype.stt.base import STTEngine, STTResult
@@ -127,31 +125,13 @@ class ParakeetEngine(STTEngine):
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
         import numpy as np
-        import soundfile as sf
 
         if audio.dtype != np.float32:
             audio = audio.astype(np.float32)
 
-        # onnx-asr accepts file paths; write to a temporary WAV
-        fd, tmp_path = tempfile.mkstemp(suffix=".wav")
-        try:
-            os.close(fd)
-            sf.write(tmp_path, audio, 16000)
-            result = self._model.transcribe(tmp_path)
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-
-        # onnx-asr may return a string or an object with a .text attribute
-        if isinstance(result, str):
-            text = result
-        elif hasattr(result, "text"):
-            text = result.text
-        else:
-            text = str(result)
-
+        # TextResultsAsrAdapter.recognize() accepts 1D float32 numpy arrays directly.
+        # Returns str — no temp file needed.
+        text: str = self._model.recognize(audio, sample_rate=16_000)
         text = text.strip()
         filtered = _filter_repetitions(text, max_repeats=max_repetitions)
         return STTResult(text=filtered, language=None)
