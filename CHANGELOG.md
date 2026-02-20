@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b187] - 2026-02-20
+
+### Fixed
+- **Service crash: `No module named voxtype`** — b186 used the Python.app binary
+  but forgot to inject PYTHONPATH (the .app binary is outside the venv and can't
+  find installed packages). Restored PYTHONPATH injection in the launchd plist
+  pointing to the venv's site-packages.
+
 ## [0.1.0b186] - 2026-02-20
 
 ### Fixed
