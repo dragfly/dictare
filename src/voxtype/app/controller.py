@@ -14,7 +14,10 @@ CLI and Tray both:
 
 from __future__ import annotations
 
+import atexit
+import errno
 import logging
+import os
 import threading
 from typing import TYPE_CHECKING, Any
 
@@ -54,6 +57,57 @@ class AppController:
         self._shutdown_event = threading.Event()
 
     # =========================================================================
+    # Single-instance enforcement
+    # =========================================================================
+
+    def _check_single_instance(self) -> None:
+        """Fail fast if another engine instance is already running.
+
+        Uses a PID file at ~/.voxtype/engine.pid.  Stale files (process gone)
+        are silently removed; live processes cause a RuntimeError.
+        """
+        from voxtype.utils.paths import get_pid_path, get_voxtype_dir
+
+        pid_path = get_pid_path()
+
+        if pid_path.exists():
+            try:
+                existing_pid = int(pid_path.read_text().strip())
+                try:
+                    os.kill(existing_pid, 0)  # Signal 0 = existence check
+                    # Process exists — refuse to start
+                    raise RuntimeError(
+                        f"Voxtype engine already running (PID {existing_pid}).\n"
+                        "Stop it first:\n"
+                        "  voxtype engine stop\n"
+                        "  # or: voxtype service stop"
+                    )
+                except ProcessLookupError:
+                    # Stale PID — process no longer exists
+                    logger.info("Stale engine PID file (PID %d not running), removing", existing_pid)
+                    pid_path.unlink(missing_ok=True)
+            except (ValueError, OSError):
+                # Unreadable or corrupt PID file — ignore and overwrite
+                pass
+
+        # Write our PID
+        get_voxtype_dir().mkdir(parents=True, exist_ok=True)
+        pid_path.write_text(str(os.getpid()))
+        atexit.register(self._cleanup_pid)
+        logger.info("Engine PID file written: %s (PID %d)", pid_path, os.getpid())
+
+    def _cleanup_pid(self) -> None:
+        """Remove the PID file on exit (only if it contains our PID)."""
+        from voxtype.utils.paths import get_pid_path
+
+        try:
+            pid_path = get_pid_path()
+            if pid_path.exists() and pid_path.read_text().strip() == str(os.getpid()):
+                pid_path.unlink()
+        except OSError:
+            pass
+
+    # =========================================================================
     # Lifecycle
     # =========================================================================
 
@@ -75,6 +129,9 @@ class AppController:
             mode: "foreground" or "daemon".
             with_bindings: If True, start keyboard bindings (foreground only).
         """
+        # 0. Single-instance check — fail fast before creating any resources
+        self._check_single_instance()
+
         from voxtype.app.bindings import KeyboardBindingManager
         from voxtype.core.engine import create_engine
         from voxtype.core.events import EngineEvents
@@ -202,6 +259,23 @@ class AppController:
             self._config.server.host, self._config.server.port,
         )
         self._http_server.start()
+
+        # Hard fail if port is already in use — engine must not run without HTTP server.
+        # Without this check, the engine would start, grab the microphone, and process
+        # audio with no way to receive agent connections (dual-instance silent failure).
+        if not self._http_server.wait_started(timeout=5.0):
+            err = getattr(self._http_server, "_start_error", None)
+            self._cleanup_pid()
+            if isinstance(err, OSError) and getattr(err, "errno", None) == errno.EADDRINUSE:
+                raise RuntimeError(
+                    f"Port {self._config.server.port} already in use — "
+                    "another engine instance is running.\n"
+                    "Stop it first:\n"
+                    "  voxtype engine stop\n"
+                    "  # or: voxtype service stop"
+                )
+            raise RuntimeError(f"HTTP server failed to start: {err}")
+
         self._engine.set_status_change_callback(
             self._http_server.notify_status_change
         )
@@ -230,6 +304,7 @@ class AppController:
 
         self._running = False
         self._shutdown_event.set()
+        self._cleanup_pid()
 
         # Capture and display stats FIRST (before slow engine shutdown)
         stats = self._engine.stats if self._engine else None
