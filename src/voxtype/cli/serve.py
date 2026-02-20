@@ -116,12 +116,11 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
         saved = load_state()
         start_listening = saved.get("listening", False)
 
-    # Write PID file before start so stop/status commands work
-    from voxtype.utils.paths import get_pid_path
+    # NOTE: PID file is written by AppController._check_single_instance() inside
+    # controller.start().  Do not write it here — writing before start() causes the
+    # controller to find its own PID and refuse to start.
 
-    pid_path = get_pid_path()
-    pid_path.parent.mkdir(parents=True, exist_ok=True)
-    pid_path.write_text(str(os.getpid()))
+    from voxtype.utils.paths import get_pid_path
 
     try:
         try:

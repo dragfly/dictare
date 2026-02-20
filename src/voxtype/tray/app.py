@@ -52,29 +52,6 @@ def _hide_dock_icon() -> None:
     except Exception:
         pass
 
-def _ensure_accessibility(prompt: bool = True) -> bool:
-    """Check macOS Accessibility permission, optionally prompting the user.
-
-    Delegates to the shared platform utility.
-    """
-    from voxtype.platform.accessibility import (
-        is_accessibility_granted,
-        request_accessibility,
-    )
-
-    if prompt:
-        trusted = request_accessibility()
-    else:
-        trusted = is_accessibility_granted()
-
-    if not trusted:
-        logger.warning(
-            "Accessibility permission not granted — "
-            "hotkey monitoring will not work until enabled in "
-            "System Settings → Privacy & Security → Accessibility"
-        )
-    return trusted
-
 def _patch_pystray_appindicator() -> None:
     """Monkey-patch pystray to save icons with .png extension on Linux.
 
@@ -689,8 +666,11 @@ def main() -> None:
     # Hide from Dock (tray apps shouldn't show a Dock tile)
     _hide_dock_icon()
 
-    # Check Accessibility permission (triggers macOS dialog if needed)
-    _ensure_accessibility(prompt=True)
+    # NOTE: The tray does NOT request Accessibility permission.
+    # The engine (running inside Voxtype.app via the Swift launcher) handles all
+    # keyboard injection and hotkey listening — those require Accessibility.
+    # The tray only reads permission state from the engine's /status endpoint
+    # (see start_status_streaming → _on_status → perms["accessibility"]).
 
     # Hotkey is handled by the engine process — the tray does NOT register
     # its own listener. Having two listeners on the same key causes a double

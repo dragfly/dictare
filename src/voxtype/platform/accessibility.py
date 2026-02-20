@@ -69,11 +69,53 @@ def open_accessibility_settings() -> None:
     subprocess.Popen(["open", ACCESSIBILITY_SETTINGS_URL])
 
 def _check_ax_trusted(prompt: bool) -> bool:
-    """Call AXIsProcessTrustedWithOptions via ctypes.
+    """Check Accessibility trust for the Voxtype bundle.
+
+    When the .app bundle exists, delegates to `Voxtype --check-permissions`
+    which calls AXIsProcessTrusted() from within the trusted Swift binary.
+    This is necessary because AXIsProcessTrustedWithOptions called from the
+    Python subprocess reports Python's own trust (not in TCC), not the
+    Voxtype.app bundle's trust (which IS in TCC).
+
+    Falls back to ctypes when no .app bundle is present (e.g. Linux / dev).
 
     Args:
-        prompt: If True, macOS shows the "grant accessibility" dialog.
+        prompt: If True, show the macOS Accessibility permission dialog.
     """
+    # Try the Swift launcher first — it reports trust for the Voxtype bundle.
+    try:
+        import json
+        import subprocess
+
+        from voxtype.daemon.app_bundle import get_executable_path
+
+        exe = get_executable_path()
+        if exe and __import__("os").path.exists(exe):
+            args = [exe, "--check-permissions"]
+            if prompt:
+                # Running without --check-permissions triggers the dialog.
+                # We call the exe normally (no flag) to trigger the prompt,
+                # then immediately kill it — the dialog appears from launchd's
+                # perspective via the existing running instance.
+                # Simpler: just call --check-permissions and separately open
+                # settings if not trusted.
+                pass
+            result = subprocess.run(
+                args,
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                data = json.loads(result.stdout.strip())
+                trusted = bool(data.get("accessibility", False))
+                if not trusted and prompt:
+                    # Trigger the system dialog by running the launcher without flags.
+                    subprocess.Popen([exe])
+                return trusted
+    except Exception:
+        logger.debug("Bundle permission check failed, falling back to ctypes", exc_info=True)
+
+    # Fallback: ctypes (checks Python's own trust — may return False even when
+    # the bundle is trusted, but useful in dev/non-bundle scenarios).
     try:
         import ctypes
 
