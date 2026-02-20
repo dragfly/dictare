@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b185] - 2026-02-20
+
+### Fixed
+- **Remove misleading Accessibility permission checks and prompts.** macOS Sequoia
+  does not allow `CGEventTap` in launchd-spawned processes — `AXIsProcessTrusted()`
+  always returns False regardless of TCC entries. This caused: (1) the Swift launcher
+  to show the macOS permission dialog on every engine restart, (2) the tray to show a
+  red "Grant Accessibility Permission" item even when the user had granted it, (3) the
+  b183/b184 brew Python.app swap logic to run needlessly. The global hotkey only works
+  from a foreground Terminal session (`voxtype serve`); when running as a service, users
+  toggle listening via the tray menu.
+- Removed `AXIsProcessTrustedWithOptions` call from Swift launcher (no more dialog).
+- Removed `_check_ax_direct()` from `permissions.py` — accessibility always True.
+- Removed "Grant Accessibility Permission" from tray menu.
+- Removed `_find_brew_python_app()` and `_is_ax_trusted()` from `launchd.py`.
+- Simplified `install()` — no more Python binary swap or PYTHONPATH injection.
+- Removed `pythonpath` parameter from `generate_plist()`.
+
 ## [0.1.0b184] - 2026-02-20
 
 ### Fixed
