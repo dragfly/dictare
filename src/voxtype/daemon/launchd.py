@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import glob
 import plistlib
 import subprocess
 from pathlib import Path
@@ -16,12 +17,17 @@ def get_plist_path() -> Path:
     return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 
 
-def generate_plist(python_path: str) -> str:
+def generate_plist(python_path: str, pythonpath: str | None = None) -> str:
     """Generate the LaunchAgent plist XML for the given python executable.
 
     If a .app bundle exists, ProgramArguments points to its executable
     so macOS associates permissions with the bundle (shows in Accessibility).
     Otherwise falls back to the raw python path.
+
+    Args:
+        python_path: Path to the Python interpreter.
+        pythonpath: Optional PYTHONPATH to inject (used when the service Python
+            differs from the venv Python — e.g. brew Python.app + uv venv packages).
     """
     from voxtype.daemon.app_bundle import get_app_path, get_executable_path
 
@@ -40,11 +46,61 @@ def generate_plist(python_path: str) -> str:
         "StandardOutPath": str(LOG_DIR / "stdout.log"),
         "StandardErrorPath": str(LOG_DIR / "stderr.log"),
     }
+    if pythonpath:
+        plist["EnvironmentVariables"] = {"PYTHONPATH": pythonpath}
     return plistlib.dumps(plist).decode()
+
+
+def _find_brew_python_app() -> str | None:
+    """Find the brew-installed Python.app binary (already trusted in macOS TCC).
+
+    Brew Python is a proper .app bundle. On most macOS setups it has already
+    been granted Accessibility permission (shown as "Python" in System Settings).
+    We prefer it over uv-managed Python (a standalone binary with no .app bundle
+    and no TCC entry) so that pynput's CGEventTap works from the launchd service.
+    """
+    for prefix in ("/opt/homebrew", "/usr/local"):
+        pattern = (
+            f"{prefix}/Cellar/python@3.11/*/Frameworks/Python.framework"
+            f"/Versions/3.11/Resources/Python.app/Contents/MacOS/Python"
+        )
+        matches = sorted(glob.glob(pattern), reverse=True)
+        if matches:
+            return matches[0]
+    return None
+
+
+def _is_ax_trusted(python_exe: str) -> bool:
+    """Return True if the given Python binary has Accessibility TCC trust.
+
+    Spawns the binary in a subprocess and calls AXIsProcessTrusted() from
+    inside it, which checks whether *that* binary is in the TCC database.
+    """
+    try:
+        result = subprocess.run(
+            [
+                python_exe, "-c",
+                "import ctypes; lib=ctypes.cdll.LoadLibrary("
+                "'/System/Library/Frameworks/ApplicationServices.framework"
+                "/ApplicationServices');"
+                "lib.AXIsProcessTrusted.restype=ctypes.c_bool;"
+                "print(bool(lib.AXIsProcessTrusted()))",
+            ],
+            capture_output=True, text=True, timeout=5,
+        )
+        return result.stdout.strip() == "True"
+    except Exception:
+        return False
 
 
 def install() -> None:
     """Create .app bundle, write plist, and load the LaunchAgent.
+
+    On macOS, if the current Python is not trusted in TCC Accessibility
+    (e.g. a uv-managed standalone binary), we automatically switch to the
+    brew Python.app (which ships as a proper .app bundle and is already
+    trusted on most systems). The venv site-packages are injected via
+    PYTHONPATH so all installed packages remain accessible.
 
     Also installs and starts the tray LaunchAgent.
     """
@@ -52,10 +108,29 @@ def install() -> None:
 
     from voxtype.daemon.app_bundle import create_app_bundle
 
-    create_app_bundle(sys.executable)
+    bundle_python = sys.executable
+    pythonpath: str | None = None
+
+    if sys.platform == "darwin" and not _is_ax_trusted(sys.executable):
+        brew = _find_brew_python_app()
+        if brew and _is_ax_trusted(brew):
+            try:
+                r = subprocess.run(
+                    [sys.executable, "-c",
+                     "import site; print(site.getsitepackages()[0])"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                venv_site = r.stdout.strip() if r.returncode == 0 else None
+            except Exception:
+                venv_site = None
+            if venv_site:
+                bundle_python = brew
+                pythonpath = venv_site
+
+    create_app_bundle(bundle_python)
     plist_path = get_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    plist_path.write_text(generate_plist(sys.executable))
+    plist_path.write_text(generate_plist(bundle_python, pythonpath=pythonpath))
     subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
     # Also install tray auto-start
