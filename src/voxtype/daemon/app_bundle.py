@@ -5,7 +5,7 @@ icon in Accessibility / Input Monitoring settings, mic indicator, and
 Activity Monitor — instead of "Python".
 
 The bundle contains a compiled Swift launcher that:
-1. Calls AXIsProcessTrustedWithOptions (shows "Voxtype" in dialog)
+1. Requests Microphone permission (shows "Voxtype" in dialog)
 2. Spawns the Python engine as a child process
 3. Forwards signals for clean shutdown
 """
@@ -66,12 +66,17 @@ def create_app_bundle(
     if app_path.exists():
         existing_python_file = macos_dir / "python_path"
         existing_launcher = macos_dir / APP_NAME
-        if (
-            existing_python_file.exists()
-            and existing_python_file.read_text().strip() == python_path
-            and existing_launcher.exists()
-        ):
-            logger.debug("App bundle already up to date, skipping recreation")
+        if existing_launcher.exists():
+            if (
+                existing_python_file.exists()
+                and existing_python_file.read_text().strip() == python_path
+            ):
+                logger.debug("App bundle already up to date, skipping recreation")
+                return app_path
+            # Only python_path changed — update the companion file without
+            # recompiling the launcher (preserves TCC trust).
+            existing_python_file.write_text(python_path)
+            logger.debug("Updated python_path in existing bundle")
             return app_path
 
         # Bundle needs update — remove it first.
