@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b182] - 2026-02-20
+
+### Fixed
+- **`linux-install.sh` now delegates to `voxtype service install`** instead of
+  writing the systemd unit file inline with a hardcoded `ExecStart`. The inline
+  version still had `python -m voxtype engine start` (removed in b179), causing
+  the Linux service to fail with exit code 2 on every start.
+- **`systemd.py`** unit template now includes `PYTHONUNBUFFERED=1` and the correct
+  `GI_TYPELIB_PATH` for the host architecture (x86_64, aarch64, arm, riscv64).
+  Previously these were only set in `linux-install.sh`; now any `voxtype service install`
+  generates the correct environment regardless of how it's invoked.
+
 ## [0.1.0b181] - 2026-02-20
 
 ### Fixed
