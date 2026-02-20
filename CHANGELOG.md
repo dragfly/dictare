@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b175] - 2026-02-20
+
+### Fixed
+- Tests: `_run_daemon` tests now redirect log output to `tmp_path` instead of the
+  production log file (`~/.local/share/voxtype/logs/engine.jsonl`). Previously
+  running `pytest` would inject test entries (PID paths, mock state, etc.) into
+  the user's live log stream visible via `voxtype logs -f`.
+  Added `_reset_voxtype_logger` autouse fixture to restore logger handlers after
+  each daemon test, preventing handler leakage across test modules.
+
+## [0.1.0b174] - 2026-02-20
+
+### Fixed
+- state.py: demote "Failed to load state" from WARNING to DEBUG (expected fallback)
+- accessibility.py: demote "Could not check Accessibility permission" from WARNING
+  to DEBUG (ctypes OSError in test env is not a real error)
+
 ## [0.1.0b173] - 2026-02-20
 
 ### Fixed
