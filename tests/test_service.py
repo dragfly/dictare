@@ -21,6 +21,7 @@ from voxtype.daemon.app_bundle import (
 from voxtype.daemon.launchd import (
     LABEL,
     _get_service_pid,
+    _kill_orphan_processes,
     _stop_service,
     _wait_for_process_exit,
     generate_plist,
@@ -246,6 +247,48 @@ class TestStopService:
              patch("subprocess.run") as mock_run:
             _stop_service()
             mock_run.assert_called_once()
+
+class TestKillOrphanProcesses:
+    def test_kills_engine_by_pid_file(self, tmp_path):
+        voxtype_dir = tmp_path / ".voxtype"
+        voxtype_dir.mkdir()
+        pid_file = voxtype_dir / "engine.pid"
+        pid_file.write_text("12345\n")
+
+        with patch("voxtype.daemon.launchd.Path.home", return_value=tmp_path), \
+             patch("os.kill") as mock_kill, \
+             patch("subprocess.run"):
+            # os.kill(pid, 0) succeeds = process alive, then os.kill(pid, 9)
+            _kill_orphan_processes()
+            assert mock_kill.call_count == 2
+            mock_kill.assert_any_call(12345, 0)
+            mock_kill.assert_any_call(12345, 9)
+
+    def test_skips_dead_engine(self, tmp_path):
+        voxtype_dir = tmp_path / ".voxtype"
+        voxtype_dir.mkdir()
+        pid_file = voxtype_dir / "engine.pid"
+        pid_file.write_text("12345\n")
+
+        with patch("voxtype.daemon.launchd.Path.home", return_value=tmp_path), \
+             patch("os.kill", side_effect=ProcessLookupError) as mock_kill, \
+             patch("subprocess.run"):
+            _kill_orphan_processes()
+            # Only the alive-check, no SIGKILL
+            mock_kill.assert_called_once_with(12345, 0)
+
+    def test_always_pkills_launcher(self, tmp_path):
+        voxtype_dir = tmp_path / ".voxtype"
+        voxtype_dir.mkdir()
+        # No PID file
+
+        with patch("voxtype.daemon.launchd.Path.home", return_value=tmp_path), \
+             patch("subprocess.run") as mock_run:
+            _kill_orphan_processes()
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "pkill" in args
+            assert "Voxtype.app" in " ".join(args)
 
 # ---------------------------------------------------------------------------
 # systemd
