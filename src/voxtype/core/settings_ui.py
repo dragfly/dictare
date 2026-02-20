@@ -102,6 +102,15 @@ input:focus,select:focus{border-color:var(--input-focus)}
 .save-bar .status.ok{color:var(--success)}
 .save-bar .status.err{color:var(--error)}
 
+/* Engine section */
+.engine-section{margin-top:24px;border-top:1px solid var(--input-border);padding-top:20px}
+.engine-section-title{font-size:12px;font-weight:600;color:var(--fg2);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.action-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--radius);
+  padding:7px 18px;cursor:pointer;font-size:13px;font-family:var(--font);font-weight:500;
+  transition:opacity .15s}
+.action-btn:hover{opacity:.85}
+
 /* Loading */
 .loading{text-align:center;padding:60px;color:var(--fg2)}
 
@@ -198,9 +207,25 @@ function renderFields(tab) {
   });
   if (!relevant.length) {
     container.innerHTML = '<div class="complex-note">No configurable fields in this section.</div>';
-    return;
+  } else {
+    container.innerHTML = relevant.map(k => renderField(k)).join("");
   }
-  container.innerHTML = relevant.map(k => renderField(k)).join("");
+  if (tab.id === "advanced") appendEngineSection(container);
+}
+
+function appendEngineSection(container) {
+  const div = document.createElement("div");
+  div.className = "engine-section";
+  div.innerHTML = `
+    <div class="engine-section-title">Engine</div>
+    <div class="field">
+      <div class="field-header">
+        <span class="field-label">Restart Engine</span>
+      </div>
+      <div class="field-desc" style="margin-bottom:8px">Force a clean restart of the engine service.</div>
+      <button class="action-btn" onclick="restartEngine()">Restart Engine</button>
+    </div>`;
+  container.appendChild(div);
 }
 
 function renderField(k) {
@@ -361,17 +386,28 @@ function showFieldError(key, msg) {
 }
 
 async function restartEngine() {
+  const banner = document.getElementById("banner");
+  if (banner) {
+    banner.classList.add("show");
+    banner.innerHTML = "<span>Engine is restarting\u2026 reconnecting automatically.</span>";
+  }
   try {
     await fetch("/control", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({command: "engine.shutdown"})
     });
-    document.getElementById("banner").innerHTML =
-      '<span>Engine is restarting... This page will stop working until the engine is back.</span>';
   } catch (e) {
-    // Expected — engine shuts down
+    // Expected — engine may shut down before responding
   }
+  setTimeout(pollUntilBack, 2000);
+}
+
+function pollUntilBack() {
+  fetch("/status").then(r => {
+    if (r.ok) { window.location.reload(); }
+    else { setTimeout(pollUntilBack, 1500); }
+  }).catch(() => setTimeout(pollUntilBack, 1500));
 }
 
 load();
