@@ -14,8 +14,24 @@ def get_unit_path() -> Path:
     return Path.home() / ".config" / "systemd" / "user" / UNIT_NAME
 
 
+def _gi_typelib_path() -> str:
+    """Return GI_TYPELIB_PATH for the current architecture."""
+    import platform
+
+    arch = platform.machine()
+    arch_map = {
+        "aarch64": "aarch64-linux-gnu",
+        "arm64": "aarch64-linux-gnu",
+        "armv7l": "arm-linux-gnueabihf",
+        "riscv64": "riscv64-linux-gnu",
+    }
+    triplet = arch_map.get(arch, "x86_64-linux-gnu")
+    return f"/usr/lib/girepository-1.0:/usr/lib/{triplet}/girepository-1.0"
+
+
 def generate_unit(python_path: str) -> str:
     """Generate the systemd unit file content."""
+    gi_path = _gi_typelib_path()
     return textwrap.dedent(f"""\
         [Unit]
         Description=Voxtype voice engine
@@ -28,6 +44,8 @@ def generate_unit(python_path: str) -> str:
         ExecStart={python_path} -m voxtype serve
         Restart=always
         RestartSec=5
+        Environment=PYTHONUNBUFFERED=1
+        Environment=GI_TYPELIB_PATH={gi_path}
 
         [Install]
         WantedBy=default.target

@@ -261,45 +261,14 @@ ok "voxtype symlinked to ~/.local/bin/voxtype"
 
 # ─── 7. Install systemd service ────────────────────────────────────────
 info "Installing systemd user service..."
-
-# Detect CPU architecture for GI typelib path (H3: ARM64/RISC-V support)
-case "$(uname -m)" in
-    aarch64|arm64) _ARCH_TRIPLET="aarch64-linux-gnu" ;;
-    armv7l|armhf)  _ARCH_TRIPLET="arm-linux-gnueabihf" ;;
-    riscv64)       _ARCH_TRIPLET="riscv64-linux-gnu" ;;
-    *)             _ARCH_TRIPLET="x86_64-linux-gnu" ;;
-esac
-GI_TYPELIB_PATH_VAL="/usr/lib/girepository-1.0:/usr/lib/${_ARCH_TRIPLET}/girepository-1.0"
-
-SERVICE_DIR="$HOME/.config/systemd/user"
-mkdir -p "$SERVICE_DIR"
-
-cat > "$SERVICE_DIR/voxtype.service" << EOF
-[Unit]
-Description=Voxtype Engine — voice-first control for AI coding agents
-After=network.target
-StartLimitIntervalSec=60
-StartLimitBurst=5
-
-[Service]
-Type=simple
-ExecStart=$VENV_DIR/bin/python -m voxtype engine start
-Restart=always
-RestartSec=5
-Environment=PYTHONUNBUFFERED=1
-Environment=GI_TYPELIB_PATH=${GI_TYPELIB_PATH_VAL}
-
-[Install]
-WantedBy=default.target
-EOF
-
-systemctl --user daemon-reload
-systemctl --user enable voxtype.service
+# Delegate to voxtype service install — generates the correct unit file
+# (ExecStart, env vars, Restart=always) for the current version.
+"$VENV_DIR/bin/voxtype" service install
 ok "systemd service installed"
 
 # ─── 8. Start engine ───────────────────────────────────────────────────
 info "Starting voxtype engine..."
-systemctl --user start voxtype.service
+"$VENV_DIR/bin/voxtype" service start
 
 # Wait a moment for startup
 sleep 2
