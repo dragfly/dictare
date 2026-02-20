@@ -81,6 +81,9 @@ tts = [
     "piper-tts>=1.2.0",
     "pathvalidate>=3.0.0",  # Missing piper-tts dependency
 ]
+parakeet = [
+    "nemo_toolkit[asr]>=2.0.0",  # NVIDIA NeMo ASR — large (~2 GB with deps)
+]
 
 [project.scripts]
 voxtype = "voxtype.cli:main"
