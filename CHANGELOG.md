@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b159] - 2026-02-20
+
+### Changed
+- `onnx-asr` promoted to mandatory dependency (was optional `[parakeet]` extra)
+  - onnxruntime (~15 MB) is smaller than ctranslate2 (~30 MB, already required via faster-whisper)
+  - No install friction: `model = "parakeet-v3"` works out of the box
+- `ParakeetEngine`: removed guided-install UX (no longer needed, onnx-asr always present)
+
 ## [0.1.0b158] - 2026-02-20
 
 ### Changed
