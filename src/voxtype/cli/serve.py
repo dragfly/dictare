@@ -144,6 +144,15 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
 
+        # SIGUSR1 = toggle listening (sent by Swift launcher on hotkey tap)
+        if hasattr(signal, "SIGUSR1"):
+
+            def _toggle_handler(signum: int, frame: Any) -> None:
+                _logger.info("SIGUSR1 received — toggling listening")
+                controller.toggle_listening()
+
+            signal.signal(signal.SIGUSR1, _toggle_handler)
+
         # Run main loop (blocks until shutdown)
         try:
             controller.run()
