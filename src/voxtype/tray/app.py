@@ -171,6 +171,7 @@ class TrayApp:
 
         # Permissions state (from engine /status polling)
         self._microphone_granted = True
+        self._input_monitoring_granted = True
 
         # Status polling
         self._polling = False
@@ -208,10 +209,17 @@ class TrayApp:
 
         # Permission warnings (shown when not granted)
         if sys.platform == "darwin":
+            if not self._input_monitoring_granted:
+                items.append(
+                    pystray.MenuItem(
+                        "\u26a0 Grant Input Monitoring",
+                        self._on_open_input_monitoring_settings,
+                    ),
+                )
             if not self._microphone_granted:
                 items.append(
                     pystray.MenuItem(
-                        "Grant Microphone Permission",
+                        "\u26a0 Grant Microphone Permission",
                         self._on_open_microphone_settings,
                     ),
                 )
@@ -369,6 +377,14 @@ class TrayApp:
 
         open_microphone_settings()
 
+    def _on_open_input_monitoring_settings(
+        self, icon: pystray.Icon, item: pystray.MenuItem
+    ) -> None:
+        """Open macOS Input Monitoring settings."""
+        from voxtype.platform.permissions import open_input_monitoring_settings
+
+        open_input_monitoring_settings()
+
     def _on_open_settings(
         self, icon: pystray.Icon, item: pystray.MenuItem
     ) -> None:
@@ -431,7 +447,8 @@ class TrayApp:
                 "listening": "voxtype_active",
             }.get(self._state, "voxtype_muted")
 
-            if not self._microphone_granted and self._state not in ("disconnected", "restarting", "loading"):
+            perms_ok = self._microphone_granted and self._input_monitoring_granted
+            if not perms_ok and self._state not in ("disconnected", "restarting", "loading"):
                 icon_name = "voxtype_muted"
 
             self._icon.icon = _load_icon(icon_name)
@@ -562,8 +579,14 @@ class TrayApp:
                     # Update permissions state
                     perms = platform.get("permissions", {})
                     mic_granted = perms.get("microphone", True)
-                    if mic_granted != self._microphone_granted:
+                    im_granted = perms.get("input_monitoring", True)
+                    perms_changed = (
+                        mic_granted != self._microphone_granted
+                        or im_granted != self._input_monitoring_granted
+                    )
+                    if perms_changed:
                         self._microphone_granted = mic_granted
+                        self._input_monitoring_granted = im_granted
                         self._update_menu()
                         self._update_icon()
             except Exception:
