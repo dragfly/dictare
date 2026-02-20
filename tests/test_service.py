@@ -170,7 +170,7 @@ class TestLaunchdIsInstalled:
 class TestSystemdGenerateUnit:
     def test_contains_exec_start(self):
         unit = generate_unit("/usr/bin/python3")
-        assert "ExecStart=/usr/bin/python3 -m voxtype engine start -d" in unit
+        assert "ExecStart=/usr/bin/python3 -m voxtype serve" in unit
 
     def test_contains_service_section(self):
         unit = generate_unit("/usr/bin/python3")
@@ -243,7 +243,7 @@ class TestDaemonPidWrite:
         voxtype_logger.handlers[:] = original_handlers
 
     def test_pid_written_and_cleaned_up(self, tmp_path):
-        from voxtype.cli.engine import _run_daemon
+        from voxtype.cli.serve import _run_serve as _run_daemon
 
         pid_file = tmp_path / "engine.pid"
         log_file = tmp_path / "engine.jsonl"
@@ -273,7 +273,7 @@ class TestDaemonPidWrite:
     def test_pid_cleaned_on_start_failure(self, tmp_path):
         from click.exceptions import Exit
 
-        from voxtype.cli.engine import _run_daemon
+        from voxtype.cli.serve import _run_serve as _run_daemon
 
         pid_file = tmp_path / "engine.pid"
         log_file = tmp_path / "engine.jsonl"

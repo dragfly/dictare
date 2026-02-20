@@ -23,7 +23,7 @@ def generate_unit(python_path: str) -> str:
 
         [Service]
         Type=simple
-        ExecStart={python_path} -m voxtype engine start -d
+        ExecStart={python_path} -m voxtype serve
         Restart=always
         RestartSec=5
 
