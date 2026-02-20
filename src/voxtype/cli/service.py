@@ -26,12 +26,12 @@ def _get_backend():
 
 @app.command("install")
 def service_install() -> None:
-    """Install and start voxtype as a system service (auto-start at login)."""
-    backend = _get_backend()
-    if backend.is_installed():
-        console.print("[yellow]Service already installed[/]")
-        raise typer.Exit(0)
+    """Install (or reinstall) voxtype as a system service.
 
+    Idempotent: safe to run multiple times. Always updates the service
+    configuration (plist / unit file) and restarts the service.
+    """
+    backend = _get_backend()
     console.print("[dim]Installing service...[/]")
     try:
         backend.install()
