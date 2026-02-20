@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b193] - 2026-02-20
+
+### Fixed
+- Clean stale `~/.voxtype/hotkey_status` during orphan kill so the new
+  launcher reports fresh Input Monitoring state instead of inheriting
+  the old "active" value from a killed process.
+
 ## [0.1.0b192] - 2026-02-20
 
 ### Fixed

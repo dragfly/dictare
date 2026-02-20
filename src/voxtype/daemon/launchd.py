@@ -206,6 +206,10 @@ def _kill_orphan_processes() -> None:
         capture_output=True,
     )
 
+    # 3. Clean stale hotkey_status so the new launcher starts fresh
+    hotkey_file = Path.home() / ".voxtype" / "hotkey_status"
+    hotkey_file.unlink(missing_ok=True)
+
 
 # --------------------------------------------------------------------------
 # Tray LaunchAgent
