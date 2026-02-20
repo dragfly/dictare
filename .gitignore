@@ -75,3 +75,7 @@ ui/.svelte-kit/
 CLAUDE.md
 WORKFLOW.md
 *.voxtype
+
+# Internal notes — not for public repo
+docs/notes/
+*.private.md
