@@ -1,6 +1,7 @@
 import {
   AudioWaveform,
   Bot,
+  HardDrive,
   Keyboard,
   Mic,
   MonitorSpeaker,
@@ -67,6 +68,13 @@ export const tabs: TabDef[] = [
     icon: Server,
     sections: ["server"],
     desc: "OpenVIP HTTP server",
+  },
+  {
+    id: "models",
+    label: "Models",
+    icon: HardDrive,
+    sections: [],
+    desc: "Download and manage STT and TTS models",
   },
   {
     id: "advanced",

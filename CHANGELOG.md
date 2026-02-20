@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b160] - 2026-02-20
+
+### Added
+- **Models UI**: web-based model manager at Settings → Models
+  - Lists all STT/TTS models with cache status, size, and "in use" badge
+  - Download button per model with real-time progress bar (SSE stream)
+  - `GET /models` — model list with cache/configured/downloading status
+  - `POST /models/{model_id}/pull` — start background download
+  - `GET /models/pull-progress` — SSE stream with fraction/bytes progress
+- `ModelsPage.svelte` — new Svelte 5 component for model management
+
 ## [0.1.0b159] - 2026-02-20
 
 ### Changed

@@ -66,6 +66,11 @@ class OpenVIPServer:
         self._status_queues: list[asyncio.Queue] = []
         self._status_queues_lock = threading.Lock()
 
+        # Model download jobs: model_id -> {status, fraction, downloaded_bytes, total_bytes}
+        self._download_jobs: dict[str, dict] = {}
+        self._progress_queues: list[asyncio.Queue] = []
+        self._progress_queues_lock = threading.Lock()
+
         # Server thread and event loop
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -393,7 +398,186 @@ class OpenVIPServer:
                 raise HTTPException(status_code=422, detail=str(e))
             return {"status": "ok", "section": section}
 
+        # ----- Models API -----
+
+        @app.get("/models")
+        async def models_list_api():
+            """List all models with cache and configured status."""
+            from voxtype.cli.models import _get_configured_models, _get_model_registry
+            from voxtype.config import load_config
+            from voxtype.utils.hf_download import get_cache_size, is_repo_cached
+
+            config = load_config()
+            registry = _get_model_registry()
+            configured = _get_configured_models(config)
+
+            result = []
+            for model_id, info in registry.items():
+                repo = info["repo"]
+                check_file = info.get("check_file", "config.json")
+                cached = await asyncio.to_thread(is_repo_cached, repo, check_file)
+                cache_size = await asyncio.to_thread(get_cache_size, repo) if cached else 0
+
+                job = self._download_jobs.get(model_id)
+                downloading = job is not None and job.get("status") == "downloading"
+
+                result.append({
+                    "id": model_id,
+                    "type": info["type"],
+                    "description": info["description"],
+                    "size_gb": info["size_gb"],
+                    "cached": cached,
+                    "cache_size_bytes": cache_size,
+                    "configured": configured.get(model_id, ""),
+                    "downloading": downloading,
+                    "download_fraction": job.get("fraction") if downloading else None,
+                    "downloaded_bytes": job.get("downloaded_bytes", 0) if downloading else 0,
+                    "total_bytes": job.get("total_bytes", 0) if downloading else 0,
+                })
+
+            return {"models": result}
+
+        @app.post("/models/{model_id}/pull")
+        async def models_pull_api(model_id: str):
+            """Start async download of a model."""
+            from voxtype.cli.models import _get_model_registry
+            from voxtype.utils.hf_download import is_repo_cached
+
+            registry = _get_model_registry()
+            if model_id not in registry:
+                raise HTTPException(status_code=404, detail=f"Unknown model: {model_id}")
+
+            info = registry[model_id]
+            repo = info["repo"]
+            check_file = info.get("check_file", "config.json")
+
+            if await asyncio.to_thread(is_repo_cached, repo, check_file):
+                return {"status": "cached"}
+
+            if model_id in self._download_jobs and self._download_jobs[model_id].get("status") == "downloading":
+                return {"status": "downloading"}
+
+            loop = asyncio.get_running_loop()
+            t = threading.Thread(
+                target=self._run_model_download,
+                args=(model_id, info, loop),
+                daemon=True,
+                name=f"model-dl-{model_id}",
+            )
+            t.start()
+            return {"status": "started"}
+
+        @app.get("/models/pull-progress")
+        async def models_pull_progress(request: Request):
+            """SSE stream for model download progress."""
+            pq: asyncio.Queue = asyncio.Queue()
+            with self._progress_queues_lock:
+                self._progress_queues.append(pq)
+
+            # Send snapshot of all in-progress jobs on connect
+            for mid, job in self._download_jobs.items():
+                await pq.put({"model_id": mid, **job})
+
+            async def event_generator():
+                try:
+                    while True:
+                        if await request.is_disconnected():
+                            break
+                        try:
+                            event = await asyncio.wait_for(pq.get(), timeout=30.0)
+                            yield {"data": json.dumps(event, ensure_ascii=False, default=str)}
+                        except TimeoutError:
+                            yield {"comment": "keepalive"}
+                finally:
+                    with self._progress_queues_lock:
+                        try:
+                            self._progress_queues.remove(pq)
+                        except ValueError:
+                            pass
+
+            return EventSourceResponse(event_generator())
+
         return app
+
+    def _run_model_download(
+        self, model_id: str, info: dict, loop: asyncio.AbstractEventLoop
+    ) -> None:
+        """Download a model in a background thread, streaming SSE progress events.
+
+        Monitors HuggingFace cache directory size at 500 ms intervals to report
+        real-time progress — same approach as the terminal Rich progress bars.
+        """
+        import time
+
+        from voxtype.utils.hf_download import get_cache_size, get_repo_size
+
+        repo: str = info["repo"]
+        runtime: str = info.get("runtime", "hf")
+        size_gb: float = info["size_gb"]
+
+        # Get total size (API call, best-effort)
+        total_bytes = int(size_gb * 1024 ** 3)
+        try:
+            actual = get_repo_size(repo)
+            if actual:
+                total_bytes = actual
+        except Exception:
+            pass
+
+        def _push(event: dict) -> None:
+            with self._progress_queues_lock:
+                queues = list(self._progress_queues)
+            for q in queues:
+                loop.call_soon_threadsafe(q.put_nowait, event)
+
+        self._download_jobs[model_id] = {
+            "status": "downloading",
+            "fraction": 0.0,
+            "downloaded_bytes": 0,
+            "total_bytes": total_bytes,
+        }
+        _push({"model_id": model_id, **self._download_jobs[model_id]})
+
+        done_event = threading.Event()
+        errors: list[Exception] = []
+
+        def _do_download() -> None:
+            try:
+                if runtime == "onnx-asr":
+                    from onnx_asr import load_model as _onnx_load
+                    _onnx_load(info["onnx_asr_model"])
+                else:
+                    from huggingface_hub import snapshot_download
+                    snapshot_download(repo)
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                done_event.set()
+
+        threading.Thread(target=_do_download, daemon=True).start()
+
+        while not done_event.is_set():
+            done_event.wait(timeout=0.5)
+            current = get_cache_size(repo)
+            fraction = min(current / total_bytes, 0.99) if total_bytes > 0 else 0.0
+            self._download_jobs[model_id].update({
+                "fraction": fraction,
+                "downloaded_bytes": current,
+            })
+            _push({"model_id": model_id, **self._download_jobs[model_id]})
+
+        if errors:
+            job = {"status": "error", "message": str(errors[0]), "fraction": 0.0, "downloaded_bytes": 0, "total_bytes": total_bytes}
+        else:
+            current = get_cache_size(repo)
+            job = {"status": "done", "fraction": 1.0, "downloaded_bytes": current, "total_bytes": total_bytes}
+
+        self._download_jobs[model_id] = job
+        _push({"model_id": model_id, **job})
+
+        # Clean up after 10 s so clients can read the final state
+        time.sleep(10)
+        self._download_jobs.pop(model_id, None)
 
     def start(self) -> None:
         """Start the HTTP server in a background thread."""

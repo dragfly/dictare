@@ -94,6 +94,40 @@ export async function captureHotkey(signal?: AbortSignal): Promise<string | null
 	}
 }
 
+// ----- Models API -----
+
+export type ModelInfo = {
+	id: string;
+	type: "stt" | "tts";
+	description: string;
+	size_gb: number;
+	cached: boolean;
+	cache_size_bytes: number;
+	configured: string;
+	downloading: boolean;
+	download_fraction: number | null;
+	downloaded_bytes: number;
+	total_bytes: number;
+};
+
+export async function fetchModels(): Promise<ModelInfo[]> {
+	const r = await fetch("/models");
+	if (!r.ok) throw new Error(`Failed to load models: ${r.status}`);
+	const data = await r.json();
+	return data.models as ModelInfo[];
+}
+
+export async function pullModel(modelId: string): Promise<string> {
+	const r = await fetch(`/models/${modelId}/pull`, { method: "POST" });
+	if (!r.ok) throw new Error(`Pull failed: ${r.status}`);
+	const data = await r.json();
+	return data.status as string;
+}
+
+export function createPullProgressSource(): EventSource {
+	return new EventSource("/models/pull-progress");
+}
+
 export async function restartEngine(): Promise<void> {
 	try {
 		await fetch("/control", {
