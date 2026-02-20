@@ -61,7 +61,7 @@ guard let pythonPath = try? String(contentsOf: configFile, encoding: .utf8)
 // --- Spawn Python engine as child process ---
 let process = Process()
 process.executableURL = URL(fileURLWithPath: pythonPath)
-process.arguments = ["-m", "voxtype", "engine", "start", "-d"]
+process.arguments = ["-m", "voxtype", "serve"]
 process.environment = ProcessInfo.processInfo.environment
 
 // Forward SIGTERM/SIGINT to child

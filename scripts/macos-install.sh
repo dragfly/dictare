@@ -19,36 +19,18 @@ OPENVIP_TARBALL="${OPENVIP_DIR}/dist/openvip-1.1.0.tar.gz"
 
 stop_services() {
     echo "==> Stopping services..."
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        # macOS: brew service + launchd tray
-        brew services stop voxtype 2>/dev/null || true
-        "${BREW_PREFIX}/bin/voxtype" tray stop 2>/dev/null || true
-    else
-        # Linux: try systemd user service first, then brew
-        if systemctl --user is-active voxtype.service &>/dev/null; then
-            systemctl --user stop voxtype.service 2>/dev/null || true
-        else
-            brew services stop voxtype 2>/dev/null || true
-        fi
-        "${BREW_PREFIX}/bin/voxtype" tray stop 2>/dev/null || true
-    fi
+    "${BREW_PREFIX}/bin/voxtype" tray stop 2>/dev/null || true
+    "${BREW_PREFIX}/bin/voxtype" service stop 2>/dev/null || true
 }
 
 start_services() {
     echo "==> Starting service..."
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        brew services start voxtype 2>&1
-        echo "==> Done. Use 'voxtype tray start' for the tray icon."
+    if "${BREW_PREFIX}/bin/voxtype" service status 2>/dev/null | grep -q "installed"; then
+        "${BREW_PREFIX}/bin/voxtype" service start 2>&1
     else
-        if [[ -f "$HOME/.config/systemd/user/voxtype.service" ]]; then
-            systemctl --user daemon-reload
-            systemctl --user start voxtype.service 2>&1
-            echo "==> Done (systemd). Use 'voxtype tray start' for the tray icon."
-        else
-            brew services start voxtype 2>&1
-            echo "==> Done (brew). Use 'voxtype tray start' for the tray icon."
-        fi
+        "${BREW_PREFIX}/bin/voxtype" service install 2>&1
     fi
+    echo "==> Done. Use 'voxtype tray start' for the tray icon."
 }
 
 # ---------- 1. Read version from source ----------

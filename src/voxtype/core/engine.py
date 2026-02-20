@@ -1356,9 +1356,9 @@ class VoxtypeEngine:
             _threading.Thread(target=_force_exit, daemon=True, name="shutdown-watchdog").start()
             return {"status": "ok"}
         elif command == "engine.restart":
-            # Persist state, then spawn a detached bootstrap process that waits for
-            # this PID to exit and starts a fresh engine instance.  Exit code 0 avoids
-            # double-start when the service manager has Restart=always.
+            # Persist state, then exit — the service manager (Restart=always) restarts us.
+            # No bootstrap subprocess: that approach breaks systemd/launchd PID tracking
+            # because the bootstrap-started process is not the service manager's child.
             from voxtype.utils.state import save_state
             save_state(
                 active_agent=self._current_agent_id,
@@ -1367,33 +1367,7 @@ class VoxtypeEngine:
             )
             self._running = False
             import os as _os
-            import subprocess as _subprocess
-            import sys as _sys
             import threading as _threading
-            _pid = _os.getpid()
-            _python = _sys.executable
-            # Bootstrap: poll until current PID is gone, then start a new engine.
-            _bootstrap = (
-                "import os, time, subprocess\n"
-                f"pid = {_pid}\n"
-                "for _ in range(120):\n"
-                "    try:\n"
-                "        os.kill(pid, 0)\n"
-                "        time.sleep(0.25)\n"
-                "    except ProcessLookupError:\n"
-                "        break\n"
-                "time.sleep(0.5)\n"
-                f"subprocess.run([{_python!r}, '-m', 'voxtype', 'engine', 'start', '-d'])\n"
-            )
-            _subprocess.Popen(
-                [_python, "-c", _bootstrap],
-                start_new_session=True,
-                stdout=_subprocess.DEVNULL,
-                stderr=_subprocess.DEVNULL,
-            )
-            # Watchdog: force-exit if graceful stop() hangs.
-            # Exit code 0 so Restart=on-failure does NOT double-start
-            # (bootstrap already handles the restart).
             def _force_restart_exit() -> None:
                 import time
                 time.sleep(6)

@@ -16,10 +16,10 @@ from voxtype.cli import (
     agent,
     config,
     dependencies,
-    engine,
     logs,
     misc,
     models,
+    serve,
     service,
     setup,
     speak,
@@ -41,7 +41,6 @@ app = typer.Typer(
 app.add_typer(models.app, name="models")
 app.add_typer(dependencies.app, name="dependencies")
 app.add_typer(tray.app, name="tray")
-app.add_typer(engine.app, name="engine")
 app.add_typer(config.app, name="config")
 app.add_typer(service.app, name="service")
 
@@ -50,6 +49,7 @@ speak.register(app)
 agent.register(app)
 setup.register(app)
 logs.register(app)
+serve.register(app)
 
 def version_callback(value: bool) -> None:
     """Print version and exit."""
