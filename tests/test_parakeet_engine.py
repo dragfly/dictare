@@ -85,12 +85,24 @@ class TestParakeetEngine:
             engine.load_model("parakeet-v3", headless=True)
         assert engine._device == "onnx"
 
-    def test_load_model_uses_cpu_provider(self):
-        """CoreML fails with ONNX external data; must force CPUExecutionProvider."""
+    def test_load_model_forces_cpu_on_macos(self):
+        """CoreML fails with ONNX external data files on macOS — must force CPUExecutionProvider."""
         engine = ParakeetEngine()
         mock_load = MagicMock(return_value=MagicMock())
-        with patch.dict("sys.modules", {"onnx_asr": MagicMock(load_model=mock_load)}):
+        with patch.dict("sys.modules", {"onnx_asr": MagicMock(load_model=mock_load)}), \
+             patch("sys.platform", "darwin"):
             engine.load_model("parakeet-v3", headless=True)
         mock_load.assert_called_once_with(
             "nemo-parakeet-tdt-0.6b-v3", providers=["CPUExecutionProvider"]
+        )
+
+    def test_load_model_auto_providers_on_linux(self):
+        """On Linux, let onnxruntime pick providers (CUDA if available, CPU fallback)."""
+        engine = ParakeetEngine()
+        mock_load = MagicMock(return_value=MagicMock())
+        with patch.dict("sys.modules", {"onnx_asr": MagicMock(load_model=mock_load)}), \
+             patch("sys.platform", "linux"):
+            engine.load_model("parakeet-v3", headless=True)
+        mock_load.assert_called_once_with(
+            "nemo-parakeet-tdt-0.6b-v3", providers=None
         )
