@@ -4,8 +4,11 @@
 	import RestartBanner from "./RestartBanner.svelte";
 	import SaveBar from "./SaveBar.svelte";
 	import ModelsPage from "$lib/components/models/ModelsPage.svelte";
+	import { Button } from "$lib/components/ui/button";
+	import { RotateCcw } from "lucide-svelte";
 	import type { TabDef, NavChild } from "$lib/types";
 	import * as settingsStore from "$lib/stores/settings.svelte";
+	import { restartEngine, pingEngine } from "$lib/api";
 	import { onMount } from "svelte";
 
 	interface Props {
@@ -48,6 +51,20 @@
 	const activeSections = $derived(activeView()?.child?.sections ?? activeView()?.tab.sections ?? []);
 	const activeLabel   = $derived(activeView()?.child?.label   ?? activeView()?.tab.label   ?? "");
 	const activeDesc    = $derived(activeView()?.child?.desc    ?? activeView()?.tab.desc    ?? "");
+	const isAdvanced    = $derived(activeNavId.startsWith("advanced"));
+
+	let restarting = $state(false);
+
+	async function handleRestart() {
+		restarting = true;
+		await restartEngine();
+		while (true) {
+			await new Promise<void>((r) => setTimeout(r, 1000));
+			const alive = await pingEngine();
+			if (alive) break;
+		}
+		restarting = false;
+	}
 </script>
 
 <div class="flex h-screen">
@@ -66,6 +83,14 @@
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
 					<p class="text-sm text-muted-foreground">{activeDesc}</p>
 				</div>
+				{#if isAdvanced}
+					<div class="px-4 mb-4">
+						<Button variant="outline" onclick={handleRestart} disabled={restarting}>
+							<RotateCcw class="size-3.5 mr-1.5 {restarting ? 'animate-spin' : ''}" />
+							{restarting ? "Restarting…" : "Restart Engine"}
+						</Button>
+					</div>
+				{/if}
 				<SettingsSection sections={activeSections} isGeneral={activeNavId === "general"} {schema} />
 			{:else}
 				<div class="text-muted-foreground py-20 text-center text-sm">Loading settings...</div>

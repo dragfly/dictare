@@ -1939,7 +1939,6 @@ requires-dist = [
     { name = "soundfile", marker = "extra == 'mlx'", specifier = ">=0.12.0" },
     { name = "sse-starlette", specifier = ">=2.0.0" },
     { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.5.0" },
-    { name = "tomlkit", specifier = ">=0.13.0" },
     { name = "tomlkit", specifier = ">=0.14.0" },
     { name = "tqdm", marker = "extra == 'mlx'", specifier = ">=4.60.0" },
     { name = "typer", specifier = ">=0.12.0" },

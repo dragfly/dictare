@@ -48,3 +48,16 @@ export const SIZE_HINTS: Record<string, string> = {
 /** Fields with enum/Literal types (fixed options from schema) */
 export const ENUM_FIELDS = new Set(["output.mode", "tts.engine"]);
 
+/** Override the auto-generated label for specific dotted keys */
+export const LABEL_OVERRIDES: Record<string, string> = {
+  "hotkey.key": "Hotkey",
+};
+
+/** TOML fields rendered without accordion (always visible, no toggle header) */
+export const TOML_NO_ACCORDION = new Set(["agent_types"]);
+
+/** Extra fields to show alongside a section (cross-section visibility) */
+export const SECTION_EXTRA_FIELDS: Record<string, string[]> = {
+  "agent_types": ["client.claim_key"],
+};
+
