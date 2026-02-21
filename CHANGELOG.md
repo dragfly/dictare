@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b208] - 2026-02-21
+
+### Fixed
+- **Double-tap hotkey now works on macOS with Swift launcher.** The SIGUSR1
+  handler was calling `toggle_listening()` directly, bypassing the TapDetector
+  state machine. Now routes through `on_hotkey_tap()` which feeds key_down +
+  key_up into the TapDetector, giving double-tap detection (mode switch) for
+  free. Single tap = toggle listening, double tap = switch agents/keyboard.
+
+### Added
+- **Detailed startup logging.** Engine logs every decision during startup at
+  INFO level: config values read, state.json restored, output mode chosen,
+  agent activation. Makes it easy to diagnose mode-reset issues.
+- **Tray app logging.** Tray writes to the same JSONL log file as engine,
+  tagged with `source: "tray"`. Logs startup, SSE status events, mode changes
+  from menu and engine. Use `voxtype logs --source tray` to filter.
+- **`voxtype logs --source` flag.** Filter log entries by source process
+  (`engine`, `tray`). Default shows all sources interleaved by timestamp.
+
 ## [0.1.0b207] - 2026-02-21
 
 ### Fixed

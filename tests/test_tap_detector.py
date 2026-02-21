@@ -273,3 +273,68 @@ class TestValidTransitions:
 
     def test_pressed_2_can_only_go_to_idle(self):
         assert TapDetector.VALID_TRANSITIONS[TapState.PRESSED_2] == [TapState.IDLE]
+
+class TestSimulatedTap:
+    """Test simulated taps (SIGUSR1 path).
+
+    On macOS the Swift launcher sends SIGUSR1 for each tap. The Python
+    handler simulates a complete tap via on_key_down() + on_key_up().
+    Two SIGUSR1 within the threshold should trigger double-tap.
+    """
+
+    def test_simulated_single_tap(self):
+        """One key_down+key_up pair fires single tap after timeout."""
+        result: list[str] = []
+        detector = TapDetector(
+            threshold=0.01,
+            on_single_tap=lambda: result.append("single"),
+            on_double_tap=lambda: result.append("double"),
+        )
+
+        # Simulate SIGUSR1: complete tap
+        detector.on_key_down()
+        detector.on_key_up()
+
+        _wait_until(lambda: len(result) > 0)
+        assert result == ["single"]
+
+    def test_simulated_double_tap(self):
+        """Two rapid key_down+key_up pairs fire double tap."""
+        result: list[str] = []
+        detector = TapDetector(
+            threshold=0.5,
+            on_single_tap=lambda: result.append("single"),
+            on_double_tap=lambda: result.append("double"),
+        )
+
+        # Simulate two SIGUSR1 in rapid succession
+        detector.on_key_down()
+        detector.on_key_up()
+        detector.on_key_down()
+        detector.on_key_up()
+
+        assert result == ["double"]
+
+    def test_simulated_slow_taps_fire_two_singles(self):
+        """Two taps separated by more than threshold fire two single taps."""
+        result: list[str] = []
+        detector = TapDetector(
+            threshold=0.01,
+            on_single_tap=lambda: result.append("single"),
+            on_double_tap=lambda: result.append("double"),
+        )
+
+        # First tap
+        detector.on_key_down()
+        detector.on_key_up()
+
+        # Wait for timeout (single tap fires)
+        _wait_until(lambda: len(result) >= 1)
+        assert result == ["single"]
+
+        # Second tap (well after threshold)
+        detector.on_key_down()
+        detector.on_key_up()
+
+        _wait_until(lambda: len(result) >= 2)
+        assert result == ["single", "single"]

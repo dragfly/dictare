@@ -177,8 +177,10 @@ class TrayApp:
 
             config = load_config()
             self._output_mode = config.output.mode
+            logger.info("tray _load_output_mode: config.output.mode=%r", config.output.mode)
         except Exception:
             self._output_mode = "keyboard"
+            logger.info("tray _load_output_mode: fallback to keyboard (config load failed)")
 
     def _create_menu(self) -> pystray.Menu:
         """Create the tray menu."""
@@ -306,6 +308,7 @@ class TrayApp:
         """Create a handler for output mode selection."""
 
         def handler(icon: pystray.Icon, item: pystray.MenuItem) -> None:
+            logger.info("tray menu: user selected output mode %r (was %r)", mode, self._output_mode)
             self._output_mode = mode
             # Persist to config
             try:
@@ -313,7 +316,7 @@ class TrayApp:
 
                 set_config_value("output.mode", mode)
             except Exception:
-                pass  # Config write failed, but mode is still set in memory
+                logger.warning("tray: failed to persist output.mode=%r to config", mode)
             if self._on_output_mode_change:
                 self._on_output_mode_change(mode)
             self._update_menu()
@@ -501,7 +504,9 @@ class TrayApp:
         self._update_menu()
 
     def set_output_mode(self, mode: str) -> None:
-        """Set output mode."""
+        """Set output mode (called by SSE status handler)."""
+        if mode != self._output_mode:
+            logger.info("tray set_output_mode: %r → %r (from engine SSE)", self._output_mode, mode)
         self._output_mode = mode
         self._update_menu()
 
@@ -545,8 +550,11 @@ class TrayApp:
                 "idle": "off",
             }
 
+            status_count = 0
+
             def _on_disconnect(exc: Exception | None) -> None:
                 if exc:
+                    logger.info("tray SSE disconnected: %s", exc)
                     # During restart, stay blue instead of going red
                     if not self._restarting:
                         self.set_state("disconnected")
@@ -560,14 +568,25 @@ class TrayApp:
                     if not self._polling:
                         break
 
+                    status_count += 1
                     platform = status.platform or {}
                     state, _ = resolve_display_state(platform)
                     self.set_state(state=_tray_state_map.get(state, "off"))
 
                     output = platform.get("output", {})
                     agents = output.get("available_agents", [])
-                    self.set_targets(agents, output.get("current_agent", ""))
-                    self.set_output_mode(output.get("mode", self._output_mode))
+                    current_agent = output.get("current_agent", "")
+                    engine_mode = output.get("mode", self._output_mode)
+                    self.set_targets(agents, current_agent)
+                    self.set_output_mode(engine_mode)
+
+                    # Log first status and any mode changes
+                    if status_count == 1:
+                        logger.info(
+                            "tray SSE first status: state=%r, mode=%r, "
+                            "current_agent=%r, agents=%r",
+                            state, engine_mode, current_agent, agents,
+                        )
 
                     # Update permissions state
                     perms = platform.get("permissions", {})
@@ -635,7 +654,9 @@ def main() -> None:
         print("Install with: pip install voxtype[tray]", file=sys.stderr)
         sys.exit(1)
 
+    from voxtype import __version__
     from voxtype.config import load_config
+    from voxtype.logging.setup import get_default_log_path, setup_logging
     from voxtype.tray.lifecycle import remove_pid, write_pid
 
     # Write PID for lifecycle management
@@ -644,6 +665,20 @@ def main() -> None:
     config = load_config()
     host = config.server.host
     port = config.server.port
+
+    # Set up logging — same JSONL file as engine, tagged with source="tray"
+    log_path = get_default_log_path("engine")
+    setup_logging(
+        log_path=log_path,
+        level=logging.INFO,
+        version=__version__,
+        params={"pid": os.getpid()},
+        source="tray",
+    )
+    logger.info(
+        "tray starting: config.output.mode=%r, server=%s:%s",
+        config.output.mode, host, port,
+    )
 
     client = Client(f"http://{host}:{port}", timeout=5.0)
 

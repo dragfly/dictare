@@ -221,22 +221,39 @@ class VoxtypeEngine:
         from voxtype.utils.state import load_state
 
         saved = load_state()
-        logger.info("Restoring state: %s", saved)
+        logger.info(
+            "restore_state: loaded state.json = %s (before: agent_mode=%r, "
+            "current_agent=%r, last_sse_agent=%r)",
+            saved, self.agent_mode, self._current_agent_id,
+            self._last_sse_agent_id,
+        )
 
         # Restore output mode
         saved_mode = saved.get("output_mode", "keyboard")
         if saved_mode == "agents" and not self.agent_mode:
             self.agent_mode = True
-            logger.info("Restored output mode: agents")
+            logger.info("restore_state: switched agent_mode False → True (from state.json)")
         elif saved_mode == "keyboard" and self.agent_mode:
             self.agent_mode = False
-            logger.info("Restored output mode: keyboard")
+            logger.info("restore_state: switched agent_mode True → False (from state.json)")
+        else:
+            logger.info(
+                "restore_state: agent_mode unchanged (%r), saved_mode=%r",
+                self.agent_mode, saved_mode,
+            )
 
         # Remember preferred agent for when it reconnects
         saved_agent = saved.get("active_agent")
         if saved_agent and saved_agent != "__keyboard__":
             self._last_sse_agent_id = saved_agent
-            logger.info("Preferred agent: %s (will activate on reconnect)", saved_agent)
+            logger.info("restore_state: preferred agent=%r (will activate on reconnect)", saved_agent)
+
+        logger.info(
+            "restore_state done: agent_mode=%r, current_agent=%r, "
+            "last_sse_agent=%r",
+            self.agent_mode, self._current_agent_id,
+            self._last_sse_agent_id,
+        )
 
     # -------------------------------------------------------------------------
     # Properties
@@ -853,7 +870,14 @@ class VoxtypeEngine:
 
         want_agent_mode = mode == "agents"
         if want_agent_mode == self.agent_mode:
+            logger.debug("set_output_mode(%r): already in this mode, no-op", mode)
             return  # Already in this mode
+
+        logger.info(
+            "set_output_mode: %s → %s (current_agent=%r, last_sse_agent=%r)",
+            "agents" if self.agent_mode else "keyboard", mode,
+            self._current_agent_id, self._last_sse_agent_id,
+        )
 
         if want_agent_mode:
             # Switch to agents: restore last SSE agent as current
@@ -914,12 +938,27 @@ class VoxtypeEngine:
         if agent.id not in self.RESERVED_AGENT_IDS:
             if self._last_sse_agent_id and agent.id == self._last_sse_agent_id:
                 self._current_agent_id = agent.id
-                logger.info("Activated preferred agent from saved state: %s", agent.id)
+                logger.info(
+                    "register_agent(%s): activated (matches preferred agent from saved state)",
+                    agent.id,
+                )
             elif self._current_agent_id is None or (
                 self.agent_mode and self._current_agent_id in self.RESERVED_AGENT_IDS
             ):
                 self._current_agent_id = agent.id
-                logger.info("Activated first real agent: %s", agent.id)
+                logger.info(
+                    "register_agent(%s): activated as first real agent "
+                    "(current_agent was %r, agent_mode=%r)",
+                    agent.id, self._current_agent_id, self.agent_mode,
+                )
+            else:
+                logger.info(
+                    "register_agent(%s): registered but not activated "
+                    "(current_agent=%r, preferred=%r)",
+                    agent.id, self._current_agent_id, self._last_sse_agent_id,
+                )
+        else:
+            logger.info("register_agent(%s): reserved agent registered", agent.id)
 
         bus.publish("agent.registered", agent_id=agent.id)
         self._notify_status()
@@ -1410,6 +1449,16 @@ class VoxtypeEngine:
             start_listening: If True, transition to LISTENING state.
                            If False (default), stay in OFF state (privacy-aware).
         """
+        logger.info(
+            "start_runtime: agent_mode=%r, current_agent=%r, "
+            "last_sse_agent=%r, agents=%s, hotkey=%r, start_listening=%r",
+            self.agent_mode, self._current_agent_id,
+            self._last_sse_agent_id,
+            list(self._agents.keys()),
+            self._hotkey is not None,
+            start_listening,
+        )
+
         self._running = True
         self._stats_start_time = time.time()
 
@@ -1531,6 +1580,13 @@ def create_engine(
     """
     effective_agent_mode = agent_mode if agent_mode is not None else (config.output.mode == "agents")
 
+    _log = logging.getLogger(__name__)
+    _log.info(
+        "create_engine: config.output.mode=%r, agent_mode_param=%r, "
+        "effective_agent_mode=%r, hotkey_enabled=%r",
+        config.output.mode, agent_mode, effective_agent_mode, hotkey_enabled,
+    )
+
     engine = VoxtypeEngine(
         config=config,
         events=events,
@@ -1550,4 +1606,8 @@ def create_engine(
         # Keyboard mode: make __keyboard__ the current agent
         engine._current_agent_id = "__keyboard__"
 
+    _log.info(
+        "create_engine done: agent_mode=%r, current_agent=%r",
+        engine.agent_mode, engine._current_agent_id,
+    )
     return engine
