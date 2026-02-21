@@ -63,6 +63,11 @@ def install() -> None:
     from voxtype.daemon.app_bundle import create_app_bundle
 
     create_app_bundle(sys.executable)
+
+    # Request Input Monitoring permission (shows system dialog on first install).
+    # Must run BEFORE launchctl load — the dialog only works from terminal context.
+    _request_input_monitoring()
+
     plist_path = get_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     plist_path.write_text(generate_plist(sys.executable))
@@ -179,6 +184,35 @@ def _stop_service() -> None:
                 os.kill(pid, 9)  # SIGKILL
             except ProcessLookupError:
                 pass  # Already gone
+
+
+def _request_input_monitoring() -> None:
+    """Request Input Monitoring permission via the Swift launcher.
+
+    Runs the launcher binary with --request-input-monitoring, which calls
+    CGRequestListenEventAccess().  On first run, macOS shows a system dialog
+    asking the user to grant Input Monitoring for Voxtype.app.
+
+    This MUST run from terminal context (not launchd) — the dialog won't
+    appear from a launchd-spawned process on Sequoia.
+    """
+    from voxtype.daemon.app_bundle import get_executable_path
+
+    executable = get_executable_path()
+    if not Path(executable).exists():
+        return
+
+    result = subprocess.run(
+        [executable, "--request-input-monitoring"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode == 0:
+        logger.info("Input Monitoring permission granted")
+    else:
+        logger.warning(
+            "Input Monitoring not yet granted — "
+            "enable Voxtype in System Settings → Privacy & Security → Input Monitoring"
+        )
 
 
 def _kill_orphan_processes() -> None:
