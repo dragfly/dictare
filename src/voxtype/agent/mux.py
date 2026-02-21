@@ -130,6 +130,7 @@ def _read_from_stdin(
     keystroke_counter: KeystrokeCounter | None = None,
     agent_id: str | None = None,
     base_url: str = DEFAULT_BASE_URL,
+    session_path: Path | None = None,
 ) -> None:
     """Read from keyboard in raw mode and put data in queue.
 
@@ -148,6 +149,11 @@ def _read_from_stdin(
 
                 # Intercept Ctrl+\ to claim this agent as active
                 if agent_id and _CTRL_BACKSLASH in data:
+                    if session_path:
+                        _log_event(session_path, "ctrl_backslash", {
+                            "agent_id": agent_id,
+                            "base_url": base_url,
+                        })
                     _claim_agent(agent_id, base_url)
                     data = data.replace(_CTRL_BACKSLASH, b"")
                     if not data:
@@ -512,7 +518,7 @@ def run_agent(
         # Start producer threads (read from stdin/SSE, put in queue)
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
-            args=(write_queue, stop_event, keystroke_counter, agent_id, base_url),
+            args=(write_queue, stop_event, keystroke_counter, agent_id, base_url, session_path),
             daemon=True,
         )
         # SSE-based IPC: connect to engine HTTP server
