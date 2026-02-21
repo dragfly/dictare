@@ -402,11 +402,17 @@ class AppController:
     def switch_to_agent(self, name: str) -> None:
         """Switch to agent by name.
 
+        If the engine is in keyboard mode, switches to agents mode first
+        so the voice output actually reaches the agent.
+
         Args:
             name: Agent name to switch to.
         """
         if not self._engine:
             return
+
+        if not self._engine.agent_mode:
+            self._engine.set_output_mode("agents")
 
         self._engine.switch_to_agent_by_name(name)
 

@@ -89,3 +89,34 @@ class TestControllerRouting:
         result = ctrl._handle_app_command({"command": "output.set_agent:cursor"})
         ctrl.switch_to_agent.assert_called_once_with("cursor")
         assert result["status"] == "ok"
+
+class TestSwitchToAgentMode:
+    """Test that switch_to_agent auto-enables agents mode."""
+
+    def test_switch_enables_agent_mode(self) -> None:
+        """switch_to_agent switches to agents mode if in keyboard mode."""
+        from voxtype.app.controller import AppController
+
+        ctrl = MagicMock(spec=AppController)
+        ctrl.switch_to_agent = AppController.switch_to_agent.__get__(ctrl)
+        ctrl._engine = MagicMock()
+        ctrl._engine.agent_mode = False
+
+        ctrl.switch_to_agent("claude")
+
+        ctrl._engine.set_output_mode.assert_called_once_with("agents")
+        ctrl._engine.switch_to_agent_by_name.assert_called_once_with("claude")
+
+    def test_switch_skips_mode_change_if_already_agents(self) -> None:
+        """switch_to_agent does NOT call set_output_mode if already in agents mode."""
+        from voxtype.app.controller import AppController
+
+        ctrl = MagicMock(spec=AppController)
+        ctrl.switch_to_agent = AppController.switch_to_agent.__get__(ctrl)
+        ctrl._engine = MagicMock()
+        ctrl._engine.agent_mode = True
+
+        ctrl.switch_to_agent("claude")
+
+        ctrl._engine.set_output_mode.assert_not_called()
+        ctrl._engine.switch_to_agent_by_name.assert_called_once_with("claude")
