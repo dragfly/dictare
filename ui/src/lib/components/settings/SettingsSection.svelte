@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { SchemaResponse } from "$lib/types";
 	import FieldRenderer from "./FieldRenderer.svelte";
+	import { SECTION_EXTRA_FIELDS } from "$lib/registry/field-config";
 
 	interface Props {
 		sections: string[];
@@ -14,12 +15,18 @@
 	const SKIP_KEYS = new Set(["default_agent_type"]);
 
 	const fields = $derived(
-		schema.keys.filter((k) => {
-			if (SKIP_KEYS.has(k.key)) return false;
-			if (isGeneral) return !k.key.includes(".") && k.type !== "dict";
-			const section = k.key.split(".")[0];
-			return sections.includes(section);
-		})
+		(() => {
+			const extraKeys = new Set(
+				sections.flatMap((s) => SECTION_EXTRA_FIELDS[s] ?? [])
+			);
+			return schema.keys.filter((k) => {
+				if (SKIP_KEYS.has(k.key)) return false;
+				if (extraKeys.has(k.key)) return true;
+				if (isGeneral) return !k.key.includes(".") && k.type !== "dict";
+				const section = k.key.split(".")[0];
+				return sections.includes(section);
+			});
+		})()
 	);
 </script>
 

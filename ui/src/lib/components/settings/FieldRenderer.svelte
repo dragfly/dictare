@@ -11,7 +11,7 @@
 	import KeyCaptureField from "./fields/KeyCaptureField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS } from "$lib/registry/field-config";
+	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, TOML_NO_ACCORDION, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS, LABEL_OVERRIDES } from "$lib/registry/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -57,7 +57,7 @@
 	const currentValue = $derived(settingsStore.getValue(field.key));
 	const isDirty = $derived(field.key in settingsStore.getDirty());
 	const error = $derived(settingsStore.getSaveErrors()[field.key]);
-	const label = $derived(humanize(field.key));
+	const label = $derived(LABEL_OVERRIDES[field.key] ?? humanize(field.key));
 	const size = $derived((SIZE_HINTS[field.key] ?? "normal") as "narrow" | "medium" | "normal");
 	const align = $derived(RIGHT_ALIGN_FIELDS.has(field.key) ? "right" as const : "left" as const);
 
@@ -87,7 +87,7 @@
 {:else if isTomlEditable}
 	<!-- Full-width TOML editor — no inline label/control split -->
 	<div class="px-4">
-		<TomlField section={field.key} label={label} />
+		<TomlField section={field.key} label={label} noAccordion={TOML_NO_ACCORDION.has(field.key)} />
 	</div>
 {:else}
 <div

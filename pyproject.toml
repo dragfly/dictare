@@ -35,7 +35,6 @@ dependencies = [
     "pydantic>=2.0.0",
     "faster-whisper>=1.0.0",
     "onnx-asr>=0.1.0",   # Parakeet V3 (ONNX runtime, no PyTorch) — 122 kB package + onnxruntime (~15 MB)
-    "tomlkit>=0.13.0",
     "rich>=13.0.0",  # Console output, tables, progress bars
     # Platform-specific dependencies
     "evdev>=1.7.0; sys_platform == 'linux'",
