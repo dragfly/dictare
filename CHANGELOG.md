@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b212] - 2026-02-21
+
+### Fixed
+- **Tray icon flickering on Linux.** Each listening toggle generated 3 SSE
+  status events (listening → playing → listening from beep playback), causing
+  pystray/AppIndicator to rewrite the temp icon file 3 times. Added icon name
+  deduplication: `_update_icon()` now skips the update if the icon hasn't
+  actually changed, eliminating visible flicker.
+- **Removed three-dots loading icon from tray.** The `voxtype_loading` icon
+  (microphone + three dots) was briefly visible during state transitions on
+  Linux due to AppIndicator latency. Now "loading" and "restarting" states use
+  the normal idle icon (yellow microphone). Consistent icon design: red =
+  disconnected, yellow = idle/loading, green = listening.
+
 ## [0.1.0b211] - 2026-02-21
 
 ### Fixed

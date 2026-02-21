@@ -160,6 +160,9 @@ class TrayApp:
         self._targets: list[str] = []
         self._current_target: str = ""
 
+        # Icon deduplication — avoids redundant file writes on Linux/AppIndicator
+        self._current_icon_name: str = ""
+
         # Callbacks
         self._on_toggle_listening_cb: Callable[[], None] | None = None
         self._on_target_change: Callable[[str], None] | None = None
@@ -444,8 +447,8 @@ class TrayApp:
 
             icon_name = {
                 "disconnected": "voxtype_muted",
-                "restarting": "voxtype_loading",
-                "loading": "voxtype_loading",
+                "restarting": "voxtype",
+                "loading": "voxtype",
                 "off": "voxtype",
                 "listening": "voxtype_active",
             }.get(self._state, "voxtype_muted")
@@ -454,7 +457,13 @@ class TrayApp:
             if not perms_ok and self._state not in ("disconnected", "restarting", "loading"):
                 icon_name = "voxtype_muted"
 
-            self._icon.icon = _load_icon(icon_name)
+            # Skip redundant icon image updates — on Linux/AppIndicator, each
+            # update writes a temp PNG file and calls set_icon(), causing
+            # visible flicker when multiple SSE events arrive in rapid
+            # succession.  Title updates are always applied (lightweight).
+            if icon_name != self._current_icon_name:
+                self._current_icon_name = icon_name
+                self._icon.icon = _load_icon(icon_name)
 
             title_map = {
                 "disconnected": "VoxType — Disconnected",
