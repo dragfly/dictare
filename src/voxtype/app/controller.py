@@ -239,6 +239,11 @@ class AppController:
         # 2. Create engine with logger
         # In serve mode, the Swift launcher handles hotkey via CGEventTap + SIGUSR1.
         # Disable engine's pynput hotkey to avoid double toggle.
+        logger.info(
+            "AppController.start: config.output.mode=%r, with_bindings=%r, "
+            "start_listening=%r",
+            self._config.output.mode, with_bindings, start_listening,
+        )
         self._engine = create_engine(
             config=self._config,
             events=ControllerEvents(),
@@ -379,6 +384,19 @@ class AppController:
         current = self._engine.is_listening
         self._engine.set_listening(not current)
         logger.debug(f"toggle_listening: {current} -> {not current}")
+
+    def on_hotkey_tap(self) -> None:
+        """Simulate a complete hotkey tap through the TapDetector.
+
+        Used by SIGUSR1 handler (macOS Swift launcher) to feed taps into
+        the same state machine that the pynput/evdev listener uses.
+        This gives double-tap detection for free: two SIGUSR1 within 0.4s
+        triggers mode switch (agents <-> keyboard).
+        """
+        if not self._engine:
+            return
+        self._engine._tap_detector.on_key_down()
+        self._engine._tap_detector.on_key_up()
 
     def next_agent(self) -> None:
         """Switch to next agent.
