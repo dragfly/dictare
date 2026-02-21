@@ -70,8 +70,7 @@ class TestTrayStates:
         """Verify each state maps to the correct icon name.
 
         red    (muted)   = disconnected — server unreachable
-        blue   (loading) = restarting / loading — engine preparing
-        yellow (default) = off (idle) — ready
+        yellow (default) = off / loading / restarting — ready or preparing
         green  (active)  = listening
         """
         app = TrayApp()
@@ -80,12 +79,14 @@ class TestTrayStates:
 
         expected = {
             "disconnected": "voxtype_muted",
-            "restarting": "voxtype_loading",
-            "loading": "voxtype_loading",
+            "restarting": "voxtype",
+            "loading": "voxtype",
             "off": "voxtype",
             "listening": "voxtype_active",
         }
         for state, icon_name in expected.items():
+            # Reset dedup cache so each state triggers an icon update
+            app._current_icon_name = ""
             with patch("voxtype.tray.app._load_icon", return_value="img") as mock_load:
                 with patch.object(app, "_update_menu"):
                     app.set_state(state)
