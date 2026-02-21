@@ -187,16 +187,17 @@ def _stop_service() -> None:
 
 
 def _request_input_monitoring() -> None:
-    """Guide the user to grant Input Monitoring for the global hotkey.
+    """Request Input Monitoring permission for the global hotkey.
 
-    On macOS Sequoia, ALL permission-check APIs are broken — they return
-    True/False regardless of actual state.  We cannot programmatically
-    detect whether Input Monitoring is granted.
+    Strategy:
+    1. Launch Voxtype.app via `open` (as a real macOS app, not a Terminal
+       child).  This triggers CGRequestListenEventAccess() inside the app's
+       own process context, which may show the macOS permission prompt.
+    2. If the prompt doesn't appear (ad-hoc signed binary on Sequoia), fall
+       back to opening System Settings with manual instructions.
 
-    Instead, we track a marker file keyed by the launcher binary hash.
-    On first install (or after launcher recompilation), we open System
-    Settings to the Input Monitoring page with clear instructions.
-    Subsequent installs with the same binary skip (permission persists).
+    A marker file keyed by launcher hash prevents re-prompting on updates
+    that don't change the binary.
     """
     from voxtype.daemon.app_bundle import get_app_path
 
@@ -215,14 +216,26 @@ def _request_input_monitoring() -> None:
         logger.debug("Input Monitoring setup already done for this binary")
         return
 
-    # First install or launcher changed — show instructions + open Settings
+    # Attempt 1: Launch the .app with --request-input-monitoring via `open`.
+    # Using `open` makes macOS treat it as a real app (own TCC identity),
+    # not a child of Terminal (which would inherit Terminal's permissions).
+    # --wait-apps blocks until the process exits, --args passes our flag.
+    subprocess.run(
+        ["open", "--wait-apps", str(app_path), "--args", "--request-input-monitoring"],
+        capture_output=True, text=True, timeout=30,
+    )
+
+    # If the app reported success AND we trust it was actually prompted,
+    # we're done.  But on Sequoia the API lies (returns true without prompt),
+    # so we always show the fallback instructions on first install.
     print(
         "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "  Input Monitoring permission required for global hotkey (Right Cmd)\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "\n"
-        "  System Settings is opening to Input Monitoring.\n"
+        "  If macOS prompted you — great, you're done.\n"
+        "  If not, System Settings is opening to Input Monitoring.\n"
         f"  Click  +  →  select  {app_path}\n"
         "  Then toggle it ON.\n"
         "\n"
