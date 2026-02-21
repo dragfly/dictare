@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b211] - 2026-02-21
+
+### Fixed
+- **Tray icon stays red on Linux despite engine being connected.** Race condition:
+  the SSE thread received engine status before `pystray.Icon` was created, so
+  `_update_icon()` silently skipped (guard: `if not self._icon`). Then `run()`
+  created the icon with the hardcoded "muted" image, ignoring the already-updated
+  `self._state`. Now syncs icon to current state right after icon creation.
+
 ## [0.1.0b210] - 2026-02-21
 
 ### Fixed
