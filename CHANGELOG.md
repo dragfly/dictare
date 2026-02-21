@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b214] - 2026-02-21
+
+### Fixed
+- **Settings UI: "Key" → "Hotkey" label.** The hotkey field showed "Key" because
+  `humanize()` used the last dotted segment. Added `LABEL_OVERRIDES` map in
+  `field-config.ts` for declarative label customization.
+- **Settings UI: Agents tab no longer wrapped in accordion.** The `agent_types`
+  TOML editor now renders immediately without a toggle header via `TOML_NO_ACCORDION`.
+- **Settings UI: `claim_key` visible in Agents tab.** Added `SECTION_EXTRA_FIELDS`
+  to surface cross-section fields — `client.claim_key` now appears alongside
+  agent type definitions.
+- **Settings UI: Restart Engine button in Advanced.** A dedicated restart button
+  is now always visible in Advanced sub-tabs, independent of the save-triggered
+  restart banner.
+- **README: fixed outdated `[agents.claude]` example** to correct `[agent_types.claude]`
+  with `description` field. Removed stale TODO GIF placeholder.
+- **pyproject.toml: removed duplicate `tomlkit` dependency** (kept `>=0.14.0`).
+
 ## [0.1.0b213] - 2026-02-21
 
 ### Fixed

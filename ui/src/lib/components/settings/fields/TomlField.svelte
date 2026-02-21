@@ -20,9 +20,10 @@
 	interface Props {
 		section: string;
 		label: string;
+		noAccordion?: boolean;
 	}
 
-	let { section, label }: Props = $props();
+	let { section, label, noAccordion = false }: Props = $props();
 
 	let editorEl: HTMLDivElement;
 	let view: EditorView | null = null;
@@ -66,6 +67,16 @@
 		if (status === "saved") {
 			const t = setTimeout(() => (status = "idle"), 3000);
 			return () => clearTimeout(t);
+		}
+	});
+
+	onMount(() => {
+		if (noAccordion) {
+			isOpen = true;
+			tick().then(() => {
+				reload();
+				loaded = true;
+			});
 		}
 	});
 
@@ -134,25 +145,27 @@
 </script>
 
 <div class="border rounded-md overflow-hidden">
-	<!-- Accordion header -->
-	<button
-		class="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/40 transition-colors"
-		onclick={toggle}
-	>
-		<span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-			{label}
-		</span>
-		<svg
-			class="h-4 w-4 text-muted-foreground transition-transform duration-200 {isOpen ? 'rotate-180' : ''}"
-			xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+	{#if !noAccordion}
+		<!-- Accordion header -->
+		<button
+			class="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/40 transition-colors"
+			onclick={toggle}
 		>
-			<path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd" />
-		</svg>
-	</button>
+			<span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+				{label}
+			</span>
+			<svg
+				class="h-4 w-4 text-muted-foreground transition-transform duration-200 {isOpen ? 'rotate-180' : ''}"
+				xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+			>
+				<path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd" />
+			</svg>
+		</button>
+	{/if}
 
-	<!-- Accordion body: rendered lazily on first open -->
+	<!-- Body: rendered lazily (accordion) or immediately (noAccordion) -->
 	{#if isOpen || loaded}
-		<div class="border-t flex flex-col gap-3 px-4 pb-4 pt-3 {isOpen ? '' : 'hidden'}">
+		<div class="{noAccordion ? '' : 'border-t'} flex flex-col gap-3 px-4 pb-4 pt-3 {isOpen ? '' : 'hidden'}">
 			<div class="flex items-center justify-end gap-2">
 				{#if status === "saved"}
 					<span class="text-xs text-green-500">Saved</span>

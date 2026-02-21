@@ -4,7 +4,6 @@ Voice-first control for AI coding agents.
 
 Speak to control Claude Code, Cursor, Aider, or any CLI tool — privately, on your hardware.
 
-<!-- TODO: demo GIF here -->
 
 ## Features
 
@@ -73,11 +72,13 @@ Agents connect via SSE — each in its own terminal.
 Define agents in `~/.config/voxtype/config.toml`:
 
 ```toml
-[agents.claude]
+[agent_types.claude]
 command = ["claude"]
+description = "Claude Code"
 
-[agents.aider]
+[agent_types.aider]
 command = ["aider", "--model", "claude-3-opus"]
+description = "Aider with Opus"
 ```
 
 Then launch with a single command:
