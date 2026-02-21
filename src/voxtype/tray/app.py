@@ -628,6 +628,10 @@ class TrayApp:
             title="VoxType",
             menu=self._create_menu(),
         )
+        # Sync icon to current state — the SSE thread may have already
+        # updated self._state before self._icon was created, causing
+        # _update_icon() to skip (guard: if not self._icon: return).
+        self._update_icon()
         self._icon.run()
 
     def run_detached(self) -> threading.Thread:
