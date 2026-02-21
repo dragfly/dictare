@@ -224,6 +224,10 @@ class ClientConfig(BaseModel):
         default=True,
         description="Clear terminal before launching child process",
     )
+    claim_key: str = Field(
+        default="ctrl+\\",
+        description="Hotkey to claim this PTY as active voice target (e.g. ctrl+\\, ctrl+])",
+    )
 
 
 class LoggingConfig(BaseModel):
@@ -827,6 +831,7 @@ def create_default_config() -> Path:
 # url = "http://127.0.0.1:8770"
 # status_bar = true
 # clear_on_start = true
+# claim_key = "ctrl+\\\\"           # Hotkey to claim this agent (ctrl+\\, ctrl+], etc.)
 
 # [logging]
 # log_file = ""                   # JSONL structured log path
