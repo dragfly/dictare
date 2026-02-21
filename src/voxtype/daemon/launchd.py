@@ -190,13 +190,11 @@ def _request_input_monitoring() -> None:
     """Request Input Monitoring permission via the Swift launcher.
 
     Runs the launcher binary with --request-input-monitoring, which calls
-    CGRequestListenEventAccess().  On first run, macOS shows a system dialog
-    asking the user to grant Input Monitoring for Voxtype.app.
-
-    This MUST run from terminal context (not launchd) — the dialog won't
-    appear from a launchd-spawned process on Sequoia.
+    CGRequestListenEventAccess().  If not granted (common on Sequoia where
+    the API silently fails), opens System Settings to the Input Monitoring
+    page so the user can add Voxtype.app manually.
     """
-    from voxtype.daemon.app_bundle import get_executable_path
+    from voxtype.daemon.app_bundle import get_app_path, get_executable_path
 
     executable = get_executable_path()
     if not Path(executable).exists():
@@ -208,11 +206,28 @@ def _request_input_monitoring() -> None:
     )
     if result.returncode == 0:
         logger.info("Input Monitoring permission granted")
-    else:
-        logger.warning(
-            "Input Monitoring not yet granted — "
-            "enable Voxtype in System Settings → Privacy & Security → Input Monitoring"
-        )
+        return
+
+    # CGRequestListenEventAccess() failed — open System Settings to the
+    # Input Monitoring page so the user can add Voxtype.app manually.
+    app_path = get_app_path()
+    print(
+        "\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "  Input Monitoring permission required for global hotkey (Right Cmd)\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "\n"
+        "  System Settings is opening to Input Monitoring.\n"
+        f"  Click  +  →  select  {app_path}\n"
+        "  Then toggle it ON.\n"
+        "\n"
+        "  (Only needed once — survives updates and restarts.)\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+    subprocess.run(
+        ["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"],
+        check=False,
+    )
 
 
 def _kill_orphan_processes() -> None:
