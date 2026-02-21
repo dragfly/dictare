@@ -236,11 +236,13 @@ class AppController:
         )
 
         # 2. Create engine with logger
+        # In serve mode, the Swift launcher handles hotkey via CGEventTap + SIGUSR1.
+        # Disable engine's pynput hotkey to avoid double toggle.
         self._engine = create_engine(
             config=self._config,
             events=ControllerEvents(),
             agent_mode=(self._config.output.mode == "agents"),
-            hotkey_enabled=True,
+            hotkey_enabled=with_bindings,
             logger=self._logger,
         )
         engine_ref[0] = self._engine
