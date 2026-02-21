@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b210] - 2026-02-21
+
+### Fixed
+- **Linux hotkey binding in serve mode.** The engine was disabling the hotkey
+  listener on all platforms when running in serve mode (`with_bindings=False`).
+  On Linux there is no Swift launcher — the engine must listen for the hotkey
+  directly via evdev. Now enables the hotkey on Linux even in serve mode.
+- **Tray SSE error logging.** The tray's SSE exception handler was silently
+  swallowing all errors, making it impossible to diagnose "disconnected" state.
+  Now logs the full exception with traceback.
+
 ## [0.1.0b209] - 2026-02-21
 
 ### Added

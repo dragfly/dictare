@@ -601,7 +601,8 @@ class TrayApp:
                         self._input_monitoring_granted = im_granted
                         self._update_menu()
                         self._update_icon()
-            except Exception:
+            except Exception as exc:
+                logger.error("tray SSE stream error: %s", exc, exc_info=True)
                 if not self._restarting:
                     self.set_state("disconnected")
 
