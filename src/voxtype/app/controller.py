@@ -18,6 +18,7 @@ import atexit
 import errno
 import logging
 import os
+import sys
 import threading
 from typing import TYPE_CHECKING, Any
 
@@ -237,18 +238,22 @@ class AppController:
         )
 
         # 2. Create engine with logger
-        # In serve mode, the Swift launcher handles hotkey via CGEventTap + SIGUSR1.
-        # Disable engine's pynput hotkey to avoid double toggle.
+        # macOS serve mode: Swift launcher handles hotkey via CGEventTap + SIGUSR1,
+        #   so disable engine's pynput listener to avoid double toggle.
+        # Linux serve mode: no Swift launcher — engine must listen for hotkey
+        #   directly via evdev.
+        enable_hotkey = with_bindings or sys.platform != "darwin"
         logger.info(
             "AppController.start: config.output.mode=%r, with_bindings=%r, "
-            "start_listening=%r",
-            self._config.output.mode, with_bindings, start_listening,
+            "enable_hotkey=%r, platform=%r, start_listening=%r",
+            self._config.output.mode, with_bindings, enable_hotkey,
+            sys.platform, start_listening,
         )
         self._engine = create_engine(
             config=self._config,
             events=ControllerEvents(),
             agent_mode=(self._config.output.mode == "agents"),
-            hotkey_enabled=with_bindings,
+            hotkey_enabled=enable_hotkey,
             logger=self._logger,
         )
         engine_ref[0] = self._engine
