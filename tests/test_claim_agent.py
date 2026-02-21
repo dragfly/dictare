@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from voxtype.agent.mux import _CTRL_BACKSLASH, _claim_agent
+from voxtype.agent.mux import (
+    _CTRL_BACKSLASH,
+    _CTRL_BACKSLASH_CSI_U,
+    _claim_agent,
+    _strip_ctrl_backslash,
+)
 
 
 class TestCtrlBackslashIntercept:
@@ -14,22 +19,52 @@ class TestCtrlBackslashIntercept:
         """Ctrl+\\ is 0x1c in raw terminal mode."""
         assert _CTRL_BACKSLASH == b"\x1c"
 
-    def test_ctrl_backslash_stripped_from_data(self) -> None:
-        """Ctrl+\\ is removed from data before forwarding."""
-        data = b"hello\x1cworld"
-        cleaned = data.replace(_CTRL_BACKSLASH, b"")
-        assert cleaned == b"helloworld"
+    def test_csi_u_byte_value(self) -> None:
+        """Kitty keyboard protocol encodes Ctrl+\\ as ESC[92;5u."""
+        assert _CTRL_BACKSLASH_CSI_U == b"\x1b[92;5u"
 
-    def test_only_ctrl_backslash_yields_empty(self) -> None:
-        """Data containing only Ctrl+\\ becomes empty."""
-        data = b"\x1c"
-        cleaned = data.replace(_CTRL_BACKSLASH, b"")
-        assert cleaned == b""
+    def test_strip_raw_byte(self) -> None:
+        """Standard 0x1c byte is stripped and detected."""
+        data, found = _strip_ctrl_backslash(b"hello\x1cworld")
+        assert found is True
+        assert data == b"helloworld"
+
+    def test_strip_csi_u(self) -> None:
+        """Kitty CSI u sequence is stripped and detected."""
+        data, found = _strip_ctrl_backslash(b"hello\x1b[92;5uworld")
+        assert found is True
+        assert data == b"helloworld"
+
+    def test_strip_only_raw_byte_yields_empty(self) -> None:
+        """Data containing only 0x1c becomes empty."""
+        data, found = _strip_ctrl_backslash(b"\x1c")
+        assert found is True
+        assert data == b""
+
+    def test_strip_only_csi_u_yields_empty(self) -> None:
+        """Data containing only CSI u sequence becomes empty."""
+        data, found = _strip_ctrl_backslash(b"\x1b[92;5u")
+        assert found is True
+        assert data == b""
+
+    def test_strip_both_variants(self) -> None:
+        """Both raw byte and CSI u in same data are stripped."""
+        data, found = _strip_ctrl_backslash(b"\x1c\x1b[92;5u")
+        assert found is True
+        assert data == b""
 
     def test_normal_data_unchanged(self) -> None:
         """Data without Ctrl+\\ passes through unchanged."""
-        data = b"normal typing\r"
-        assert _CTRL_BACKSLASH not in data
+        data, found = _strip_ctrl_backslash(b"normal typing\r")
+        assert found is False
+        assert data == b"normal typing\r"
+
+    def test_other_csi_u_not_stripped(self) -> None:
+        """Other CSI u sequences (e.g. ESC[97;5u = Ctrl+a) are not stripped."""
+        original = b"\x1b[97;5u"
+        data, found = _strip_ctrl_backslash(original)
+        assert found is False
+        assert data == original
 
 
 class TestClaimAgent:

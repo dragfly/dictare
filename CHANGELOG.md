@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b207] - 2026-02-21
+
+### Fixed
+- **Ctrl+\\ now works with Claude Code (kitty keyboard protocol).** Claude Code
+  enables the kitty keyboard protocol (CSI u), which encodes Ctrl+\\ as the
+  7-byte sequence `ESC[92;5u` instead of the standard `0x1c` byte. The stdin
+  reader now detects both variants, so Ctrl+\\ claims the agent regardless of
+  what keyboard protocol the child process enables.
+
+## [0.1.0b206] - 2026-02-21
+
+### Fixed
+- **Log all ESC/0x1c stdin bytes for keyboard debug.** Temporary diagnostic
+  logging to identify how terminal emulators encode Ctrl+\\ when child
+  processes change the keyboard protocol.
+
 ## [0.1.0b205] - 2026-02-21
 
 ### Fixed
