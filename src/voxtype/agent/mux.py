@@ -114,12 +114,23 @@ class KeystrokeCounter:
         with self._lock:
             return self._count
 
+# Ctrl+\ in raw mode — used to claim this agent as active.
+_CTRL_BACKSLASH = b"\x1c"
+
 def _read_from_stdin(
     write_queue: queue.Queue,
     stop_event: threading.Event,
     keystroke_counter: KeystrokeCounter | None = None,
+    agent_id: str | None = None,
+    base_url: str = DEFAULT_BASE_URL,
 ) -> None:
-    """Read from keyboard in raw mode and put data in queue."""
+    """Read from keyboard in raw mode and put data in queue.
+
+    When *agent_id* is set, Ctrl+\\ is intercepted and sends
+    ``output.set_agent:<agent_id>`` to the engine, making this
+    terminal the active voice target.  The keystroke is consumed
+    and never forwarded to the child process.
+    """
     try:
         while not stop_event.is_set():
             r, _, _ = select.select([sys.stdin.fileno()], [], [], 0.1)
@@ -127,6 +138,14 @@ def _read_from_stdin(
                 data = os.read(sys.stdin.fileno(), 1024)
                 if not data:
                     break
+
+                # Intercept Ctrl+\ to claim this agent as active
+                if agent_id and _CTRL_BACKSLASH in data:
+                    _claim_agent(agent_id, base_url)
+                    data = data.replace(_CTRL_BACKSLASH, b"")
+                    if not data:
+                        continue
+
                 # Count keystrokes (bytes received = approximate keystroke count)
                 if keystroke_counter:
                     keystroke_counter.add(len(data))
@@ -134,6 +153,19 @@ def _read_from_stdin(
                 write_queue.put(("raw", data))
     except (BrokenPipeError, OSError):
         pass
+
+def _claim_agent(agent_id: str, base_url: str) -> None:
+    """Send ``output.set_agent:<agent_id>`` to the engine (fire-and-forget)."""
+    def _do() -> None:
+        try:
+            from openvip import Client
+
+            client = Client(base_url, timeout=3)
+            client.control(f"output.set_agent:{agent_id}")
+        except Exception:
+            pass  # Best-effort; engine may be unreachable
+
+    threading.Thread(target=_do, daemon=True).start()
 
 def _stream_active_agent(
     agent_id: str,
@@ -468,7 +500,7 @@ def run_agent(
         # Start producer threads (read from stdin/SSE, put in queue)
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
-            args=(write_queue, stop_event, keystroke_counter),
+            args=(write_queue, stop_event, keystroke_counter, agent_id, base_url),
             daemon=True,
         )
         # SSE-based IPC: connect to engine HTTP server
