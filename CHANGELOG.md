@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b200] - 2026-02-21
+
+### Fixed
+- **Input Monitoring setup actually works now.** `CGRequestListenEventAccess()`
+  returns true on Sequoia even when permission is NOT granted (same broken API
+  pattern).  Replaced with marker-file approach: on first install (or after
+  launcher recompilation), always opens System Settings to Input Monitoring
+  with clear instructions.  Subsequent installs with the same binary skip.
+
 ## [0.1.0b199] - 2026-02-21
 
 ### Fixed

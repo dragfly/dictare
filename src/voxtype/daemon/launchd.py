@@ -187,30 +187,35 @@ def _stop_service() -> None:
 
 
 def _request_input_monitoring() -> None:
-    """Request Input Monitoring permission via the Swift launcher.
+    """Guide the user to grant Input Monitoring for the global hotkey.
 
-    Runs the launcher binary with --request-input-monitoring, which calls
-    CGRequestListenEventAccess().  If not granted (common on Sequoia where
-    the API silently fails), opens System Settings to the Input Monitoring
-    page so the user can add Voxtype.app manually.
+    On macOS Sequoia, ALL permission-check APIs are broken — they return
+    True/False regardless of actual state.  We cannot programmatically
+    detect whether Input Monitoring is granted.
+
+    Instead, we track a marker file keyed by the launcher binary hash.
+    On first install (or after launcher recompilation), we open System
+    Settings to the Input Monitoring page with clear instructions.
+    Subsequent installs with the same binary skip (permission persists).
     """
-    from voxtype.daemon.app_bundle import get_app_path, get_executable_path
+    from voxtype.daemon.app_bundle import get_app_path
 
-    executable = get_executable_path()
-    if not Path(executable).exists():
-        return
-
-    result = subprocess.run(
-        [executable, "--request-input-monitoring"],
-        capture_output=True, text=True, timeout=30,
-    )
-    if result.returncode == 0:
-        logger.info("Input Monitoring permission granted")
-        return
-
-    # CGRequestListenEventAccess() failed — open System Settings to the
-    # Input Monitoring page so the user can add Voxtype.app manually.
     app_path = get_app_path()
+    macos_dir = app_path / "Contents" / "MacOS"
+    if not macos_dir.exists():
+        return
+
+    # Read the current launcher hash (written by create_app_bundle)
+    hash_file = macos_dir / "launcher_hash"
+    current_hash = hash_file.read_text().strip() if hash_file.exists() else ""
+
+    # Check if we already guided the user for this exact binary
+    marker = Path.home() / ".voxtype" / "input_monitoring_setup"
+    if marker.exists() and marker.read_text().strip() == current_hash:
+        logger.debug("Input Monitoring setup already done for this binary")
+        return
+
+    # First install or launcher changed — show instructions + open Settings
     print(
         "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -228,6 +233,10 @@ def _request_input_monitoring() -> None:
         ["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"],
         check=False,
     )
+
+    # Write marker so next install with same binary skips
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(current_hash)
 
 
 def _kill_orphan_processes() -> None:
