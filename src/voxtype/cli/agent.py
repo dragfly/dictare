@@ -190,5 +190,6 @@ def register(app: typer.Typer) -> None:
             agent_id, command, quiet=quiet, verbose=verbose,
             base_url=server, status_bar=show_status_bar,
             clear_on_start=config.client.clear_on_start,
+            claim_key=config.client.claim_key,
         )
         raise typer.Exit(exit_code)
