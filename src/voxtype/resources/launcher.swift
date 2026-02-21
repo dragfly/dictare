@@ -19,6 +19,19 @@ import Cocoa
 import Foundation
 
 // ---------------------------------------------------------------------------
+// Request Input Monitoring (called during `voxtype service install`)
+// ---------------------------------------------------------------------------
+if CommandLine.arguments.contains("--request-input-monitoring") {
+    let granted = CGRequestListenEventAccess()
+    if granted {
+        fputs("Input Monitoring: granted\n", stderr)
+    } else {
+        fputs("Input Monitoring: not granted — enable Voxtype in System Settings\n", stderr)
+    }
+    exit(granted ? 0 : 1)
+}
+
+// ---------------------------------------------------------------------------
 // Permission check mode (called by Python engine for diagnostics)
 // ---------------------------------------------------------------------------
 if CommandLine.arguments.contains("--check-permissions") {
