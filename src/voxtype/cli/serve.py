@@ -90,6 +90,7 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
         level=log_level,
         version=__version__,
         params={"mode": "serve", "pid": os.getpid()},
+        source="engine",
     )
 
     # Stdout logging — plain text, human-readable (like `ollama serve`)
@@ -144,14 +145,16 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
 
-        # SIGUSR1 = toggle listening (sent by Swift launcher on hotkey tap)
+        # SIGUSR1 = hotkey tap (sent by Swift launcher on macOS).
+        # Route through TapDetector so double-tap detection works:
+        # single tap → toggle listening, double tap → switch output mode.
         if hasattr(signal, "SIGUSR1"):
 
-            def _toggle_handler(signum: int, frame: Any) -> None:
-                _logger.info("SIGUSR1 received — toggling listening")
-                controller.toggle_listening()
+            def _tap_handler(signum: int, frame: Any) -> None:
+                _logger.info("SIGUSR1 received — hotkey tap")
+                controller.on_hotkey_tap()
 
-            signal.signal(signal.SIGUSR1, _toggle_handler)
+            signal.signal(signal.SIGUSR1, _tap_handler)
 
         # Run main loop (blocks until shutdown)
         try:

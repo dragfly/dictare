@@ -44,7 +44,12 @@ class VoxtypeJsonFormatter(JsonFormatter):
     Adds:
     - ISO timestamp as 'ts'
     - Renames 'message' to 'event' for structured events
+    - Optional 'source' field (engine, tray) for multi-process filtering
     """
+
+    def __init__(self, *args: Any, source: str = "", **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._source = source
 
     def add_fields(
         self,
@@ -67,11 +72,16 @@ class VoxtypeJsonFormatter(JsonFormatter):
         # Add logger name for debugging
         log_record["logger"] = record.name
 
+        # Add source identifier (engine, tray) for filtering
+        if self._source:
+            log_record["source"] = self._source
+
 def setup_logging(
     log_path: Path | str | None = None,
     level: int = logging.INFO,
     version: str | None = None,
     params: dict[str, Any] | None = None,
+    source: str = "",
 ) -> logging.Handler | None:
     """Configure logging with JSON formatter.
 
@@ -84,6 +94,9 @@ def setup_logging(
         level: Logging level (logging.DEBUG, logging.INFO, etc.)
         version: App version to log at session start.
         params: Additional params to log at session start.
+        source: Process identifier (e.g., "engine", "tray") added to
+                every log entry. Used by ``voxtype logs --source`` to
+                filter entries when multiple processes share a log file.
 
     Returns:
         The file handler if log_path provided, else None.
@@ -104,11 +117,15 @@ def setup_logging(
         # File handler with JSON formatter
         handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
         handler.setLevel(level)
-        handler.setFormatter(VoxtypeJsonFormatter())
+        handler.setFormatter(VoxtypeJsonFormatter(source=source))
         root_logger.addHandler(handler)
 
         # Log session start
-        session_data = {"version": version} if version else {}
+        session_data: dict[str, Any] = {}
+        if version:
+            session_data["version"] = version
+        if source:
+            session_data["source"] = source
         if params:
             session_data.update(params)
 

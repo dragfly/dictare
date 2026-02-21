@@ -19,16 +19,24 @@ LEVEL_COLORS = {
     "CRITICAL": "red bold",
 }
 
-def _format_line(raw: str) -> str | None:
-    """Parse a JSONL line and return a human-readable string, or None to skip."""
+def _parse_line(raw: str) -> dict | None:
+    """Parse a JSONL line into a dict, or None for blank lines."""
     raw = raw.strip()
     if not raw:
         return None
     try:
-        entry = json.loads(raw)
+        return json.loads(raw)
     except json.JSONDecodeError:
-        return raw  # pass through non-JSON lines as-is
+        return {"event": raw}  # pass through non-JSON lines as-is
 
+def _matches_source(entry: dict, source_filter: str) -> bool:
+    """Return True if entry matches the source filter."""
+    if not source_filter:
+        return True
+    return entry.get("source", "") == source_filter
+
+def _format_entry(entry: dict) -> str:
+    """Format a parsed log entry as a human-readable string."""
     ts = entry.get("ts", "")
     # Shorten ISO timestamp → HH:MM:SS
     if "T" in ts:
@@ -36,17 +44,28 @@ def _format_line(raw: str) -> str | None:
 
     level = entry.get("level", "INFO").upper()
     event = entry.get("event", entry.get("message", ""))
-    logger = entry.get("logger", "")
+    logger_name = entry.get("logger", "")
+    source = entry.get("source", "")
 
     # Collect extra fields (skip known structural ones)
-    skip = {"ts", "level", "event", "message", "logger", "version", "pid"}
+    skip = {"ts", "level", "event", "message", "logger", "version", "pid", "source"}
     extras = {k: v for k, v in entry.items() if k not in skip and v is not None}
     extras_str = "  " + "  ".join(f"{k}={v}" for k, v in extras.items()) if extras else ""
 
-    short_logger = logger.split(".")[-1] if logger else ""
+    short_logger = logger_name.split(".")[-1] if logger_name else ""
     logger_str = f"  [{short_logger}]" if short_logger else ""
+    source_str = f"  <{source}>" if source else ""
 
-    return f"{ts}  {level:<8} {event}{logger_str}{extras_str}"
+    return f"{ts}  {level:<8} {event}{source_str}{logger_str}{extras_str}"
+
+def _format_line(raw: str, source_filter: str = "") -> str | None:
+    """Parse a JSONL line and return a human-readable string, or None to skip."""
+    entry = _parse_line(raw)
+    if entry is None:
+        return None
+    if not _matches_source(entry, source_filter):
+        return None
+    return _format_entry(entry)
 
 def _print_line(line: str, use_rich: bool) -> None:
     if not use_rich:
@@ -77,13 +96,16 @@ def register(app: typer.Typer) -> None:
         follow: Annotated[bool, typer.Option("--follow", "-f", help="Follow log output")] = False,
         last: Annotated[int, typer.Option("--last", "-n", help="Show last N lines")] = 50,
         name: Annotated[str, typer.Option("--name", help="Log name (engine, agent.*)")] = "engine",
+        source: Annotated[str, typer.Option("--source", "-s", help="Filter by source (engine, tray)")] = "",
         raw: Annotated[bool, typer.Option("--raw", help="Output raw JSONL (pipe-friendly)")] = False,
     ) -> None:
         """Show engine logs in human-readable format.
 
         Examples:
-            voxtype logs              # last 50 lines
+            voxtype logs              # last 50 lines (all sources)
             voxtype logs -f           # follow (like tail -f)
+            voxtype logs -s tray      # only tray entries
+            voxtype logs -s engine    # only engine entries
             voxtype logs -n 100       # last 100 lines
             voxtype logs --raw | jq . # raw JSONL for scripting
         """
@@ -101,7 +123,20 @@ def register(app: typer.Typer) -> None:
         if raw:
             # Raw mode: just output JSONL lines, pipe-friendly
             lines = log_path.read_text().splitlines()
-            for line in lines[-last:]:
+            shown = 0
+            for line in reversed(lines):
+                if shown >= last:
+                    break
+                entry = _parse_line(line)
+                if entry and _matches_source(entry, source):
+                    shown += 1
+            # Now print them in order
+            matching = []
+            for line in lines:
+                entry = _parse_line(line)
+                if entry and _matches_source(entry, source):
+                    matching.append(line)
+            for line in matching[-last:]:
                 print(line)
             if follow:
                 with open(log_path) as f:
@@ -109,18 +144,23 @@ def register(app: typer.Typer) -> None:
                     while True:
                         line = f.readline()
                         if line:
-                            print(line.rstrip())
-                            sys.stdout.flush()
+                            entry = _parse_line(line)
+                            if entry and _matches_source(entry, source):
+                                print(line.rstrip())
+                                sys.stdout.flush()
                         else:
                             time.sleep(0.1)
             return
 
         # Human-readable mode
         lines = log_path.read_text().splitlines()
-        for raw_line in lines[-last:]:
-            formatted = _format_line(raw_line)
+        matching = []
+        for raw_line in lines:
+            formatted = _format_line(raw_line, source)
             if formatted:
-                _print_line(formatted, use_rich)
+                matching.append(formatted)
+        for formatted in matching[-last:]:
+            _print_line(formatted, use_rich)
 
         if follow:
             with open(log_path) as f:
@@ -128,7 +168,7 @@ def register(app: typer.Typer) -> None:
                 while True:
                     raw_line = f.readline()
                     if raw_line:
-                        formatted = _format_line(raw_line)
+                        formatted = _format_line(raw_line, source)
                         if formatted:
                             _print_line(formatted, use_rich)
                             sys.stdout.flush()
