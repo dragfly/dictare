@@ -114,8 +114,28 @@ class KeystrokeCounter:
         with self._lock:
             return self._count
 
-# Ctrl+\ in raw mode — used to claim this agent as active.
+# Ctrl+\ byte sequences — used to claim this agent as active.
+# Standard raw mode: single byte 0x1c.
 _CTRL_BACKSLASH = b"\x1c"
+# Kitty keyboard protocol (CSI u): ESC [ 92 ; 5 u
+# Some programs (e.g. Claude Code) enable this protocol, causing the
+# terminal emulator to encode Ctrl+\ as a 7-byte CSI sequence instead.
+_CTRL_BACKSLASH_CSI_U = b"\x1b[92;5u"
+
+def _strip_ctrl_backslash(data: bytes) -> tuple[bytes, bool]:
+    """Remove all Ctrl+\\ variants from *data*.
+
+    Returns (cleaned_data, found) where *found* is True if any
+    Ctrl+\\ sequence was present.
+    """
+    found = False
+    if _CTRL_BACKSLASH_CSI_U in data:
+        data = data.replace(_CTRL_BACKSLASH_CSI_U, b"")
+        found = True
+    if _CTRL_BACKSLASH in data:
+        data = data.replace(_CTRL_BACKSLASH, b"")
+        found = True
+    return data, found
 
 def _read_from_stdin(
     write_queue: queue.Queue,
@@ -131,6 +151,9 @@ def _read_from_stdin(
     ``output.set_agent:<agent_id>`` to the engine, making this
     terminal the active voice target.  The keystroke is consumed
     and never forwarded to the child process.
+
+    Supports both classic raw-mode byte (``0x1c``) and the kitty
+    keyboard protocol CSI u sequence (``ESC[92;5u``).
     """
     try:
         while not stop_event.is_set():
@@ -140,24 +163,18 @@ def _read_from_stdin(
                 if not data:
                     break
 
-                # Log raw bytes containing ESC (temporary debug)
-                if session_path and (b"\x1b" in data or b"\x1c" in data):
-                    _log_event(session_path, "stdin_raw", {
-                        "hex": data[:32].hex(),
-                        "len": len(data),
-                    })
-
                 # Intercept Ctrl+\ to claim this agent as active
-                if agent_id and _CTRL_BACKSLASH in data:
-                    if session_path:
-                        _log_event(session_path, "ctrl_backslash", {
-                            "agent_id": agent_id,
-                            "base_url": base_url,
-                        })
-                    _claim_agent(agent_id, base_url)
-                    data = data.replace(_CTRL_BACKSLASH, b"")
-                    if not data:
-                        continue
+                if agent_id:
+                    data, found = _strip_ctrl_backslash(data)
+                    if found:
+                        if session_path:
+                            _log_event(session_path, "ctrl_backslash", {
+                                "agent_id": agent_id,
+                                "base_url": base_url,
+                            })
+                        _claim_agent(agent_id, base_url)
+                        if not data:
+                            continue
 
                 # Count keystrokes (bytes received = approximate keystroke count)
                 if keystroke_counter:
