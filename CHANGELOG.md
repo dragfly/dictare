@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b209] - 2026-02-21
+
+### Added
+- **Configurable claim key.** The hotkey to claim a PTY agent as active voice
+  target is now configurable via `[client] claim_key` in config.toml (default:
+  `"ctrl+\\"`). Supports any `ctrl+<char>` combo (e.g. `"ctrl+]"`). Both
+  raw-mode byte and kitty CSI u encoding are generated automatically.
+
 ## [0.1.0b208] - 2026-02-21
 
 ### Fixed

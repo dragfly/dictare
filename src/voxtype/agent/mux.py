@@ -114,28 +114,62 @@ class KeystrokeCounter:
         with self._lock:
             return self._count
 
-# Ctrl+\ byte sequences — used to claim this agent as active.
-# Standard raw mode: single byte 0x1c.
+# Default claim key byte sequences (Ctrl+\).
+# Kept as module constants for backward-compatible test imports.
 _CTRL_BACKSLASH = b"\x1c"
-# Kitty keyboard protocol (CSI u): ESC [ 92 ; 5 u
-# Some programs (e.g. Claude Code) enable this protocol, causing the
-# terminal emulator to encode Ctrl+\ as a 7-byte CSI sequence instead.
 _CTRL_BACKSLASH_CSI_U = b"\x1b[92;5u"
 
-def _strip_ctrl_backslash(data: bytes) -> tuple[bytes, bool]:
-    """Remove all Ctrl+\\ variants from *data*.
+def _parse_claim_key(key_str: str) -> tuple[bytes, bytes]:
+    """Parse a claim key string into (raw_byte, csi_u_bytes).
+
+    Supports ``ctrl+<char>`` format.  For any ``ctrl+X``:
+    - Raw mode byte: ``ord(X) & 0x1F``
+    - Kitty CSI u:   ``ESC[{ord(X)};5u``
+
+    Args:
+        key_str: Key specification, e.g. ``"ctrl+\\\\"`` or ``"ctrl+]"``.
+
+    Returns:
+        Tuple of (raw_byte, csi_u_bytes).
+
+    Raises:
+        ValueError: If the format is not recognized.
+    """
+    key_str = key_str.strip().lower()
+    if not key_str.startswith("ctrl+") or len(key_str) < 6:
+        raise ValueError(
+            f"Unsupported claim_key format: {key_str!r}. "
+            "Expected 'ctrl+<char>' (e.g. 'ctrl+\\\\', 'ctrl+]')"
+        )
+    char = key_str[5:]
+    if len(char) != 1:
+        raise ValueError(
+            f"Unsupported claim_key character: {char!r}. "
+            "Expected a single character after 'ctrl+'"
+        )
+    raw = bytes([ord(char) & 0x1F])
+    csi_u = f"\x1b[{ord(char)};5u".encode()
+    return raw, csi_u
+
+def _strip_claim_key(data: bytes, raw: bytes, csi_u: bytes) -> tuple[bytes, bool]:
+    """Remove all claim key variants from *data*.
 
     Returns (cleaned_data, found) where *found* is True if any
-    Ctrl+\\ sequence was present.
+    claim key sequence was present.
     """
     found = False
-    if _CTRL_BACKSLASH_CSI_U in data:
-        data = data.replace(_CTRL_BACKSLASH_CSI_U, b"")
+    if csi_u in data:
+        data = data.replace(csi_u, b"")
         found = True
-    if _CTRL_BACKSLASH in data:
-        data = data.replace(_CTRL_BACKSLASH, b"")
+    if raw in data:
+        data = data.replace(raw, b"")
         found = True
     return data, found
+
+# Backward-compatible alias used by existing tests
+def _strip_ctrl_backslash(data: bytes) -> tuple[bytes, bool]:
+    """Remove Ctrl+\\\\ from *data* (backward-compatible wrapper)."""
+    return _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_CSI_U)
 
 def _read_from_stdin(
     write_queue: queue.Queue,
@@ -144,16 +178,18 @@ def _read_from_stdin(
     agent_id: str | None = None,
     base_url: str = DEFAULT_BASE_URL,
     session_path: Path | None = None,
+    claim_key_raw: bytes = _CTRL_BACKSLASH,
+    claim_key_csi_u: bytes = _CTRL_BACKSLASH_CSI_U,
 ) -> None:
     """Read from keyboard in raw mode and put data in queue.
 
-    When *agent_id* is set, Ctrl+\\ is intercepted and sends
+    When *agent_id* is set, the claim key is intercepted and sends
     ``output.set_agent:<agent_id>`` to the engine, making this
     terminal the active voice target.  The keystroke is consumed
     and never forwarded to the child process.
 
-    Supports both classic raw-mode byte (``0x1c``) and the kitty
-    keyboard protocol CSI u sequence (``ESC[92;5u``).
+    Supports both classic raw-mode byte and the kitty keyboard
+    protocol CSI u sequence.
     """
     try:
         while not stop_event.is_set():
@@ -163,12 +199,12 @@ def _read_from_stdin(
                 if not data:
                     break
 
-                # Intercept Ctrl+\ to claim this agent as active
+                # Intercept claim key to claim this agent as active
                 if agent_id:
-                    data, found = _strip_ctrl_backslash(data)
+                    data, found = _strip_claim_key(data, claim_key_raw, claim_key_csi_u)
                     if found:
                         if session_path:
-                            _log_event(session_path, "ctrl_backslash", {
+                            _log_event(session_path, "claim_key", {
                                 "agent_id": agent_id,
                                 "base_url": base_url,
                             })
@@ -448,6 +484,7 @@ def run_agent(
     base_url: str = DEFAULT_BASE_URL,
     status_bar: bool = True,
     clear_on_start: bool = True,
+    claim_key: str = "ctrl+\\",
 ) -> int:
     """Run a command with multiplexed input from stdin and voxtype SSE.
 
@@ -462,10 +499,14 @@ def run_agent(
         base_url: Engine HTTP server base URL.
         status_bar: Show persistent status bar on last terminal row.
         clear_on_start: Clear terminal before launching child process.
+        claim_key: Key combo to claim this agent (e.g. "ctrl+\\", "ctrl+]").
 
     Returns:
         Exit code of the process.
     """
+    # Parse claim key once at startup
+    claim_raw, claim_csi_u = _parse_claim_key(claim_key)
+
     # Create session log
     session_path = _get_session_log_path(agent_id)
     _write_session_start(session_path, agent_id, command, base_url)
@@ -531,6 +572,7 @@ def run_agent(
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
             args=(write_queue, stop_event, keystroke_counter, agent_id, base_url, session_path),
+            kwargs={"claim_key_raw": claim_raw, "claim_key_csi_u": claim_csi_u},
             daemon=True,
         )
         # SSE-based IPC: connect to engine HTTP server
