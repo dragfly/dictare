@@ -147,6 +147,13 @@ def _read_from_stdin(
                 if not data:
                     break
 
+                # Log all raw bytes for debugging (temporary)
+                if session_path and b"\x1c" in data:
+                    _log_event(session_path, "raw_0x1c_found", {
+                        "hex": data.hex(),
+                        "agent_id": agent_id,
+                    })
+
                 # Intercept Ctrl+\ to claim this agent as active
                 if agent_id and _CTRL_BACKSLASH in data:
                     if session_path:
