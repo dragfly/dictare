@@ -506,6 +506,8 @@ class TestAgentSwitch:
         result = engine.handle_protocol_command({"command": "engine.shutdown"})
         assert result["status"] == "ok"
         assert engine._running is False
+        # Cancel the shutdown watchdog so it doesn't os._exit() during tests
+        engine._exit_watchdog_cancel.set()
 
     def test_handle_protocol_command_unknown(self) -> None:
         """handle_protocol_command returns error for unknown commands."""

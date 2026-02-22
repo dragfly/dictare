@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b235] - 2026-02-22
+
+### Fixed
+- **CI: fix `os._exit(1)` killing test process after 6 seconds.** The
+  `engine.shutdown` handler spawned a watchdog thread that called `os._exit(1)`
+  after 6s — this killed the entire pytest process at ~78% when running all
+  784 tests (including slow). Watchdog now honours a cancellable event so
+  tests can neutralize it.
+
 ## [0.1.0b234] - 2026-02-22
 
 ### Fixed
