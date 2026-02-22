@@ -59,43 +59,25 @@ def _hide_dock_icon() -> None:
 def _patch_pystray_appindicator() -> None:
     """Monkey-patch pystray to use cached icon files on Linux.
 
-    Two problems with pystray's default AppIndicator handling:
-    1. Uses tempfile.mktemp() without .png extension — AppIndicator treats
-       extensionless paths as icon theme names and falls back to a default.
-    2. Creates a NEW temp file on EVERY icon update — AppIndicator must
-       reload from the new path, briefly showing a fallback icon (flicker).
-
-    Fix: cache icon files by content hash.  Each unique icon image gets ONE
-    stable temp file created once.  Subsequent updates reuse the existing
-    path, so AppIndicator loads instantly from an already-present file.
+    AppIndicator's set_icon() needs a proper file path with extension,
+    otherwise it treats the path as an icon theme name and fails.
+    pystray uses tempfile.mktemp() without extension, causing fallback icons.
     """
     if sys.platform == "darwin":
         return
     try:
-        import io
         import tempfile
 
         import pystray._util.gtk as _gtk
 
-        _content_cache: dict[int, str] = {}  # PNG content hash → stable path
-
-        def _update_fs_icon_cached(self: _gtk.GtkIcon) -> None:
-            """Write icon to a stable cached file (no flicker on swap)."""
-            buf = io.BytesIO()
-            self.icon.save(buf, "PNG")
-            png_bytes = buf.getvalue()
-            cache_key = hash(png_bytes)
-
-            if cache_key not in _content_cache:
-                path = tempfile.mktemp(suffix=".png")
-                with open(path, "wb") as f:
-                    f.write(png_bytes)
-                _content_cache[cache_key] = path
-
-            self._icon_path = _content_cache[cache_key]
+        def _update_fs_icon_png(self: _gtk.GtkIcon) -> None:
+            """Update icon file with .png extension."""
+            self._icon_path = tempfile.mktemp(suffix=".png")
+            with open(self._icon_path, "wb") as f:
+                self.icon.save(f, "PNG")
             self._icon_valid = True
 
-        _gtk.GtkIcon._update_fs_icon = _update_fs_icon_cached
+        _gtk.GtkIcon._update_fs_icon = _update_fs_icon_png
     except Exception:
         logger.warning("Could not patch pystray for AppIndicator icons", exc_info=True)
 
