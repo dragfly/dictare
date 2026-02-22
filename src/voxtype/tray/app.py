@@ -82,6 +82,7 @@ def _patch_pystray_appindicator() -> None:
             self._icon_valid = True
 
         _gtk.GtkIcon._update_fs_icon = _update_fs_icon_png
+        logger.info("AppIndicator .png patch applied")
     except Exception:
         logger.warning("Could not patch pystray for AppIndicator icons", exc_info=True)
 
@@ -161,9 +162,6 @@ class TrayApp:
         self._restarting = False  # True while engine restart in progress
         self._targets: list[str] = []
         self._current_target: str = ""
-
-        # Icon deduplication — avoids redundant file writes on Linux/AppIndicator
-        self._current_icon_name: str = ""
 
         # Callbacks
         self._on_toggle_listening_cb: Callable[[], None] | None = None
@@ -459,13 +457,7 @@ class TrayApp:
             if not perms_ok and self._state not in ("disconnected", "restarting", "loading"):
                 icon_name = "voxtype_muted"
 
-            # Skip redundant icon image updates — on Linux/AppIndicator, each
-            # update writes a temp PNG file and calls set_icon(), causing
-            # visible flicker when multiple SSE events arrive in rapid
-            # succession.  Title updates are always applied (lightweight).
-            if icon_name != self._current_icon_name:
-                self._current_icon_name = icon_name
-                self._icon.icon = _load_icon(icon_name)
+            self._icon.icon = _load_icon(icon_name)
 
             title_map = {
                 "disconnected": "VoxType — Disconnected",

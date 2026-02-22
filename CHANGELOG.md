@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b229] - 2026-02-22
+
+### Fixed
+- **Linux: tray icon deduplication removed.** The icon dedup added in b212
+  was preventing AppIndicator from receiving icon updates. Restored b168
+  behavior: every state change sets the icon unconditionally. Added logging
+  to confirm the AppIndicator patch is applied.
+
 ## [0.1.0b228] - 2026-02-22
 
 ### Fixed
