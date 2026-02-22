@@ -876,22 +876,6 @@ def create_default_config() -> Path:
 # triggers = ["agent"]
 # match_threshold = 0.5
 
-# Agent type presets — command templates for named agent sessions
-#
-# Usage:
-#   voxtype agent <session-name>                         # uses agent_types.default
-#   voxtype agent <session-name> --type <type>           # uses specified type
-#   voxtype agent <session-name> --type <type> --continue
-#
-# Multiple sessions can share the same type:
-#   voxtype agent frontend --type sonnet
-#   voxtype agent backend --type sonnet
-#
-# continue_args: args inserted after argv[0] when --continue is passed.
-#   Claude Code: ["-c"]
-#   Codex:       ["resume", "--last"]   (resume is a subcommand, not a flag)
-#   Aider:       no continue flag
-
 [agent_types]
 default = "sonnet"
 

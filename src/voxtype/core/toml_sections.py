@@ -30,16 +30,6 @@ SUPPORTED_SECTIONS = frozenset([
 ])
 
 _AGENT_TYPES_HEADER = """\
-# Agent type presets — single-command launch
-# Usage:  voxtype agent <name>
-#         voxtype agent <name> --continue   (continue previous session)
-#         voxtype agent                     (uses agent_types.default)
-#
-# continue_args: args inserted after argv[0] when --continue/-C is passed.
-#   Claude Code: ["-c"]
-#   Codex:       ["resume", "--last"]   (resume is a subcommand, not a flag)
-#   Aider:       no continue flag
-
 [agent_types]
 default = "sonnet"
 
@@ -290,6 +280,7 @@ def _extract_section_lines(text: str, section: str) -> str | None:
     result: list[str] = []
     has_content = False
     in_target = False
+    in_non_owned = False  # inside a non-owned [section] — comments belong there
     comment_buf: list[str] = []  # comments/blanks that might precede an owned header
 
     for line in text.splitlines(keepends=True):
@@ -303,14 +294,19 @@ def _extract_section_lines(text: str, section: str) -> str | None:
                 comment_buf = []
                 result.append(line)
                 in_target = True
+                in_non_owned = False
                 has_content = True
             else:
                 # Non-owned section: discard buffer, leave owned section
                 comment_buf = []
                 in_target = False
+                in_non_owned = True
 
         elif in_target:
             result.append(line)
+
+        elif in_non_owned:
+            pass  # content belongs to the non-owned section, don't buffer
 
         elif not stripped or stripped.startswith("#"):
             # Comment or blank — may precede an owned section header
@@ -355,6 +351,7 @@ def _strip_section_lines(text: str, section: str) -> str:
     owned_prefixes = owned_map[section]
     result: list[str] = []
     in_target = False
+    in_non_owned = False  # inside a non-owned [section] — comments belong there
     comment_buf: list[str] = []  # pending comment/blank lines
 
     for line in text.splitlines(keepends=True):
@@ -366,15 +363,20 @@ def _strip_section_lines(text: str, section: str) -> str:
                 # Discard buffered comments — they belong to this owned header
                 comment_buf = []
                 in_target = True
+                in_non_owned = False
             else:
                 # Non-owned header: flush buffered comments, keep this line
                 result.extend(comment_buf)
                 comment_buf = []
                 result.append(line)
                 in_target = False
+                in_non_owned = True
 
         elif in_target:
             pass  # skip owned content
+
+        elif in_non_owned:
+            result.append(line)  # belongs to non-owned section, keep it
 
         elif not stripped or stripped.startswith("#"):
             # Buffer — may precede an owned header
