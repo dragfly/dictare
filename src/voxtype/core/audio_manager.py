@@ -272,12 +272,9 @@ class AudioManager:
         if self._device_monitor:
             self._device_monitor.stop()
 
-        # Stop and destroy old audio capture
+        # Abort old stream immediately (no lock, no waiting for callbacks)
         if self._audio:
-            try:
-                self._audio.stop_streaming()
-            except Exception:
-                pass
+            self._audio.emergency_abort()
             self._audio = None
 
         # Determine target device: configured or system default
@@ -297,9 +294,9 @@ class AudioManager:
             )
 
             try:
-                # Force PortAudio to refresh device list
-                sd._terminate()
-                sd._initialize()
+                # Refresh PortAudio device list with timeout — Pa_Terminate()
+                # can deadlock when CoreAudio is corrupted (error -50)
+                self._reinit_portaudio(sd, timeout_s=3.0)
 
                 self._audio = AudioCapture(
                     sample_rate=self._config.advanced.sample_rate,
@@ -327,6 +324,33 @@ class AudioManager:
                 self._audio = None
         logger.error("All reconnect attempts exhausted")
         return False
+
+    @staticmethod
+    def _reinit_portaudio(sd: Any, timeout_s: float = 3.0) -> None:
+        """Reinitialize PortAudio with a timeout.
+
+        Pa_Terminate() can deadlock when CoreAudio is in a corrupted state
+        (e.g. error -50 after device change). Run it in a thread so we
+        can skip it if it hangs and still attempt to open a new stream.
+        """
+        done = threading.Event()
+
+        def _do_reinit() -> None:
+            try:
+                sd._terminate()
+                sd._initialize()
+            except Exception:
+                pass
+            finally:
+                done.set()
+
+        t = threading.Thread(target=_do_reinit, daemon=True)
+        t.start()
+        if not done.wait(timeout=timeout_s):
+            logger.warning(
+                "PortAudio reinit timed out after %.1fs — proceeding anyway",
+                timeout_s,
+            )
 
     def flush_vad(self) -> None:
         """Flush VAD state (send buffered audio as speech_end)."""
