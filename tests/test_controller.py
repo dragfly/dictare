@@ -201,7 +201,7 @@ class TestSpeechEvents:
             controller.stop()
 
 class TestSpeechEndQueuesAudio:
-    """Test speech queuing during TRANSCRIBING only."""
+    """Test speech queuing during TRANSCRIBING and INJECTING."""
 
     def test_speech_end_during_transcribing_queues_audio(self) -> None:
         """SpeechEnded during TRANSCRIBING queues audio for later."""
@@ -221,8 +221,8 @@ class TestSpeechEndQueuesAudio:
         finally:
             controller.stop()
 
-    def test_speech_end_during_injecting_does_not_queue(self) -> None:
-        """SpeechEnded during INJECTING does not queue audio."""
+    def test_speech_end_during_injecting_queues_audio(self) -> None:
+        """SpeechEnded during INJECTING queues audio for later."""
         sm = StateManager(initial_state=AppState.INJECTING)
         engine = MockEngine()
         controller = StateController(sm)
@@ -235,7 +235,7 @@ class TestSpeechEndQueuesAudio:
             _drain(controller)
 
             assert sm.state == AppState.INJECTING
-            engine._audio_manager.queue_audio.assert_not_called()
+            engine._audio_manager.queue_audio.assert_called_once_with(audio_data)
         finally:
             controller.stop()
 
