@@ -166,6 +166,8 @@ class VoxtypeEngine:
         # TTS engine (loaded at startup, None if unavailable)
         self._tts_engine: Any = None
         self._tts_error: str = ""
+        # Watchdog cancel event — allows tests to prevent os._exit()
+        self._exit_watchdog_cancel = threading.Event()
 
         # Last transcribed text (for /status endpoint)
         self._last_text = ""
@@ -1364,6 +1366,27 @@ class VoxtypeEngine:
 
         return {"status": "ok", "duration_ms": duration_ms}
 
+    def _start_exit_watchdog(self, exit_code: int, timeout: float = 6) -> None:
+        """Start a watchdog that force-exits after *timeout* seconds.
+
+        Used by engine.shutdown / engine.restart to break deadlocks.
+        The watchdog honours ``_exit_watchdog_cancel`` so tests can prevent
+        the ``os._exit()`` call.
+        """
+        import os as _os
+
+        cancel = self._exit_watchdog_cancel
+
+        def _watchdog() -> None:
+            import time
+            time.sleep(timeout)
+            if cancel.is_set():
+                return
+            logger.warning("Graceful shutdown timed out — forcing exit")
+            _os._exit(exit_code)
+
+        threading.Thread(target=_watchdog, daemon=True, name="shutdown-watchdog").start()
+
     def handle_protocol_command(self, body: dict) -> dict:
         """Handle an OpenVIP protocol command.
 
@@ -1398,14 +1421,7 @@ class VoxtypeEngine:
             self._running = False
             # Watchdog: force-exit if graceful stop() hangs (e.g. audio deadlock).
             # Exit code 1 so both Restart=always and Restart=on-failure trigger a restart.
-            import os as _os
-            import threading as _threading
-            def _force_exit() -> None:
-                import time
-                time.sleep(6)
-                logger.warning("Graceful shutdown timed out — forcing exit")
-                _os._exit(1)
-            _threading.Thread(target=_force_exit, daemon=True, name="shutdown-watchdog").start()
+            self._start_exit_watchdog(exit_code=1)
             return {"status": "ok"}
         elif command == "engine.restart":
             # Persist state, then exit — the service manager (Restart=always) restarts us.
@@ -1418,16 +1434,7 @@ class VoxtypeEngine:
                 listening=self.is_listening,
             )
             self._running = False
-            import os as _os
-            import threading as _threading
-            def _force_restart_exit() -> None:
-                import time
-                time.sleep(6)
-                logger.warning("Restart shutdown timed out — forcing exit")
-                _os._exit(0)
-            _threading.Thread(
-                target=_force_restart_exit, daemon=True, name="restart-watchdog"
-            ).start()
+            self._start_exit_watchdog(exit_code=0)
             return {"status": "ok"}
         elif command == "ping":
             return {"status": "ok", "pong": True}
