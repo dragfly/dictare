@@ -732,14 +732,16 @@ class TestAudioFeedbackSounds:
         assert DEFAULT_SOUND_READY.exists()
 
     def test_sound_configs_default_enabled(self) -> None:
-        """AudioConfig sounds default to enabled with no custom path."""
+        """AudioConfig sounds default to enabled (except transcribing)."""
         from voxtype.config import AudioConfig
 
         cfg = AudioConfig()
-        for name in ("start", "stop", "transcribing", "ready", "sent", "agent_announce"):
+        for name in ("start", "stop", "ready", "sent", "agent_announce"):
             assert name in cfg.sounds
             assert cfg.sounds[name].enabled is True
             assert cfg.sounds[name].path is None
+        # Transcribing disabled by default (continuous VAD pipeline)
+        assert cfg.sounds["transcribing"].enabled is False
 
     def test_transcribing_transition_fires_callback(self) -> None:
         """RECORDING→TRANSCRIBING fires on_state_change callback."""
