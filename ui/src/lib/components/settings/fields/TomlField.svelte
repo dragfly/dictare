@@ -4,7 +4,6 @@
 	import {
 		EditorView,
 		keymap,
-		lineNumbers,
 		highlightActiveLine,
 		drawSelection,
 		highlightSpecialChars,
@@ -43,7 +42,6 @@
 		history(),
 		drawSelection(),
 		dropCursor(),
-		lineNumbers(),
 		highlightActiveLine(),
 		keymap.of([...defaultKeymap, ...historyKeymap]),
 		StreamLanguage.define(toml),
@@ -144,9 +142,46 @@
 	}
 </script>
 
-<div class="border rounded-md overflow-hidden">
-	{#if !noAccordion}
-		<!-- Accordion header -->
+{#if noAccordion}
+	<!-- No accordion: title + editor always visible -->
+	<div class="flex flex-col gap-3">
+		<span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+			{label}
+		</span>
+
+		<!-- CodeMirror editor mount point -->
+		<div
+			bind:this={editorEl}
+			class="rounded-md border bg-muted/30 overflow-hidden
+				{status === 'loading' ? 'opacity-50' : ''}"
+		></div>
+
+		<div class="flex items-center gap-2">
+			<Button
+				size="sm"
+				disabled={!isDirty || status === "saving"}
+				onclick={save}
+			>
+				{status === "saving" ? "Saving…" : "Save"}
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				disabled={!isDirty || status === "saving"}
+				onclick={reset}
+			>
+				Reset
+			</Button>
+			{#if status === "saved"}
+				<span class="text-xs text-green-500">Saved</span>
+			{:else if status === "error" && errorMessage}
+				<span class="text-xs text-destructive">{errorMessage}</span>
+			{/if}
+		</div>
+	</div>
+{:else}
+	<!-- Accordion mode -->
+	<div class="border rounded-md overflow-hidden">
 		<button
 			class="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/40 transition-colors"
 			onclick={toggle}
@@ -161,44 +196,39 @@
 				<path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd" />
 			</svg>
 		</button>
-	{/if}
 
-	<!-- Body: rendered lazily (accordion) or immediately (noAccordion) -->
-	{#if isOpen || loaded}
-		<div class="{noAccordion ? '' : 'border-t'} flex flex-col gap-3 px-4 pb-4 pt-3 {isOpen ? '' : 'hidden'}">
-			<div class="flex items-center justify-end gap-2">
-				{#if status === "saved"}
-					<span class="text-xs text-green-500">Saved</span>
-				{:else if status === "error"}
-					<span class="text-xs text-destructive">Error</span>
-				{/if}
-				<Button
-					variant="ghost"
-					size="sm"
-					disabled={!isDirty || status === "saving"}
-					onclick={reset}
-				>
-					Reset
-				</Button>
-				<Button
-					size="sm"
-					disabled={!isDirty || status === "saving"}
-					onclick={save}
-				>
-					{status === "saving" ? "Saving…" : "Save"}
-				</Button>
+		{#if isOpen || loaded}
+			<div class="border-t flex flex-col gap-3 px-4 pb-4 pt-3 {isOpen ? '' : 'hidden'}">
+				<!-- CodeMirror editor mount point -->
+				<div
+					bind:this={editorEl}
+					class="rounded-md border bg-muted/30 overflow-hidden
+						{status === 'loading' ? 'opacity-50' : ''}"
+				></div>
+
+				<div class="flex items-center gap-2">
+					<Button
+						size="sm"
+						disabled={!isDirty || status === "saving"}
+						onclick={save}
+					>
+						{status === "saving" ? "Saving…" : "Save"}
+					</Button>
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={!isDirty || status === "saving"}
+						onclick={reset}
+					>
+						Reset
+					</Button>
+					{#if status === "saved"}
+						<span class="text-xs text-green-500">Saved</span>
+					{:else if status === "error" && errorMessage}
+						<span class="text-xs text-destructive">{errorMessage}</span>
+					{/if}
+				</div>
 			</div>
-
-			<!-- CodeMirror editor mount point -->
-			<div
-				bind:this={editorEl}
-				class="rounded-md border bg-muted/30 overflow-hidden
-					{status === 'loading' ? 'opacity-50' : ''}"
-			></div>
-
-			{#if status === "error" && errorMessage}
-				<p class="text-xs text-destructive font-mono whitespace-pre-wrap">{errorMessage}</p>
-			{/if}
-		</div>
-	{/if}
-</div>
+		{/if}
+	</div>
+{/if}

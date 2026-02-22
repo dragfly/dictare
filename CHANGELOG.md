@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b215] - 2026-02-22
+
+### Changed
+- **Settings UI: TOML editors redesigned.** Removed accordion wrappers from
+  Agents, Speech (stt.advanced), and Audio (audio.sounds, audio.advanced) tabs.
+  Editors now render immediately with a section title, no line numbers, no card
+  container, and Save/Reset buttons below the editor aligned left.
+- **Settings UI: Shortcuts editor redesigned.** Removed accordion wrapper —
+  shortcuts are always visible with title, rows, and Save/Reset below.
+- **Settings UI: Audio field ordering.** Sounds appears before Advanced in the
+  Audio tab via declarative `FIELD_ORDER` in field-config.ts.
+
 ## [0.1.0b214] - 2026-02-21
 
 ### Fixed
