@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b218] - 2026-02-22
+
+### Fixed
+- **Web UI engine restart now works.** `engine.restart` was missing from the
+  `PROTOCOL_COMMANDS` routing set in `http_server.py`, so the command was routed
+  to the app controller (which just logged it) instead of the engine (which
+  actually restarts). One-character fix: added `"engine.restart"` to the set.
+
 ## [0.1.0b217] - 2026-02-22
 
 ### Added
