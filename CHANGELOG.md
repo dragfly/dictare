@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b220] - 2026-02-22
+
+### Fixed
+- **Engine restarts to keyboard mode instead of agents.** On SIGTERM shutdown
+  (tray restart), `_persist_state()` was never called before `_running` was set
+  to False. Agents disconnecting during HTTP server teardown would then be the
+  last "state" — but `_persist_state()` skipped because `_running=False`, leaving
+  stale defaults in `state.json`. Now `_persist_state()` is called explicitly
+  before disabling further saves.
+
 ## [0.1.0b219] - 2026-02-22
 
 ### Changed

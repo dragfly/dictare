@@ -321,9 +321,10 @@ class AppController:
         stats = self._engine.stats if self._engine else None
         self._display_session_stats(stats)
 
-        # Mark engine as not running BEFORE teardown — prevents _persist_state()
-        # from saving stale data as agents unregister during HTTP server shutdown.
+        # Save final state, then disable further saves — agents unregister during
+        # HTTP server shutdown and would overwrite state with stale data.
         if self._engine:
+            self._engine._persist_state()
             self._engine._running = False
 
         # Stop bindings
