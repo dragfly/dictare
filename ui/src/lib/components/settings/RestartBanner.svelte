@@ -10,15 +10,17 @@
 	async function handleRestart() {
 		restarting = true;
 		await restartEngine();
-		// Poll until the engine responds, then auto-dismiss
+		// Wait for engine to go DOWN
+		while (true) {
+			await new Promise<void>((r) => setTimeout(r, 500));
+			if (!(await pingEngine())) break;
+		}
+		// Wait for engine to come back UP
 		while (true) {
 			await new Promise<void>((r) => setTimeout(r, 1000));
-			const alive = await pingEngine();
-			if (alive) {
-				settingsStore.clearNeedsRestart();
-				break;
-			}
+			if (await pingEngine()) break;
 		}
+		settingsStore.clearNeedsRestart();
 		restarting = false;
 	}
 </script>
