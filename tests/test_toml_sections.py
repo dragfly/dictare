@@ -1,18 +1,13 @@
 """Tests for TOML section read/write (WYSIWYG editor)."""
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
-
-import pytest
 
 from voxtype.core.toml_sections import (
     _extract_section_lines,
     _strip_section_lines,
     apply_section,
-    serialize_section,
 )
-
 
 # ---------------------------------------------------------------------------
 # _strip_section_lines — inverse of _extract_section_lines
@@ -22,10 +17,7 @@ from voxtype.core.toml_sections import (
 def _roundtrip(text: str, section: str) -> None:
     """Verify extract + strip partitions text without overlap or gap."""
     extracted = _extract_section_lines(text, section) or ""
-    stripped = _strip_section_lines(text, section)
-    # Stripped + extracted lines should together reconstruct the original
-    # (ignoring trailing newline differences at section boundaries)
-    combined = stripped.rstrip("\n") + ("\n\n" if stripped.strip() and extracted.strip() else "") + extracted.strip()
+    _strip_section_lines(text, section)  # verify no crash
     # Just verify no content was silently lost
     assert extracted or not any(
         line.startswith("[agent_types") for line in text.splitlines()

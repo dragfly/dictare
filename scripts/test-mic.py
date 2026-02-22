@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Test microphone recording."""
+import numpy as np
 import sounddevice as sd
 import soundfile as sf
-import numpy as np
 
 print("Registrando 5 secondi a 16kHz... PARLA ORA!")
 audio = sd.rec(int(5 * 16000), samplerate=16000, channels=1, dtype="float32")

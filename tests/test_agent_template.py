@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 from typer.testing import CliRunner
 
 from voxtype.cli.agent import _check_engine, _try_start_service
-from voxtype.config import AgentTypeConfig, AgentTypesConfig, Config, load_config
+from voxtype.config import AgentTypesConfig, Config, load_config
 
 _runner = CliRunner()
 
