@@ -118,8 +118,18 @@ class StateManager:
 
     @property
     def should_process_audio(self) -> bool:
-        """Check if audio should be processed (LISTENING or RECORDING)."""
-        return self.state in (AppState.LISTENING, AppState.RECORDING)
+        """Check if audio should be processed by VAD.
+
+        True for LISTENING, RECORDING, TRANSCRIBING, and INJECTING so that
+        speech arriving during transcription is segmented and queued for
+        sequential STT processing.  PLAYING and OFF remain excluded.
+        """
+        return self.state in (
+            AppState.LISTENING,
+            AppState.RECORDING,
+            AppState.TRANSCRIBING,
+            AppState.INJECTING,
+        )
 
     def transition(self, to_state: AppState, *, force: bool = False) -> bool:
         """Attempt state transition.

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b230] - 2026-02-22
+
+### Changed
+- **Continuous VAD pipeline.** VAD now keeps running during TRANSCRIBING and
+  INJECTING states instead of silently dropping audio chunks. Speech arriving
+  during transcription is segmented by VAD and queued for sequential STT
+  processing. No concurrent STT — same single-threaded model, just no more
+  lost audio. PLAYING and OFF still mute the mic as before.
+
 ## [0.1.0b229] - 2026-02-22
 
 ### Fixed

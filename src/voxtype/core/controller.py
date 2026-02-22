@@ -206,8 +206,8 @@ class StateController:
 
         # Valid transitions: LISTENING or RECORDING → TRANSCRIBING
         if current not in (AppState.LISTENING, AppState.RECORDING):
-            # Can't transition - queue audio if busy transcribing
-            if current == AppState.TRANSCRIBING and self._engine:
+            # Can't transition - queue audio if busy transcribing/injecting
+            if current in (AppState.TRANSCRIBING, AppState.INJECTING) and self._engine:
                 if self._engine._audio_manager:
                     self._engine._audio_manager.queue_audio(event.audio_data)
             return
