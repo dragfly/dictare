@@ -9,9 +9,10 @@
 	import TomlField from "./fields/TomlField.svelte";
 	import ShortcutsField from "./fields/ShortcutsField.svelte";
 	import KeyCaptureField from "./fields/KeyCaptureField.svelte";
+	import DeviceField from "./fields/DeviceField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, TOML_NO_ACCORDION, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS, LABEL_OVERRIDES } from "$lib/registry/field-config";
+	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, TOML_NO_ACCORDION, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS, LABEL_OVERRIDES, DEVICE_FIELDS } from "$lib/registry/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -53,6 +54,7 @@
 		})()
 	);
 	const keyCaptureFormat = $derived(KEY_CAPTURE_FIELDS[field.key] as "evdev" | "shortcut" | undefined);
+	const deviceDirection = $derived(DEVICE_FIELDS[field.key] as "input" | "output" | undefined);
 	const presets = $derived(FIELD_PRESETS[field.key]);
 	const currentValue = $derived(settingsStore.getValue(field.key));
 	const isDirty = $derived(field.key in settingsStore.getDirty());
@@ -109,7 +111,13 @@
 
 	<!-- Right: control -->
 	<div class="flex items-center gap-2 shrink-0 mt-0.5">
-		{#if keyCaptureFormat}
+		{#if deviceDirection}
+			<DeviceField
+				direction={deviceDirection}
+				value={(currentValue as string) ?? ""}
+				onchange={(v) => settingsStore.markDirty(field.key, v)}
+			/>
+		{:else if keyCaptureFormat}
 			<KeyCaptureField
 				format={keyCaptureFormat}
 				value={(currentValue as string) ?? ""}

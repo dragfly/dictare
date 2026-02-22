@@ -118,11 +118,12 @@ class AudioManager:
         self._on_partial_audio = on_partial_audio
         self._on_vad_loading = on_vad_loading
 
-        # Create audio capture
+        # Create audio capture — prefer top-level input_device over advanced.device
+        device = self._config.input_device or self._config.advanced.device
         self._audio = AudioCapture(
             sample_rate=self._config.advanced.sample_rate,
             channels=self._config.advanced.channels,
-            device=self._config.advanced.device,
+            device=device,
         )
 
         # Create device monitor (detects OS-level device changes before PortAudio crashes)
@@ -271,21 +272,27 @@ class AudioManager:
                 pass
             self._audio = None
 
-        # Retry with fresh AudioCapture object using NEW default device
+        # Determine target device: configured or system default
+        configured_device = self._config.input_device or None
+
+        # Retry with fresh AudioCapture object
         for attempt in range(5):
             if self._on_reconnect_attempt:
                 self._on_reconnect_attempt(attempt + 1)
             time.sleep(1.0)
+
+            # On last attempt, fallback to system default even if device is configured
+            use_device = configured_device if attempt < 4 else None
+
             try:
                 # Force PortAudio to refresh device list
                 sd._terminate()
                 sd._initialize()
 
-                # Create new AudioCapture with default device (None)
                 self._audio = AudioCapture(
                     sample_rate=self._config.advanced.sample_rate,
                     channels=self._config.advanced.channels,
-                    device=None,  # Always use new default on reconnect
+                    device=use_device,
                 )
                 self._audio.start_streaming(on_chunk_callback)
 

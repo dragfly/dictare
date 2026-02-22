@@ -246,6 +246,18 @@ class OpenVIPServer:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+        @app.get("/audio/devices")
+        async def list_audio_devices():
+            """List available audio input and output devices."""
+            from voxtype.audio.capture import AudioCapture
+
+            return {
+                "input": AudioCapture.list_devices(),
+                "output": AudioCapture.list_output_devices(),
+                "default_input": AudioCapture.get_default_device(),
+                "default_output": AudioCapture.get_default_output_device(),
+            }
+
         # ----- Settings UI -----
 
         from pathlib import Path as _Path

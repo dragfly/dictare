@@ -584,6 +584,11 @@ class VoxtypeEngine:
         else:
             self._hotkey = None
 
+        # Set output device for beep playback
+        if self.config.audio.output_device:
+            from voxtype.audio.beep import set_output_device
+            set_output_device(self.config.audio.output_device)
+
         # Loading complete — notify SSE subscribers to clear loading state
         self._loading_active = False
         self._notify_status()
@@ -1244,6 +1249,10 @@ class VoxtypeEngine:
                     "language": self.config.tts.language,
                     "available": self._tts_engine is not None,
                     "error": self._tts_error or None,
+                },
+                "audio_devices": {
+                    "input": self.config.audio.input_device or "(default)",
+                    "output": self.config.audio.output_device or "(default)",
                 },
                 "permissions": self._get_permissions(),
                 "loading": {
