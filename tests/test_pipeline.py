@@ -22,6 +22,19 @@ from voxtype.pipeline.filters.input_filter import (
     _tokenize,
 )
 
+# Triggers used in tests only — production default is empty dict (must configure in config.toml)
+_TEST_TRIGGERS: dict[str, list[list[str]]] = {
+    "it": [["ok", "invia"], ["ok", "in", "via"], ["ok", "manda"], ["vai."]],
+    "en": [["ok", "send"], ["ok", "submit"], ["go", "ahead"]],
+}
+
+
+def _make_filter(**kwargs: object) -> InputFilter:
+    """Create InputFilter with test triggers (production default is empty)."""
+    if "triggers" not in kwargs:
+        kwargs["triggers"] = _TEST_TRIGGERS
+    return InputFilter(**kwargs)  # type: ignore[arg-type]
+
 
 @pytest.fixture(autouse=True)
 def reset_event_bus():
@@ -91,14 +104,11 @@ class TestPipelineResult:
 class TestInputFilterBasics:
     """Test InputFilter basic operations."""
 
-    def test_default_triggers(self) -> None:
-        """InputFilter has default triggers organized by language."""
+    def test_default_triggers_empty(self) -> None:
+        """InputFilter has empty triggers by default (must configure in config.toml)."""
         f = InputFilter()
+        assert f.triggers == {}
         assert f.triggers == DEFAULT_SUBMIT_TRIGGERS
-        assert "it" in f.triggers
-        assert "en" in f.triggers
-        assert ["ok", "invia"] in f.triggers["it"]
-        assert ["ok", "send"] in f.triggers["en"]
 
     def test_custom_triggers(self) -> None:
         """InputFilter accepts custom triggers dict."""
@@ -133,7 +143,7 @@ class TestInputFilterTriggerDetection:
 
     def test_multi_word_trigger_at_end(self) -> None:
         """Multi-word trigger at end is detected."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "hello world ok send"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -142,7 +152,7 @@ class TestInputFilterTriggerDetection:
 
     def test_italian_ok_invia_trigger(self) -> None:
         """Italian 'ok invia' trigger is detected."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "ho un bug nel parser ok invia", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -151,7 +161,7 @@ class TestInputFilterTriggerDetection:
 
     def test_italian_ok_in_via_trigger(self) -> None:
         """Italian 'ok in via' (misheard 'ok invia') trigger is detected."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "ho un bug nel parser ok in via", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -160,7 +170,7 @@ class TestInputFilterTriggerDetection:
 
     def test_multi_word_trigger(self) -> None:
         """Multi-word trigger (ok invia) is detected."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "fammi vedere il codice ok invia", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -180,7 +190,7 @@ class TestInputFilterTriggerDetection:
 
     def test_case_insensitive(self) -> None:
         """Trigger detection is case insensitive."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "hello OK SEND"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -203,7 +213,7 @@ class TestInputFilterTriggerDetection:
 
     def test_x_input_newline_still_checks_triggers(self) -> None:
         """x_input with newline=True does NOT skip trigger detection."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "hello ok submit", "x_input": {"newline": True}}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -211,7 +221,7 @@ class TestInputFilterTriggerDetection:
 
     def test_last_word_only_trigger_at_end(self) -> None:
         """Last-word-only trigger ('vai.') matches when last word."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "correggi il bug vai", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -220,14 +230,14 @@ class TestInputFilterTriggerDetection:
 
     def test_last_word_only_trigger_not_at_end(self) -> None:
         """Last-word-only trigger ('vai.') does NOT match when not last word."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "vai a vedere il codice", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.PASS
 
     def test_last_word_only_with_punctuation(self) -> None:
         """Last-word-only trigger works even if transcription has punctuation."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "correggi il bug, vai!", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -235,14 +245,14 @@ class TestInputFilterTriggerDetection:
 
     def test_last_word_only_case_insensitive(self) -> None:
         """Last-word-only trigger is case insensitive."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "correggi il bug VAI", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
 
     def test_last_word_only_confidence_is_1(self) -> None:
         """Last-word-only trigger has confidence 1.0."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "test vai", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -269,7 +279,7 @@ class TestInputFilterConfidence:
 
     def test_high_confidence_at_end(self) -> None:
         """Trigger at very end has high confidence."""
-        f = InputFilter(confidence_threshold=0.85)
+        f = _make_filter(confidence_threshold=0.85)
         msg = {"text": "test ok invia", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -331,7 +341,7 @@ class TestPipelineWithFilters:
 
     def test_single_filter_augments(self) -> None:
         """Single filter can augment message."""
-        p = Pipeline([InputFilter()])
+        p = Pipeline([_make_filter()])
         msg = {"text": "hello ok send"}
         result = p.process(msg)
         assert len(result) == 1
@@ -386,7 +396,7 @@ class TestLanguageBasedTriggers:
 
     def test_italian_message_uses_italian_triggers(self) -> None:
         """Italian message uses Italian triggers."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "test ok invia", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -394,7 +404,7 @@ class TestLanguageBasedTriggers:
 
     def test_english_message_uses_english_triggers(self) -> None:
         """English message uses English triggers."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "test ok send", "language": "en"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -402,7 +412,7 @@ class TestLanguageBasedTriggers:
 
     def test_italian_message_also_checks_english(self) -> None:
         """Italian message also checks English triggers."""
-        f = InputFilter()
+        f = _make_filter()
         # English trigger "ok submit" should work even with Italian language
         msg = {"text": "test ok submit", "language": "it"}
         result = f.process(msg)
@@ -410,21 +420,21 @@ class TestLanguageBasedTriggers:
 
     def test_unknown_language_falls_back_to_english(self) -> None:
         """Unknown language uses only English triggers."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "test ok send", "language": "xyz"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
 
     def test_no_language_defaults_to_english(self) -> None:
         """Message without language defaults to English."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "test ok send"}  # No language field
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
 
     def test_language_code_normalized(self) -> None:
         """Language codes like 'en-US' are normalized to 'en'."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "test ok send", "language": "en-US"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -467,7 +477,7 @@ class TestEdgeCases:
 
     def test_punctuation_around_trigger(self) -> None:
         """Trigger with punctuation is detected."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "hello, ok send!"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
@@ -492,7 +502,7 @@ class TestEdgeCases:
 
     def test_message_preserves_other_fields(self) -> None:
         """Message preserves other fields when augmented."""
-        f = InputFilter()
+        f = _make_filter()
         msg = {"text": "hello ok send", "id": "123", "custom": "value"}
         result = f.process(msg)
         # fork_message() creates new ID, traces back to original
@@ -706,7 +716,7 @@ class TestAgentFilterWithPipeline:
     def test_agent_filter_before_input_filter(self) -> None:
         """Agent filter can run before input filter in pipeline."""
         agent_f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
-        input_f = InputFilter()
+        input_f = _make_filter()
 
         p = Pipeline([agent_f, input_f])
 
@@ -718,7 +728,7 @@ class TestAgentFilterWithPipeline:
     def test_agent_and_input_in_same_message(self) -> None:
         """Both agent switch and input can be detected."""
         agent_f = AgentFilter(agent_ids=["voxtype"], subscribe_to_events=False)
-        input_f = InputFilter()
+        input_f = _make_filter()
 
         # Agent filter first, then input filter
         p = Pipeline([agent_f, input_f])

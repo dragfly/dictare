@@ -30,38 +30,9 @@ from voxtype.pipeline.filters._text import tokenize as _tokenize
 
 logger = logging.getLogger(__name__)
 
-# Default trigger word patterns organized by language
-# Each language has a list of patterns (each pattern is a list of words)
-# Order matters: longer/more specific patterns should come first
-DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {
-    "it": [
-        # Multi-word - "ok" prefix prevents false positives
-        ["ok", "invia"],
-        ["ok", "in", "via"],  # "invia" often heard as "in via"
-        ["ok", "manda"],
-        ["ok", "fatto"],
-        ["va", "bene", "invia"],
-        ["va", "bene", "in", "via"],
-        ["invia", "adesso"],
-        ["manda", "adesso"],
-        # Last-word-only (trailing "." = must be last word of transcription)
-        ["vai."],
-    ],
-    "en": [
-        ["ok", "send"],
-        ["ok", "submit"],
-        ["go", "ahead"],
-    ],
-    "es": [
-        ["ok", "enviar"],
-    ],
-    "de": [
-        ["ok", "senden"],
-    ],
-    "fr": [
-        ["ok", "envoyer"],
-    ],
-}
+# No hardcoded triggers — configure in config.toml under [pipeline.submit_filter.triggers].
+# Empty dict means no triggers active unless explicitly configured.
+DEFAULT_SUBMIT_TRIGGERS: dict[str, list[list[str]]] = {}
 
 
 @dataclass

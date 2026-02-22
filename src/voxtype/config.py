@@ -273,34 +273,8 @@ class SubmitFilterConfig(BaseModel):
 
     enabled: bool = Field(default=True, description="Enable submit trigger detection")
     triggers: dict[str, list[list[str]]] = Field(
-        default_factory=lambda: {
-            "it": [
-                ["ok", "invia"],
-                ["ok", "in", "via"],
-                ["ok", "manda"],
-                ["ok", "fatto"],
-                ["va", "bene", "invia"],
-                ["va", "bene", "in", "via"],
-                ["invia", "adesso"],
-                ["manda", "adesso"],
-                ["vai."],
-            ],
-            "en": [
-                ["ok", "send"],
-                ["ok", "submit"],
-                ["go", "ahead"],
-            ],
-            "es": [
-                ["ok", "enviar"],
-            ],
-            "de": [
-                ["ok", "senden"],
-            ],
-            "fr": [
-                ["ok", "envoyer"],
-            ],
-        },
-        description="Trigger patterns by language code. Only multi-word sequences — single words trigger too easily.",
+        default_factory=dict,
+        description="Trigger patterns by language code. Empty by default — configure in config.toml.",
     )
     confidence_threshold: float = Field(
         default=0.85,
@@ -873,25 +847,19 @@ def create_default_config() -> Path:
 # max_scan_words = 15
 # decay_rate = 0.95               # 5% confidence decay per word from end
 #
-# Submit triggers by language. English is always checked.
+# Submit triggers by language. No triggers active by default.
 # Each trigger is a multi-word sequence — all words must appear in order.
 # Single words trigger too easily; always use 2+ word sequences.
-# Add your language with its ISO code.
+# Uncomment and customize for your language.
 #
 # [pipeline.submit_filter.triggers]
-# it = [
-#     ["ok", "invia"],
-#     ["ok", "in", "via"],
-#     ["ok", "manda"],
-#     ["ok", "fatto"],
-#     ["va", "bene", "invia"],
-#     ["invia", "adesso"],
-#     ["vai."],
-# ]
 # en = [
 #     ["ok", "send"],
 #     ["ok", "submit"],
-#     ["go", "ahead"],
+# ]
+# it = [
+#     ["ok", "invia"],
+#     ["ok", "manda"],
 # ]
 # es = [
 #     ["ok", "enviar"],
