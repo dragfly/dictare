@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b225] - 2026-02-22
+
+### Fixed
+- **Linux: engine stuck in PLAYING state.** `sd.wait()` hangs indefinitely on
+  ALSA/PulseAudio backends, preventing `PlayCompleted` from firing and leaving
+  the FSM stuck. Replaced with polling loop + 10s timeout.
+- **Linux: evdev listener silent death.** Replaced `sys.stderr.write` and silent
+  `pass` on OSError with structured logging (`logger.warning`/`logger.error`).
+  Device errors, thread exits, and startup info now appear in engine logs.
+
 ## [0.1.0b224] - 2026-02-22
 
 ### Fixed

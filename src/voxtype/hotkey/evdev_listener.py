@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from voxtype.hotkey.base import HotkeyListener
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import evdev
@@ -164,9 +166,15 @@ class EvdevHotkeyListener(HotkeyListener):
         self._stop_event.clear()
         self._on_other_key = on_other_key
 
+        logger.info(
+            "Evdev hotkey started: key=%s, device=%s (%s)",
+            self.key_name, self._device.path, self._device.name,
+        )
+
         def listen_loop() -> None:
             assert self._device is not None
             try:
+                logger.debug("Evdev read_loop starting on %s", self._device.path)
                 for event in self._device.read_loop():
                     if self._stop_event.is_set():
                         break
@@ -190,11 +198,11 @@ class EvdevHotkeyListener(HotkeyListener):
                         elif event.value == 1 and self._on_other_key:
                             # Any other key pressed - notify for combo detection
                             self._on_other_key()
-            except OSError:
-                # Device closed or disconnected
-                pass
+                logger.info("Evdev read_loop exited normally")
+            except OSError as e:
+                logger.warning("Evdev device error: %s (%s)", e, self._device.path)
             except Exception as e:
-                sys.stderr.write(f"Hotkey listener error: {e}\n")
+                logger.error("Evdev listener error: %s", e, exc_info=True)
 
         self._thread = threading.Thread(target=listen_loop, daemon=True)
         self._thread.start()

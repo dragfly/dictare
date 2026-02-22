@@ -140,7 +140,20 @@ def _audio_worker() -> None:
 
             sd.play(data * volume if volume != 1.0 else data, sr, device=_output_device)
             if on_complete:
-                sd.wait()
+                # sd.wait() can hang indefinitely on Linux (ALSA/PulseAudio).
+                # Poll with timeout to prevent FSM getting stuck in PLAYING.
+                import time as _time
+
+                deadline = _time.monotonic() + 10.0
+                while sd.get_stream() and sd.get_stream().active:
+                    if _time.monotonic() > deadline:
+                        logger.warning("sd.wait() timed out after 10s — forcing completion")
+                        try:
+                            sd.stop()
+                        except Exception:
+                            pass
+                        break
+                    _time.sleep(0.05)
         except Exception:
             logger.debug("Audio playback failed for %s", path_str, exc_info=True)
             _play_sound_file_fallback(path_str)
