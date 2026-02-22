@@ -249,6 +249,14 @@ class AudioManager:
         """Check if audio device needs reconnection."""
         return self._audio is not None and self._audio.needs_reconnect()
 
+    def is_stream_stale(self, timeout_s: float = 3.0) -> bool:
+        """Check if audio stream is alive but not delivering data.
+
+        Detects zombie streams where PortAudio reports active but
+        CoreAudio has stopped (e.g. after device change with error -50).
+        """
+        return self._audio is not None and self._audio.is_stale(timeout_s)
+
     def reconnect(self, on_chunk_callback: Callable[[Any], None]) -> bool:
         """Attempt to reconnect audio device.
 
@@ -283,6 +291,10 @@ class AudioManager:
 
             # On last attempt, fallback to system default even if device is configured
             use_device = configured_device if attempt < 4 else None
+            logger.info(
+                "Reconnect attempt %d/5 with device=%r",
+                attempt + 1, use_device,
+            )
 
             try:
                 # Force PortAudio to refresh device list
@@ -310,8 +322,10 @@ class AudioManager:
                     device_name = device_info['name'] if device_info else None
                     self._on_reconnect_success(device_name)
                 return True
-            except Exception:
+            except Exception as exc:
+                logger.warning("Reconnect attempt %d/5 failed: %s", attempt + 1, exc)
                 self._audio = None
+        logger.error("All reconnect attempts exhausted")
         return False
 
     def flush_vad(self) -> None:

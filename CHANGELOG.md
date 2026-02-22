@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b223] - 2026-02-22
+
+### Fixed
+- **Zombie audio stream detection.** After device changes, PortAudio could report
+  stream as active while CoreAudio was corrupted (error -50). New health check
+  tracks `_last_callback_time` in streaming callbacks, detects stale streams
+  (no data for 3s), and forces reconnect. Post-reconnect verification waits for
+  actual audio data before declaring success.
+
 ## [0.1.0b222] - 2026-02-22
 
 ### Added
