@@ -162,19 +162,15 @@ _SOUNDS_HEADER = """\
 
 _SUBMIT_FILTER_HEADER = """\
 # Submit filter — detects voice trigger phrases to submit text
-# Triggers are grouped by language code. Each trigger is a list of word sequences.
+# No triggers active by default — uncomment and customize for your language.
+# Each trigger is a multi-word sequence; single words trigger too easily.
 #
 # [pipeline.submit_filter.triggers]
-# en = [["ok", "send"], ["ok", "submit"], ["go", "ahead"]]
+# en = [["ok", "send"], ["ok", "submit"]]
 # it = [["ok", "invia"], ["ok", "manda"]]
-# es = [["ok", "envía"], ["ok", "manda"], ["adelante"]]
-# de = [["ok", "senden"], ["ok", "schicke"]]
-# fr = [["ok", "envoie"], ["ok", "lance"]]
-# pt = [["ok", "envia"], ["ok", "manda"]]
-# ja = [["送って"]]
-# zh = [["发送"]]
-# ko = [["전송해"]]
-# ru = [["отправить"]]
+# es = [["ok", "enviar"]]
+# de = [["ok", "senden"]]
+# fr = [["ok", "envoyer"]]
 """
 
 _AGENT_FILTER_HEADER = """\

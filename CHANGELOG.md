@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b232] - 2026-02-22
+
+### Changed
+- **Submit filter triggers no longer hardcoded.** Default triggers are now empty —
+  must be configured in `config.toml` under `[pipeline.submit_filter.triggers]`.
+  Prevents unintended submit on phrases like "ok invia" when user hasn't
+  explicitly opted in. Template examples retained as commented-out reference.
+
 ## [0.1.0b231] - 2026-02-22
 
 ### Changed
