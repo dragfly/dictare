@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b233] - 2026-02-22
+
+### Fixed
+- **Settings UI: section extraction no longer bleeds across sections.** Comments
+  after a non-owned `[section]` header (e.g. `# enabled = true` under `[pipeline]`)
+  were incorrectly attributed to the next owned section (e.g. Agent Filter accordion
+  showed Submit Filter content). Now comments stay with their parent section.
+
 ## [0.1.0b232] - 2026-02-22
 
 ### Changed
