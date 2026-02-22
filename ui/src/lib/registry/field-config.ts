@@ -54,7 +54,12 @@ export const LABEL_OVERRIDES: Record<string, string> = {
 };
 
 /** TOML fields rendered without accordion (always visible, no toggle header) */
-export const TOML_NO_ACCORDION = new Set(["agent_types"]);
+export const TOML_NO_ACCORDION = new Set(["agent_types", "stt.advanced", "audio.sounds", "audio.advanced"]);
+
+/** Custom field ordering: fields listed here appear first, in this order */
+export const FIELD_ORDER: Record<string, string[]> = {
+  "audio": ["audio.sounds", "audio.advanced"],
+};
 
 /** Extra fields to show alongside a section (cross-section visibility) */
 export const SECTION_EXTRA_FIELDS: Record<string, string[]> = {
