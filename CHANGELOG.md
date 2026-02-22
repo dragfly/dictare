@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b224] - 2026-02-22
+
+### Fixed
+- **PortAudio reinit deadlock.** `Pa_Terminate()` hangs when CoreAudio is in
+  corrupted state (error -50 after device change). Reconnect now uses
+  `emergency_abort()` (fast, lock-free) instead of `stop_streaming()`, and runs
+  `sd._terminate()/sd._initialize()` in a thread with 3s timeout — skips if
+  hung and tries to open a new stream anyway.
+
 ## [0.1.0b223] - 2026-02-22
 
 ### Fixed
