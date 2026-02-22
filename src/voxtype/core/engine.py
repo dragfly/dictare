@@ -687,10 +687,12 @@ class VoxtypeEngine:
                     # Log transcription
                     if self._logger:
                         duration_ms = audio_duration * 1000
+                        stt_ms = transcribe_time * 1000
                         self._logger.log_transcription(
                             text=text,
                             duration_ms=duration_ms,
                             language=self.config.stt.language,
+                            stt_ms=stt_ms,
                         )
 
                     # Check if user has turned off listening
@@ -823,7 +825,8 @@ class VoxtypeEngine:
                 # No agent available
                 method = "none"
 
-            self._stats_injection_seconds += time.time() - inject_start
+            inject_elapsed = time.time() - inject_start
+            self._stats_injection_seconds += inject_elapsed
 
         # Determine final text and input info (after pipeline processing)
         first_msg = messages_to_send[0] if messages_to_send else {}
@@ -843,6 +846,7 @@ class VoxtypeEngine:
                 enter_sent=None,  # Agents handle their own submission
                 submit_trigger=submit_trigger,
                 submit_confidence=submit_confidence,
+                inject_ms=inject_elapsed * 1000,
             )
 
     # -------------------------------------------------------------------------

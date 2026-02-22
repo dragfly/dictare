@@ -140,6 +140,7 @@ class JSONLLogger:
         text: str,
         duration_ms: float | None = None,
         language: str | None = None,
+        stt_ms: float | None = None,
     ) -> None:
         """Log a transcription event.
 
@@ -153,6 +154,7 @@ class JSONLLogger:
             "chars": chars,
             "words": words,
             "duration_ms": duration_ms,
+            "stt_ms": round(stt_ms, 1) if stt_ms is not None else None,
             "language": language,
         }
         # Include text only in verbose mode
@@ -229,6 +231,7 @@ class JSONLLogger:
         enter_sent: bool | None = None,
         submit_trigger: str | None = None,
         submit_confidence: float | None = None,
+        inject_ms: float | None = None,
     ) -> None:
         """Log a text injection.
 
@@ -242,6 +245,7 @@ class JSONLLogger:
             "success": success,
             "auto_enter": auto_enter,
             "enter_sent": enter_sent,
+            "inject_ms": round(inject_ms, 1) if inject_ms is not None else None,
         }
         # Include text only in verbose mode
         if self._params.get("verbose"):

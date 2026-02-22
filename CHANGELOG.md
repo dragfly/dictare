@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b217] - 2026-02-22
+
+### Added
+- **STT and injection timing metrics.** Transcription logs now include `stt_ms`
+  (STT processing time) and injection logs include `inject_ms` (time to deliver
+  text to the agent). Enables diagnosing delays in the transcription pipeline.
+
 ## [0.1.0b216] - 2026-02-22
 
 ### Fixed
