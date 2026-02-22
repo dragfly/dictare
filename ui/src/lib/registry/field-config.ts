@@ -6,6 +6,12 @@ export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device"]);
 /** Fields whose text input should be right-aligned */
 export const RIGHT_ALIGN_FIELDS = new Set(["server.host"]);
 
+/** Fields rendered as audio device selectors */
+export const DEVICE_FIELDS: Record<string, "input" | "output"> = {
+  "audio.input_device": "input",
+  "audio.output_device": "output",
+};
+
 /** Fields rendered as key-capture widgets */
 export const KEY_CAPTURE_FIELDS: Record<string, "evdev" | "shortcut"> = {
   "hotkey.key": "evdev",
@@ -51,6 +57,8 @@ export const ENUM_FIELDS = new Set(["output.mode", "tts.engine"]);
 /** Override the auto-generated label for specific dotted keys */
 export const LABEL_OVERRIDES: Record<string, string> = {
   "hotkey.key": "Hotkey",
+  "audio.input_device": "Input Device",
+  "audio.output_device": "Output Device",
 };
 
 /** TOML fields rendered without accordion (always visible, no toggle header) */
@@ -58,7 +66,7 @@ export const TOML_NO_ACCORDION = new Set(["agent_types", "stt.advanced", "audio.
 
 /** Custom field ordering: fields listed here appear first, in this order */
 export const FIELD_ORDER: Record<string, string[]> = {
-  "audio": ["audio.sounds", "audio.advanced"],
+  "audio": ["audio.input_device", "audio.output_device", "audio.sounds", "audio.advanced"],
 };
 
 /** Extra fields to show alongside a section (cross-section visibility) */

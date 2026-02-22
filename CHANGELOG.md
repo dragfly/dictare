@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b222] - 2026-02-22
+
+### Added
+- **Audio device selection.** Input and output device dropdowns in Settings > Audio
+  as the first two fields. "Default (device name)" shows system default. New
+  `audio.input_device` and `audio.output_device` config fields (2-level keys).
+  Migration validator auto-migrates legacy `audio.advanced.device` to `input_device`.
+  Reconnection respects configured device (falls back to system default after 5
+  retries). `GET /audio/devices` API endpoint lists available devices. Status
+  endpoint reports current audio devices. Output device routed to beep playback.
+
 ## [0.1.0b220] - 2026-02-22
 
 ### Fixed

@@ -130,6 +130,51 @@ class AudioCapture:
 
         return input_devices
 
+    @staticmethod
+    def list_output_devices() -> list[dict]:
+        """List available audio output devices.
+
+        Returns:
+            List of device info dictionaries.
+        """
+        devices = sd.query_devices()
+        output_devices = []
+
+        for i, device in enumerate(devices):  # type: ignore
+            if device["max_output_channels"] > 0:  # type: ignore
+                output_devices.append(
+                    {
+                        "index": i,
+                        "name": device["name"],  # type: ignore
+                        "channels": device["max_output_channels"],  # type: ignore
+                        "sample_rate": device["default_samplerate"],  # type: ignore
+                    }
+                )
+
+        return output_devices
+
+    @staticmethod
+    def get_default_output_device() -> dict | None:
+        """Get default output device info.
+
+        Returns:
+            Device info dictionary or None if no default.
+        """
+        try:
+            default_idx = sd.default.device[1]  # Output device
+            if default_idx is None:
+                return None
+
+            device = sd.query_devices(default_idx)
+            return {
+                "index": default_idx,
+                "name": device["name"],  # type: ignore
+                "channels": device["max_output_channels"],  # type: ignore
+                "sample_rate": device["default_samplerate"],  # type: ignore
+            }
+        except Exception:
+            return None
+
     def start_streaming(self, callback: Callable[[NDArray[np.float32]], None]) -> None:
         """Start continuous audio streaming with callback.
 

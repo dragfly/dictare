@@ -94,6 +94,28 @@ export async function captureHotkey(signal?: AbortSignal): Promise<string | null
 	}
 }
 
+// ----- Audio Devices API -----
+
+export type AudioDeviceInfo = {
+	index: number;
+	name: string;
+	channels: number;
+	sample_rate: number;
+};
+
+export type AudioDevicesResponse = {
+	input: AudioDeviceInfo[];
+	output: AudioDeviceInfo[];
+	default_input: AudioDeviceInfo | null;
+	default_output: AudioDeviceInfo | null;
+};
+
+export async function fetchAudioDevices(): Promise<AudioDevicesResponse> {
+	const r = await fetch("/audio/devices");
+	if (!r.ok) throw new Error(`Failed to load audio devices: ${r.status}`);
+	return r.json();
+}
+
 // ----- Models API -----
 
 export type ModelInfo = {
