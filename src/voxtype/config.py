@@ -33,7 +33,7 @@ def _default_sounds() -> dict[str, SoundConfig]:
     return {
         "start": SoundConfig(),
         "stop": SoundConfig(),
-        "transcribing": SoundConfig(),
+        "transcribing": SoundConfig(enabled=False),
         "ready": SoundConfig(),
         "sent": SoundConfig(),
         "agent_announce": SoundConfig(),
@@ -801,7 +801,7 @@ def create_default_config() -> Path:
 # [audio.sounds.stop]             # LISTENING → OFF  (down-beep.wav)
 # enabled = true
 # [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING  (typewriter.wav)
-# enabled = true
+# enabled = false                  # Disabled by default (continuous VAD makes it unnecessary)
 # volume = 1.0                    # Reduce to 0.3–0.5 for background typewriter effect
 # [audio.sounds.ready]            # TRANSCRIBING → LISTENING  (carriage return)
 # enabled = true

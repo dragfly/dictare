@@ -106,13 +106,17 @@ language = "en"
 class TestSoundConfig:
     """Test per-event sound configuration with TOML sub-tables."""
 
-    def test_defaults_all_enabled(self) -> None:
-        """All 6 sound events default to enabled with no custom path."""
+    def test_defaults_sound_events(self) -> None:
+        """All 6 sound events present; transcribing disabled by default."""
         cfg = AudioConfig()
         expected = {"start", "stop", "transcribing", "ready", "sent", "agent_announce"}
         assert set(cfg.sounds.keys()) == expected
+        # Transcribing disabled by default (continuous VAD makes it unnecessary)
+        assert cfg.sounds["transcribing"].enabled is False
+        # All others enabled
+        for name in ("start", "stop", "ready", "sent", "agent_announce"):
+            assert cfg.sounds[name].enabled is True
         for sc in cfg.sounds.values():
-            assert sc.enabled is True
             assert sc.path is None
 
     def test_toml_subtable_parsing(self) -> None:
