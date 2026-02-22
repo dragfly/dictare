@@ -32,6 +32,18 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Output device for beep playback (None = system default)
+_output_device: str | int | None = None
+
+def set_output_device(device: str | None) -> None:
+    """Set the output device for beep playback.
+
+    Args:
+        device: Device name or None/empty for system default.
+    """
+    global _output_device
+    _output_device = device or None
+
 _SOUNDS_DIR = Path(__file__).parent / "sounds"
 
 # Default bundled sound files
@@ -118,7 +130,7 @@ def _audio_worker() -> None:
 
             import sounddevice as sd
 
-            sd.play(data * volume if volume != 1.0 else data, sr)
+            sd.play(data * volume if volume != 1.0 else data, sr, device=_output_device)
             if on_complete:
                 sd.wait()
         except Exception:

@@ -8,7 +8,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 # Environment variable prefix
 ENV_PREFIX = "VOXTYPE_"
@@ -58,6 +58,14 @@ class AudioAdvancedConfig(BaseModel):
 class AudioConfig(BaseModel):
     """Audio capture configuration."""
 
+    input_device: str = Field(
+        default="",
+        description="Input device name (empty = system default)",
+    )
+    output_device: str = Field(
+        default="",
+        description="Output device name (empty = system default)",
+    )
     max_duration: int = Field(default=60, description="Max recording duration in seconds")
     audio_feedback: bool = Field(
         default=True,
@@ -79,6 +87,18 @@ class AudioConfig(BaseModel):
         default_factory=_default_sounds,
         description="Per-event sound configuration (start, stop, transcribing, ready, sent, agent_announce)",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_advanced_device(cls, values: Any) -> Any:
+        """Migrate audio.advanced.device → audio.input_device."""
+        if not isinstance(values, dict):
+            return values
+        advanced = values.get("advanced")
+        if isinstance(advanced, dict) and advanced.get("device") and not values.get("input_device"):
+            values["input_device"] = advanced["device"]
+            advanced["device"] = None
+        return values
 
 class STTAdvancedConfig(BaseModel):
     """Low-level STT tuning parameters (rarely need changing)."""
@@ -724,6 +744,8 @@ def create_default_config() -> Path:
 # verbose = false
 
 [audio]
+# input_device = ""               # Input device name (empty = system default)
+# output_device = ""              # Output device name (empty = system default)
 # max_duration = 60               # Max recording duration (seconds)
 # audio_feedback = true           # Master switch for all audio feedback
 # silence_ms = 1200               # VAD silence to end speech (ms)
