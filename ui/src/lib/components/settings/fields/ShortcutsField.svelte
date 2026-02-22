@@ -88,7 +88,7 @@
 	}
 </script>
 
-<div class="flex flex-col gap-3">
+<div class="flex flex-col gap-3 mb-6">
 	<span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
 		Shortcuts
 	</span>
