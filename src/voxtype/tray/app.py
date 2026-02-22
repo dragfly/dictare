@@ -24,22 +24,16 @@ def _load_icon(name: str) -> Image.Image:
     Prefers @2x variant — the Retina patch will set NSImage point-size
     so macOS renders full resolution on HiDPI displays.
 
-    On Linux, the source file path is stored on the Image object so the
-    AppIndicator patch can point directly to it (no temp files needed).
     """
     from PIL import Image
 
     retina_path = ICONS_DIR / f"{name}@2x.png"
     if retina_path.exists():
-        img = Image.open(retina_path)
-        img._source_path = str(retina_path)  # type: ignore[attr-defined]
-        return img
+        return Image.open(retina_path)
 
     icon_path = ICONS_DIR / f"{name}.png"
     if icon_path.exists():
-        img = Image.open(icon_path)
-        img._source_path = str(icon_path)  # type: ignore[attr-defined]
-        return img
+        return Image.open(icon_path)
 
     # Fallback: 22x22 transparent
     return Image.new("RGBA", (22, 22), (0, 0, 0, 0))
@@ -60,14 +54,14 @@ def _hide_dock_icon() -> None:
         pass
 
 def _patch_pystray_appindicator() -> None:
-    """Monkey-patch pystray to point AppIndicator at our bundled PNG files.
+    """Monkey-patch pystray to save icons with .png extension on Linux.
 
-    pystray writes icons to temp files without .png extension, which causes
-    AppIndicator to fail (it treats extensionless paths as theme names).
+    AppIndicator's set_icon() needs a proper file path with extension,
+    otherwise it treats the path as an icon theme name and fails.
+    pystray uses tempfile.mktemp() without extension, causing fallback icons.
 
-    Instead of writing temp files, we point _icon_path directly at the
-    bundled PNG that _load_icon() already stored on the Image object.
-    No temp files, no file I/O, no serialization.
+    Each update creates a new temp file with a unique name — AppIndicator
+    caches by path, so reusing paths causes stale icons.
     """
     if sys.platform == "darwin":
         return
@@ -76,20 +70,14 @@ def _patch_pystray_appindicator() -> None:
 
         import pystray._util.gtk as _gtk
 
-        def _update_fs_icon_direct(self: _gtk.GtkIcon) -> None:
-            """Point icon path directly at bundled PNG file."""
-            source = getattr(self.icon, "_source_path", None)
-            if source:
-                self._icon_path = source
-                self._icon_valid = True
-            else:
-                # Fallback for dynamically created images (no source file)
-                self._icon_path = tempfile.mktemp(suffix=".png")
-                with open(self._icon_path, "wb") as f:
-                    self.icon.save(f, "PNG")
-                self._icon_valid = True
+        def _update_fs_icon_png(self: _gtk.GtkIcon) -> None:
+            """Update icon file with .png extension."""
+            self._icon_path = tempfile.mktemp(suffix=".png")
+            with open(self._icon_path, "wb") as f:
+                self.icon.save(f, "PNG")
+            self._icon_valid = True
 
-        _gtk.GtkIcon._update_fs_icon = _update_fs_icon_direct
+        _gtk.GtkIcon._update_fs_icon = _update_fs_icon_png
     except Exception:
         logger.warning("Could not patch pystray for AppIndicator icons", exc_info=True)
 
