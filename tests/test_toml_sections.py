@@ -49,19 +49,22 @@ engine = "espeak"
         assert "[stt]" in stripped
         assert "[tts]" in stripped
 
-    def test_strip_removes_preceding_comments(self) -> None:
-        """Comments immediately before an owned header must be removed too."""
+    def test_strip_keeps_comments_in_non_owned_section(self) -> None:
+        """Comments after a non-owned header belong to that section, not stripped."""
         text = """\
 [stt]
 model = "base"
 
-# This comment belongs to agent_types
+# This comment is after [stt], belongs to stt
 [agent_types.claude]
 command = ["claude"]
 """
         stripped = _strip_section_lines(text, "agent_types")
-        assert "# This comment belongs to agent_types" not in stripped
+        # Comment belongs to [stt] section, so it's kept
+        assert "# This comment is after [stt], belongs to stt" in stripped
         assert "[stt]" in stripped
+        # Owned content is stripped
+        assert "[agent_types" not in stripped
 
     def test_strip_preserves_unrelated_comments(self) -> None:
         """Comments NOT preceding an owned header must be kept."""

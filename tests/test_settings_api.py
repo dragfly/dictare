@@ -172,13 +172,13 @@ class TestTomlSectionGet:
         r = client.get("/settings/toml-section/nonexistent")
         assert r.status_code == 404
 
-    def test_content_includes_comments(self, client, tmp_path):
-        """Template header (when no section in file) contains comments."""
+    def test_fallback_template_has_defaults(self, client, tmp_path):
+        """Template header (when no section in file) contains default presets."""
         config_file = tmp_path / "nonexistent_config.toml"
         with patch("voxtype.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
-        assert "#" in r.json()["content"]
+        assert "[agent_types]" in r.json()["content"]
 
 class TestTomlSectionPost:
     """POST /settings/toml-section/{section}"""
