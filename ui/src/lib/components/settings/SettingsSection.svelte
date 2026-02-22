@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { SchemaResponse } from "$lib/types";
 	import FieldRenderer from "./FieldRenderer.svelte";
-	import { SECTION_EXTRA_FIELDS, FIELD_ORDER } from "$lib/registry/field-config";
+	import { SECTION_EXTRA_FIELDS, FIELD_ORDER, TOML_EDITABLE_KEYS } from "$lib/registry/field-config";
 
 	interface Props {
 		sections: string[];
@@ -26,11 +26,16 @@
 				const section = k.key.split(".")[0];
 				return sections.includes(section);
 			});
-			// Apply custom field ordering if defined for any active section
+			// Sort: normal fields first, TOML/shortcuts editors last.
+			// Within each group, apply custom FIELD_ORDER if defined.
+			const isEditor = (key: string) =>
+				TOML_EDITABLE_KEYS.has(key) || key === "keyboard.shortcuts";
 			const order = sections.flatMap((s) => FIELD_ORDER[s] ?? []);
-			if (order.length === 0) return filtered;
 			const orderIndex = new Map(order.map((k, i) => [k, i]));
 			return filtered.toSorted((a, b) => {
+				const aEditor = isEditor(a.key) ? 1 : 0;
+				const bEditor = isEditor(b.key) ? 1 : 0;
+				if (aEditor !== bEditor) return aEditor - bEditor;
 				const ai = orderIndex.get(a.key) ?? order.length;
 				const bi = orderIndex.get(b.key) ?? order.length;
 				return ai - bi;
