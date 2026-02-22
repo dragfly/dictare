@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -45,6 +46,7 @@ class AudioCapture:
         self._lock = threading.Lock()
         self._needs_reconnect = False
         self._streaming_callback: Callable[[Any], None] | None = None
+        self._last_callback_time: float = 0.0  # monotonic timestamp of last callback
 
     def _audio_callback(
         self,
@@ -186,6 +188,7 @@ class AudioCapture:
                 return
 
             self._streaming_callback = callback
+            self._last_callback_time = time.monotonic()
             self._stream = sd.InputStream(
                 samplerate=self.sample_rate,
                 channels=self.channels,
@@ -213,6 +216,7 @@ class AudioCapture:
                 # Real device error (output underflow, priming output) — reconnect
                 self._needs_reconnect = True
                 return
+        self._last_callback_time = time.monotonic()
         if self._streaming_callback is not None:
             self._streaming_callback(indata.flatten().copy())
 
@@ -270,10 +274,24 @@ class AudioCapture:
             return True
         return False
 
+    def is_stale(self, timeout_s: float = 3.0) -> bool:
+        """Check if audio stream is alive but not delivering data.
+
+        Detects zombie streams where PortAudio reports active=True but
+        CoreAudio has stopped delivering audio (e.g. after device change).
+
+        Args:
+            timeout_s: Seconds without a callback before stream is stale.
+
+        Returns:
+            True if stream exists and no callback received within timeout.
+        """
+        if self._stream is None or not self._stream.active:
+            return False
+        return (time.monotonic() - self._last_callback_time) > timeout_s
+
     def reconnect_streaming(self, callback: Callable[[NDArray[np.float32]], None]) -> bool:
         """Reconnect audio stream after device change."""
-        import time
-
         self._needs_reconnect = False
         self.stop_streaming()
 
@@ -282,7 +300,28 @@ class AudioCapture:
             time.sleep(1.0)
             try:
                 self.start_streaming(callback)
+                # Verify audio is actually flowing (not a zombie stream)
+                if not self._wait_for_data(timeout_s=2.0):
+                    self.stop_streaming()
+                    continue
                 return True
             except Exception:
                 pass
+        return False
+
+    def _wait_for_data(self, timeout_s: float = 2.0) -> bool:
+        """Wait for at least one audio callback after stream start.
+
+        Args:
+            timeout_s: Maximum seconds to wait.
+
+        Returns:
+            True if data arrived, False if timed out (zombie stream).
+        """
+        start = time.monotonic()
+        baseline = self._last_callback_time
+        while (time.monotonic() - start) < timeout_s:
+            if self._last_callback_time > baseline:
+                return True
+            time.sleep(0.05)
         return False

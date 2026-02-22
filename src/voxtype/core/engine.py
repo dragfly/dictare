@@ -1507,14 +1507,34 @@ class VoxtypeEngine:
         """Run the engine main loop (blocking).
 
         Call start_runtime() first. This keeps the main thread alive and
-        handles audio device reconnection.
+        handles audio device reconnection and zombie stream detection.
         """
+        stale_check_interval = 0  # counter to throttle is_stale checks
         try:
             while self._running:
                 time.sleep(0.1)
-                if self._audio_manager and self._audio_manager.needs_reconnect():
+                if not self._audio_manager:
+                    continue
+
+                # Fast path: explicit reconnect needed (device unplugged, etc.)
+                if self._audio_manager.needs_reconnect():
+                    logger.warning("Audio device needs reconnect")
                     if not self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
+                        logger.error("Audio reconnect failed after 5 attempts")
                         break
+                    logger.info("Audio reconnect succeeded")
+                    continue
+
+                # Slow path: zombie stream detection (check every ~3s)
+                stale_check_interval += 1
+                if stale_check_interval >= 30:  # 30 * 0.1s = 3s
+                    stale_check_interval = 0
+                    if self._audio_manager.is_stream_stale():
+                        logger.warning("Audio stream stale (no data) — forcing reconnect")
+                        if not self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
+                            logger.error("Audio reconnect failed after stale detection")
+                            break
+                        logger.info("Audio reconnect succeeded after stale detection")
         except KeyboardInterrupt:
             pass
 
