@@ -36,32 +36,20 @@ default = "sonnet"
 [agent_types.sonnet]
 command = ["claude", "--model", "claude-sonnet-4-6", "--max-turns", "1000"]
 continue_args = ["-c"]
+live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude Sonnet 4.6"
-
-[agent_types.sonnet-danger]
-command = ["claude", "--model", "claude-sonnet-4-6", "--dangerously-skip-permissions", "--max-turns", "1000"]
-continue_args = ["-c"]
-description = "Claude Sonnet 4.6 (auto-approve)"
 
 [agent_types.opus]
 command = ["claude", "--model", "claude-opus-4-6", "--max-turns", "1000"]
 continue_args = ["-c"]
+live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude Opus 4.6"
-
-[agent_types.opus-danger]
-command = ["claude", "--model", "claude-opus-4-6", "--dangerously-skip-permissions", "--max-turns", "1000"]
-continue_args = ["-c"]
-description = "Claude Opus 4.6 (auto-approve)"
 
 [agent_types.chatgpt]
 command = ["codex"]
 continue_args = ["resume", "--last"]
+live_dangerously_args = ["--dangerously-bypass-approvals-and-sandbox"]
 description = "OpenAI Codex"
-
-[agent_types.chatgpt-danger]
-command = ["codex", "--dangerously-bypass-approvals-and-sandbox"]
-continue_args = ["resume", "--last"]
-description = "OpenAI Codex (auto-approve)"
 """
 
 _SHORTCUTS_HEADER = """\

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b238] - 2026-02-23
+
+### Changed
+- **Agent config: `live_dangerously_args` replaces `-danger` presets.** Each agent
+  type now declares its own dangerous-mode args (e.g. `["--dangerously-skip-permissions"]`
+  for Claude, `["--dangerously-bypass-approvals-and-sandbox"]` for Codex). Use
+  `voxtype agent <name> --live-dangerously` to activate. Eliminates 3 duplicate
+  presets (sonnet-danger, opus-danger, chatgpt-danger) and gives the engine a
+  semantic signal that the agent is running in dangerous mode.
+
 ## [0.1.0b235] - 2026-02-22
 
 ### Fixed

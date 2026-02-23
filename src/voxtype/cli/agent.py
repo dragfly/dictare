@@ -101,6 +101,7 @@ def register(app: typer.Typer) -> None:
         show_status_bar: bool | None = None
         agent_type_name: str | None = None
         continue_session: bool = False
+        live_dangerously: bool = False
         has_double_dash = False  # tracks whether '--' separator was used
         for i, arg in enumerate(args):
             if arg in ("--verbose", "-v"):
@@ -114,6 +115,9 @@ def register(app: typer.Typer) -> None:
                 own_flags_to_remove.add(i)
             elif arg in ("--continue", "-C"):
                 continue_session = True
+                own_flags_to_remove.add(i)
+            elif arg == "--live-dangerously":
+                live_dangerously = True
                 own_flags_to_remove.add(i)
             elif arg in ("--server", "-s") and i + 1 < len(args):
                 server = args[i + 1]
@@ -135,7 +139,7 @@ def register(app: typer.Typer) -> None:
             unknown_flags = [a for a in command_override if a.startswith("-")]
             if unknown_flags:
                 console.print(f"[red]Error: unrecognized option(s): {' '.join(unknown_flags)}[/]")
-                console.print("[dim]voxtype agent options: --type/-t <type>, --continue/-C, --server/-s <url>, --verbose, --quiet, --no-status-bar[/]")
+                console.print("[dim]voxtype agent options: --type/-t <type>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose, --quiet, --no-status-bar[/]")
                 console.print("[dim]To pass flags to the agent command:  voxtype agent <name> -- <command> [flags][/]")
                 raise typer.Exit(1)
 
@@ -177,6 +181,14 @@ def register(app: typer.Typer) -> None:
             elif resolved_agent_type is not None:
                 console.print("[yellow]Warning: --continue given but agent type has no continue_args configured[/]")
             # With command override (--), --continue is silently ignored — user controls the full command
+
+        # Apply --live-dangerously: insert live_dangerously_args after argv[0]
+        if live_dangerously:
+            if resolved_agent_type is not None and resolved_agent_type.live_dangerously_args:
+                command = [command[0]] + resolved_agent_type.live_dangerously_args + command[1:]
+            elif resolved_agent_type is not None:
+                console.print("[yellow]Warning: --live-dangerously given but agent type has no live_dangerously_args configured[/]")
+            # With command override (--), --live-dangerously is silently ignored
 
         # Best-effort: try to start the engine if it's not reachable.
         # Never block — the SSE layer has its own reconnect loop.
