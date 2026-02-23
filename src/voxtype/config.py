@@ -302,6 +302,10 @@ class AgentTypeConfig(BaseModel):
         default_factory=list,
         description="Args inserted after argv[0] when --continue is passed (e.g. [\"-c\"] for Claude Code, [\"--resume\"] for Codex)",
     )
+    live_dangerously_args: list[str] = Field(
+        default_factory=list,
+        description="Args inserted after argv[0] when --live-dangerously is passed (e.g. [\"--dangerously-skip-permissions\"] for Claude Code)",
+    )
 
 class AgentTypesConfig(BaseModel):
     """Container for agent type presets.
@@ -848,32 +852,20 @@ default = "sonnet"
 [agent_types.sonnet]
 command = ["claude", "--model", "claude-sonnet-4-6", "--max-turns", "1000"]
 continue_args = ["-c"]
+live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude Sonnet 4.6"
-
-[agent_types.sonnet-danger]
-command = ["claude", "--model", "claude-sonnet-4-6", "--dangerously-skip-permissions", "--max-turns", "1000"]
-continue_args = ["-c"]
-description = "Claude Sonnet 4.6 (auto-approve)"
 
 [agent_types.opus]
 command = ["claude", "--model", "claude-opus-4-6", "--max-turns", "1000"]
 continue_args = ["-c"]
+live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude Opus 4.6"
-
-[agent_types.opus-danger]
-command = ["claude", "--model", "claude-opus-4-6", "--dangerously-skip-permissions", "--max-turns", "1000"]
-continue_args = ["-c"]
-description = "Claude Opus 4.6 (auto-approve)"
 
 [agent_types.chatgpt]
 command = ["codex"]
 continue_args = ["resume", "--last"]
+live_dangerously_args = ["--dangerously-bypass-approvals-and-sandbox"]
 description = "OpenAI Codex"
-
-[agent_types.chatgpt-danger]
-command = ["codex", "--dangerously-bypass-approvals-and-sandbox"]
-continue_args = ["resume", "--last"]
-description = "OpenAI Codex (auto-approve)"
 """
 
     with open(config_path, "w") as f:
