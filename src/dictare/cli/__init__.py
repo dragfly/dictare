@@ -23,6 +23,7 @@ from dictare.cli import (
     service,
     setup,
     speak,
+    status,
     tray,
 )
 from dictare.cli._helpers import console
@@ -48,6 +49,7 @@ app.add_typer(service.app, name="service")
 speak.register(app)
 agent.register(app)
 setup.register(app)
+status.register(app)
 logs.register(app)
 serve.register(app)
 
