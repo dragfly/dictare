@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b299] - 2026-02-24
+
+### Removed
+- **Coqui XTTS v2 hidden from UI** — removed from models.json. The
+  coqui-tts package is abandoned and incompatible with torch>=2.6 and
+  transformers>=4.46. Code kept in coqui.py for potential future use.
+
 ## [0.1.0b298] - 2026-02-24
 
 ### Fixed
