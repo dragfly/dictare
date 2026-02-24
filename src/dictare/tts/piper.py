@@ -112,19 +112,20 @@ class PiperTTS(TTSEngine):
         """Check if piper is available."""
         return self._piper_cmd is not None
 
-    def speak(self, text: str) -> bool:
+    def speak(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> bool:
         """Speak text using Piper.
 
-        Plays via native system audio player (afplay on macOS,
-        paplay/aplay on Linux) for correct resampling without crackling.
-        See docs/notes/audio-playback-architecture.md.
-
-        Args:
-            text: Text to speak.
-
-        Returns:
-            True if successful.
+        Per-request voice/language overrides are ignored (piper uses
+        config values set at init time).
         """
+        if voice or language:
+            logger.debug("piper ignores per-request voice/language overrides")
         if not self._piper_cmd:
             return False
 

@@ -145,11 +145,19 @@ class KokoroTTS(TTSEngine):
         base = self.language.lower().split("-")[0]
         return _DEFAULT_VOICES.get(base, "af_heart")
 
-    def speak(self, text: str) -> bool:
+    def speak(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> bool:
         """Speak text using Kokoro.
 
         Args:
             text: Text to speak.
+            voice: Per-request voice override.
+            language: Per-request language override.
 
         Returns:
             True if successful.
@@ -161,13 +169,21 @@ class KokoroTTS(TTSEngine):
             import soundfile as sf
 
             kokoro = self._get_kokoro()
+
+            # Per-request overrides: temporarily swap, resolve, restore
+            orig_lang, orig_voice = self.language, self.voice
+            if language:
+                self.language = language
+            if voice:
+                self.voice = voice
             lang = self._resolve_lang()
-            voice = self._resolve_voice()
+            resolved_voice = self._resolve_voice()
+            self.language, self.voice = orig_lang, orig_voice
 
             # kokoro.create() returns (samples, sample_rate)
             samples, sample_rate = kokoro.create(  # type: ignore[attr-defined]
                 text,
-                voice=voice,
+                voice=resolved_voice,
                 speed=self.speed,
                 lang=lang,
             )

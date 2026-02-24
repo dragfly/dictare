@@ -1496,6 +1496,15 @@ class DictareEngine:
 
         tts = self._tts_engine
 
+        # Per-request overrides (optional, protocol fields)
+        voice = body.get("voice") or None
+        language = body.get("language") or None
+        speak_kwargs: dict[str, str] = {}
+        if voice:
+            speak_kwargs["voice"] = voice
+        if language:
+            speak_kwargs["language"] = language
+
         # Mic-pausing: blocking speak with PlayStart/PlayComplete events
         pause = not self.config.audio.headphones_mode
 
@@ -1514,7 +1523,7 @@ class DictareEngine:
                     pass
 
                 try:
-                    ok = tts.speak(text)
+                    ok = tts.speak(text, **speak_kwargs)
                 finally:
                     if started:
                         try:
@@ -1522,9 +1531,9 @@ class DictareEngine:
                         except Exception:
                             pass
             else:
-                ok = tts.speak(text)
+                ok = tts.speak(text, **speak_kwargs)
         else:
-            ok = tts.speak(text)
+            ok = tts.speak(text, **speak_kwargs)
 
         duration_ms = int((time.time() - start) * 1000)
 

@@ -43,7 +43,13 @@ class WorkerTTSEngine(TTSEngine):
     # TTSEngine interface
     # ------------------------------------------------------------------
 
-    def speak(self, text: str) -> bool:
+    def speak(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> bool:
         """Send *text* to the worker and wait for completion."""
         request_id = str(uuid4())
         done = threading.Event()
@@ -55,16 +61,22 @@ class WorkerTTSEngine(TTSEngine):
         # Deliver to the __tts__ worker via SSE
         from dictare.core.engine import DictareEngine
 
+        msg: dict[str, Any] = {
+            "openvip": "1.0",
+            "type": "speech",
+            "id": str(uuid4()),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "text": text,
+            "request_id": request_id,
+        }
+        if voice:
+            msg["voice"] = voice
+        if language:
+            msg["language"] = language
+
         delivered = self._server.put_message(
             DictareEngine.TTS_AGENT_ID,
-            {
-                "openvip": "1.0",
-                "type": "speech",
-                "id": str(uuid4()),
-                "timestamp": datetime.now(UTC).isoformat(),
-                "text": text,
-                "request_id": request_id,
-            },
+            msg,
         )
         if not delivered:
             logger.warning("TTS worker not connected — speak(%r) dropped", text)
