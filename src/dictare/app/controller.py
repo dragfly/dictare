@@ -68,7 +68,7 @@ class AppController:
         Uses a PID file at ~/.dictare/engine.pid.  Stale files (process gone)
         are silently removed; live processes cause a RuntimeError.
         """
-        from dictare.utils.paths import get_pid_path, get_dictare_dir
+        from dictare.utils.paths import get_dictare_dir, get_pid_path
 
         pid_path = get_pid_path()
 

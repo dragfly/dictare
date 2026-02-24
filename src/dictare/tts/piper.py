@@ -105,7 +105,7 @@ class PiperTTS(TTSEngine):
         return self._piper_cmd is not None
 
     def speak(self, text: str) -> bool:
-        """Speak text using Piper + aplay/afplay.
+        """Speak text using Piper + sounddevice (via serialized audio worker).
 
         Args:
             text: Text to speak.
@@ -117,8 +117,6 @@ class PiperTTS(TTSEngine):
             return False
 
         try:
-            import sys
-
             model_path = self._get_model_path()
 
             # Create temp file for audio
@@ -138,22 +136,19 @@ class PiperTTS(TTSEngine):
             )
 
             if result.returncode != 0:
-                logger.debug("Piper failed: %s", result.stderr.decode()[:200])
+                logger.warning("Piper failed: %s", result.stderr.decode()[:200])
                 wav_path.unlink(missing_ok=True)
                 return False
 
-            # Play audio
-            if sys.platform == "darwin":
-                player = ["afplay", str(wav_path)]
-            else:
-                player = ["aplay", "-q", str(wav_path)]
+            # Play through serialized audio worker (thread-safe)
+            from dictare.audio.beep import play_wav_sync
 
-            subprocess.run(player, capture_output=True, timeout=120)
+            play_wav_sync(wav_path, timeout_s=120)
             wav_path.unlink(missing_ok=True)
             return True
 
         except Exception:
-            logger.debug("Piper speak failed", exc_info=True)
+            logger.warning("Piper speak failed", exc_info=True)
             return False
 
     def get_name(self) -> str:

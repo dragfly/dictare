@@ -58,9 +58,23 @@ def register(app: typer.Typer) -> None:
 
         config = load_config(config_file)
 
-        # Ensure required models are cached (auto-downloads if missing)
-        if not ensure_required_models(config):
-            raise typer.Exit(1)
+        # Download missing models in background — engine starts immediately.
+        # STT/TTS gracefully degrade until their model is ready.
+        import threading
+
+        def _bg_download() -> None:
+            try:
+                ensure_required_models(config)
+            except Exception:
+                import logging
+
+                logging.getLogger("dictare.serve").warning(
+                    "Background model download failed — "
+                    "run 'dictare models pull' manually",
+                    exc_info=True,
+                )
+
+        threading.Thread(target=_bg_download, daemon=True).start()
 
         # Auto-detect hardware acceleration
         auto_detect_acceleration(config, cpu_only=not config.stt.hw_accel)

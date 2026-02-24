@@ -165,6 +165,25 @@ def _audio_worker() -> None:
                     pass
 
 
+def play_wav_sync(path: str | Path, timeout_s: float = 15.0) -> bool:
+    """Play a WAV file through the serialized audio worker, blocking until done.
+
+    Use this from TTS engines instead of calling sd.play() directly — the
+    worker thread is the only thread allowed to call sounddevice output APIs.
+
+    Args:
+        path: Path to the WAV file.
+        timeout_s: Maximum seconds to wait for playback completion.
+
+    Returns:
+        True if playback completed, False if timed out or failed.
+    """
+    _ensure_worker()
+    done = threading.Event()
+    _play_queue.put((str(path), 1.0, done.set))
+    return done.wait(timeout=timeout_s)
+
+
 def get_sound_for_event(audio_config: Any, name: str) -> tuple[bool, str]:
     """Check if a sound event is enabled and return its file path.
 
@@ -392,22 +411,14 @@ def play_audio(
 
         from dictare.core.fsm import PlayCompleted, PlayStarted
 
-        try:
-            play_id = controller.get_next_play_id()
-            controller.send(PlayStarted(text="", source="audio"))
-        except Exception:
-            logger.debug("Failed to register play_id, playing without mic pause")
-            threading.Thread(target=fn, daemon=True).start()
-            return
+        controller.send(PlayStarted(text="", source="audio"))
 
         def _play_with_events() -> None:
             try:
                 fn()
             finally:
                 try:
-                    controller.send(
-                        PlayCompleted(play_id=play_id, source="audio")
-                    )
+                    controller.send(PlayCompleted(source="audio"))
                 except Exception:
                     pass
 
@@ -429,19 +440,11 @@ def play_audio(
 
     from dictare.core.fsm import PlayCompleted, PlayStarted
 
-    try:
-        play_id = controller.get_next_play_id()
-        controller.send(PlayStarted(text="", source="audio"))
-    except Exception:
-        logger.debug("Failed to register play_id, playing without mic pause")
-        play_sound_file(_path)
-        return
+    controller.send(PlayStarted(text="", source="audio"))
 
     def on_complete() -> None:
         try:
-            controller.send(
-                PlayCompleted(play_id=play_id, source="audio")
-            )
+            controller.send(PlayCompleted(source="audio"))
         except Exception:
             pass
 

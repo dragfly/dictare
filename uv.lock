@@ -226,6 +226,105 @@ wheels = [
 ]
 
 [[package]]
+name = "dictare"
+source = { editable = "." }
+dependencies = [
+    { name = "evdev", marker = "sys_platform == 'linux'" },
+    { name = "fastapi" },
+    { name = "faster-whisper" },
+    { name = "hidapi", marker = "sys_platform == 'darwin'" },
+    { name = "numpy" },
+    { name = "onnx-asr" },
+    { name = "openvip" },
+    { name = "pathvalidate" },
+    { name = "pillow" },
+    { name = "piper-tts" },
+    { name = "pydantic" },
+    { name = "pynput", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
+    { name = "pystray" },
+    { name = "python-json-logger" },
+    { name = "rich" },
+    { name = "sounddevice" },
+    { name = "soundfile" },
+    { name = "sse-starlette" },
+    { name = "tomlkit" },
+    { name = "typer" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-xdist" },
+    { name = "ruff" },
+]
+gpu = [
+    { name = "nvidia-cudnn-cu12" },
+]
+mlx = [
+    { name = "huggingface-hub" },
+    { name = "mlx" },
+    { name = "mlx-audio" },
+    { name = "mlx-whisper" },
+    { name = "numba" },
+    { name = "scipy" },
+    { name = "soundfile" },
+    { name = "tiktoken" },
+    { name = "tqdm" },
+]
+tts = [
+    { name = "pathvalidate" },
+    { name = "piper-tts" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "evdev", marker = "sys_platform == 'linux'", specifier = ">=1.7.0" },
+    { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "faster-whisper", specifier = ">=1.0.0" },
+    { name = "hidapi", marker = "sys_platform == 'darwin'", specifier = ">=0.14.0" },
+    { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
+    { name = "mlx", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
+    { name = "mlx-audio", marker = "extra == 'mlx'", specifier = ">=0.3.0" },
+    { name = "mlx-whisper", marker = "extra == 'mlx'", specifier = ">=0.4.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "numba", marker = "extra == 'mlx'", specifier = ">=0.60" },
+    { name = "numpy", specifier = ">=1.24.0" },
+    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.2.0" },
+    { name = "onnx-asr", specifier = ">=0.1.0" },
+    { name = "openvip", editable = "../../openvip-dev/sdks/python" },
+    { name = "pathvalidate", specifier = ">=3.0.0" },
+    { name = "pathvalidate", marker = "extra == 'tts'", specifier = ">=3.0.0" },
+    { name = "pillow", specifier = ">=10.0.0" },
+    { name = "piper-tts", specifier = ">=1.2.0" },
+    { name = "piper-tts", marker = "extra == 'tts'", specifier = ">=1.2.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pynput", marker = "sys_platform == 'darwin'", specifier = ">=1.7.0" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
+    { name = "pystray", specifier = ">=0.19.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.5.0" },
+    { name = "python-json-logger", specifier = ">=2.0.0" },
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.0,<0.15.0" },
+    { name = "scipy", marker = "extra == 'mlx'", specifier = ">=1.10.0" },
+    { name = "sounddevice", specifier = ">=0.5.0,<0.5.4" },
+    { name = "soundfile", specifier = ">=0.12.0" },
+    { name = "soundfile", marker = "extra == 'mlx'", specifier = ">=0.12.0" },
+    { name = "sse-starlette", specifier = ">=2.0.0" },
+    { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.5.0" },
+    { name = "tomlkit", specifier = ">=0.14.0" },
+    { name = "tqdm", marker = "extra == 'mlx'", specifier = ">=4.60.0" },
+    { name = "typer", specifier = ">=0.12.0" },
+    { name = "uvicorn", specifier = ">=0.32.0" },
+]
+provides-extras = ["dev", "gpu", "mlx", "tts"]
+
+[[package]]
 name = "evdev"
 version = "1.9.2"
 source = { registry = "https://pypi.org/simple" }
@@ -938,7 +1037,7 @@ wheels = [
 
 [[package]]
 name = "openvip"
-version = "1.1.0"
+version = "1.0.1"
 source = { editable = "../../openvip-dev/sdks/python" }
 dependencies = [
     { name = "pydantic" },
@@ -1850,101 +1949,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/c3/d1/8f3c683c9561a4e66
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3d/d8/2083a1daa7439a66f3a48589a57d576aa117726762618f6bb09fe3798796/uvicorn-0.40.0-py3-none-any.whl", hash = "sha256:c6c8f55bc8bf13eb6fa9ff87ad62308bbbc33d0b67f84293151efe87e0d5f2ee", size = 68502, upload-time = "2025-12-21T14:16:21.041Z" },
 ]
-
-[[package]]
-name = "voxtype"
-source = { editable = "." }
-dependencies = [
-    { name = "evdev", marker = "sys_platform == 'linux'" },
-    { name = "fastapi" },
-    { name = "faster-whisper" },
-    { name = "hidapi", marker = "sys_platform == 'darwin'" },
-    { name = "numpy" },
-    { name = "onnx-asr" },
-    { name = "openvip" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "pynput", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
-    { name = "pystray" },
-    { name = "python-json-logger" },
-    { name = "rich" },
-    { name = "sounddevice" },
-    { name = "soundfile" },
-    { name = "sse-starlette" },
-    { name = "tomlkit" },
-    { name = "typer" },
-    { name = "uvicorn" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-xdist" },
-    { name = "ruff" },
-]
-gpu = [
-    { name = "nvidia-cudnn-cu12" },
-]
-mlx = [
-    { name = "huggingface-hub" },
-    { name = "mlx" },
-    { name = "mlx-audio" },
-    { name = "mlx-whisper" },
-    { name = "numba" },
-    { name = "scipy" },
-    { name = "soundfile" },
-    { name = "tiktoken" },
-    { name = "tqdm" },
-]
-tts = [
-    { name = "pathvalidate" },
-    { name = "piper-tts" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "evdev", marker = "sys_platform == 'linux'", specifier = ">=1.7.0" },
-    { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "faster-whisper", specifier = ">=1.0.0" },
-    { name = "hidapi", marker = "sys_platform == 'darwin'", specifier = ">=0.14.0" },
-    { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
-    { name = "mlx", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
-    { name = "mlx-audio", marker = "extra == 'mlx'", specifier = ">=0.3.0" },
-    { name = "mlx-whisper", marker = "extra == 'mlx'", specifier = ">=0.4.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "numba", marker = "extra == 'mlx'", specifier = ">=0.60" },
-    { name = "numpy", specifier = ">=1.24.0" },
-    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.2.0" },
-    { name = "onnx-asr", specifier = ">=0.1.0" },
-    { name = "openvip", editable = "../../openvip-dev/sdks/python" },
-    { name = "pathvalidate", marker = "extra == 'tts'", specifier = ">=3.0.0" },
-    { name = "pillow", specifier = ">=10.0.0" },
-    { name = "piper-tts", marker = "extra == 'tts'", specifier = ">=1.2.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pynput", marker = "sys_platform == 'darwin'", specifier = ">=1.7.0" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
-    { name = "pystray", specifier = ">=0.19.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.5.0" },
-    { name = "python-json-logger", specifier = ">=2.0.0" },
-    { name = "rich", specifier = ">=13.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.0,<0.15.0" },
-    { name = "scipy", marker = "extra == 'mlx'", specifier = ">=1.10.0" },
-    { name = "sounddevice", specifier = ">=0.5.0,<0.5.4" },
-    { name = "soundfile", specifier = ">=0.12.0" },
-    { name = "soundfile", marker = "extra == 'mlx'", specifier = ">=0.12.0" },
-    { name = "sse-starlette", specifier = ">=2.0.0" },
-    { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.5.0" },
-    { name = "tomlkit", specifier = ">=0.14.0" },
-    { name = "tqdm", marker = "extra == 'mlx'", specifier = ">=4.60.0" },
-    { name = "typer", specifier = ">=0.12.0" },
-    { name = "uvicorn", specifier = ">=0.32.0" },
-]
-provides-extras = ["dev", "gpu", "mlx", "tts"]
 
 [[package]]
 name = "wheel"

@@ -244,8 +244,7 @@ class TranscriptionCompleted(StateMessage):
 class PlayStarted(StateMessage):
     """TTS playback starting.
 
-    Each TTS start increments a counter. The play_id is assigned by the controller
-    when the message is processed, not when it's created.
+    Increments the active-plays counter in the controller's worker thread.
     """
 
     text: str = ""
@@ -255,12 +254,10 @@ class PlayStarted(StateMessage):
 class PlayCompleted(StateMessage):
     """TTS playback finished.
 
-    The play_id must match the ID assigned when PlayStarted was processed.
-    If multiple TTS are playing concurrently, only the completion of the
-    LAST started TTS will trigger state transition back to LISTENING.
+    The controller maintains an active-plays counter on its worker thread.
+    Each PlayStarted increments it; each PlayCompleted decrements it.
+    State transition back to LISTENING happens only when the counter reaches zero.
     """
-
-    play_id: int = 0  # Must match the ID from PlayStarted
 
 
 # --- Commands (imperative — request an action) ---
