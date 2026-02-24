@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b307] - 2026-02-24
+
+### Added
+- **TTS audio caching** — deterministic WAV cache using
+  `sha256(engine|text|language|voice)`. Cache hit = instant playback
+  (no model inference). LRU eviction via mtime, max 500 files.
+  Cache dir: `~/.local/share/dictare/tts-cache/`.
+
 ## [0.1.0b306] - 2026-02-24
 
 ### Added
