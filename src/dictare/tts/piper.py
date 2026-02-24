@@ -104,7 +104,10 @@ class PiperTTS(TTSEngine):
         return self._piper_cmd is not None
 
     def speak(self, text: str) -> bool:
-        """Speak text using Piper + sounddevice (via serialized audio worker).
+        """Speak text using Piper.
+
+        On macOS, plays via afplay (native CoreAudio resampling).
+        On Linux, plays via the serialized sounddevice audio worker.
 
         Args:
             text: Text to speak.
@@ -112,6 +115,8 @@ class PiperTTS(TTSEngine):
         Returns:
             True if successful.
         """
+        import sys
+
         if not self._piper_cmd:
             return False
 
@@ -139,10 +144,20 @@ class PiperTTS(TTSEngine):
                 wav_path.unlink(missing_ok=True)
                 return False
 
-            # Play through serialized audio worker (thread-safe)
-            from dictare.audio.beep import play_wav_sync
+            # Play audio
+            if sys.platform == "darwin":
+                # afplay handles CoreAudio resampling natively (no crackling)
+                subprocess.run(
+                    ["afplay", str(wav_path)],
+                    capture_output=True,
+                    timeout=120,
+                )
+            else:
+                # Linux: use serialized sounddevice worker (thread-safe)
+                from dictare.audio.beep import play_wav_sync
 
-            play_wav_sync(wav_path, timeout_s=120)
+                play_wav_sync(wav_path, timeout_s=120)
+
             wav_path.unlink(missing_ok=True)
             return True
 
