@@ -13,6 +13,77 @@ from dictare.cli._helpers import console
 logger = logging.getLogger(__name__)
 
 
+# Kokoro voice name convention: {lang_prefix}{gender}_{name}
+_KOKORO_LANG_PREFIX: dict[str, str] = {
+    "a": "EN-US",
+    "b": "EN-GB",
+    "e": "ES",
+    "f": "FR",
+    "h": "HI",
+    "i": "IT",
+    "j": "JA",
+    "p": "PT",
+    "z": "ZH",
+}
+
+_KOKORO_GENDER: dict[str, str] = {
+    "f": "F",
+    "m": "M",
+}
+
+
+def _list_voices(engine_override: str | None, config_file: Path | None) -> None:
+    """List available voices for the current TTS engine."""
+    from dictare.config import load_config
+
+    config = load_config(config_file)
+    engine_name = engine_override or config.tts.engine
+
+    if engine_name != "kokoro":
+        console.print(f"[dim]{engine_name}: --list-voices not supported[/]")
+        return
+
+    # Read voices from the kokoro venv python
+    from dictare.tts.venv import get_venv_python
+
+    venv_python = get_venv_python("kokoro")
+    if venv_python is None:
+        console.print("[red]Kokoro venv not installed.[/]")
+        console.print("[dim]Install via Dashboard or: dictare models install kokoro[/]")
+        return
+
+    import subprocess
+
+    result = subprocess.run(
+        [
+            venv_python, "-c",
+            "from kokoro_onnx import Kokoro; from pathlib import Path; "
+            "d = Path.home() / '.local/share/dictare/models/kokoro'; "
+            "k = Kokoro(str(d / 'model.onnx'), str(d / 'voices.bin')); "
+            "print('\\n'.join(sorted(k.voices.keys())))",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    if result.returncode != 0:
+        console.print("[red]Failed to list voices[/]")
+        console.print(f"[dim]{result.stderr.strip()}[/]")
+        return
+
+    voices = result.stdout.strip().splitlines()
+    console.print(f"[bold]Kokoro voices ({len(voices)}):[/]\n")
+
+    for v in voices:
+        lang_code = _KOKORO_LANG_PREFIX.get(v[0], "??") if v else "??"
+        gender = _KOKORO_GENDER.get(v[1], "?") if len(v) > 1 else "?"
+        name = v[3:] if len(v) > 3 else v
+        console.print(f"  [cyan]{v:20}[/] {lang_code:5}  {gender}  {name}")
+
+    console.print("\n[dim]Use: dictare speak \"text\" -v <voice_name>[/]")
+
+
 def register(app: typer.Typer) -> None:
     """Register speak command on the main app."""
 
@@ -51,6 +122,10 @@ def register(app: typer.Typer) -> None:
             bool,
             typer.Option("--list-engines", help="List available TTS engines and exit"),
         ] = False,
+        list_voices: Annotated[
+            bool,
+            typer.Option("--list-voices", help="List available voices for the current TTS engine"),
+        ] = False,
     ) -> None:
         """Speak text using text-to-speech via the running engine.
 
@@ -77,6 +152,11 @@ def register(app: typer.Typer) -> None:
             for name, desc, langs, install in engines_info:
                 console.print(f"  [cyan]{name:10}[/] {desc:20} Languages: {langs:8} ({install})")
             console.print("\n[dim]Use: dictare speak \"text\" --engine <name>[/]")
+            raise typer.Exit(0)
+
+        # List voices mode
+        if list_voices:
+            _list_voices(engine, config_file)
             raise typer.Exit(0)
 
         # Load config
