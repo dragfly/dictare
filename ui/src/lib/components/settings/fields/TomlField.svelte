@@ -181,7 +181,7 @@
 	</div>
 {:else}
 	<!-- Accordion mode -->
-	<div class="border rounded-md overflow-hidden">
+	<div class="border rounded-md overflow-hidden mb-2">
 		<button
 			class="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/40 transition-colors"
 			onclick={toggle}
