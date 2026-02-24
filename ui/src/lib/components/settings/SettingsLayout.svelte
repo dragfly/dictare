@@ -1,7 +1,6 @@
 <script lang="ts">
 	import SettingsNav from "./SettingsNav.svelte";
 	import SettingsSection from "./SettingsSection.svelte";
-	import RestartBanner from "./RestartBanner.svelte";
 	import SaveBar from "./SaveBar.svelte";
 	import EngineStatusBar from "./EngineStatusBar.svelte";
 	import DashboardPage from "$lib/components/dashboard/DashboardPage.svelte";
@@ -77,7 +76,6 @@
 	<SettingsNav {tabs} bind:activeNavId version={schema?.version ?? ""} />
 	<main class="flex-1 overflow-y-auto">
 		<div class="max-w-2xl mx-auto pt-14 pb-8">
-			<RestartBanner />
 			{#if activeNavId === "dashboard"}
 				<div class="px-4 mb-8">
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>

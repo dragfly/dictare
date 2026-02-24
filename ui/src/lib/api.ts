@@ -192,6 +192,18 @@ export async function fetchStatus(): Promise<StatusResponse> {
 	return r.json();
 }
 
+export async function setOutputMode(mode: "keyboard" | "agents"): Promise<void> {
+	try {
+		await fetch("/control", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ command: `output.set_mode:${mode}` }),
+		});
+	} catch {
+		// Engine might be briefly unresponsive
+	}
+}
+
 export async function restartEngine(): Promise<void> {
 	try {
 		await fetch("/control", {

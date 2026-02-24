@@ -73,9 +73,7 @@
     "type": "tts",
     "description": "Coqui XTTS v2 (16 languages, voice cloning)",
     "size_gb": 1.5,
-    "venv": "coqui",
-    "repo": "coqui/XTTS-v2",
-    "check_file": "config.json"
+    "venv": "coqui"
   },
   "outetts": {
     "type": "tts",

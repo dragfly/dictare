@@ -6,9 +6,9 @@
 		uninstallCapability,
 		selectCapability,
 		createPullProgressSource,
-		pingEngine,
 		type CapabilityInfo,
 	} from "$lib/api";
+	import * as settingsStore from "$lib/stores/settings.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { Download, CheckCircle, AlertCircle, Loader, Trash2 } from "lucide-svelte";
 
@@ -112,26 +112,13 @@
 		try {
 			await selectCapability(pendingSelection.id);
 			pendingSelection = null;
-			// Wait for engine to come back after restart
-			await waitForEngine();
+			// Signal that engine needs restart (footer bar will show prompt)
+			settingsStore.setNeedsRestart();
 			await load();
 		} catch (e) {
 			installErrors = { ...installErrors, [pendingSelection.id]: String(e) };
 		} finally {
 			saving = false;
-		}
-	}
-
-	async function waitForEngine() {
-		// Wait for engine to go down
-		for (let i = 0; i < 10; i++) {
-			await new Promise<void>((r) => setTimeout(r, 500));
-			if (!(await pingEngine())) break;
-		}
-		// Wait for engine to come back up
-		for (let i = 0; i < 30; i++) {
-			await new Promise<void>((r) => setTimeout(r, 1000));
-			if (await pingEngine()) return;
 		}
 	}
 
@@ -332,7 +319,6 @@
 				<p class="text-sm text-muted-foreground">
 					Switch {pendingSelection.type === "stt" ? "STT model" : "TTS engine"} to
 					<span class="font-medium text-foreground">{pendingSelection.id}</span>?
-					Engine will restart.
 				</p>
 				<div class="flex items-center gap-2">
 					<Button variant="outline" size="sm" onclick={handleCancel} disabled={saving}>
@@ -341,7 +327,7 @@
 					<Button size="sm" onclick={handleSave} disabled={saving}>
 						{#if saving}
 							<Loader class="size-3 animate-spin mr-1.5" />
-							Restarting...
+							Saving...
 						{:else}
 							Save
 						{/if}
