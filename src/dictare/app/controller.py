@@ -252,16 +252,14 @@ class AppController:
         self._engine = create_engine(
             config=self._config,
             events=ControllerEvents(),
-            agent_mode=(self._config.output.mode == "agents"),
             hotkey_enabled=enable_hotkey,
             logger=self._logger,
         )
         engine_ref[0] = self._engine
 
         # 3. Restore saved state BEFORE HTTP server starts.
-        #    Sets _last_sse_agent_id so register_agent() picks the right agent
-        #    when SSE clients connect. Must happen before agents can register.
-        self._engine._restore_state()
+        #    Overrides config defaults with saved session if fresh.
+        start_listening = self._engine._restore_state(start_listening)
 
         # 4. Start HTTP server early (so StatusPanel can connect during loading)
         from dictare.core.http_server import OpenVIPServer
@@ -325,7 +323,7 @@ class AppController:
         # Save final state, then disable further saves — agents unregister during
         # HTTP server shutdown and would overwrite state with stale data.
         if self._engine:
-            self._engine._persist_state()
+            self._engine._save_state()
             self._engine._running = False
 
         # Stop bindings

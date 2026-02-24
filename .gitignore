@@ -80,3 +80,4 @@ WORKFLOW.md
 docs/notes/
 *.private.md
 dist/
+private/

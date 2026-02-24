@@ -5,13 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0b267] - 2026-02-24
+## [0.1.0b268] - 2026-02-24
 
-### Fixed
-- **`_restore_state()` enforces agent/mode consistency.** If the saved agent is
-  a real SSE agent (e.g. `voice`), the mode is forced to `agents` regardless of
-  what the file says. Prevents corrupted session files from putting the engine in
-  an impossible state (keyboard mode with an SSE agent active).
+### Changed
+- **`agent_mode` is now a derived read-only property**, not a flag.
+  `agent_mode = (_current_agent_id != KEYBOARD_AGENT_ID)`. Cannot go out of sync.
+- **`output_mode` removed from session-state.json.** Mode is always derived from
+  the active agent. Session file only stores: `active_agent`, `listening`, `last_active`.
+- **Removed `_restore_listening` flag**, `_persist_state()` wrapper, `_agent_mode`
+  backing field, debug traceback property, and `agent_mode` parameter from
+  `create_engine()`. Total: -5 variables, -3 methods, -50 lines of mode comparison logic.
+- **`KEYBOARD_AGENT_ID` constant** replaces all `"__keyboard__"` string literals.
+- **`_restore_state()` now takes and returns `start_listening`** — no intermediate flags.
 
 ## [0.1.0b266] - 2026-02-24
 

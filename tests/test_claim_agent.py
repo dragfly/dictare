@@ -219,7 +219,7 @@ class TestSwitchToAgentMode:
         ctrl = MagicMock(spec=AppController)
         ctrl.switch_to_agent = AppController.switch_to_agent.__get__(ctrl)
         ctrl._engine = MagicMock()
-        ctrl._engine.agent_mode = False
+        ctrl._engine.agent_mode = False  # keyboard mode
 
         ctrl.switch_to_agent("claude")
 
@@ -233,7 +233,7 @@ class TestSwitchToAgentMode:
         ctrl = MagicMock(spec=AppController)
         ctrl.switch_to_agent = AppController.switch_to_agent.__get__(ctrl)
         ctrl._engine = MagicMock()
-        ctrl._engine.agent_mode = True
+        ctrl._engine.agent_mode = True  # already in agent mode
 
         ctrl.switch_to_agent("claude")
 

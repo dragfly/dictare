@@ -1,11 +1,15 @@
 """Engine session state persistence.
 
-Saves/loads runtime state (active agent, output mode, listening) to a
-JSON file so the engine can restore its previous state after restart.
+Saves/loads runtime state to a JSON file so the engine can restore
+its previous session after a restart.
 
-Session expiry: if the last save was more than SESSION_TIMEOUT_S ago,
-the state is considered stale and load_state() returns None, signalling
-the caller to use config.toml defaults instead.
+What we save:
+  - active_agent: which agent was selected (e.g. "voice", "__keyboard__")
+  - listening: whether the engine was listening
+  - last_active: timestamp for session expiry
+
+What we do NOT save:
+  - output_mode: derived from active_agent — never persisted.
 """
 
 from __future__ import annotations
@@ -31,14 +35,12 @@ def _state_path() -> Path:
 def save_state(
     *,
     active_agent: str | None = None,
-    output_mode: str = "keyboard",
     listening: bool = False,
 ) -> None:
     """Save engine state to disk with a timestamp."""
     path = _state_path()
     data = {
         "active_agent": active_agent,
-        "output_mode": output_mode,
         "listening": listening,
         "last_active": time.time(),
     }
@@ -79,7 +81,6 @@ def load_state() -> dict[str, Any] | None:
     logger.info("Session still fresh (%.0f s ago), restoring state", elapsed)
     return {
         "active_agent": data.get("active_agent"),
-        "output_mode": data.get("output_mode"),
         "listening": data.get("listening", False),
     }
 

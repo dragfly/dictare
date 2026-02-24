@@ -75,34 +75,19 @@ class DictareEngine:
     # Default VAD silence duration in milliseconds
     DEFAULT_VAD_SILENCE_MS = 1200
 
+    # The built-in keyboard agent ID
+    KEYBOARD_AGENT_ID = "__keyboard__"
+
     @property
     def agent_mode(self) -> bool:
-        return self._agent_mode
-
-    @agent_mode.setter
-    def agent_mode(self, value: bool) -> None:
-        import traceback
-
-        old = getattr(self, "_agent_mode", None)
-        self._agent_mode = value
-        if old != value:
-            # Log 3 most recent caller frames (skip this setter)
-            stack = traceback.extract_stack(limit=4)[:-1]
-            caller_info = " <- ".join(
-                f"{f.filename.split('/')[-1]}:{f.lineno}({f.name})"
-                for f in reversed(stack)
-            )
-            logger.info(
-                "agent_mode CHANGED: %r → %r | caller: %s",
-                old, value, caller_info,
-            )
+        """True when outputting to agents, False when keyboard."""
+        return self._current_agent_id != self.KEYBOARD_AGENT_ID
 
     def __init__(
         self,
         config: Config,
         events: EngineEvents | None = None,
         logger: JSONLLogger | None = None,
-        agent_mode: bool = False,
         hotkey_enabled: bool = True,
     ) -> None:
         """Initialize the engine.
@@ -111,7 +96,6 @@ class DictareEngine:
             config: Application configuration.
             events: Optional event handler for UI callbacks.
             logger: Optional JSONL logger for structured logging.
-            agent_mode: Enable agent mode with auto-discovery.
             hotkey_enabled: Enable hotkey listener. Set False for daemon mode
                            (macOS requires main thread for hotkey events).
         """
@@ -134,8 +118,6 @@ class DictareEngine:
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
 
-        # Agent mode: whether we're outputting to agents (vs keyboard/clipboard)
-        self._agent_mode = agent_mode
         self._agents: dict[str, Agent] = {}  # ID -> Agent instance
         # Note: Agent registration is handled externally via register_agent()/
         # unregister_agent() API. The app creates the appropriate AgentRegistrar.
@@ -155,7 +137,11 @@ class DictareEngine:
         self._logger = logger
 
         # Agent state (must be initialized before pipeline)
-        self._current_agent_id: str | None = None  # ID of currently selected agent
+        # _current_agent_id drives agent_mode property:
+        #   KEYBOARD_AGENT_ID → keyboard mode, anything else → agent mode
+        self._current_agent_id: str | None = (
+            None if config.output.mode == "agents" else self.KEYBOARD_AGENT_ID
+        )
         self._agent_order: list[str] = []  # Ordered list of agent IDs for cycling
 
         # Pipelines for message processing
@@ -167,7 +153,6 @@ class DictareEngine:
         # Grace period after restart: give the preferred agent time to reconnect
         # before auto-assigning any first-come agent.  Set in _restore_state().
         self._preferred_agent_deadline: float | None = None
-        self._restore_listening: bool = False  # Set by _restore_state(), applied in start_runtime()
 
         # Tap detection (isolated state machine)
         # Single tap: toggle listening on/off
@@ -228,7 +213,7 @@ class DictareEngine:
         self._check_grace_period()
         if self._status_change_callback is not None:
             self._status_change_callback()
-        self._persist_state()
+        self._save_state()
 
     def _check_grace_period(self) -> None:
         """Assign first available agent once the preferred-agent grace period expires."""
@@ -253,136 +238,61 @@ class DictareEngine:
                     visible[0],
                 )
 
-    def _persist_state(self) -> None:
-        """Save current engine state to disk for restore after restart.
-
-        Skipped when engine is not running (during shutdown, agents
-        unregister and state would be saved as None/idle).
-        """
+    def _save_state(self) -> None:
+        """Save current state to session-state.json.  Skipped during shutdown."""
         if not self._running:
             return
-        self._save_state()
-
-    def save_session_before_shutdown(self) -> None:
-        """Save session state explicitly before shutdown (SIGTERM, engine.shutdown, etc.).
-
-        Bypasses the _running guard because this is called right before
-        _running is set to False — the state is still valid.
-        """
-        logger.info(
-            "session_save_before_shutdown: agent=%r, agent_mode=%r (raw _agent_mode=%r), "
-            "listening=%r, _running=%r, agents=%s",
-            self._current_agent_id,
-            self.agent_mode,
-            self._agent_mode,
-            self.is_listening,
-            self._running,
-            list(self._agents.keys()),
-        )
-        self._save_state()
-
-    def _save_state(self) -> None:
-        """Write current state to session-state.json.
-
-        Derives output_mode from current agent (ground truth), NOT from the
-        agent_mode flag which can become stale after a corrupted restore.
-        """
         from dictare.utils.state import save_state
 
-        # Ground truth: if current agent is a real SSE agent → agents mode
-        is_agents = (
-            self._current_agent_id is not None
-            and self._current_agent_id not in self.RESERVED_AGENT_IDS
-        )
-        mode = "agents" if is_agents else "keyboard"
+        save_state(active_agent=self._current_agent_id, listening=self.is_listening)
 
-        if is_agents != self.agent_mode:
-            logger.warning(
-                "_save_state: agent_mode flag (%r) disagrees with current_agent (%r) "
-                "→ saving mode=%r (derived from agent)",
-                self.agent_mode, self._current_agent_id, mode,
-            )
+    def save_session_before_shutdown(self) -> None:
+        """Save session state before SIGTERM / engine.shutdown / engine.restart."""
+        from dictare.utils.state import save_state
 
-        save_state(
-            active_agent=self._current_agent_id,
-            output_mode=mode,
-            listening=self.is_listening,
+        save_state(active_agent=self._current_agent_id, listening=self.is_listening)
+        logger.info(
+            "session_saved: agent=%r, mode=%s, listening=%r",
+            self._current_agent_id,
+            "agents" if self.agent_mode else "keyboard",
+            self.is_listening,
         )
 
-    def _restore_state(self) -> None:
-        """Restore engine state from session-state.json after restart.
+    def _restore_state(self, start_listening: bool) -> bool:
+        """Restore session state, overriding config defaults.
 
-        If the session is fresh (< 60 min), restores output_mode, listening
-        state, and preferred agent.  Otherwise, uses config.toml defaults
-        (cold start).
+        Returns the (possibly updated) start_listening value.
+
+        Logic:
+          1. Config already set _current_agent_id and start_listening.
+          2. If a fresh session exists, override with saved values.
+          3. If session is missing/expired/corrupt → config defaults stand.
         """
         from dictare.utils.state import load_state
 
         saved = load_state()
-
         if saved is None:
-            logger.info(
-                "restore_state: no fresh session → cold start from config.toml "
-                "(agent_mode=%r, listening=False)",
-                self.agent_mode,
-            )
-            return
+            logger.info("restore_state: no fresh session, using config defaults")
+            return start_listening
 
-        logger.info(
-            "restore_state: fresh session found → %s "
-            "(config defaults were: agent_mode=%r, current_agent=%r)",
-            saved, self.agent_mode, self._current_agent_id,
-        )
-
-        # Restore preferred agent and output mode.
-        # The saved agent is ground truth — if it's a real agent, mode MUST
-        # be "agents" regardless of what the file says (guards against
-        # corrupted saves from older versions).
         saved_agent = saved.get("active_agent")
-        saved_mode = saved.get("output_mode")
-        is_real_agent = saved_agent and saved_agent not in self.RESERVED_AGENT_IDS
+        saved_listening = saved.get("listening", False)
 
-        if is_real_agent and saved_mode != "agents":
-            logger.warning(
-                "restore_state: saved agent=%r contradicts mode=%r → forcing agents",
-                saved_agent, saved_mode,
-            )
-            saved_mode = "agents"
+        logger.info("restore_state: fresh session → agent=%r, listening=%r", saved_agent, saved_listening)
 
-        if saved_mode == "agents" and not self.agent_mode:
-            self.agent_mode = True
-            logger.info("restore_state: output_mode → agents (was keyboard from config)")
-        elif saved_mode == "keyboard" and self.agent_mode:
-            self.agent_mode = False
-            logger.info("restore_state: output_mode → keyboard (was agents from config)")
-        else:
-            logger.info("restore_state: output_mode unchanged (%s)", saved_mode)
-
-        # Restore listening state — will be applied in start_runtime()
-        self._restore_listening = saved.get("listening", False)
-        if self._restore_listening:
-            logger.info("restore_state: will start listening (session was listening)")
-
-        # Remember preferred agent for when it reconnects, with grace period
-        if is_real_agent:
+        # Restore agent: if it's a real agent, wait for it to reconnect
+        if saved_agent and saved_agent != self.KEYBOARD_AGENT_ID:
             import time as _time
 
+            self._current_agent_id = None  # agents mode, waiting
             self._last_sse_agent_id = saved_agent
-            grace_seconds = 20.0
-            self._preferred_agent_deadline = _time.monotonic() + grace_seconds
-            logger.info(
-                "restore_state: waiting for agent %r (grace period %.0fs)",
-                saved_agent, grace_seconds,
-            )
-        else:
-            logger.info("restore_state: no preferred agent to wait for")
+            self._preferred_agent_deadline = _time.monotonic() + 20.0
+            logger.info("restore_state: waiting for agent %r (20s grace)", saved_agent)
+        elif saved_agent == self.KEYBOARD_AGENT_ID:
+            self._current_agent_id = self.KEYBOARD_AGENT_ID
+            logger.info("restore_state: keyboard mode")
 
-        logger.info(
-            "restore_state done: agent_mode=%r, restore_listening=%r, "
-            "preferred_agent=%r",
-            self.agent_mode, self._restore_listening,
-            self._last_sse_agent_id,
-        )
+        return saved_listening
 
     # -------------------------------------------------------------------------
     # Properties
@@ -404,7 +314,7 @@ class DictareEngine:
         return self._state_manager.is_off
 
     # Agent IDs reserved for internal use — hidden from API, rejected by HTTP
-    RESERVED_AGENT_IDS = frozenset({"__keyboard__"})
+    RESERVED_AGENT_IDS = frozenset({KEYBOARD_AGENT_ID})
 
     @property
     def agents(self) -> list[str]:
@@ -1020,20 +930,20 @@ class DictareEngine:
 
         if want_agent_mode:
             # Switch to agents: restore last SSE agent as current
-            self.agent_mode = True
             restore_id = self._last_sse_agent_id
             real_agents = self.visible_agents
             if restore_id and restore_id in self._agents:
                 self._current_agent_id = restore_id
             elif real_agents:
                 self._current_agent_id = real_agents[0]
+            else:
+                self._current_agent_id = None  # agents mode, waiting for connection
             self.speak_text("agent mode")
         else:
             # Switch to keyboard: save current agent, make __keyboard__ current
-            if self._current_agent_id and self._current_agent_id != "__keyboard__":
+            if self._current_agent_id and self._current_agent_id != self.KEYBOARD_AGENT_ID:
                 self._last_sse_agent_id = self._current_agent_id
-            self._current_agent_id = "__keyboard__"
-            self.agent_mode = False
+            self._current_agent_id = self.KEYBOARD_AGENT_ID
             self.speak_text("keyboard mode")
 
         self._notify_status()
@@ -1618,11 +1528,6 @@ class DictareEngine:
                 is_running=lambda: self._running,
             )
 
-        # Transition to initial state — session restore can override the default
-        if self._restore_listening:
-            start_listening = True
-            self._restore_listening = False
-            logger.info("start_runtime: restoring listening=True from session")
         if start_listening:
             old_state = self.state
             self._state_manager.transition(AppState.LISTENING)
@@ -1726,42 +1631,30 @@ def create_engine(
     events: EngineEvents,
     *,
     logger: JSONLLogger | None = None,
-    agent_mode: bool | None = None,
     hotkey_enabled: bool = True,
 ) -> DictareEngine:
     """Create a DictareEngine.
 
-    This is the shared initialization logic used by both CLI (dictare listen)
-    and daemon. Ensures consistent behavior.
-
     In agent mode, agents self-register via SSE connection to the HTTP server.
     In keyboard mode, a KeyboardAgent is created and managed internally.
+    Mode is determined by config.output.mode and _current_agent_id.
 
     Args:
         config: Application configuration.
         events: Event handler callbacks.
         logger: Optional JSONL logger.
-        agent_mode: Override config.output.mode. If None, uses config.
         hotkey_enabled: Enable hotkey listener. Set False for daemon mode
                        (macOS requires main thread for hotkey events).
 
     Returns:
         Configured DictareEngine instance.
     """
-    effective_agent_mode = agent_mode if agent_mode is not None else (config.output.mode == "agents")
-
     _log = logging.getLogger(__name__)
-    _log.info(
-        "create_engine: config.output.mode=%r, agent_mode_param=%r, "
-        "effective_agent_mode=%r, hotkey_enabled=%r",
-        config.output.mode, agent_mode, effective_agent_mode, hotkey_enabled,
-    )
 
     engine = DictareEngine(
         config=config,
         events=events,
         logger=logger,
-        agent_mode=effective_agent_mode,
         hotkey_enabled=hotkey_enabled,
     )
 
@@ -1771,10 +1664,6 @@ def create_engine(
     keyboard_agent = KeyboardAgent(config)
     engine._keyboard_agent = keyboard_agent
     engine.register_agent(keyboard_agent)
-
-    if not effective_agent_mode:
-        # Keyboard mode: make __keyboard__ the current agent
-        engine._current_agent_id = "__keyboard__"
 
     _log.info(
         "create_engine done: agent_mode=%r, current_agent=%r",
