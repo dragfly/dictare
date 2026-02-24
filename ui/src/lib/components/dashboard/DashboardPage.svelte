@@ -92,51 +92,74 @@
 	</div>
 {:else if p}
 	<div class="space-y-6 px-4">
-		<!-- Engine overview card -->
-		<div class="rounded-lg border bg-card p-4 space-y-2">
-			<div class="flex items-center justify-between">
-				<h3 class="text-sm font-semibold">Engine</h3>
-				<Badge variant="outline" class="text-[10px]">{p.mode} mode</Badge>
+		<!-- Engine + Permissions side by side -->
+		<div class="grid grid-cols-2 gap-4">
+			<div class="rounded-lg border bg-card p-4 space-y-2">
+				<div class="flex items-center justify-between">
+					<h3 class="text-sm font-semibold">Engine</h3>
+					<Badge variant="outline" class="text-[10px]">{p.mode} mode</Badge>
+				</div>
+				<div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+					<div class="text-muted-foreground">State</div>
+					<div>{p.state}</div>
+					<div class="text-muted-foreground">Uptime</div>
+					<div>{fmtUptime(p.uptime_seconds)}</div>
+					<div class="text-muted-foreground">STT</div>
+					<div>{p.stt.model_name} <span class="text-muted-foreground">on {p.stt.device}</span></div>
+					<div class="text-muted-foreground">TTS</div>
+					<div>
+						{p.tts.engine}
+						{#if p.tts.available}
+							<span class="text-green-500 text-xs ml-1">active</span>
+						{:else}
+							<span class="text-destructive text-xs ml-1">unavailable</span>
+						{/if}
+					</div>
+				</div>
 			</div>
-			<div class="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
-				<div class="text-muted-foreground">State</div>
-				<div>{p.state}</div>
-				<div class="text-muted-foreground">Uptime</div>
-				<div>{fmtUptime(p.uptime_seconds)}</div>
-				<div class="text-muted-foreground">STT</div>
-				<div>{p.stt.model_name} <span class="text-muted-foreground">on {p.stt.device}</span></div>
-				<div class="text-muted-foreground">TTS</div>
-				<div>
-					{p.tts.engine}
-					{#if p.tts.available}
-						<span class="text-green-500 text-xs ml-1">active</span>
+
+			<div class="space-y-4">
+				<!-- Agents -->
+				<div class="rounded-lg border bg-card p-4 space-y-2">
+					<h3 class="text-sm font-semibold">Agents</h3>
+					{#if p.output.available_agents.length > 0}
+						<div class="flex flex-wrap gap-2">
+							{#each p.output.available_agents as agent}
+								<Badge
+									variant={agent === p.output.current_agent ? "default" : "secondary"}
+									class="text-xs"
+								>
+									{agent}
+									{#if agent === p.output.current_agent}
+										<span class="ml-1 opacity-70">active</span>
+									{/if}
+								</Badge>
+							{/each}
+						</div>
 					{:else}
-						<span class="text-destructive text-xs ml-1">unavailable</span>
+						<p class="text-sm text-muted-foreground">No agents connected</p>
 					{/if}
 				</div>
-			</div>
-		</div>
 
-		<!-- Agents card -->
-		<div class="rounded-lg border bg-card p-4 space-y-2">
-			<h3 class="text-sm font-semibold">Agents</h3>
-			{#if p.output.available_agents.length > 0}
-				<div class="flex flex-wrap gap-2">
-					{#each p.output.available_agents as agent}
-						<Badge
-							variant={agent === p.output.current_agent ? "default" : "secondary"}
-							class="text-xs"
-						>
-							{agent}
-							{#if agent === p.output.current_agent}
-								<span class="ml-1 opacity-70">active</span>
-							{/if}
-						</Badge>
-					{/each}
-				</div>
-			{:else}
-				<p class="text-sm text-muted-foreground">No agents connected</p>
-			{/if}
+				<!-- Permissions -->
+				{#if p.permissions}
+					<div class="rounded-lg border bg-card p-4 space-y-2">
+						<h3 class="text-sm font-semibold">Permissions</h3>
+						<div class="flex flex-wrap gap-3">
+							{#each Object.entries(p.permissions) as [key, ok]}
+								<div class="flex items-center gap-1.5 text-sm">
+									{#if ok}
+										<CheckCircle class="size-3.5 text-green-500" />
+									{:else}
+										<XCircle class="size-3.5 text-destructive" />
+									{/if}
+									<span class="capitalize">{key.replace("_", " ")}</span>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		<!-- TTS Engines -->
@@ -158,25 +181,6 @@
 				<div class="space-y-2">
 					{#each p.engines.stt as eng (eng.name)}
 						{@render engineRow(eng)}
-					{/each}
-				</div>
-			</div>
-		{/if}
-
-		<!-- Permissions -->
-		{#if p.permissions}
-			<div class="rounded-lg border bg-card p-4 space-y-2">
-				<h3 class="text-sm font-semibold">Permissions</h3>
-				<div class="flex flex-wrap gap-3">
-					{#each Object.entries(p.permissions) as [key, ok]}
-						<div class="flex items-center gap-1.5 text-sm">
-							{#if ok}
-								<CheckCircle class="size-3.5 text-green-500" />
-							{:else}
-								<XCircle class="size-3.5 text-destructive" />
-							{/if}
-							<span class="capitalize">{key.replace("_", " ")}</span>
-						</div>
 					{/each}
 				</div>
 			</div>
