@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b293] - 2026-02-24
+
+### Added
+- **Engine status bar** — fixed bottom bar across all Settings pages. Shows
+  orange "Engine restarting..." when engine goes down, green "Engine ready"
+  when it comes back (auto-hides after 1.5s). Polls `/health` every 2s.
+
 ## [0.1.0b292] - 2026-02-24
 
 ### Fixed
