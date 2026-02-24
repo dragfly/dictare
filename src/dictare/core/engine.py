@@ -76,6 +76,9 @@ class DictareEngine:
     # The built-in keyboard agent ID
     KEYBOARD_AGENT_ID = "__keyboard__"
 
+    # The TTS worker agent ID
+    TTS_AGENT_ID = "__tts__"
+
     @property
     def agent_mode(self) -> bool:
         """True when outputting to agents, False when keyboard."""
@@ -177,6 +180,14 @@ class DictareEngine:
         # TTS engine (loaded at startup, None if unavailable)
         self._tts_engine: Any = None
         self._tts_error: str = ""
+        self._tts_proxy: Any = None  # WorkerTTSEngine (set when using worker)
+        self._tts_worker_process: Any = None  # subprocess.Popen for TTS worker
+
+        # Scoped auth tokens for internal services
+        import secrets
+        self._auth_tokens: dict[str, str] = {
+            "register_tts": secrets.token_urlsafe(32),
+        }
         # Watchdog cancel event — allows tests to prevent os._exit()
         self._exit_watchdog_cancel = threading.Event()
 
@@ -312,7 +323,7 @@ class DictareEngine:
         return self._state_manager.is_off
 
     # Agent IDs reserved for internal use — hidden from API, rejected by HTTP
-    RESERVED_AGENT_IDS = frozenset({KEYBOARD_AGENT_ID})
+    RESERVED_AGENT_IDS = frozenset({KEYBOARD_AGENT_ID, TTS_AGENT_ID})
 
     @property
     def agents(self) -> list[str]:
@@ -505,7 +516,9 @@ class DictareEngine:
         """
         self._status_change_callback = callback
 
-    def init_components(self, *, headless: bool = False) -> None:
+    def init_components(
+        self, *, headless: bool = False, http_server: Any = None,
+    ) -> None:
         """Initialize engine components (STT, VAD, audio, hotkey).
 
         Call this before start_runtime(). This loads models and creates
@@ -513,6 +526,8 @@ class DictareEngine:
 
         Args:
             headless: If True, skip all console output (for Engine/daemon mode).
+            http_server: OpenVIPServer instance (enables TTS worker mode for
+                heavy engines like outetts/piper/coqui).
         """
         from dictare.utils.hardware import is_mlx_available
         from dictare.utils.stats import get_model_load_time, save_model_load_time
@@ -584,30 +599,37 @@ class DictareEngine:
         logger.info("VAD model loaded in %.1fs", vad_elapsed)
 
         # Load TTS engine (optional — engine continues if unavailable)
-        logger.debug("Loading TTS engine: %s", tts_engine_name)
+        # Heavy engines (outetts, piper, coqui) run in a worker subprocess
+        # to avoid blocking the main process with model loading.
+        _worker_engines = {"outetts", "piper", "coqui"}
+        use_worker = (
+            tts_engine_name in _worker_engines and http_server is not None
+        )
+
+        logger.debug("Loading TTS engine: %s (worker=%s)", tts_engine_name, use_worker)
         self._loading_models[2]["start_time"] = time.time()
         self._loading_models[2]["status"] = "loading"
-        try:
-            from dictare.tts import get_cached_tts_engine
 
-            self._tts_engine = get_cached_tts_engine(self.config.tts)
-            # Ensure voice model is downloaded (piper downloads on first use)
-            if hasattr(self._tts_engine, "_get_model_path"):
-                self._tts_engine._get_model_path()
-            tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
-            self._loading_models[2]["elapsed"] = tts_elapsed
-            self._loading_models[2]["status"] = "done"
-            save_model_load_time(tts_engine_name, tts_elapsed)
-            logger.debug("TTS engine loaded in %.1fs", tts_elapsed)
-        except ValueError as exc:
-            tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
-            self._loading_models[2]["elapsed"] = tts_elapsed
-            self._loading_models[2]["status"] = "error"
-            self._tts_error = str(exc)
-            logger.warning(
-                "TTS engine '%s' not available — fix: dictare dependencies resolve",
-                tts_engine_name,
-            )
+        if use_worker:
+            try:
+                self._spawn_tts_worker(http_server)
+                tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
+                self._loading_models[2]["elapsed"] = tts_elapsed
+                self._loading_models[2]["status"] = "done"
+                save_model_load_time(tts_engine_name, tts_elapsed)
+                logger.info("TTS worker spawned in %.1fs", tts_elapsed)
+            except Exception as exc:
+                tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
+                self._loading_models[2]["elapsed"] = tts_elapsed
+                self._loading_models[2]["status"] = "error"
+                self._tts_error = str(exc)
+                logger.warning(
+                    "TTS worker failed to start, falling back to in-process: %s", exc
+                )
+                # Fallback to in-process loading
+                self._load_tts_in_process(tts_engine_name, save_model_load_time)
+        else:
+            self._load_tts_in_process(tts_engine_name, save_model_load_time)
 
         # Create hotkey listener for toggle (if available and enabled)
         # Note: hotkey disabled in daemon mode - macOS requires main thread
@@ -623,6 +645,82 @@ class DictareEngine:
         if self.config.audio.output_device:
             from dictare.audio.beep import set_output_device
             set_output_device(self.config.audio.output_device)
+
+    # -------------------------------------------------------------------------
+    # TTS Loading Helpers
+    # -------------------------------------------------------------------------
+
+    def _load_tts_in_process(
+        self, engine_name: str, save_fn: Any = None,
+    ) -> None:
+        """Load a TTS engine in the main process (lightweight engines)."""
+        try:
+            from dictare.tts import get_cached_tts_engine
+
+            self._tts_engine = get_cached_tts_engine(self.config.tts)
+            if hasattr(self._tts_engine, "_get_model_path"):
+                self._tts_engine._get_model_path()
+            tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
+            self._loading_models[2]["elapsed"] = tts_elapsed
+            self._loading_models[2]["status"] = "done"
+            if save_fn:
+                save_fn(engine_name, tts_elapsed)
+            logger.debug("TTS engine loaded in-process in %.1fs", tts_elapsed)
+        except ValueError as exc:
+            tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
+            self._loading_models[2]["elapsed"] = tts_elapsed
+            self._loading_models[2]["status"] = "error"
+            self._tts_error = str(exc)
+            logger.warning(
+                "TTS engine '%s' not available — fix: dictare dependencies resolve",
+                engine_name,
+            )
+
+    def _spawn_tts_worker(self, http_server: Any) -> None:
+        """Spawn a persistent TTS worker subprocess and create the proxy engine."""
+        import subprocess
+
+        from dictare.tts.proxy import WorkerTTSEngine
+
+        token = self._auth_tokens["register_tts"]
+        port = http_server.port
+
+        cmd = [
+            sys.executable, "-m", "dictare.tts.worker",
+            "--url", f"http://127.0.0.1:{port}",
+            "--token", token,
+            "--engine", self.config.tts.engine,
+            "--language", self.config.tts.language,
+            "--speed", str(self.config.tts.speed),
+        ]
+        if self.config.tts.voice:
+            cmd.extend(["--voice", self.config.tts.voice])
+
+        logger.info("Spawning TTS worker: %s", " ".join(cmd))
+        self._tts_worker_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+        # Create proxy engine — it will wait for worker to connect
+        proxy = WorkerTTSEngine(http_server)
+        self._tts_proxy = proxy
+        self._tts_engine = proxy
+
+        # Wait for worker to connect (it loads the model first, which can take time)
+        if not http_server._tts_connected_event.wait(timeout=120.0):
+            # Check if process died
+            if self._tts_worker_process.poll() is not None:
+                stderr = self._tts_worker_process.stderr
+                err_output = stderr.read().decode() if stderr else ""
+                raise RuntimeError(
+                    f"TTS worker exited with code {self._tts_worker_process.returncode}: "
+                    f"{err_output[:500]}"
+                )
+            raise RuntimeError("TTS worker failed to connect within 120s")
+
+        logger.info("TTS worker connected")
 
     # -------------------------------------------------------------------------
     # VAD Callbacks
@@ -1606,6 +1704,16 @@ class DictareEngine:
 
         if self._hotkey:
             self._hotkey.stop()
+
+        # Terminate TTS worker subprocess
+        if self._tts_worker_process is not None:
+            logger.info("Stopping TTS worker (PID %d)", self._tts_worker_process.pid)
+            self._tts_worker_process.terminate()
+            try:
+                self._tts_worker_process.wait(timeout=5)
+            except Exception:
+                self._tts_worker_process.kill()
+            self._tts_worker_process = None
 
 def create_engine(
     config: Config,
