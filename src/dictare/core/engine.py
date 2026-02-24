@@ -73,6 +73,28 @@ class DictareEngine:
     # Default VAD silence duration in milliseconds
     DEFAULT_VAD_SILENCE_MS = 1200
 
+    @property
+    def agent_mode(self) -> bool:
+        return self._agent_mode
+
+    @agent_mode.setter
+    def agent_mode(self, value: bool) -> None:
+        import traceback
+
+        old = getattr(self, "_agent_mode", None)
+        self._agent_mode = value
+        if old != value:
+            # Log 3 most recent caller frames (skip this setter)
+            stack = traceback.extract_stack(limit=4)[:-1]
+            caller_info = " <- ".join(
+                f"{f.filename.split('/')[-1]}:{f.lineno}({f.name})"
+                for f in reversed(stack)
+            )
+            logger.info(
+                "agent_mode CHANGED: %r → %r | caller: %s",
+                old, value, caller_info,
+            )
+
     def __init__(
         self,
         config: Config,
@@ -111,7 +133,7 @@ class DictareEngine:
         self.vad_silence_ms = config.audio.silence_ms
 
         # Agent mode: whether we're outputting to agents (vs keyboard/clipboard)
-        self.agent_mode = agent_mode
+        self._agent_mode = agent_mode
         self._agents: dict[str, Agent] = {}  # ID -> Agent instance
         # Note: Agent registration is handled externally via register_agent()/
         # unregister_agent() API. The app creates the appropriate AgentRegistrar.
@@ -245,13 +267,17 @@ class DictareEngine:
         Bypasses the _running guard because this is called right before
         _running is set to False — the state is still valid.
         """
-        self._save_state()
         logger.info(
-            "session_save_before_shutdown: agent=%r, mode=%s, listening=%r",
+            "session_save_before_shutdown: agent=%r, agent_mode=%r (raw _agent_mode=%r), "
+            "listening=%r, _running=%r, agents=%s",
             self._current_agent_id,
-            "agents" if self.agent_mode else "keyboard",
+            self.agent_mode,
+            self._agent_mode,
             self.is_listening,
+            self._running,
+            list(self._agents.keys()),
         )
+        self._save_state()
 
     def _save_state(self) -> None:
         """Write current state to session-state.json."""
