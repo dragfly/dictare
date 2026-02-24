@@ -1037,7 +1037,7 @@ wheels = [
 
 [[package]]
 name = "openvip"
-version = "1.0.1"
+version = "1.0.0"
 source = { editable = "../../openvip-dev/sdks/python" }
 dependencies = [
     { name = "pydantic" },
