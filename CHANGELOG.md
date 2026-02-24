@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b265] - 2026-02-24
+
+### Fixed
+- **Removed vestigial `load_state()` call in `serve.py`** that bypassed
+  `_restore_state()` and could crash on `None.get()` (session expired/missing).
+  Listening restore is now exclusively handled by `engine._restore_state()`.
+
+### Added
+- **Version logged at startup and shutdown.** Startup: `dictare 0.1.0bXXX starting`,
+  Shutdown: `Shutting down dictare 0.1.0bXXX (signal 15)`. Makes it trivial to
+  verify which version saved the session state.
+
 ## [0.1.0b264] - 2026-02-24
 
 ### Added

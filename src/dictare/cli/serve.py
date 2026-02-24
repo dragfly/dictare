@@ -122,16 +122,14 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
     root_logger.addHandler(_stdout_handler)
 
     _logger = logging.getLogger("dictare.serve")
-    _logger.info("Starting engine (PID %s, port %s)", os.getpid(), config.server.port)
+
+    from dictare import __version__
+
+    _logger.info("dictare %s starting (PID %s, port %s)", __version__, os.getpid(), config.server.port)
     _logger.info("Log: %s", log_path)
 
-    # Determine initial listening state (privacy-aware: restore from saved state)
+    # Listening state is restored by engine._restore_state() — not here.
     start_listening = False
-    if config.daemon.restore_listening:
-        from dictare.utils.state import load_state
-
-        saved = load_state()
-        start_listening = saved.get("listening", False)
 
     # NOTE: PID file is written by AppController._check_single_instance() inside
     # controller.start().  Do not write it here — writing before start() causes the
@@ -155,7 +153,7 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
 
         # Signal handlers
         def signal_handler(signum: int, frame: Any) -> None:
-            _logger.info("Shutting down (signal %s)", signum)
+            _logger.info("Shutting down dictare %s (signal %s)", __version__, signum)
             controller.request_shutdown()
 
         signal.signal(signal.SIGTERM, signal_handler)
