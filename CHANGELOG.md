@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b264] - 2026-02-24
+
+### Added
+- **`agent_mode` property with change tracking.** Every `agent_mode` change is
+  logged with caller stack trace. This will catch whatever is flipping the engine
+  to keyboard mode unexpectedly during session lifetime.
+- **Enhanced shutdown save log** shows `_agent_mode` raw value, registered agents
+  list, and `_running` flag for easier debugging.
+
 ## [0.1.0b263] - 2026-02-24
 
 ### Fixed
