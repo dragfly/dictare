@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b263] - 2026-02-24
+
+### Fixed
+- **SIGTERM now saves session state before shutdown.** Previously, `request_shutdown()`
+  (SIGTERM from launchd/systemd) set `_running=False` without saving, so the last
+  state was lost. Now `save_session_before_shutdown()` is called explicitly.
+- **Listening state restored from session.** The `listening` field was saved to
+  `session-state.json` but never read back. Now the engine restarts in listening
+  mode if the session was listening.
+- **Comprehensive session lifecycle logging.** Cold start vs session restore,
+  output_mode changes, listening restore, preferred agent wait, and
+  save-before-shutdown are all logged with clear context.
+
 ## [0.1.0b262] - 2026-02-24
 
 ### Changed
