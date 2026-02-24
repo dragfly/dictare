@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b285] - 2026-02-24
+
+### Fixed
+- **`uv` discovery in launchd context** — `_find_uv()` now checks Homebrew paths
+  (`/opt/homebrew/bin/uv`, `/usr/local/bin/uv`) when `shutil.which("uv")` fails
+  due to launchd's minimal PATH. TTS venv installs now work from Dashboard.
+- **Dashboard shows install errors** — failed TTS installs now display the error
+  message inline below the engine name instead of silently appearing to succeed.
+
 ## [0.1.0b284] - 2026-02-24
 
 ### Added

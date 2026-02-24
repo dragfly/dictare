@@ -25,6 +25,7 @@
 	let loadError = $state<string | null>(null);
 	let copiedHint = $state<string | null>(null);
 	let installingEngines = $state<Set<string>>(new Set());
+	let installErrors = $state<Map<string, string>>(new Map());
 
 	let es: EventSource | null = null;
 	let progressEs: EventSource | null = null;
@@ -71,6 +72,9 @@
 
 	async function handleInstall(engine: string) {
 		installingEngines = new Set([...installingEngines, engine]);
+		const newErrors = new Map(installErrors);
+		newErrors.delete(engine);
+		installErrors = newErrors;
 		connectProgressSSE();
 		try {
 			await installTtsEngine(engine);
@@ -101,9 +105,11 @@
 						installingEngines = new Set(
 							[...installingEngines].filter((e) => e !== engine)
 						);
-						// Refresh status to get updated availability
+						if (data.status === "error") {
+							const msg = (data.message as string) || "Install failed";
+							installErrors = new Map([...installErrors, [engine, msg]]);
+						}
 						load();
-						// Close progress SSE if no more installs
 						if (installingEngines.size === 0) {
 							progressEs?.close();
 							progressEs = null;
@@ -264,6 +270,9 @@
 					{/if}
 				</div>
 				<p class="text-xs text-muted-foreground">{eng.description}</p>
+				{#if installErrors.has(eng.name)}
+					<p class="text-xs text-destructive mt-0.5">{installErrors.get(eng.name)}</p>
+				{/if}
 			</div>
 		</div>
 		<div class="flex items-center gap-2 shrink-0">

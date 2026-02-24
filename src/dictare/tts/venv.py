@@ -113,9 +113,16 @@ def get_dictare_src_path() -> str:
     return str(dictare_init.parent.parent)
 
 
-def _has_uv() -> bool:
-    """Check if uv is available on PATH."""
-    return shutil.which("uv") is not None
+def _find_uv() -> str | None:
+    """Find the uv binary, including Homebrew paths not in launchd PATH."""
+    uv = shutil.which("uv")
+    if uv:
+        return uv
+    # launchd services have minimal PATH — check common Homebrew locations
+    for path in ("/opt/homebrew/bin/uv", "/usr/local/bin/uv"):
+        if Path(path).exists():
+            return path
+    return None
 
 
 def install_venv(
@@ -148,9 +155,10 @@ def install_venv(
         _log(f"Creating venv at {venv_dir}")
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
 
-        if _has_uv():
+        uv = _find_uv()
+        if uv:
             subprocess.run(
-                ["uv", "venv", "--python", "3.11", str(venv_dir)],
+                [uv, "venv", "--python", "3.11", str(venv_dir)],
                 check=True,
                 capture_output=True,
             )
@@ -165,9 +173,9 @@ def install_venv(
         python = str(venv_dir / "bin" / "python")
         _log(f"Installing {', '.join(all_packages)}")
 
-        if _has_uv():
+        if uv:
             subprocess.run(
-                ["uv", "pip", "install", "--python", python, *all_packages],
+                [uv, "pip", "install", "--python", python, *all_packages],
                 check=True,
                 capture_output=True,
             )
