@@ -53,6 +53,9 @@ dependencies = [
     # OpenVIP client SDK
     "openvip>=1.0.0",
     "tomlkit>=0.14.0",
+    # TTS
+    "piper-tts>=1.2.0",
+    "pathvalidate>=3.0.0",
 ]
 
 [project.optional-dependencies]

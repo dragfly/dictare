@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b260] - 2026-02-24
+
+### Changed
+- **Rebuild from b238 base.** Clean rebuild discarding the broken authorization
+  cascade (b239–b259). Only proven fixes cherry-picked onto the stable base.
+
+### Fixed
+- **VAD atomic close eliminates reconnect storm.** `close()` now does
+  `self._model = None` atomically + `gc.collect()` instead of the two-step
+  `del self._model.session` / `self._model = None` that left a race window.
+- **Play ID counter on FSM worker thread.** Replaced racy `get_next_play_id()`
+  (called from multiple engine threads) with an atomic counter incremented on
+  the single FSM worker thread. Multiple concurrent TTS plays are tracked
+  correctly.
+- **Engine resilience: no exit on reconnect failure.** Engine now retries with
+  30s backoff instead of breaking out of the run loop entirely.
+- **STT exception logging.** Added `logger.exception()` on transcription
+  failures instead of silently swallowing errors.
+- **Piper TTS uses sounddevice via audio worker queue.** Replaces
+  platform-specific subprocess calls (aplay/afplay) with `play_wav_sync()`
+  routed through the serialized audio worker — consistent, cross-platform.
+
+### Added
+- **Background model download.** `ensure_required_models()` runs in a
+  background thread so the engine starts immediately.
+- **`/health` endpoint.** Liveness probe for service monitors.
+- **`play_wav_sync()` utility.** Synchronous wrapper over the async audio
+  queue for callers that need to wait for playback completion (TTS).
+- `piper-tts` and `pathvalidate` as explicit dependencies.
+
 ## [0.1.0b238] - 2026-02-23
 
 ### Changed

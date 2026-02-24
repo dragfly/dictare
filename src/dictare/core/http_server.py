@@ -90,6 +90,11 @@ class OpenVIPServer:
             redoc_url=None,
         )
 
+        @app.get("/health")
+        async def health():
+            """Liveness probe — returns 200 when engine is up."""
+            return {"status": "ok"}
+
         @app.get("/agents/{agent_id}/messages")
         async def sse_agent_messages(agent_id: str, request: Request):
             """SSE endpoint - connection IS the agent registration."""

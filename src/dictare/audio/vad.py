@@ -103,18 +103,18 @@ class SileroVAD(VADEngine):
     def close(self) -> None:
         """Release ONNX session resources.
 
-        Call this on shutdown to properly clean up the ONNX session
-        and avoid semaphore leak warnings.
+        Sets self._model = None atomically.  Any in-flight callback that
+        already captured a local reference will finish safely; the ONNX
+        session is freed by gc once all references are dropped.
+
+        Previous code did ``del self._model.session`` before setting
+        ``self._model = None``, creating a window where another thread
+        could see a model object without a session → AttributeError.
         """
         import gc
 
-        if self._model is not None:
-            # Delete the session to release ONNX resources
-            if hasattr(self._model, 'session'):
-                del self._model.session
-            self._model = None
-            # Force immediate garbage collection to release ONNX semaphores
-            gc.collect()
+        self._model = None
+        gc.collect()
 
     def reset(self) -> None:
         """Reset VAD hidden state."""
