@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Voxtype Linux development install script.
+# Dictare Linux development install script.
 # Installs all system dependencies + builds from local source.
 #
 # Usage: ./scripts/linux-install.sh [--gpu]
@@ -31,7 +31,7 @@ for arg in "$@"; do
         --gpu) INSTALL_GPU=true ;;
         --help|-h)
             cat <<'EOF'
-Voxtype Linux development install script.
+Dictare Linux development install script.
 
 Usage: ./scripts/linux-install.sh [--gpu]
 
@@ -43,7 +43,7 @@ What happens:
   1. Installs system packages (apt/dnf/pacman) — requires sudo
   2. Installs uv (Python package manager)
   3. Creates Python venv + installs PyGObject for tray icon
-  4. Installs voxtype from local source via uv sync
+  4. Installs dictare from local source via uv sync
   5. Installs systemd user service
   6. Starts the engine
 EOF
@@ -67,7 +67,7 @@ cd "$PROJECT_DIR"
 
 # ─── Explain what we're about to do ────────────────────────────────────
 printf "\n"
-info "This script will install voxtype for Linux development."
+info "This script will install dictare for Linux development."
 printf "\n"
 printf "What happens:\n"
 printf "  1. Install system packages via apt/dnf/pacman ${YELLOW}(requires sudo)${RESET}\n"
@@ -153,7 +153,7 @@ ok "System dependencies installed"
 # A udev rule grants access without requiring a re-login.
 if [[ "$PKG_MGR" != "" ]]; then
     UDEV_RULE='KERNEL=="event*", GROUP="input", MODE="0660"'
-    UDEV_FILE="/etc/udev/rules.d/99-voxtype.rules"
+    UDEV_FILE="/etc/udev/rules.d/99-dictare.rules"
     if [[ ! -f "$UDEV_FILE" ]]; then
         info "Installing udev rule for hotkey access..."
         echo "$UDEV_RULE" | sudo tee "$UDEV_FILE" > /dev/null
@@ -205,15 +205,15 @@ fi
 
 ok "Python venv ready"
 
-# ─── 5. Install voxtype + sync dependencies ───────────────────────────
-info "Installing voxtype from source..."
+# ─── 5. Install dictare + sync dependencies ───────────────────────────
+info "Installing dictare from source..."
 
 # Stop existing service first
-if systemctl --user is-active voxtype.service &>/dev/null; then
+if systemctl --user is-active dictare.service &>/dev/null; then
     info "Stopping existing service..."
-    systemctl --user stop voxtype.service
+    systemctl --user stop dictare.service
 fi
-"$VENV_DIR/bin/python" -m voxtype tray stop 2>/dev/null || true
+"$VENV_DIR/bin/python" -m dictare tray stop 2>/dev/null || true
 
 # Sync dependencies
 if [[ "$INSTALL_GPU" == true ]]; then
@@ -246,49 +246,49 @@ else
 fi
 
 # Verify installation
-VERSION=$("$VENV_DIR/bin/python" -m voxtype --version 2>&1 || echo "unknown")
-ok "voxtype installed: $VERSION"
+VERSION=$("$VENV_DIR/bin/python" -m dictare --version 2>&1 || echo "unknown")
+ok "dictare installed: $VERSION"
 
-# ─── Symlink to ~/.local/bin so 'voxtype' works from any shell ─────────
+# ─── Symlink to ~/.local/bin so 'dictare' works from any shell ─────────
 mkdir -p "$HOME/.local/bin"
-ln -sf "$VENV_DIR/bin/voxtype" "$HOME/.local/bin/voxtype"
+ln -sf "$VENV_DIR/bin/dictare" "$HOME/.local/bin/dictare"
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
     warn "'~/.local/bin' is not in your PATH."
     printf "  Add this to your ~/.bashrc or ~/.zshrc:\n"
     printf "    export PATH=\"\$HOME/.local/bin:\$PATH\"\n\n"
 fi
-ok "voxtype symlinked to ~/.local/bin/voxtype"
+ok "dictare symlinked to ~/.local/bin/dictare"
 
 # ─── 7. Install systemd service ────────────────────────────────────────
 info "Installing systemd user service..."
-# Delegate to voxtype service install — generates the correct unit file
+# Delegate to dictare service install — generates the correct unit file
 # (ExecStart, env vars, Restart=always) for the current version.
-"$VENV_DIR/bin/voxtype" service install
+"$VENV_DIR/bin/dictare" service install
 ok "systemd service installed"
 
 # ─── 8. Start engine ───────────────────────────────────────────────────
-info "Starting voxtype engine..."
-"$VENV_DIR/bin/voxtype" service start
+info "Starting dictare engine..."
+"$VENV_DIR/bin/dictare" service start
 
 # Wait a moment for startup
 sleep 2
 
-if systemctl --user is-active voxtype.service &>/dev/null; then
+if systemctl --user is-active dictare.service &>/dev/null; then
     ok "Engine running"
 else
-    warn "Engine may have failed to start. Check: journalctl --user -u voxtype.service"
+    warn "Engine may have failed to start. Check: journalctl --user -u dictare.service"
 fi
 
 # ─── 9. Summary ────────────────────────────────────────────────────────
 printf "\n"
-ok "Done! Voxtype is installed and running."
+ok "Done! Dictare is installed and running."
 printf "\n"
-printf "  ${BOLD}voxtype agent claude${RESET}    # voice-control Claude Code\n"
-printf "  ${BOLD}voxtype tray start${RESET}      # show tray icon\n"
+printf "  ${BOLD}dictare agent claude${RESET}    # voice-control Claude Code\n"
+printf "  ${BOLD}dictare tray start${RESET}      # show tray icon\n"
 printf "\n"
 printf "Service commands:\n"
-printf "  ${BOLD}systemctl --user status voxtype${RESET}\n"
-printf "  ${BOLD}journalctl --user -u voxtype -f${RESET}   # follow logs\n"
+printf "  ${BOLD}systemctl --user status dictare${RESET}\n"
+printf "  ${BOLD}journalctl --user -u dictare -f${RESET}   # follow logs\n"
 printf "\n"
 
 if [[ "$HAS_NVIDIA" == true && "$INSTALL_GPU" == false ]]; then

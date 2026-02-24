@@ -1,7 +1,7 @@
 """Tests for AgentSwitchExecutor."""
 
-from voxtype.pipeline import PipelineAction
-from voxtype.pipeline.executors import AgentSwitchExecutor
+from dictare.pipeline import PipelineAction
+from dictare.pipeline.executors import AgentSwitchExecutor
 
 
 class TestAgentSwitchExecutor:
@@ -36,11 +36,11 @@ class TestAgentSwitchExecutor:
         """Message with x_agent_switch is consumed."""
         switched_to = []
         ex = AgentSwitchExecutor(switch_fn=lambda t: (switched_to.append(t), True)[1])
-        msg = {"text": "", "x_agent_switch": {"target": "voxtype", "confidence": 0.95}}
+        msg = {"text": "", "x_agent_switch": {"target": "dictare", "confidence": 0.95}}
         result = ex.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert result.messages == []
-        assert switched_to == ["voxtype"]
+        assert switched_to == ["dictare"]
 
     def test_switch_calls_switch_fn(self) -> None:
         """Executor calls switch_fn with target agent name."""

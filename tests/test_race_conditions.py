@@ -2,7 +2,7 @@
 
 These tests verify that concurrent operations don't lose data or corrupt state.
 This is the most critical test file - race conditions have been the primary
-source of bugs in voxtype.
+source of bugs in dictare.
 """
 
 import json
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from voxtype.core.fsm import AppState, StateManager
+from dictare.core.fsm import AppState, StateManager
 
 pytestmark = pytest.mark.slow
 

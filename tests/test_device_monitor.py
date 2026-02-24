@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from voxtype.audio.capture import AudioCapture
-from voxtype.audio.device_monitor import (
+from dictare.audio.capture import AudioCapture
+from dictare.audio.device_monitor import (
     CoreAudioDeviceMonitor,
     DeviceMonitor,
     PollingDeviceMonitor,
@@ -42,19 +42,19 @@ class TestCreateDeviceMonitor:
     """Test platform-based factory function."""
 
     def test_returns_coreaudio_on_darwin(self) -> None:
-        with patch("voxtype.audio.device_monitor.sys") as mock_sys:
+        with patch("dictare.audio.device_monitor.sys") as mock_sys:
             mock_sys.platform = "darwin"
             monitor = create_device_monitor(lambda: None)
             assert isinstance(monitor, CoreAudioDeviceMonitor)
 
     def test_returns_polling_on_linux(self) -> None:
-        with patch("voxtype.audio.device_monitor.sys") as mock_sys:
+        with patch("dictare.audio.device_monitor.sys") as mock_sys:
             mock_sys.platform = "linux"
             monitor = create_device_monitor(lambda: None)
             assert isinstance(monitor, PollingDeviceMonitor)
 
     def test_returns_polling_on_unknown(self) -> None:
-        with patch("voxtype.audio.device_monitor.sys") as mock_sys:
+        with patch("dictare.audio.device_monitor.sys") as mock_sys:
             mock_sys.platform = "win32"
             monitor = create_device_monitor(lambda: None)
             assert isinstance(monitor, PollingDeviceMonitor)
@@ -266,7 +266,7 @@ class TestAudioManagerDeviceMonitor:
 
     def test_on_device_change_calls_emergency_abort(self) -> None:
         """Device change callback triggers emergency_abort on AudioCapture."""
-        from voxtype.core.audio_manager import AudioManager
+        from dictare.core.audio_manager import AudioManager
 
         config = MagicMock()
         config.advanced.sample_rate = 16000
@@ -286,7 +286,7 @@ class TestAudioManagerDeviceMonitor:
 
     def test_on_device_change_safe_without_audio(self) -> None:
         """Device change when _audio is None should not raise."""
-        from voxtype.core.audio_manager import AudioManager
+        from dictare.core.audio_manager import AudioManager
 
         config = MagicMock()
         manager = AudioManager(config=config)
@@ -295,7 +295,7 @@ class TestAudioManagerDeviceMonitor:
 
     def test_close_stops_device_monitor(self) -> None:
         """AudioManager.close() stops the device monitor."""
-        from voxtype.core.audio_manager import AudioManager
+        from dictare.core.audio_manager import AudioManager
 
         config = MagicMock()
         manager = AudioManager(config=config)

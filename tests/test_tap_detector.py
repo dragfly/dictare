@@ -3,7 +3,7 @@
 import threading
 import time
 
-from voxtype.hotkey.tap_detector import TapDetector, TapState
+from dictare.hotkey.tap_detector import TapDetector, TapState
 
 
 def _wait_until(predicate, timeout: float = 2.0) -> None:

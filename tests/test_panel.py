@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from voxtype.cli.panel import StatusPanel
+from dictare.cli.panel import StatusPanel
 
 
 def _make_status(*, state: str = "idle", device: str = "cpu", model: str = "large-v3-turbo") -> dict:
@@ -13,7 +13,7 @@ def _make_status(*, state: str = "idle", device: str = "cpu", model: str = "larg
         "connected_agents": [],
         "uptime_seconds": 0,
         "platform": {
-            "name": "Voxtype",
+            "name": "Dictare",
             "version": "3.0.0-test",
             "mode": "keyboard",
             "state": state,

@@ -1,1 +1,1 @@
-"""Tests for voxtype."""
+"""Tests for dictare."""

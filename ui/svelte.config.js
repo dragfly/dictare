@@ -4,8 +4,8 @@ import adapter from '@sveltejs/adapter-static';
 const config = {
 	kit: {
 		adapter: adapter({
-			pages: '../src/voxtype/ui/dist',
-			assets: '../src/voxtype/ui/dist',
+			pages: '../src/dictare/ui/dist',
+			assets: '../src/dictare/ui/dist',
 			fallback: 'index.html',
 			precompress: false,
 			strict: false

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from voxtype.app.controller import AppController
-from voxtype.config import Config
+from dictare.app.controller import AppController
+from dictare.config import Config
 
 
 def _make_controller() -> AppController:
@@ -25,9 +25,9 @@ class TestPidFileCheck:
         ctrl = _make_controller()
 
         with (
-            patch("voxtype.app.controller.atexit.register"),
-            patch("voxtype.utils.paths.get_pid_path", return_value=pid_path),
-            patch("voxtype.utils.paths.get_voxtype_dir", return_value=tmp_path),
+            patch("dictare.app.controller.atexit.register"),
+            patch("dictare.utils.paths.get_pid_path", return_value=pid_path),
+            patch("dictare.utils.paths.get_dictare_dir", return_value=tmp_path),
         ):
             ctrl._check_single_instance()
 
@@ -41,9 +41,9 @@ class TestPidFileCheck:
 
         ctrl = _make_controller()
         with (
-            patch("voxtype.app.controller.atexit.register"),
-            patch("voxtype.utils.paths.get_pid_path", return_value=pid_path),
-            patch("voxtype.utils.paths.get_voxtype_dir", return_value=tmp_path),
+            patch("dictare.app.controller.atexit.register"),
+            patch("dictare.utils.paths.get_pid_path", return_value=pid_path),
+            patch("dictare.utils.paths.get_dictare_dir", return_value=tmp_path),
         ):
             ctrl._check_single_instance()
 
@@ -56,8 +56,8 @@ class TestPidFileCheck:
 
         ctrl = _make_controller()
         with (
-            patch("voxtype.utils.paths.get_pid_path", return_value=pid_path),
-            patch("voxtype.utils.paths.get_voxtype_dir", return_value=tmp_path),
+            patch("dictare.utils.paths.get_pid_path", return_value=pid_path),
+            patch("dictare.utils.paths.get_dictare_dir", return_value=tmp_path),
         ):
             with pytest.raises(RuntimeError, match="already running"):
                 ctrl._check_single_instance()
@@ -68,7 +68,7 @@ class TestPidFileCheck:
         pid_path.write_text(str(os.getpid()))
 
         ctrl = _make_controller()
-        with patch("voxtype.utils.paths.get_pid_path", return_value=pid_path):
+        with patch("dictare.utils.paths.get_pid_path", return_value=pid_path):
             ctrl._cleanup_pid()
 
         assert not pid_path.exists()
@@ -79,7 +79,7 @@ class TestPidFileCheck:
         pid_path.write_text("1")  # PID 1 (init/systemd) — not us
 
         ctrl = _make_controller()
-        with patch("voxtype.utils.paths.get_pid_path", return_value=pid_path):
+        with patch("dictare.utils.paths.get_pid_path", return_value=pid_path):
             ctrl._cleanup_pid()
 
         assert pid_path.exists()
@@ -88,5 +88,5 @@ class TestPidFileCheck:
         """_cleanup_pid() with no PID file is a no-op."""
         pid_path = tmp_path / "engine.pid"
         ctrl = _make_controller()
-        with patch("voxtype.utils.paths.get_pid_path", return_value=pid_path):
+        with patch("dictare.utils.paths.get_pid_path", return_value=pid_path):
             ctrl._cleanup_pid()  # Should not raise

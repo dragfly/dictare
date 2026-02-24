@@ -2,13 +2,13 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in voxtype, please report it responsibly.
+If you discover a security vulnerability in dictare, please report it responsibly.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
 Instead, please use one of the following methods:
 
-1. **GitHub Security Advisory** (preferred): Use [GitHub's private vulnerability reporting](https://github.com/dragfly/voxtype/security/advisories/new) to submit a report.
+1. **GitHub Security Advisory** (preferred): Use [GitHub's private vulnerability reporting](https://github.com/dragfly/dictare/security/advisories/new) to submit a report.
 
 2. **Email**: Contact the maintainers directly (if contact info is available in the repository).
 
@@ -31,13 +31,13 @@ When reporting a vulnerability, please include:
 
 This security policy applies to:
 
-- The voxtype Python package
+- The dictare Python package
 - The install script (`install.sh`)
 - Any official extensions or plugins
 
 ## Security Considerations
 
-voxtype handles:
+dictare handles:
 
 - **Audio input**: Microphone access for speech-to-text
 - **Keyboard simulation**: Injecting text into applications

@@ -2,8 +2,8 @@
 
 from typer.testing import CliRunner
 
-from voxtype import __version__
-from voxtype.cli import app
+from dictare import __version__
+from dictare.cli import app
 
 runner = CliRunner()
 
@@ -21,7 +21,7 @@ class TestCLIBasics:
         """Test --help flag shows help."""
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "voxtype" in result.stdout.lower()
+        assert "dictare" in result.stdout.lower()
 
     def test_config_help(self) -> None:
         """Test 'config --help' shows config command help."""
@@ -54,7 +54,7 @@ class TestCLIConfigCommands:
             config_path.write_text('editor = "myeditor --flag"\n')
 
             with (
-                patch("voxtype.cli.config.get_config_path", return_value=config_path),
+                patch("dictare.cli.config.get_config_path", return_value=config_path),
                 patch("subprocess.run") as mock_run,
             ):
                 result = runner.invoke(app, ["config", "edit"])
@@ -75,7 +75,7 @@ class TestCLIConfigCommands:
             config_path.write_text("")  # No editor field
 
             with (
-                patch("voxtype.cli.config.get_config_path", return_value=config_path),
+                patch("dictare.cli.config.get_config_path", return_value=config_path),
                 patch("subprocess.run") as mock_run,
                 patch.dict("os.environ", {"VISUAL": "", "EDITOR": "nano"}),
             ):
@@ -97,8 +97,8 @@ class TestCLIConfigCommands:
             config_path = config_dir / "config.toml"
 
             with (
-                patch("voxtype.cli.config.get_config_path", return_value=config_path),
-                patch("voxtype.config.get_config_dir", return_value=config_dir),
+                patch("dictare.cli.config.get_config_path", return_value=config_path),
+                patch("dictare.config.get_config_dir", return_value=config_dir),
                 patch("subprocess.run"),
                 patch.dict("os.environ", {"VISUAL": "vim", "EDITOR": ""}),
             ):
@@ -109,10 +109,10 @@ class TestCLIConfigCommands:
 
 
 class TestAgentContinue:
-    """Tests for --continue / -C flag on 'voxtype agent'."""
+    """Tests for --continue / -C flag on 'dictare agent'."""
 
     def _make_config(self, continue_args: list[str] | None = None) -> object:
-        from voxtype.config import AgentTypeConfig, AgentTypesConfig, ClientConfig, Config
+        from dictare.config import AgentTypeConfig, AgentTypesConfig, ClientConfig, Config
 
         at = AgentTypeConfig(
             command=["claude", "--model", "claude-sonnet-4-6"],
@@ -135,9 +135,9 @@ class TestAgentContinue:
             return 0
 
         with (
-            patch("voxtype.cli.agent._check_engine", return_value=True),
-            patch("voxtype.config.load_config", return_value=cfg),
-            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.config.load_config", return_value=cfg),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
         ):
             result = runner.invoke(app, ["agent"] + args)
 
@@ -178,7 +178,7 @@ class TestAgentContinue:
 
     def test_agent_type_config_parses_continue_args(self) -> None:
         """AgentTypeConfig correctly parses continue_args from TOML data."""
-        from voxtype.config import AgentTypeConfig
+        from dictare.config import AgentTypeConfig
 
         at = AgentTypeConfig.model_validate({
             "command": ["claude"],
@@ -188,7 +188,7 @@ class TestAgentContinue:
 
     def test_agent_type_config_continue_args_defaults_empty(self) -> None:
         """continue_args defaults to [] when not specified."""
-        from voxtype.config import AgentTypeConfig
+        from dictare.config import AgentTypeConfig
 
         at = AgentTypeConfig.model_validate({"command": ["claude"]})
         assert at.continue_args == []

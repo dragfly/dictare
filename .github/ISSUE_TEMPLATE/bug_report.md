@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a bug to help us improve voxtype
+about: Report a bug to help us improve dictare
 title: ''
 labels: bug
 assignees: ''
@@ -12,7 +12,7 @@ A clear and concise description of the bug.
 
 ## Steps to Reproduce
 
-1. Run `voxtype listen`
+1. Run `dictare listen`
 2. Do '...'
 3. See error
 
@@ -29,13 +29,13 @@ What actually happened.
 - **OS**: [e.g., macOS 14.0, Ubuntu 24.04]
 - **Architecture**: [e.g., Apple Silicon M1, x86_64]
 - **Python version**: [e.g., 3.11.5]
-- **voxtype version**: [run `voxtype --version`]
+- **dictare version**: [run `dictare --version`]
 - **Installation method**: [e.g., install.sh, uv tool install, pip]
 
 ## Logs
 
 <details>
-<summary>Output of `voxtype check`</summary>
+<summary>Output of `dictare check`</summary>
 
 ```
 [paste output here]

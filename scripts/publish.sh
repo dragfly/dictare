@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Publish openvip + voxtype to PyPI
+# Publish openvip + dictare to PyPI
 #
 # Usage:
 #   ./scripts/publish.sh              # interactive, asks before each step
 #   ./scripts/publish.sh --dry-run    # build only, no upload
 #
 # Prerequisites:
-#   - PyPI API tokens configured (OPENVIP_PYPI_TOKEN + VOXTYPE_PYPI_TOKEN env vars,
+#   - PyPI API tokens configured (OPENVIP_PYPI_TOKEN + DICTARE_PYPI_TOKEN env vars,
 #     or ~/.pypirc, or uv keyring)
 #   - All tests passing
 #   - Version bumped in both projects
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VOXTYPE_DIR="$(dirname "$SCRIPT_DIR")"
-OPENVIP_DIR="${VOXTYPE_DIR}/../../openvip-dev/sdks/python"
+DICTARE_DIR="$(dirname "$SCRIPT_DIR")"
+OPENVIP_DIR="${DICTARE_DIR}/../../openvip-dev/sdks/python"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
 BOLD='\033[1m'
@@ -45,7 +45,7 @@ for arg in "$@"; do
         --dry-run) DRY_RUN=true ;;
         --help|-h)
             cat <<'EOF'
-Publish openvip + voxtype to PyPI
+Publish openvip + dictare to PyPI
 
 Usage:
   ./scripts/publish.sh              Interactive publish
@@ -55,12 +55,12 @@ Steps:
   1. Run tests
   2. Verify versions are aligned
   3. Build + publish openvip to PyPI
-  4. Build + publish voxtype to PyPI
+  4. Build + publish dictare to PyPI
   5. Create git tag + GitHub release
 
 Environment variables (for non-interactive upload):
   OPENVIP_PYPI_TOKEN   PyPI API token for openvip
-  VOXTYPE_PYPI_TOKEN   PyPI API token for voxtype
+  DICTARE_PYPI_TOKEN   PyPI API token for dictare
 EOF
             exit 0
             ;;
@@ -69,9 +69,9 @@ EOF
 done
 
 # ─── Read versions ────────────────────────────────────────────────────
-VOXTYPE_VERSION=$(python3.11 -c "
+DICTARE_VERSION=$(python3.11 -c "
 import re, pathlib
-text = pathlib.Path('${VOXTYPE_DIR}/src/voxtype/__init__.py').read_text()
+text = pathlib.Path('${DICTARE_DIR}/src/dictare/__init__.py').read_text()
 print(re.search(r'__version__\s*=\s*\"(.+?)\"', text).group(1))
 ")
 
@@ -81,27 +81,27 @@ text = pathlib.Path('${OPENVIP_DIR}/pyproject.toml').read_text()
 print(re.search(r'version\s*=\s*\"(.+?)\"', text).group(1))
 ")
 
-# Check that voxtype's openvip dependency matches
+# Check that dictare's openvip dependency matches
 OPENVIP_DEP_VERSION=$(python3.11 -c "
 import re, pathlib
-text = pathlib.Path('${VOXTYPE_DIR}/pyproject.toml').read_text()
+text = pathlib.Path('${DICTARE_DIR}/pyproject.toml').read_text()
 m = re.search(r'\"openvip>=([^\"]+)\"', text)
 print(m.group(1) if m else 'NOT FOUND')
 ")
 
 printf "\n"
 info "Versions"
-printf "  voxtype:          %s\n" "$VOXTYPE_VERSION"
+printf "  dictare:          %s\n" "$DICTARE_VERSION"
 printf "  openvip:          %s\n" "$OPENVIP_VERSION"
-printf "  openvip dep in voxtype: >=%s\n" "$OPENVIP_DEP_VERSION"
+printf "  openvip dep in dictare: >=%s\n" "$OPENVIP_DEP_VERSION"
 printf "\n"
 
 # ─── Step 1: Tests ────────────────────────────────────────────────────
-info "[1/5] Running voxtype tests..."
+info "[1/5] Running dictare tests..."
 if [[ "$DRY_RUN" == true ]]; then
     warn "[dry-run] Would run: uv run --python 3.11 python -m pytest tests/ -x --tb=short"
 else
-    cd "$VOXTYPE_DIR"
+    cd "$DICTARE_DIR"
     uv run --python 3.11 python -m pytest tests/ -x --tb=short || error "Tests failed. Fix before publishing."
     ok "All tests passed"
 fi
@@ -111,7 +111,7 @@ info "[2/5] Running ruff..."
 if [[ "$DRY_RUN" == true ]]; then
     warn "[dry-run] Would run: uv run --python 3.11 ruff check ."
 else
-    cd "$VOXTYPE_DIR"
+    cd "$DICTARE_DIR"
     uv run --python 3.11 ruff check . || error "Lint errors. Fix before publishing."
     ok "Lint clean"
 fi
@@ -139,53 +139,53 @@ else
     fi
 fi
 
-# ─── Step 4: Build + publish voxtype ─────────────────────────────────
-info "[4/5] Build + publish voxtype ${VOXTYPE_VERSION}"
+# ─── Step 4: Build + publish dictare ─────────────────────────────────
+info "[4/5] Build + publish dictare ${DICTARE_VERSION}"
 
-cd "$VOXTYPE_DIR"
+cd "$DICTARE_DIR"
 rm -rf dist/
 
-info "Building voxtype..."
+info "Building dictare..."
 uv build --sdist --wheel
-ok "Built voxtype: $(ls dist/)"
+ok "Built dictare: $(ls dist/)"
 
 # Verify the wheel doesn't contain local path references
-if unzip -l dist/voxtype-*.whl 2>/dev/null | grep -q "nottoplay"; then
+if unzip -l dist/dictare-*.whl 2>/dev/null | grep -q "nottoplay"; then
     error "Wheel contains local path reference to openvip! Check pyproject.toml."
 fi
 ok "Wheel is clean (no local path references)"
 
 if [[ "$DRY_RUN" == true ]]; then
-    warn "[dry-run] Would upload voxtype to PyPI"
+    warn "[dry-run] Would upload dictare to PyPI"
 else
-    if confirm "Upload voxtype ${VOXTYPE_VERSION} to PyPI?"; then
+    if confirm "Upload dictare ${DICTARE_VERSION} to PyPI?"; then
         PUBLISH_ARGS=""
-        if [[ -n "${VOXTYPE_PYPI_TOKEN:-}" ]]; then
-            PUBLISH_ARGS="--token $VOXTYPE_PYPI_TOKEN"
+        if [[ -n "${DICTARE_PYPI_TOKEN:-}" ]]; then
+            PUBLISH_ARGS="--token $DICTARE_PYPI_TOKEN"
         fi
         uv publish $PUBLISH_ARGS
-        ok "voxtype ${VOXTYPE_VERSION} published to PyPI"
+        ok "dictare ${DICTARE_VERSION} published to PyPI"
     fi
 fi
 
 # ─── Step 5: Git tag + GitHub release ─────────────────────────────────
 info "[5/5] Git tag + GitHub release"
 
-TAG="v${VOXTYPE_VERSION}"
+TAG="v${DICTARE_VERSION}"
 
 if [[ "$DRY_RUN" == true ]]; then
     warn "[dry-run] Would create tag ${TAG} and GitHub release"
 else
     if confirm "Create git tag ${TAG} and GitHub release?"; then
-        cd "$VOXTYPE_DIR"
+        cd "$DICTARE_DIR"
         git tag -a "$TAG" -m "Release ${TAG}"
         git push origin "$TAG"
         ok "Tag ${TAG} pushed"
 
         if command -v gh &>/dev/null; then
             gh release create "$TAG" \
-                --title "voxtype ${VOXTYPE_VERSION}" \
-                --notes "See [CHANGELOG.md](https://github.com/dragfly/voxtype/blob/main/CHANGELOG.md) for details." \
+                --title "dictare ${DICTARE_VERSION}" \
+                --notes "See [CHANGELOG.md](https://github.com/dragfly/dictare/blob/main/CHANGELOG.md) for details." \
                 --prerelease
             ok "GitHub release created"
         else
@@ -198,6 +198,6 @@ printf "\n"
 ok "Publish workflow complete!"
 printf "\n"
 printf "Verify:\n"
-printf "  pip install voxtype==${VOXTYPE_VERSION}\n"
+printf "  pip install dictare==${DICTARE_VERSION}\n"
 printf "  pip install openvip==${OPENVIP_VERSION}\n"
 printf "\n"

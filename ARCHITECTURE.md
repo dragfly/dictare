@@ -2,7 +2,7 @@
 
 ## Overview
 
-`voxtype` is a voice-to-text tool for terminals. It uses VAD (Voice Activity Detection) for hands-free speech detection.
+`dictare` is a voice-to-text tool for terminals. It uses VAD (Voice Activity Detection) for hands-free speech detection.
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -35,7 +35,7 @@ All transcription happens locally using [faster-whisper](https://github.com/SYST
 Each platform uses native, reliable backends:
 
 ```
-src/voxtype/
+src/dictare/
 ├── hotkey/
 │   ├── evdev_listener.py    # Linux (uinput)
 │   └── pynput_listener.py   # macOS (Accessibility API)
@@ -55,7 +55,7 @@ src/voxtype/
 
 ### 3. No Fallbacks
 
-Each platform has one canonical backend. If it's not available, voxtype fails with a clear error message explaining how to fix it:
+Each platform has one canonical backend. If it's not available, dictare fails with a clear error message explaining how to fix it:
 
 - **Linux**: Requires `ydotoold` running
 - **macOS**: Requires Accessibility permission
@@ -93,7 +93,7 @@ Both work on X11, Wayland, and TTY.
 
 ## Configuration
 
-Config file: `~/.config/voxtype/config.toml`
+Config file: `~/.config/dictare/config.toml`
 
 ```toml
 [stt]
@@ -108,4 +108,4 @@ key = "KEY_SCROLLLOCK"   # Linux
 audio_feedback = true
 ```
 
-See `voxtype run --help` for all options.
+See `dictare run --help` for all options.

@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from voxtype.core.fsm import (
+from dictare.core.fsm import (
     AppState,
     InvalidTransitionError,
     StateManager,

@@ -5,8 +5,8 @@ set -euo pipefail
 
 echo "=== ENGINE TEST ==="
 
-if [[ "${VOXTYPE_SKIP_ENGINE_TEST:-}" == "1" ]]; then
-    echo "SKIPPED: VOXTYPE_SKIP_ENGINE_TEST=1"
+if [[ "${DICTARE_SKIP_ENGINE_TEST:-}" == "1" ]]; then
+    echo "SKIPPED: DICTARE_SKIP_ENGINE_TEST=1"
     exit 0
 fi
 
@@ -29,7 +29,7 @@ HF_CACHE="${HF_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/huggingface}/hub"
 WHISPER_MODEL="$HF_CACHE/models--mobiuslabsgmbh--faster-whisper-large-v3-turbo"
 if [[ ! -d "$WHISPER_MODEL" ]]; then
     echo "   No whisper model found in $WHISPER_MODEL"
-    echo "   Run 'voxtype models download' first, or mount HF cache"
+    echo "   Run 'dictare models download' first, or mount HF cache"
     echo "SKIPPED: Models not available"
     exit 0
 fi
@@ -37,7 +37,7 @@ echo "   Whisper model found"
 
 # Start engine in background (verbose mode to disable interactive panel)
 echo "3. Starting engine..."
-python -m voxtype engine start --verbose 2>&1 &
+python -m dictare engine start --verbose 2>&1 &
 ENGINE_PID=$!
 
 # Cleanup on exit

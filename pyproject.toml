@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "voxtype"
+name = "dictare"
 dynamic = ["version"]
 description = "Voice-first control for AI coding agents"
 readme = "README.md"
@@ -83,22 +83,22 @@ tts = [
 ]
 
 [project.scripts]
-voxtype = "voxtype.cli:main"
+dictare = "dictare.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/dragfly/voxtype"
-Repository = "https://github.com/dragfly/voxtype"
-Issues = "https://github.com/dragfly/voxtype/issues"
+Homepage = "https://github.com/dragfly/dictare"
+Repository = "https://github.com/dragfly/dictare"
+Issues = "https://github.com/dragfly/dictare/issues"
 
 [tool.uv.sources]
 openvip = { path = "../../openvip-dev/sdks/python", editable = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/voxtype"]
+packages = ["src/dictare"]
 artifacts = ["*.mp3", "*.icns", "*.png", "*.swift", "*.html", "*.js", "*.css", "*.json"]
 
 [tool.hatch.version]
-path = "src/voxtype/__init__.py"
+path = "src/dictare/__init__.py"
 
 [tool.ruff]
 line-length = 100

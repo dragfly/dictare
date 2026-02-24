@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from voxtype.core.openvip_messages import (
+from dictare.core.openvip_messages import (
     OPENVIP_VERSION,
     create_message,
 )

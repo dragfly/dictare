@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from voxtype.config import (
+from dictare.config import (
     AudioConfig,
     Config,
     HotkeyConfig,
@@ -165,7 +165,7 @@ silence_ms = 1000
 
     def test_get_sound_for_event_enabled(self) -> None:
         """get_sound_for_event returns (True, path) when enabled."""
-        from voxtype.audio.beep import DEFAULT_SOUND_START, get_sound_for_event
+        from dictare.audio.beep import DEFAULT_SOUND_START, get_sound_for_event
 
         cfg = AudioConfig()
         enabled, path = get_sound_for_event(cfg, "start")
@@ -174,7 +174,7 @@ silence_ms = 1000
 
     def test_get_sound_for_event_disabled(self) -> None:
         """get_sound_for_event returns (False, '') when event disabled."""
-        from voxtype.audio.beep import get_sound_for_event
+        from dictare.audio.beep import get_sound_for_event
 
         cfg = AudioConfig()
         cfg.sounds["start"] = SoundConfig(enabled=False)
@@ -183,7 +183,7 @@ silence_ms = 1000
 
     def test_get_sound_for_event_custom_path(self) -> None:
         """get_sound_for_event returns custom path when set."""
-        from voxtype.audio.beep import get_sound_for_event
+        from dictare.audio.beep import get_sound_for_event
 
         cfg = AudioConfig()
         cfg.sounds["stop"] = SoundConfig(enabled=True, path="/my/custom.mp3")
@@ -193,7 +193,7 @@ silence_ms = 1000
 
     def test_get_sound_for_event_master_switch_off(self) -> None:
         """Master switch audio_feedback=false disables all sounds."""
-        from voxtype.audio.beep import get_sound_for_event
+        from dictare.audio.beep import get_sound_for_event
 
         cfg = AudioConfig(audio_feedback=False)
         for name in ("start", "stop", "transcribing", "ready", "sent", "agent_announce"):
@@ -202,7 +202,7 @@ silence_ms = 1000
 
     def test_get_sound_for_event_agent_announce(self) -> None:
         """agent_announce returns (True, '') since it uses TTS not a file."""
-        from voxtype.audio.beep import get_sound_for_event
+        from dictare.audio.beep import get_sound_for_event
 
         cfg = AudioConfig()
         enabled, path = get_sound_for_event(cfg, "agent_announce")

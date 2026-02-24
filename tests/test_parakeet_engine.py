@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from voxtype.stt.parakeet import ParakeetEngine, is_parakeet_model
+from dictare.stt.parakeet import ParakeetEngine, is_parakeet_model
 
 
 class TestIsParakeetModel:

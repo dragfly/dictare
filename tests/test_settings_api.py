@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from starlette.testclient import TestClient
 
-from voxtype.config import Config
+from dictare.config import Config
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def settings_app():
     """Create a minimal FastAPI app with settings routes for testing."""
     from unittest.mock import MagicMock
 
-    from voxtype.core.http_server import OpenVIPServer
+    from dictare.core.http_server import OpenVIPServer
 
     engine = MagicMock()
     engine.get_status.return_value = {"state": "OFF"}
@@ -104,7 +104,7 @@ class TestPostSettings:
     def test_update_valid_key(self, client, tmp_path):
         config_file = tmp_path / "config.toml"
         config_file.write_text("[stt]\nmodel = \"large-v3-turbo\"\n")
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
                 "/settings",
                 json={"key": "stt.model", "value": "base"},
@@ -128,7 +128,7 @@ class TestPostSettings:
     def test_invalid_value_returns_422(self, client, tmp_path):
         config_file = tmp_path / "config.toml"
         config_file.write_text("[output]\nmode = \"keyboard\"\n")
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
                 "/settings",
                 json={"key": "output.mode", "value": "invalid_mode"},
@@ -145,7 +145,7 @@ class TestTomlSectionGet:
         config_file.write_text(
             '[agent_types.claude]\ncommand = ["claude"]\n'
         )
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
         data = r.json()
@@ -157,7 +157,7 @@ class TestTomlSectionGet:
         """Fetch returns the default preset template when the section is not in the file."""
         config_file = tmp_path / "config.toml"
         config_file.write_text("")  # no agent_types section
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
         content = r.json()["content"]
@@ -181,7 +181,7 @@ class TestTomlSectionGet:
     def test_fallback_template_has_defaults(self, client, tmp_path):
         """Template header (when no section in file) contains default presets."""
         config_file = tmp_path / "nonexistent_config.toml"
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
         assert "[agent_types]" in r.json()["content"]
@@ -201,7 +201,7 @@ default = "claude"
 command = ["claude"]
 description = "Claude Code"
 """
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
                 "/settings/toml-section/agent_types",
                 json={"content": toml_content},
@@ -210,7 +210,7 @@ description = "Claude Code"
         assert r.json()["status"] == "ok"
 
         # Verify persisted
-        from voxtype.config import load_config
+        from dictare.config import load_config
         config = load_config(config_file)
         assert config.agent_types.default == "claude"
         assert "claude" in config.agent_types
@@ -226,14 +226,14 @@ command = ["claude", "--model", "claude-sonnet-4-6"]
 continue_args = ["-c"]
 description = "Claude Sonnet"
 """
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
                 "/settings/toml-section/agent_types",
                 json={"content": toml_content},
             )
         assert r.status_code == 200
 
-        from voxtype.config import load_config
+        from dictare.config import load_config
         config = load_config(config_file)
         assert config.agent_types.get("sonnet").continue_args == ["-c"]
 
@@ -245,7 +245,7 @@ description = "Claude Sonnet"
             'command = ["claude", "--model", "claude-sonnet-4-6"]\n'
             'continue_args = ["-c"]\n'
         )
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
         assert "continue_args" in r.json()["content"]
@@ -259,7 +259,7 @@ description = "Claude Sonnet"
             "[agent_types.sonnet]\n"
             'command = ["claude"]\n'
         )
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.get("/settings/toml-section/agent_types")
         assert r.status_code == 200
         assert "my custom comment" in r.json()["content"]
@@ -278,7 +278,7 @@ description = "Claude Sonnet"
 [agent_types.claude]
 description = "Missing command field"
 """
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
                 "/settings/toml-section/agent_types",
                 json={"content": toml_content},
@@ -307,14 +307,14 @@ description = "Missing command field"
 keys = "ctrl+shift+l"
 command = "toggle-listening"
 """
-        with patch("voxtype.config.get_config_path", return_value=config_file):
+        with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
                 "/settings/toml-section/keyboard.shortcuts",
                 json={"content": toml_content},
             )
         assert r.status_code == 200
 
-        from voxtype.config import load_config
+        from dictare.config import load_config
         config = load_config(config_file)
         assert len(config.keyboard.shortcuts) == 1
         assert config.keyboard.shortcuts[0]["keys"] == "ctrl+shift+l"

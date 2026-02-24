@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from voxtype.pipeline.base import Pipeline, PipelineResult
-from voxtype.pipeline.loader import (
+from dictare.pipeline.base import Pipeline, PipelineResult
+from dictare.pipeline.loader import (
     _BUILTIN_STEPS,
     PipelineLoader,
     get_step_registry,

@@ -1,4 +1,4 @@
-"""Tests for voxtype.tray.app."""
+"""Tests for dictare.tray.app."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from voxtype.tray.app import TrayApp
+from dictare.tray.app import TrayApp
 
 
 def _mock_pystray():
@@ -66,7 +66,7 @@ class TestTrayStates:
         app._icon = mock_icon
         with patch.object(app, "_update_menu"):  # avoid pystray import
             app.set_state("disconnected")
-        # _update_icon was called; the icon should be set to voxtype_muted
+        # _update_icon was called; the icon should be set to dictare_muted
         assert mock_icon.icon is not None  # icon was updated
 
     def test_icon_state_mapping(self) -> None:
@@ -81,16 +81,16 @@ class TestTrayStates:
         app._icon = mock_icon
 
         expected = {
-            "disconnected": "voxtype_muted",
-            "restarting": "voxtype",
-            "loading": "voxtype",
-            "off": "voxtype",
-            "listening": "voxtype_active",
+            "disconnected": "dictare_muted",
+            "restarting": "dictare",
+            "loading": "dictare",
+            "off": "dictare",
+            "listening": "dictare_active",
         }
         for state, icon_name in expected.items():
             # Reset dedup cache so each state triggers an icon update
             app._current_icon_name = ""
-            with patch("voxtype.tray.app._load_icon", return_value="img") as mock_load:
+            with patch("dictare.tray.app._load_icon", return_value="img") as mock_load:
                 with patch.object(app, "_update_menu"):
                     app.set_state(state)
                 mock_load.assert_called_with(icon_name), f"state={state}"
@@ -108,13 +108,13 @@ class TestTrayStates:
             "listening": "VoxType — Listening",
         }
         for state, title in expected_titles.items():
-            with patch("voxtype.tray.app._load_icon", return_value="img"):
+            with patch("dictare.tray.app._load_icon", return_value="img"):
                 with patch.object(app, "_update_menu"):
                     app.set_state(state)
             assert mock_icon.title == title, f"state={state}: {mock_icon.title!r}"
 
         # Loading with stage info
-        with patch("voxtype.tray.app._load_icon", return_value="img"):
+        with patch("dictare.tray.app._load_icon", return_value="img"):
             with patch.object(app, "_update_menu"):
                 app.set_state("loading", loading_stage="STT")
         assert mock_icon.title == "VoxType — Loading STT…"

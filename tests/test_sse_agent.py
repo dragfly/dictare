@@ -9,9 +9,9 @@ import threading
 
 import pytest
 
-from voxtype.agent.base import BaseAgent, OpenVIPMessage
-from voxtype.agent.mux import _read_from_sse, _stream_active_agent
-from voxtype.agent.sse import SSEAgent
+from dictare.agent.base import BaseAgent, OpenVIPMessage
+from dictare.agent.mux import _read_from_sse, _stream_active_agent
+from dictare.agent.sse import SSEAgent
 
 
 class MockServer:
@@ -587,7 +587,7 @@ class TestWriteToPtySeparateEsc:
         """Helper: run _write_to_pty with one message, return (writes, drain_count)."""
         from unittest.mock import patch
 
-        from voxtype.agent.mux import _write_to_pty
+        from dictare.agent.mux import _write_to_pty
 
         wq: queue.Queue = queue.Queue()
         stop = threading.Event()

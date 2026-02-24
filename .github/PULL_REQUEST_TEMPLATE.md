@@ -14,7 +14,7 @@
 
 - [ ] Ran `uv run pytest tests/`
 - [ ] Ran `uv run ruff check .`
-- [ ] Tested manually with `voxtype listen`
+- [ ] Tested manually with `dictare listen`
 
 ## Checklist
 

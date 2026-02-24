@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from voxtype.core.http_server import OpenVIPServer
+from dictare.core.http_server import OpenVIPServer
 
 
 class MockEngine:
@@ -36,7 +36,7 @@ class MockEngine:
             "connected_agents": [],
             "uptime_seconds": 0,
             "platform": {
-                "name": "Voxtype",
+                "name": "Dictare",
                 "version": "test",
                 "state": "idle",
                 "uptime_seconds": 0,
