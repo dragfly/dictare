@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 from dictare.tts.base import TTSEngine, play_wav_native
+
+logger = logging.getLogger(__name__)
+
+# XTTS v2: multilingual model, supports --language_idx and --speaker_wav
+_XTTS_MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
 
 class CoquiTTS(TTSEngine):
     """TTS using Coqui TTS / XTTS - high-quality neural voices.
@@ -81,9 +87,12 @@ class CoquiTTS(TTSEngine):
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 wav_path = Path(f.name)
 
-            # Build command
+            # Build command — always use XTTS v2 for multilingual support.
+            # Without --model_name, coqui defaults to tacotron2 (English only)
+            # which ignores --language_idx and fails silently.
             cmd = [
                 self._tts_cmd,
+                "--model_name", _XTTS_MODEL,
                 "--text", text,
                 "--language_idx", self.language,
                 "--out_path", str(wav_path),
@@ -101,6 +110,8 @@ class CoquiTTS(TTSEngine):
             )
 
             if result.returncode != 0 or not wav_path.exists():
+                stderr = result.stderr.decode(errors="replace")[:500] if result.stderr else ""
+                logger.warning("Coqui TTS failed (exit %d): %s", result.returncode, stderr)
                 wav_path.unlink(missing_ok=True)
                 return False
 
@@ -110,6 +121,7 @@ class CoquiTTS(TTSEngine):
             return True
 
         except Exception:
+            logger.warning("Coqui TTS exception", exc_info=True)
             return False
 
     def get_name(self) -> str:
