@@ -202,6 +202,15 @@ class OpenVIPServer:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+        @app.get("/speech/voices")
+        async def speech_voices():
+            """List available voices for the current TTS engine."""
+            voices = await asyncio.to_thread(self._engine.list_voices)
+            return {
+                "engine": self._engine.config.tts.engine,
+                "voices": voices,
+            }
+
         @app.post("/internal/tts/complete")
         async def tts_complete(request: Request):
             """Worker signals that a speak() call finished."""

@@ -32,56 +32,52 @@ _KOKORO_GENDER: dict[str, str] = {
 }
 
 
+def _print_voices(engine_name: str, voices: list[str]) -> None:
+    """Pretty-print a list of voice names."""
+    console.print(f"[bold]{engine_name} voices ({len(voices)}):[/]\n")
+
+    for v in voices:
+        # Kokoro names follow {lang}{gender}_{name} convention
+        if len(v) > 3 and v[2] == "_":
+            lang_code = _KOKORO_LANG_PREFIX.get(v[0], "??")
+            gender = _KOKORO_GENDER.get(v[1], "?")
+            name = v[3:]
+            console.print(f"  [cyan]{v:20}[/] {lang_code:5}  {gender}  {name}")
+        else:
+            console.print(f"  [cyan]{v}[/]")
+
+    console.print("\n[dim]Use: dictare speak \"text\" -v <voice_name>[/]")
+
+
 def _list_voices(engine_override: str | None, config_file: Path | None) -> None:
     """List available voices for the current TTS engine."""
+    import json as _json
+    import urllib.error
+    import urllib.request
+
     from dictare.config import load_config
 
     config = load_config(config_file)
     engine_name = engine_override or config.tts.engine
 
-    if engine_name != "kokoro":
-        console.print(f"[dim]{engine_name}: --list-voices not supported[/]")
+    # Try the running engine API first
+    url = f"http://{config.server.host}:{config.server.port}/speech/voices"
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = _json.loads(resp.read())
+        voices = data.get("voices", [])
+        name = data.get("engine", engine_name)
+        if voices:
+            _print_voices(name, voices)
+            return
+        console.print(f"[dim]{name}: no voices available[/]")
         return
+    except (urllib.error.URLError, ConnectionRefusedError, OSError):
+        pass  # Engine not running — try offline
 
-    # Read voices from the kokoro venv python
-    from dictare.tts.venv import get_venv_python
-
-    venv_python = get_venv_python("kokoro")
-    if venv_python is None:
-        console.print("[red]Kokoro venv not installed.[/]")
-        console.print("[dim]Install via Dashboard or: dictare models install kokoro[/]")
-        return
-
-    import subprocess
-
-    result = subprocess.run(
-        [
-            venv_python, "-c",
-            "from kokoro_onnx import Kokoro; from pathlib import Path; "
-            "d = Path.home() / '.local/share/dictare/models/kokoro'; "
-            "k = Kokoro(str(d / 'model.onnx'), str(d / 'voices.bin')); "
-            "print('\\n'.join(sorted(k.voices.keys())))",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    if result.returncode != 0:
-        console.print("[red]Failed to list voices[/]")
-        console.print(f"[dim]{result.stderr.strip()}[/]")
-        return
-
-    voices = result.stdout.strip().splitlines()
-    console.print(f"[bold]Kokoro voices ({len(voices)}):[/]\n")
-
-    for v in voices:
-        lang_code = _KOKORO_LANG_PREFIX.get(v[0], "??") if v else "??"
-        gender = _KOKORO_GENDER.get(v[1], "?") if len(v) > 1 else "?"
-        name = v[3:] if len(v) > 3 else v
-        console.print(f"  [cyan]{v:20}[/] {lang_code:5}  {gender}  {name}")
-
-    console.print("\n[dim]Use: dictare speak \"text\" -v <voice_name>[/]")
+    console.print("[dim]Engine not running. Start it for voice listing.[/]")
+    console.print("[dim]  dictare service start[/]")
 
 
 def register(app: typer.Typer) -> None:

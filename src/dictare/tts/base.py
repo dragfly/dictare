@@ -74,3 +74,11 @@ class TTSEngine(ABC):
     def get_name(self) -> str:
         """Get engine name."""
         pass
+
+    def list_voices(self) -> list[str]:
+        """Return available voice names for this engine.
+
+        Default: empty list (engine doesn't support voice listing).
+        Override in subclasses that support it.
+        """
+        return []

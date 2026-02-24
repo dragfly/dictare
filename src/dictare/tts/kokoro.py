@@ -208,3 +208,11 @@ class KokoroTTS(TTSEngine):
     def get_name(self) -> str:
         """Get engine name."""
         return "kokoro"
+
+    def list_voices(self) -> list[str]:
+        """Return available voice names from the loaded model."""
+        try:
+            kokoro = self._get_kokoro()
+            return sorted(kokoro.voices.keys())  # type: ignore[attr-defined]
+        except Exception:
+            return []
