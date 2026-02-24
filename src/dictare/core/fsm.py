@@ -18,11 +18,14 @@ Two categories of messages:
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # States
@@ -158,6 +161,7 @@ class StateManager:
                     raise InvalidTransitionError(from_state, to_state)
 
             self._state = to_state
+            logger.info("state: %s → %s", from_state.name, to_state.name)
 
         return True
 
