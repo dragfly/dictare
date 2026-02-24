@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 
 from dictare.cli._helpers import console
+
+logger = logging.getLogger(__name__)
 
 def register(app: typer.Typer) -> None:
     """Register speak command on the main app."""
@@ -48,9 +51,7 @@ def register(app: typer.Typer) -> None:
             typer.Option("--list-engines", help="List available TTS engines and exit"),
         ] = False,
     ) -> None:
-        """Speak text using text-to-speech.
-
-        Uses the running engine if available, falls back to in-process TTS.
+        """Speak text using text-to-speech via the running engine.
 
         Examples:
             dictare speak "Hello world"
@@ -61,7 +62,6 @@ def register(app: typer.Typer) -> None:
         import sys
 
         from dictare.config import TTSConfig, load_config
-        from dictare.tts import create_tts_engine
 
         # List engines mode
         if list_engines:
@@ -98,7 +98,7 @@ def register(app: typer.Typer) -> None:
                 raise typer.Exit(0)
 
         # Validate engine if provided
-        valid_engines = ("espeak", "say", "piper", "coqui", "outetts")
+        valid_engines = ("espeak", "say", "piper", "coqui", "outetts", "kokoro")
         if engine is not None and engine not in valid_engines:
             console.print(f"[red]Error: Unknown TTS engine '{engine}'[/]")
             console.print(f"[dim]Available engines: {', '.join(valid_engines)}[/]")
@@ -112,7 +112,10 @@ def register(app: typer.Typer) -> None:
             voice=voice or config.tts.voice,
         )
 
-        # Try to use running engine via HTTP /speech if available
+        # Speak via running engine — no in-process fallback.
+        # TTS engines (coqui, piper, outetts, kokoro) run in the engine's
+        # worker subprocess with their own isolated venv.
+        import json as _json
         import urllib.error
 
         from openvip import Client
@@ -134,27 +137,26 @@ def register(app: typer.Typer) -> None:
                 duration = response.duration_ms or "?"
                 console.print(f"[dim]Spoken via engine ({duration}ms)[/]")
             return
-        except (urllib.error.URLError, ConnectionRefusedError, OSError):
-            pass  # Engine not running, fall through to in-process
-        except Exception as e:
+        except urllib.error.HTTPError as e:
+            # Engine returned an error (422, 500, etc.)
+            detail = ""
+            try:
+                body = _json.loads(e.read().decode())
+                detail = body.get("detail", str(body))
+            except Exception:
+                detail = str(e)
+            logger.error("TTS failed (HTTP %d): %s", e.code, detail)
             if not quiet:
-                console.print(f"[yellow]Engine unavailable: {e}[/]")
-            # Fall through to in-process TTS
-
-        # Fallback: in-process TTS
-        try:
-            tts = create_tts_engine(tts_config)
-        except ValueError as e:
-            from dictare.utils.install_info import get_feature_install_message
-
-            console.print(f"[red]{e}[/]")
-            if tts_config.engine == "espeak":
-                console.print("  Install: sudo apt install espeak-ng (Linux) or brew install espeak (macOS)")
-            elif tts_config.engine in ("piper", "coqui"):
-                console.print(get_feature_install_message(tts_config.engine))
+                console.print(f"[red]TTS failed: {detail}[/]")
             raise typer.Exit(1)
-
-        if not quiet:
-            console.print(f"[dim]Speaking ({tts.get_name()}): {text[:50]}{'...' if len(text) > 50 else ''}[/]")
-
-        tts.speak(text)
+        except (urllib.error.URLError, ConnectionRefusedError, OSError):
+            logger.debug("Engine not reachable for TTS")
+            if not quiet:
+                console.print("[red]Engine not running.[/]")
+                console.print("[dim]Start it with: dictare service start[/]")
+            raise typer.Exit(1)
+        except Exception as e:
+            logger.error("TTS error: %s", e, exc_info=True)
+            if not quiet:
+                console.print(f"[red]TTS error: {e}[/]")
+            raise typer.Exit(1)
