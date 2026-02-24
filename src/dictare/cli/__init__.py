@@ -59,6 +59,26 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+@app.command()
+def version(
+    deps: Annotated[
+        bool,
+        typer.Option("--deps", help="Show key dependency versions"),
+    ] = False,
+) -> None:
+    """Show dictare version and optionally key dependency versions."""
+    console.print(f"dictare {__version__}")
+    if deps:
+        import importlib.metadata
+
+        for pkg in ["openvip", "faster-whisper", "piper-tts", "onnx-asr"]:
+            try:
+                v = importlib.metadata.version(pkg)
+                console.print(f"  {pkg} {v}")
+            except importlib.metadata.PackageNotFoundError:
+                console.print(f"  {pkg} [dim]not installed[/dim]")
+
+
 @app.callback()
 def main_callback(
     version: Annotated[
