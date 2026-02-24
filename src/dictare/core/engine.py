@@ -1499,6 +1499,7 @@ class DictareEngine:
 
         start = time.time()
 
+        ok = False
         if pause and self._controller is not None:
             from dictare.core.fsm import AppState, PlayCompleted, PlayStarted
 
@@ -1511,7 +1512,7 @@ class DictareEngine:
                     pass
 
                 try:
-                    tts.speak(text)
+                    ok = tts.speak(text)
                 finally:
                     if started:
                         try:
@@ -1519,11 +1520,14 @@ class DictareEngine:
                         except Exception:
                             pass
             else:
-                tts.speak(text)
+                ok = tts.speak(text)
         else:
-            tts.speak(text)
+            ok = tts.speak(text)
 
         duration_ms = int((time.time() - start) * 1000)
+
+        if not ok:
+            return {"status": "error", "error": "TTS engine failed to speak"}
 
         return {"status": "ok", "duration_ms": duration_ms}
 
