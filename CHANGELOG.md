@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b294] - 2026-02-24
+
+### Fixed
+- **Uninstall requires confirmation** — trash button now shows a confirm dialog
+  before removing the isolated environment.
+- **Cannot uninstall active capability** — trash button hidden on the currently
+  configured STT/TTS capability. Switch to another first, then uninstall.
+
 ## [0.1.0b293] - 2026-02-24
 
 ### Added
