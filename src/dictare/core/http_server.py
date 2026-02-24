@@ -731,6 +731,59 @@ class OpenVIPServer:
             await asyncio.to_thread(uninstall_venv, venv_name)
             return {"status": "ok"}
 
+        @app.post("/capabilities/{cap_id}/select")
+        async def capability_select(cap_id: str):
+            """Select a capability as the active STT model or TTS engine.
+
+            Maps capability ID to the appropriate config key/value,
+            saves it, and triggers an engine restart.
+            """
+            from dictare.cli.models import _get_model_registry
+            from dictare.config import set_config_value
+
+            registry = _get_model_registry()
+            if cap_id not in registry:
+                raise HTTPException(status_code=404, detail=f"Unknown capability: {cap_id}")
+
+            info = registry[cap_id]
+            cap_type = info["type"]
+
+            if cap_type == "stt":
+                # Map registry key to stt.model value
+                # "whisper-tiny" → "tiny", "parakeet-v3" → "parakeet-v3"
+                if cap_id.startswith("whisper-"):
+                    model_value = cap_id[len("whisper-"):]
+                else:
+                    model_value = cap_id
+                try:
+                    set_config_value("stt.model", model_value)
+                    logger.info("capabilities.select stt.model=%s", model_value)
+                except (KeyError, ValueError) as e:
+                    raise HTTPException(status_code=422, detail=str(e))
+
+            elif cap_type == "tts":
+                # Map registry key to tts.engine value
+                # "coqui-xtts-v2" → "coqui" (via venv field), "piper" → "piper"
+                engine_value = info.get("venv", cap_id)
+                try:
+                    set_config_value("tts.engine", engine_value)
+                    logger.info("capabilities.select tts.engine=%s", engine_value)
+                except (KeyError, ValueError) as e:
+                    raise HTTPException(status_code=422, detail=str(e))
+
+            else:
+                raise HTTPException(status_code=400, detail=f"Unknown type: {cap_type}")
+
+            # Trigger engine restart
+            try:
+                await asyncio.to_thread(
+                    self._engine.handle_protocol_command, {"command": "engine.restart"}
+                )
+            except Exception:
+                pass  # Engine shuts down during restart, expected
+
+            return {"status": "ok"}
+
         return app
 
     def _run_model_download(

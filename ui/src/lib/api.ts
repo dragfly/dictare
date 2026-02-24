@@ -253,3 +253,11 @@ export async function uninstallCapability(id: string): Promise<void> {
 	const r = await fetch(`/capabilities/${id}/install`, { method: "DELETE" });
 	if (!r.ok) throw new Error(`Uninstall failed: ${r.status}`);
 }
+
+export async function selectCapability(id: string): Promise<void> {
+	const r = await fetch(`/capabilities/${id}/select`, { method: "POST" });
+	if (!r.ok) {
+		const data = await r.json().catch(() => ({}));
+		throw new Error(data.detail || `Select failed: ${r.status}`);
+	}
+}

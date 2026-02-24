@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b289] - 2026-02-24
+
+### Added
+- **Model selection via radio buttons** — Models page now has radio buttons on
+  each capability card. Click a ready capability to select it, then Save to
+  switch STT model or TTS engine with automatic engine restart.
+- **`POST /capabilities/{id}/select`** — backend endpoint that maps capability
+  ID to config key (stt.model / tts.engine), saves config, and restarts engine.
+- **Green border on active model** — selected capability card has a green border
+  for instant visual feedback.
+- **Error hover tooltip** — download failures show "Download failed" with error
+  details on hover. Errors are logged server-side.
+
+### Changed
+- **Radio enabled only when ready** — can only select capabilities that are fully
+  installed (venv + model). Download first, then select.
+- **Save bar for model changes** — bottom bar shows with Save/Cancel when
+  changing the selected capability. Save triggers restart.
+
 ## [0.1.0b288] - 2026-02-24
 
 ### Added
