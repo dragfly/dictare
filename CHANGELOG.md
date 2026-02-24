@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b273] - 2026-02-24
+
+### Fixed
+- **Loading state stays active until `start_runtime`** — UI no longer flashes
+  "idle" between model loading and LISTENING transition.
+- **Renamed `_loading_active` → `_loading`** for clarity.
+- **Removed old fallback Settings UI** (`settings_ui.py`, 422 lines) — shadcn-svelte
+  SPA is the only Settings UI now.
+- **Fixed `.gitignore`** — `dist/` → `/dist/` (root-only) so `src/dictare/ui/dist/`
+  is tracked; updated override from `voxtype` → `dictare`.
+
 ## [0.1.0b272] - 2026-02-24
 
 ### Changed
