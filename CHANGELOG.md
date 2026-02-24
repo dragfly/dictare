@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b283] - 2026-02-24
+
+### Added
+- **TTS isolated venvs** — heavy TTS engines (piper, coqui, outetts) now install
+  into isolated venvs at `~/.local/share/dictare/tts-env/{engine}/`, eliminating
+  dependency conflicts between TTS and STT engines (e.g., numba vs numpy).
+- **Dashboard Install/Uninstall buttons** — one-click install for TTS engines
+  directly from the Settings UI. Progress streams via existing SSE.
+- **API endpoints** — `POST /tts-engines/{engine}/install` and
+  `DELETE /tts-engines/{engine}/install` for programmatic venv management.
+- **Venv-aware engine detection** — piper and coqui `_detect_*()` methods now
+  check venv bin directories as fallback. `check_all_tts_engines()` reports
+  `needs_venv` and `venv_installed` status fields.
+
+### Changed
+- **piper-tts and pathvalidate removed from core dependencies** — now managed
+  via isolated venv, reducing base install size and eliminating conflicts.
+- **`/speech` endpoint returns proper HTTP errors** — engine mismatch → 409,
+  TTS unavailable or empty text → 422 (no more `{"status":"error"}` with 200).
+- **No in-process TTS fallback** — if the TTS worker fails to start, the engine
+  reports TTS as unavailable (red in Dashboard) instead of silently dropping
+  speak requests.
+- **`handle_speech()` simplified** — always uses the running TTS worker proxy.
+  Engine override rejected with clear error message pointing to Settings.
+
 ## [0.1.0b282] - 2026-02-24
 
 ### Changed

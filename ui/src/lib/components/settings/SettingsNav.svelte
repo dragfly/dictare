@@ -57,7 +57,7 @@
 
 <nav class="w-52 shrink-0 border-r bg-background/50 h-screen overflow-y-auto p-3 flex flex-col">
 	<div class="px-3 pt-8 pb-3 mb-1">
-		<span class="text-sm font-semibold tracking-tight">VoxType</span>
+		<span class="text-sm font-semibold tracking-tight">Dictare</span>
 		{#if version}
 			<span class="text-[11px] text-muted-foreground ml-1.5">{version}</span>
 		{/if}

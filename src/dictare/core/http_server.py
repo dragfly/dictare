@@ -192,7 +192,13 @@ class OpenVIPServer:
                 result = await asyncio.to_thread(
                     self._engine.handle_speech, body
                 )
+                if result.get("status") == "error":
+                    raise HTTPException(status_code=422, detail=result["error"])
                 return result
+            except HTTPException:
+                raise
+            except ValueError as e:
+                raise HTTPException(status_code=409, detail=str(e))
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
@@ -540,6 +546,47 @@ class OpenVIPServer:
 
             return EventSourceResponse(event_generator())
 
+        # ----- TTS Venv Install/Uninstall API -----
+
+        @app.post("/tts-engines/{engine}/install")
+        async def tts_engine_install(engine: str):
+            """Install an isolated TTS venv for an engine."""
+            from dictare.tts.venv import VENV_ENGINES
+
+            if engine not in VENV_ENGINES:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Unknown venv engine: {engine}. Valid: {', '.join(VENV_ENGINES)}",
+                )
+
+            job_id = f"tts-install-{engine}"
+            if job_id in self._download_jobs and self._download_jobs[job_id].get("status") == "downloading":
+                return {"status": "installing"}
+
+            loop = asyncio.get_running_loop()
+            t = threading.Thread(
+                target=self._run_tts_install,
+                args=(engine, loop),
+                daemon=True,
+                name=f"tts-install-{engine}",
+            )
+            t.start()
+            return {"status": "started"}
+
+        @app.delete("/tts-engines/{engine}/install")
+        async def tts_engine_uninstall(engine: str):
+            """Remove the isolated TTS venv for an engine."""
+            from dictare.tts.venv import VENV_ENGINES, uninstall_venv
+
+            if engine not in VENV_ENGINES:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Unknown venv engine: {engine}. Valid: {', '.join(VENV_ENGINES)}",
+                )
+
+            await asyncio.to_thread(uninstall_venv, engine)
+            return {"status": "ok"}
+
         return app
 
     def _run_model_download(
@@ -621,6 +668,46 @@ class OpenVIPServer:
         # Clean up after 10 s so clients can read the final state
         time.sleep(10)
         self._download_jobs.pop(model_id, None)
+
+    def _run_tts_install(
+        self, engine: str, loop: asyncio.AbstractEventLoop
+    ) -> None:
+        """Install TTS venv in a background thread, streaming progress via SSE."""
+        import time
+
+        from dictare.tts.venv import install_venv
+
+        job_id = f"tts-install-{engine}"
+
+        def _push(event: dict) -> None:
+            with self._progress_queues_lock:
+                queues = list(self._progress_queues)
+            for q in queues:
+                loop.call_soon_threadsafe(q.put_nowait, event)
+
+        self._download_jobs[job_id] = {
+            "status": "downloading",
+            "fraction": 0.0,
+            "message": f"Installing TTS venv for {engine}...",
+        }
+        _push({"model_id": job_id, **self._download_jobs[job_id]})
+
+        def on_progress(msg: str) -> None:
+            self._download_jobs[job_id].update({"message": msg, "fraction": 0.5})
+            _push({"model_id": job_id, **self._download_jobs[job_id]})
+
+        ok = install_venv(engine, on_progress=on_progress)
+
+        if ok:
+            job = {"status": "done", "fraction": 1.0, "message": f"TTS venv for {engine} installed"}
+        else:
+            job = {"status": "error", "fraction": 0.0, "message": f"Failed to install TTS venv for {engine}"}
+
+        self._download_jobs[job_id] = job
+        _push({"model_id": job_id, **job})
+
+        time.sleep(10)
+        self._download_jobs.pop(job_id, None)
 
     def start(self) -> None:
         """Start the HTTP server in a background thread."""

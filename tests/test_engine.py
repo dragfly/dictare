@@ -7,6 +7,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
 from dictare.agent.base import OpenVIPMessage
 from dictare.config import TTSConfig
@@ -1217,29 +1218,15 @@ class TestTTSIntegration:
         assert "duration_ms" in result
         mock_tts.speak.assert_called_once_with("test")
 
-    @patch("dictare.tts.get_cached_tts_engine")
-    def test_handle_tts_request_override_config(
-        self, mock_get_tts: MagicMock
-    ) -> None:
-        """handle_speech applies engine/language/voice/speed overrides."""
+    def test_handle_tts_request_rejects_engine_mismatch(self) -> None:
+        """handle_speech rejects requests for a different engine."""
         engine, _ = self._make_engine()
-        mock_override_tts = MagicMock()
-        mock_get_tts.return_value = mock_override_tts
 
-        engine.handle_speech({
-            "text": "ciao",
-            "engine": "piper",
-            "language": "it",
-            "voice": "paola",
-            "speed": 200,
-        })
-
-        cfg = mock_get_tts.call_args[0][0]
-        assert cfg.engine == "piper"
-        assert cfg.language == "it"
-        assert cfg.voice == "paola"
-        assert cfg.speed == 200
-        mock_override_tts.speak.assert_called_once_with("ciao")
+        with pytest.raises(ValueError, match="not the configured engine"):
+            engine.handle_speech({
+                "text": "ciao",
+                "engine": "piper",
+            })
 
     def test_handle_tts_request_empty_text(self) -> None:
         """handle_speech returns error for empty text."""

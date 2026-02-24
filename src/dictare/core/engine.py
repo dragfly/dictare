@@ -628,11 +628,14 @@ class DictareEngine:
                 self._loading_models[2]["elapsed"] = tts_elapsed
                 self._loading_models[2]["status"] = "error"
                 self._tts_error = str(exc)
+                # Clean up the broken proxy so status shows unavailable
+                self._tts_engine = None
+                self._tts_proxy = None
                 logger.warning(
-                    "TTS worker failed to start, falling back to in-process: %s", exc
+                    "TTS engine '%s' not available — install via Dashboard or: "
+                    "dictare dependencies resolve",
+                    tts_engine_name,
                 )
-                # Fallback to in-process loading
-                self._load_tts_in_process(tts_engine_name, save_model_load_time)
         else:
             self._load_tts_in_process(tts_engine_name, save_model_load_time)
 
@@ -683,29 +686,42 @@ class DictareEngine:
 
     def _spawn_tts_worker(self, http_server: Any) -> None:
         """Spawn a persistent TTS worker subprocess and create the proxy engine."""
+        import os
         import subprocess
 
         from dictare.tts.proxy import WorkerTTSEngine
+        from dictare.tts.venv import get_dictare_src_path, get_venv_python
 
         token = self._auth_tokens["register_tts"]
         port = http_server.port
+        engine_name = self.config.tts.engine
+
+        # Use venv python if the engine has an isolated venv, else sys.executable
+        venv_python = get_venv_python(engine_name)
+        python = venv_python or sys.executable
 
         cmd = [
-            sys.executable, "-m", "dictare.tts.worker",
+            python, "-m", "dictare.tts.worker",
             "--url", f"http://127.0.0.1:{port}",
             "--token", token,
-            "--engine", self.config.tts.engine,
+            "--engine", engine_name,
             "--language", self.config.tts.language,
             "--speed", str(self.config.tts.speed),
         ]
         if self.config.tts.voice:
             cmd.extend(["--voice", self.config.tts.voice])
 
+        # When using venv python, inject PYTHONPATH so worker can import dictare
+        env = None
+        if venv_python:
+            env = {**os.environ, "PYTHONPATH": get_dictare_src_path()}
+
         logger.info("Spawning TTS worker: %s", " ".join(cmd))
         self._tts_worker_process = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
+            env=env,
         )
 
         # Create proxy engine — it will wait for worker to connect
@@ -1446,44 +1462,40 @@ class DictareEngine:
     def handle_speech(self, body: dict) -> dict:
         """Handle a speech (TTS) request.
 
-        Accepts override fields from the request body: engine, language,
-        voice, speed. Falls back to the engine's TTSConfig for any field
-        not provided.
+        Uses the running TTS worker. Accepts ``language`` and ``speed``
+        overrides for future per-request support.
+
+        If ``engine`` is specified and differs from the configured engine,
+        returns an error — switching engines requires a config change.
 
         Args:
             body: Request body with ``text`` (required) and optional
-                ``engine``, ``language``, ``voice``, ``speed``.
+                ``engine``, ``language``, ``speed``.
 
         Returns:
             Response dict with status and duration.
+
+        Raises:
+            ValueError: If requested engine differs from configured engine.
         """
         text = body.get("text", "")
         if not text:
             return {"status": "error", "error": "No text provided"}
 
-        from dictare.config import TTSConfig
-        from dictare.tts import get_cached_tts_engine
-
-        # Build TTSConfig with overrides from request body
-        has_override = any(k in body for k in ("engine", "language", "voice", "speed"))
-
-        if has_override:
-            base = self.config.tts
-            tts_config = TTSConfig(
-                engine=body.get("engine") or base.engine,
-                language=body.get("language") or base.language,
-                voice=body.get("voice") or base.voice,
-                speed=body.get("speed") or base.speed,
+        # Reject engine mismatch early
+        requested_engine = body.get("engine")
+        if requested_engine and requested_engine != self.config.tts.engine:
+            raise ValueError(
+                f"Requested engine '{requested_engine}' is not the configured "
+                f"engine ('{self.config.tts.engine}'). "
+                f"Change it in Settings → Speech."
             )
-            try:
-                tts = get_cached_tts_engine(tts_config)
-            except ValueError as exc:
-                return {"status": "error", "error": str(exc)}
-        elif self._tts_engine is not None:
-            tts = self._tts_engine
-        else:
+
+        if self._tts_engine is None:
             error = self._tts_error or "TTS engine not loaded"
             return {"status": "error", "error": error}
+
+        tts = self._tts_engine
 
         # Mic-pausing: blocking speak with PlayStart/PlayComplete events
         pause = not self.config.audio.headphones_mode

@@ -67,6 +67,15 @@ class PiperTTS(TTSEngine):
         if piper_path.exists():
             return str(piper_path)
 
+        # Try piper in the isolated TTS venv
+        from dictare.tts.venv import get_venv_bin_dir
+
+        venv_bin = get_venv_bin_dir("piper")
+        if venv_bin:
+            venv_piper = venv_bin / "piper"
+            if venv_piper.exists():
+                return str(venv_piper)
+
         return None
 
     def _get_model_path(self) -> Path:
