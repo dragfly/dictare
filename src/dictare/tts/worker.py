@@ -65,9 +65,19 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--speed", type=int, default=175, help="Speed")
     args = parser.parse_args(argv)
 
+    from pathlib import Path
+
+    log_dir = Path.home() / ".local" / "share" / "dictare" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "tts-worker.log"
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [tts-worker] %(levelname)s %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(),
+        ],
     )
 
     # 1. Load TTS engine (expensive — done ONCE)

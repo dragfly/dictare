@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b275] - 2026-02-24
+
+### Fixed
+- **TTS proxy missing protocol fields** — SSE messages to worker were missing
+  `id` and `timestamp`, causing Pydantic validation failure in the SDK's
+  `parse_message()`. Worker silently dropped all speech messages.
+- **TTS worker logs** — worker now logs to `~/.local/share/dictare/logs/tts-worker.log`
+  in addition to stderr.
+
 ## [0.1.0b274] - 2026-02-24
 
 ### Added

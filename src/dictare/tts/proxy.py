@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -60,6 +61,8 @@ class WorkerTTSEngine(TTSEngine):
             {
                 "openvip": "1.0",
                 "type": "speech",
+                "id": str(uuid4()),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "text": text,
                 "request_id": request_id,
             },
