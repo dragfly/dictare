@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b295] - 2026-02-24
+
+### Fixed
+- **Parakeet download check** — `check_file` in models.json pointed to
+  `model_fp16.onnx` which doesn't exist in the repo; changed to
+  `encoder-model.int8.onnx`. Parakeet was already cached but the UI
+  kept showing the download button.
+- **`dictare speak` no in-process fallback** — removed the in-process TTS
+  fallback that crashed trying to find `tts` binary in PATH. Now uses the
+  running engine exclusively. Clean error messages: "Engine not running"
+  when engine is down, "TTS failed: <detail>" on engine errors, with full
+  stacktraces logged to the log file.
+
+### Changed
+- **Model/engine selectors removed from Settings** — `stt.model` and
+  `tts.engine` dropdowns removed from Speech and Voice tabs. These are
+  now selected exclusively via the Models page radio buttons.
+
 ## [0.1.0b294] - 2026-02-24
 
 ### Fixed

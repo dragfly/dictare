@@ -1,7 +1,7 @@
 export type PresetOption = string | { value: string; label: string };
 
 /** Fields hidden from the UI form (still configurable via config file) */
-export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device"]);
+export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device", "stt.model", "tts.engine"]);
 
 /** Fields whose text input should be right-aligned */
 export const RIGHT_ALIGN_FIELDS = new Set(["server.host"]);
@@ -28,7 +28,6 @@ export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "aud
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
   "stt.language": [{ value: "auto", label: "Auto-detect" }, { value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }, { value: "ko", label: "Korean" }, { value: "ru", label: "Russian" }],
-  "stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo", "parakeet-v3"],
   "tts.language": [{ value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }],
 };
 
@@ -52,7 +51,7 @@ export const SIZE_HINTS: Record<string, string> = {
 };
 
 /** Fields with enum/Literal types (fixed options from schema) */
-export const ENUM_FIELDS = new Set(["output.mode", "tts.engine"]);
+export const ENUM_FIELDS = new Set(["output.mode"]);
 
 /** Override the auto-generated label for specific dotted keys */
 export const LABEL_OVERRIDES: Record<string, string> = {
