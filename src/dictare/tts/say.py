@@ -70,3 +70,18 @@ class SayTTS(TTSEngine):
     def get_name(self) -> str:
         """Get engine name."""
         return "say"
+
+    def list_voices(self) -> list[str]:
+        """Return available macOS voices."""
+        if not self.is_available():
+            return []
+        try:
+            result = subprocess.run(
+                ["say", "-v", "?"], capture_output=True, text=True, timeout=10,
+            )
+            # Format: "Name  lang_code  # description"
+            return sorted(
+                line.split()[0] for line in result.stdout.splitlines() if line.strip()
+            )
+        except Exception:
+            return []

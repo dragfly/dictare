@@ -1542,6 +1542,54 @@ class DictareEngine:
 
         return {"status": "ok", "duration_ms": duration_ms}
 
+    def list_voices(self) -> list[str]:
+        """Return available voices for the configured TTS engine."""
+        from dictare.tts.venv import VENV_ENGINES
+
+        engine_name = self.config.tts.engine
+
+        # Worker-based engines: query via venv subprocess
+        if engine_name in VENV_ENGINES:
+            return self._list_voices_via_venv(engine_name)
+
+        # Direct engines: call list_voices() on the loaded engine
+        if self._tts_engine is not None:
+            return self._tts_engine.list_voices()
+
+        return []
+
+    @staticmethod
+    def _list_voices_via_venv(engine_name: str) -> list[str]:
+        """List voices by running a script in the engine's venv."""
+        import subprocess as sp
+
+        from dictare.tts.venv import get_venv_python
+
+        venv_python = get_venv_python(engine_name)
+        if venv_python is None:
+            return []
+
+        if engine_name == "kokoro":
+            script = (
+                "from kokoro_onnx import Kokoro; from pathlib import Path; "
+                "d = Path.home() / '.local/share/dictare/models/kokoro'; "
+                "k = Kokoro(str(d / 'model.onnx'), str(d / 'voices.bin')); "
+                "print('\\n'.join(sorted(k.voices.keys())))"
+            )
+        else:
+            return []
+
+        try:
+            result = sp.run(
+                [venv_python, "-c", script],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                return []
+            return [v for v in result.stdout.strip().splitlines() if v]
+        except Exception:
+            return []
+
     def _start_exit_watchdog(self, exit_code: int, timeout: float = 6) -> None:
         """Start a watchdog that force-exits after *timeout* seconds.
 
