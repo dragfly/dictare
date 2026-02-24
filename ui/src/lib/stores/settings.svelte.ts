@@ -22,6 +22,9 @@ export function getSaveErrors(): Record<string, string> {
 export function getNeedsRestart(): boolean {
 	return needsRestart;
 }
+export function setNeedsRestart(): void {
+	needsRestart = true;
+}
 export function clearNeedsRestart(): void {
 	needsRestart = false;
 }

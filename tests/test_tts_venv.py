@@ -218,10 +218,11 @@ def test_spawn_worker_uses_venv_python():
         cmd = popen_call[0][0]
         assert cmd[0] == fake_venv_python
 
-        # Verify PYTHONPATH was set in env
+        # Verify PYTHONPATH and COQUI_TOS_AGREED were set in env
         env = popen_call[1].get("env")
         assert env is not None
         assert env["PYTHONPATH"] == fake_src_path
+        assert env["COQUI_TOS_AGREED"] == "1"
 
 
 def test_spawn_worker_uses_sys_executable_without_venv():
@@ -259,9 +260,11 @@ def test_spawn_worker_uses_sys_executable_without_venv():
         cmd = popen_call[0][0]
         assert cmd[0] == sys.executable
 
-        # No env override when not using venv
+        # Env includes COQUI_TOS_AGREED but no PYTHONPATH (no venv)
         env = popen_call[1].get("env")
-        assert env is None
+        assert env is not None
+        assert env["COQUI_TOS_AGREED"] == "1"
+        assert "PYTHONPATH" not in env
 
 
 # ---------------------------------------------------------------------------

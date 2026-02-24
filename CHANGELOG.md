@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b297] - 2026-02-24
+
+### Fixed
+- **Coqui TTS** — pass `COQUI_TOS_AGREED=1` env var to subprocess, fixing
+  EOFError on license prompt. Remove wrong `repo`/`check_file` from
+  models.json (Coqui uses its own model manager, not HuggingFace).
+
+### Changed
+- **Restart UX** — replaced top restart banner with footer status bar.
+  After saving settings, an amber "Settings changed. Restart engine?" bar
+  appears at the bottom (consistent with the engine status bar). Model
+  selection no longer auto-restarts — user decides when to restart.
+- **Dashboard mode toggle** — added Keyboard/Agents toggle buttons in the
+  Engine card. Switches output mode immediately via control command (no
+  restart needed). SSE pushes update, toggle reflects current state.
+
 ## [0.1.0b296] - 2026-02-24
 
 ### Fixed
