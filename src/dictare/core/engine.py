@@ -705,6 +705,7 @@ class DictareEngine:
                         return
 
             except Exception as e:
+                logger.exception("STT transcription failed")
                 if self._logger:
                     self._logger.log_error(str(e), context="transcribe_and_process")
             finally:
@@ -1341,20 +1342,19 @@ class DictareEngine:
             from dictare.core.fsm import AppState, PlayCompleted, PlayStarted
 
             if self._controller.state != AppState.OFF:
+                started = False
                 try:
-                    play_id = self._controller.get_next_play_id()
                     self._controller.send(PlayStarted(text="", source="tts"))
+                    started = True
                 except Exception:
-                    play_id = None
+                    pass
 
                 try:
                     tts.speak(text)
                 finally:
-                    if play_id is not None:
+                    if started:
                         try:
-                            self._controller.send(
-                                PlayCompleted(play_id=play_id, source="tts")
-                            )
+                            self._controller.send(PlayCompleted(source="tts"))
                         except Exception:
                             pass
             else:
@@ -1526,10 +1526,16 @@ class DictareEngine:
                 # Fast path: explicit reconnect needed (device unplugged, etc.)
                 if self._audio_manager.needs_reconnect():
                     logger.warning("Audio device needs reconnect")
-                    if not self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
-                        logger.error("Audio reconnect failed after 5 attempts")
-                        break
-                    logger.info("Audio reconnect succeeded")
+                    if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
+                        logger.info("Audio reconnect succeeded")
+                    else:
+                        logger.error(
+                            "Audio reconnect failed — waiting 30s before retry "
+                            "(engine still running)"
+                        )
+                        _deadline = time.monotonic() + 30.0
+                        while self._running and time.monotonic() < _deadline:
+                            time.sleep(0.5)
                     continue
 
                 # Slow path: zombie stream detection (check every ~3s)
@@ -1538,10 +1544,15 @@ class DictareEngine:
                     stale_check_interval = 0
                     if self._audio_manager.is_stream_stale():
                         logger.warning("Audio stream stale (no data) — forcing reconnect")
-                        if not self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
-                            logger.error("Audio reconnect failed after stale detection")
-                            break
-                        logger.info("Audio reconnect succeeded after stale detection")
+                        if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
+                            logger.info("Audio reconnect succeeded after stale detection")
+                        else:
+                            logger.error(
+                                "Audio reconnect failed after stale — waiting 30s"
+                            )
+                            _deadline = time.monotonic() + 30.0
+                            while self._running and time.monotonic() < _deadline:
+                                time.sleep(0.5)
         except KeyboardInterrupt:
             pass
 

@@ -147,11 +147,6 @@ class StateController:
         """Check if TTS is currently playing."""
         return self._current_play_id > 0
 
-    def get_next_play_id(self) -> int:
-        """Get the next play ID. Called before starting audio playback."""
-        self._current_play_id += 1
-        return self._current_play_id
-
     def _process_loop(self) -> None:
         """Main event processing loop."""
         while self._running:
@@ -281,27 +276,33 @@ class StateController:
                 self._engine._inject_text(event.text, agent=event.agent, language=event.language)
             return
 
-        # Normal flow: transition to LISTENING and inject
+        # Normal flow: transition to target state and inject
         old_state = self._state_manager.state
-        self._state_manager.reset_to_listening()
+        target_state = self._desired_state_after_play
+        self._desired_state_after_play = AppState.LISTENING  # Reset for next time
+        self._state_manager.transition(target_state, force=True)
         if self._on_state_change:
-            self._on_state_change(old_state, AppState.LISTENING, "transcription_complete")
+            self._on_state_change(old_state, target_state, "transcription_complete")
 
         if self._engine and event.text:
             self._engine._inject_text(event.text, agent=event.agent, language=event.language)
 
-        # Process queued audio
-        if self._engine:
+        # Process queued audio only when going back to LISTENING
+        if target_state == AppState.LISTENING and self._engine:
             self._engine._process_queued_audio()
 
     def _handle_play_start(self, event: PlayStarted) -> None:
         """TTS is about to play.
 
-        Note: The play ID is assigned via get_next_play_id() BEFORE sending this event.
-        This handler just manages VAD and state transitions.
+        Increments the active-plays counter. Counter is managed exclusively on
+        this worker thread — no data race possible.
         """
-        # Reset desired state for this new TTS (user might press OFF during it)
-        self._desired_state_after_play = AppState.LISTENING
+        self._current_play_id += 1  # active-plays counter
+
+        # Reset desired state for this new TTS only if user has not already
+        # requested OFF (i.e., don't clobber a pending OFF intent).
+        if self._desired_state_after_play != AppState.OFF:
+            self._desired_state_after_play = AppState.LISTENING
 
         # Reset VAD to discard any buffered audio
         if self._engine and self._engine._audio_manager:
@@ -317,16 +318,15 @@ class StateController:
     def _handle_play_complete(self, event: PlayCompleted) -> None:
         """TTS finished playing.
 
-        Only processes if event.play_id matches the LAST play started.
-        This handles concurrent TTS (rapid agent switching) - we only
-        return to LISTENING when the final TTS completes.
+        Decrements the active-plays counter. State transition happens only when
+        the counter reaches zero (last concurrent TTS has finished).
         """
-        # Ignore if this is not the last TTS (concurrent TTS scenario)
-        if event.play_id != self._current_play_id:
-            return
+        if self._current_play_id > 0:
+            self._current_play_id -= 1
 
-        # This is the last TTS - clear the counter
-        self._current_play_id = 0
+        # Still plays in flight — don't transition yet
+        if self._current_play_id > 0:
+            return
 
         # Reset VAD to discard TTS audio
         if self._engine and self._engine._audio_manager:
@@ -414,10 +414,17 @@ class StateController:
             if self._state_manager.try_transition(AppState.LISTENING):
                 if self._on_state_change:
                     self._on_state_change(AppState.OFF, AppState.LISTENING, "set_listening")
-        elif not event.on and current == AppState.LISTENING:
-            if self._state_manager.try_transition(AppState.OFF):
-                if self._on_state_change:
-                    self._on_state_change(AppState.LISTENING, AppState.OFF, "set_listening")
+        elif not event.on:
+            if current == AppState.LISTENING:
+                if self._state_manager.try_transition(AppState.OFF):
+                    if self._on_state_change:
+                        self._on_state_change(AppState.LISTENING, AppState.OFF, "set_listening")
+            elif current in (AppState.RECORDING, AppState.TRANSCRIBING, AppState.INJECTING):
+                # Active state — record intent, apply when TTS/activity completes
+                self._desired_state_after_play = AppState.OFF
+            elif current == AppState.PLAYING:
+                # TTS playing — record intent (will apply in _handle_play_complete)
+                self._desired_state_after_play = AppState.OFF
 
     def _handle_discard_current(self, event: DiscardCurrent) -> None:
         """User wants to discard current recording."""
