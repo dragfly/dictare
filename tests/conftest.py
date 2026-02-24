@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from voxtype.core.http_server import OpenVIPServer
+from dictare.core.http_server import OpenVIPServer
 
 # =============================================================================
 # Pytest hooks

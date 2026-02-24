@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# Build a .deb package for voxtype
+# Build a .deb package for dictare
 #
 # Usage: ./build-deb.sh
-# Output: voxtype_<version>_<arch>.deb
+# Output: dictare_<version>_<arch>.deb
 #
 set -e
 
@@ -13,7 +13,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Read version from source
 VERSION=$(python3 -c "
 import re, pathlib
-text = pathlib.Path('$REPO_ROOT/src/voxtype/__init__.py').read_text()
+text = pathlib.Path('$REPO_ROOT/src/dictare/__init__.py').read_text()
 print(re.search(r'__version__\s*=\s*\"(.+?)\"', text).group(1))
 ")
 
@@ -23,31 +23,31 @@ DEB_VERSION=$(echo "$VERSION" | sed 's/a/~a/')
 
 ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
 
-echo "Building voxtype ${DEB_VERSION} for ${ARCH}..."
+echo "Building dictare ${DEB_VERSION} for ${ARCH}..."
 
 # Create temp build directory
 BUILD_DIR=$(mktemp -d)
-PKG_DIR="${BUILD_DIR}/voxtype_${DEB_VERSION}_${ARCH}"
+PKG_DIR="${BUILD_DIR}/dictare_${DEB_VERSION}_${ARCH}"
 trap "rm -rf $BUILD_DIR" EXIT
 
 # Create directory structure
 mkdir -p "${PKG_DIR}/DEBIAN"
-mkdir -p "${PKG_DIR}/opt/voxtype"
+mkdir -p "${PKG_DIR}/opt/dictare"
 mkdir -p "${PKG_DIR}/usr/local/bin"
 
-# Create venv and install voxtype
-echo "Creating venv and installing voxtype..."
-uv venv --python 3.11 "${PKG_DIR}/opt/voxtype/.venv"
-VIRTUAL_ENV="${PKG_DIR}/opt/voxtype/.venv" \
-    uv pip install --python "${PKG_DIR}/opt/voxtype/.venv/bin/python" \
-    "voxtype==${VERSION}" --prerelease=allow
+# Create venv and install dictare
+echo "Creating venv and installing dictare..."
+uv venv --python 3.11 "${PKG_DIR}/opt/dictare/.venv"
+VIRTUAL_ENV="${PKG_DIR}/opt/dictare/.venv" \
+    uv pip install --python "${PKG_DIR}/opt/dictare/.venv/bin/python" \
+    "dictare==${VERSION}" --prerelease=allow
 
 # Create wrapper script
-cat > "${PKG_DIR}/usr/local/bin/voxtype" << 'WRAPPER'
+cat > "${PKG_DIR}/usr/local/bin/dictare" << 'WRAPPER'
 #!/bin/sh
-exec /opt/voxtype/.venv/bin/voxtype "$@"
+exec /opt/dictare/.venv/bin/dictare "$@"
 WRAPPER
-chmod 755 "${PKG_DIR}/usr/local/bin/voxtype"
+chmod 755 "${PKG_DIR}/usr/local/bin/dictare"
 
 # Generate control file with version
 sed "s/@VERSION@/${DEB_VERSION}/g; s/@ARCH@/${ARCH}/g" \
@@ -62,10 +62,10 @@ for script in postinst prerm postrm; do
 done
 
 # Build the package
-dpkg-deb --build "${PKG_DIR}" "${SCRIPT_DIR}/voxtype_${DEB_VERSION}_${ARCH}.deb"
+dpkg-deb --build "${PKG_DIR}" "${SCRIPT_DIR}/dictare_${DEB_VERSION}_${ARCH}.deb"
 
 echo ""
-echo "Package built: voxtype_${DEB_VERSION}_${ARCH}.deb"
+echo "Package built: dictare_${DEB_VERSION}_${ARCH}.deb"
 echo ""
-echo "Install with:  sudo dpkg -i voxtype_${DEB_VERSION}_${ARCH}.deb"
-echo "Remove with:   sudo dpkg -r voxtype"
+echo "Install with:  sudo dpkg -i dictare_${DEB_VERSION}_${ARCH}.deb"
+echo "Remove with:   sudo dpkg -r dictare"

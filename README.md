@@ -1,4 +1,4 @@
-# voxtype
+# dictare
 
 Voice-first control for AI coding agents.
 
@@ -7,7 +7,7 @@ Speak to control Claude Code, Cursor, Aider, or any CLI tool — privately, on y
 ## Features
 
 - **Voice-to-Agent** — voice commands drive your AI coding agent, not just text
-- **Single command** — `voxtype agent claude` and you're talking to Claude Code
+- **Single command** — `dictare agent claude` and you're talking to Claude Code
 - **100% local** — Whisper STT runs on-device, zero data leaves your machine
 - **Multi-agent** — switch agents with your voice: *"agent cursor"*
 - **Open protocol** — [OpenVIP](spec/) lets any tool connect via SSE
@@ -16,13 +16,13 @@ Speak to control Claude Code, Cursor, Aider, or any CLI tool — privately, on y
 ## Install
 
 ```bash
-pip install voxtype
+pip install dictare
 ```
 
 Or from source:
 
 ```bash
-git clone https://github.com/dragfly/voxtype && cd voxtype
+git clone https://github.com/dragfly/dictare && cd dictare
 uv sync --python 3.11
 ```
 
@@ -30,10 +30,10 @@ uv sync --python 3.11
 
 ```bash
 # 1. Install as system service (starts at login, like Ollama)
-voxtype service install
+dictare service install
 
 # 2. Launch your agent
-voxtype agent claude
+dictare agent claude
 ```
 
 Speak and Claude Code executes. That's it.
@@ -68,7 +68,7 @@ Agents connect via SSE — each in its own terminal.
 
 ## Agent Templates
 
-Define agents in `~/.config/voxtype/config.toml`:
+Define agents in `~/.config/dictare/config.toml`:
 
 ```toml
 [agent_types.claude]
@@ -83,8 +83,8 @@ description = "Aider with Opus"
 Then launch with a single command:
 
 ```bash
-voxtype agent claude                          # uses template
-voxtype agent claude -- claude --model opus   # override command
+dictare agent claude                          # uses template
+dictare agent claude -- claude --model opus   # override command
 ```
 
 ## Voice Commands
@@ -99,11 +99,11 @@ Submit triggers are multilingual (en, it, es, de, fr) and configurable in config
 ## Service Management
 
 ```bash
-voxtype service install     # Install + enable + start (auto-start at login)
-voxtype service status      # Check service and engine status
-voxtype service stop        # Stop the service
-voxtype service uninstall   # Remove the service
-voxtype service logs        # View recent logs
+dictare service install     # Install + enable + start (auto-start at login)
+dictare service status      # Check service and engine status
+dictare service stop        # Stop the service
+dictare service uninstall   # Remove the service
+dictare service logs        # View recent logs
 ```
 
 ## Engine
@@ -111,17 +111,17 @@ voxtype service logs        # View recent logs
 For manual control without the system service:
 
 ```bash
-voxtype engine start -d --agents   # Start engine as daemon
-voxtype engine status              # Check engine status
-voxtype engine stop                # Stop engine
+dictare engine start -d --agents   # Start engine as daemon
+dictare engine status              # Check engine status
+dictare engine stop                # Stop engine
 ```
 
 ## Keyboard Mode
 
-Don't need an agent? Use voxtype as a pure dictation tool — voice to keystrokes:
+Don't need an agent? Use dictare as a pure dictation tool — voice to keystrokes:
 
 ```bash
-voxtype listen --keyboard
+dictare listen --keyboard
 ```
 
 **Hotkey** to toggle listening:
@@ -131,9 +131,9 @@ voxtype listen --keyboard
 ## Text-to-Speech
 
 ```bash
-voxtype speak "Hello world"
-voxtype speak --engine qwen3 "Hello"
-echo "Hello" | voxtype speak
+dictare speak "Hello world"
+dictare speak --engine qwen3 "Hello"
+echo "Hello" | dictare speak
 ```
 
 Engines: `espeak`, `say` (macOS), `piper`, `coqui`, `qwen3`, `outetts`
@@ -141,10 +141,10 @@ Engines: `espeak`, `say` (macOS), `piper`, `coqui`, `qwen3`, `outetts`
 ## Configuration
 
 ```bash
-voxtype config edit           # Open config in editor
-voxtype config list           # Show all settings
-voxtype config get stt.model
-voxtype config set stt.language it
+dictare config edit           # Open config in editor
+dictare config list           # Show all settings
+dictare config get stt.model
+dictare config set stt.language it
 ```
 
 ## Requirements
@@ -160,7 +160,7 @@ System Settings > Privacy & Security > Accessibility > add your terminal app.
 ## Development
 
 ```bash
-git clone https://github.com/dragfly/voxtype && cd voxtype
+git clone https://github.com/dragfly/dictare && cd dictare
 
 # macOS Apple Silicon (MLX GPU acceleration)
 uv sync --python 3.11 --extra mlx
@@ -169,7 +169,7 @@ uv sync --python 3.11 --extra mlx
 uv sync --python 3.11
 
 # Run
-uv run --python 3.11 voxtype listen --keyboard
+uv run --python 3.11 dictare listen --keyboard
 
 # Tests
 uv run --python 3.11 python -m pytest tests/ -x

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from voxtype.core.toml_sections import (
+from dictare.core.toml_sections import (
     _extract_section_lines,
     _strip_section_lines,
     apply_section,
@@ -143,8 +143,8 @@ description = "Claude Sonnet"
         config_path = self._make_config(tmp_path, initial)
 
         # Simulate what the UI does: load section, save it back unchanged
-        from voxtype.config import Config
-        from voxtype.core.toml_sections import serialize_section
+        from dictare.config import Config
+        from dictare.core.toml_sections import serialize_section
 
         config = Config()
         section_text = serialize_section("agent_types", config)
@@ -166,8 +166,8 @@ description = "Claude Sonnet"
         initial = "[stt]\nmodel = \"base\"\n"
         config_path = self._make_config(tmp_path, initial)
 
-        from voxtype.config import Config
-        from voxtype.core.toml_sections import serialize_section
+        from dictare.config import Config
+        from dictare.core.toml_sections import serialize_section
 
         config = Config()
         # serialize_section returns the template (comment-only) since section absent

@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Agent config: `live_dangerously_args` replaces `-danger` presets.** Each agent
   type now declares its own dangerous-mode args (e.g. `["--dangerously-skip-permissions"]`
   for Claude, `["--dangerously-bypass-approvals-and-sandbox"]` for Codex). Use
-  `voxtype agent <name> --live-dangerously` to activate. Eliminates 3 duplicate
+  `dictare agent <name> --live-dangerously` to activate. Eliminates 3 duplicate
   presets (sonnet-danger, opus-danger, chatgpt-danger) and gives the engine a
   semantic signal that the agent is running in dangerous mode.
 
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   blocks, unused variables in test_loop_audio, test_toml_sections,
   test_agent_template, and scripts/test-mic.
 - **Remove CLI help text from config template.** Agent type usage examples
-  (`voxtype agent <name>`, `--continue`, etc.) belong in `--help`, not config.
+  (`dictare agent <name>`, `--continue`, etc.) belong in `--help`, not config.
 
 ## [0.1.0b233] - 2026-02-22
 
@@ -225,7 +225,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pystray/AppIndicator to rewrite the temp icon file 3 times. Added icon name
   deduplication: `_update_icon()` now skips the update if the icon hasn't
   actually changed, eliminating visible flicker.
-- **Removed three-dots loading icon from tray.** The `voxtype_loading` icon
+- **Removed three-dots loading icon from tray.** The `dictare_loading` icon
   (microphone + three dots) was briefly visible during state transitions on
   Linux due to AppIndicator latency. Now "loading" and "restarting" states use
   the normal idle icon (yellow microphone). Consistent icon design: red =
@@ -274,8 +274,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   agent activation. Makes it easy to diagnose mode-reset issues.
 - **Tray app logging.** Tray writes to the same JSONL log file as engine,
   tagged with `source: "tray"`. Logs startup, SSE status events, mode changes
-  from menu and engine. Use `voxtype logs --source tray` to filter.
-- **`voxtype logs --source` flag.** Filter log entries by source process
+  from menu and engine. Use `dictare logs --source tray` to filter.
+- **`dictare logs --source` flag.** Filter log entries by source process
   (`engine`, `tray`). Default shows all sources interleaved by timestamp.
 
 ## [0.1.0b207] - 2026-02-21
@@ -318,7 +318,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0b202] - 2026-02-21
 
 ### Added
-- **Ctrl+\\ to claim agent.** Press Ctrl+\\ in any `voxtype agent` terminal to
+- **Ctrl+\\ to claim agent.** Press Ctrl+\\ in any `dictare agent` terminal to
   make that agent the active voice target. No mouse tracking, no terminal
   interference — just a single keystroke to redirect voice input.
 
@@ -326,7 +326,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Input Monitoring: try `open` to launch as real macOS app.** Using `open`
-  instead of running the binary directly gives Voxtype.app its own TCC
+  instead of running the binary directly gives Dictare.app its own TCC
   identity (not Terminal's), which may trigger the automatic macOS prompt.
   Falls back to opening System Settings if the prompt doesn't appear.
 
@@ -343,14 +343,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Input Monitoring setup fallback.** `CGRequestListenEventAccess()` silently
-  fails on Sequoia.  When it fails, `voxtype service install` now opens System
-  Settings to the Input Monitoring page with clear instructions to add Voxtype.app.
+  fails on Sequoia.  When it fails, `dictare service install` now opens System
+  Settings to the Input Monitoring page with clear instructions to add Dictare.app.
 
 ## [0.1.0b198] - 2026-02-21
 
 ### Added
 - **Automatic Input Monitoring permission request during service install.**
-  `voxtype service install` now calls `CGRequestListenEventAccess()` via the
+  `dictare service install` now calls `CGRequestListenEventAccess()` via the
   Swift launcher before loading the service.  macOS shows a system dialog on
   first install — the user approves and the hotkey works immediately.
 
@@ -392,7 +392,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0b193] - 2026-02-20
 
 ### Fixed
-- Clean stale `~/.voxtype/hotkey_status` during orphan kill so the new
+- Clean stale `~/.dictare/hotkey_status` during orphan kill so the new
   launcher reports fresh Input Monitoring state instead of inheriting
   the old "active" value from a killed process.
 
@@ -403,7 +403,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fix only worked for NEW launchers — when upgrading from pre-b191, the OLD
   `stop()` ran (without kill verification), leaving the old process alive.
   `install()` now always runs `_kill_orphan_processes()` which reads the engine
-  PID file (`~/.voxtype/engine.pid`) and pkills the Voxtype.app launcher binary,
+  PID file (`~/.dictare/engine.pid`) and pkills the Dictare.app launcher binary,
   regardless of launchd state.
 
 ## [0.1.0b191] - 2026-02-20
@@ -422,7 +422,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Tray shows Input Monitoring warning** when permission is missing (macOS).
   Red icon + menu item with warning symbol that opens System Settings directly.
-- Swift launcher writes `~/.voxtype/hotkey_status` ("active" or "failed")
+- Swift launcher writes `~/.dictare/hotkey_status` ("active" or "failed")
   so the Python engine can report Input Monitoring state to the tray.
 
 ## [0.1.0b189] - 2026-02-20
@@ -431,10 +431,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Global hotkey works from launchd service (macOS Sequoia).** Root cause:
   CGEventTap created by a Python process spawned by launchd never receives
   events on Sequoia — the tap is created but non-functional. Fix: move the
-  CGEventTap to the Swift launcher (Voxtype.app), which runs as an
+  CGEventTap to the Swift launcher (Dictare.app), which runs as an
   NSApplication with `.accessory` activation policy. The launcher detects
   Right Cmd taps and sends SIGUSR1 to the child Python engine, which toggles
-  listening. Requires Voxtype.app to be granted both **Accessibility** and
+  listening. Requires Dictare.app to be granted both **Accessibility** and
   **Input Monitoring** in System Settings.
 
 ### Changed
@@ -454,7 +454,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0b187] - 2026-02-20
 
 ### Fixed
-- **Service crash: `No module named voxtype`** — b186 used the Python.app binary
+- **Service crash: `No module named dictare`** — b186 used the Python.app binary
   but forgot to inject PYTHONPATH (the .app binary is outside the venv and can't
   find installed packages). Restored PYTHONPATH injection in the launchd plist
   pointing to the venv's site-packages.
@@ -483,7 +483,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to show the macOS permission dialog on every engine restart, (2) the tray to show a
   red "Grant Accessibility Permission" item even when the user had granted it, (3) the
   b183/b184 brew Python.app swap logic to run needlessly. The global hotkey only works
-  from a foreground Terminal session (`voxtype serve`); when running as a service, users
+  from a foreground Terminal session (`dictare serve`); when running as a service, users
   toggle listening via the tray menu.
 - Removed `AXIsProcessTrustedWithOptions` call from Swift launcher (no more dialog).
 - Removed `_check_ax_direct()` from `permissions.py` — accessibility always True.
@@ -495,7 +495,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0b184] - 2026-02-20
 
 ### Fixed
-- **`voxtype service install` is now idempotent** — removed the "already installed"
+- **`dictare service install` is now idempotent** — removed the "already installed"
   early-exit guard that prevented the b183 brew-Python-app fix from taking effect when
   the service was already installed. `service install` always rewrites the plist/unit
   and reloads the service.
@@ -506,38 +506,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **macOS service now uses brew Python.app when current Python is not TCC-trusted.**
-  When `voxtype service install` is run from a uv-managed venv (standalone CPython
+  When `dictare service install` is run from a uv-managed venv (standalone CPython
   binary with no `.app` bundle), the engine's `python_path` is automatically swapped
   to the brew Python.app binary (`/opt/homebrew/Cellar/python@3.11/.../Python.app`),
   which ships as a proper macOS `.app` bundle and is already trusted in TCC on most
   developer systems. The venv's `site-packages` are injected via `PYTHONPATH` in the
-  launchd plist so all installed packages (including the editable voxtype install)
+  launchd plist so all installed packages (including the editable dictare install)
   remain accessible. This allows pynput's `CGEventTap` to succeed, making the push-to-
   talk hotkey work from the launchd service.
 - **`permissions.py` accessibility check now uses Python-direct ctypes call** instead of
-  the Voxtype.app subprocess approach. The subprocess check (`Voxtype --check-permissions
+  the Dictare.app subprocess approach. The subprocess check (`Dictare --check-permissions
   → AXIsProcessTrusted()`) gave wrong results in a launchd agent context: spawned
   subprocesses lack a window-server session, so `AXIsProcessTrusted()` in the subprocess
   returned `false` even for a genuinely trusted binary. Checking directly via ctypes in
   the engine process is the authoritative answer (it's the same process that runs pynput).
-  Microphone still checked via the launcher (Voxtype.app registered with AVFoundation).
+  Microphone still checked via the launcher (Dictare.app registered with AVFoundation).
 
 ## [0.1.0b182] - 2026-02-20
 
 ### Fixed
-- **`linux-install.sh` now delegates to `voxtype service install`** instead of
+- **`linux-install.sh` now delegates to `dictare service install`** instead of
   writing the systemd unit file inline with a hardcoded `ExecStart`. The inline
-  version still had `python -m voxtype engine start` (removed in b179), causing
+  version still had `python -m dictare engine start` (removed in b179), causing
   the Linux service to fail with exit code 2 on every start.
 - **`systemd.py`** unit template now includes `PYTHONUNBUFFERED=1` and the correct
   `GI_TYPELIB_PATH` for the host architecture (x86_64, aarch64, arm, riscv64).
-  Previously these were only set in `linux-install.sh`; now any `voxtype service install`
+  Previously these were only set in `linux-install.sh`; now any `dictare service install`
   generates the correct environment regardless of how it's invoked.
 
 ## [0.1.0b181] - 2026-02-20
 
 ### Fixed
-- **`_find_launcher` now checks service-installed bundle first** (`~/Applications/Voxtype.app`).
+- **`_find_launcher` now checks service-installed bundle first** (`~/Applications/Dictare.app`).
   The brew Cellar path was checked first but has a different TCC identity — calling
   `AXIsProcessTrusted()` from it returns `false` in a launchd service context where the
   Terminal session is not present. The service-installed bundle is the one the user
@@ -549,44 +549,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Tray no longer prompts for Accessibility permission.** The tray process does not need
-  Accessibility — the engine (running inside `Voxtype.app` via the Swift launcher) handles
+  Accessibility — the engine (running inside `Dictare.app` via the Swift launcher) handles
   all keyboard injection and hotkey listening. The tray reads permission state from the
   engine's `/status` endpoint. Removed `_ensure_accessibility()` from tray startup.
 - **`create_app_bundle` skips recreation when bundle is unchanged** (same Python path +
   launcher binary). Recreating the `.app` binary invalidates macOS TCC trust, causing
   repeated Accessibility permission dialogs after reinstall.
-- **`is_accessibility_granted()` now reports Voxtype.app's trust, not Python's.** Calls
-  `Voxtype --check-permissions` (Swift launcher) which runs `AXIsProcessTrusted()` from
+- **`is_accessibility_granted()` now reports Dictare.app's trust, not Python's.** Calls
+  `Dictare --check-permissions` (Swift launcher) which runs `AXIsProcessTrusted()` from
   the bundle's process context. Falls back to ctypes for dev/non-bundle environments.
 
 ## [0.1.0b179] - 2026-02-20
 
 ### Changed (breaking)
-- **`voxtype engine` subcommand group removed entirely.** Use `voxtype serve` instead.
-  - `voxtype engine start` → `voxtype serve`
-  - `voxtype engine start -d` → `voxtype service install` (for service) or `voxtype serve` (for dev)
-  - `voxtype engine stop` → `voxtype service stop`
-  - `voxtype engine status` → `voxtype service status`
-- **`voxtype serve`** is now a top-level command (Ollama-style). Runs in foreground and logs
-  to both the JSONL file (`~/.local/share/voxtype/logs/engine.jsonl`, used by `voxtype logs -f`)
+- **`dictare engine` subcommand group removed entirely.** Use `dictare serve` instead.
+  - `dictare engine start` → `dictare serve`
+  - `dictare engine start -d` → `dictare service install` (for service) or `dictare serve` (for dev)
+  - `dictare engine stop` → `dictare service stop`
+  - `dictare engine status` → `dictare service status`
+- **`dictare serve`** is now a top-level command (Ollama-style). Runs in foreground and logs
+  to both the JSONL file (`~/.local/share/dictare/logs/engine.jsonl`, used by `dictare logs -f`)
   and stdout (captured by systemd/launchd; visible in terminal during dev). `--verbose` enables
   DEBUG-level output. The service manager handles backgrounding and `Restart=always`.
 - Service templates updated: systemd `ExecStart` and launchd plist fallback now call
-  `voxtype serve` instead of `voxtype engine start -d`.
-- Swift launcher (macOS .app bundle) updated to call `voxtype serve`.
+  `dictare serve` instead of `dictare engine start -d`.
+- Swift launcher (macOS .app bundle) updated to call `dictare serve`.
 - `engine.restart` protocol command simplified: no longer spawns a bootstrap subprocess
   (which broke systemd/launchd PID tracking). Now just exits; the service manager restarts.
-- Homebrew formula: removed `service do` block. Service is managed via `voxtype service install`,
+- Homebrew formula: removed `service do` block. Service is managed via `dictare service install`,
   not `brew services`. Caveats updated accordingly.
-- `scripts/macos-install.sh`: replaced `brew services start/stop` with `voxtype service start/stop`.
+- `scripts/macos-install.sh`: replaced `brew services start/stop` with `dictare service start/stop`.
 
 ## [0.1.0b178] - 2026-02-20
 
 ### Fixed
 - Tray: removed "try brew services first" fallback from `_on_restart_engine()`. The tray
   now always uses the native service backend (`launchd` on macOS, `systemd` on Linux),
-  which manages `com.voxtype.engine` — the same label used by `voxtype service install`.
-  Previously the tray would silently restart via `homebrew.mxcl.voxtype` if brew was
+  which manages `com.dictare.engine` — the same label used by `dictare service install`.
+  Previously the tray would silently restart via `homebrew.mxcl.dictare` if brew was
   managing the service, creating two separate launchd entries with different labels and
   causing confusion about which service was actually running.
 
@@ -595,7 +595,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Engine: new `engine.restart` protocol command that saves state, then spawns a detached
   bootstrap subprocess which waits for the current engine PID to exit and starts a fresh
-  instance via `voxtype engine start -d`. This makes "Restart Engine" in the web UI work
+  instance via `dictare engine start -d`. This makes "Restart Engine" in the web UI work
   correctly even when the engine was started manually or via the tray (not via the service
   manager). Includes a 6-second watchdog that exits with code 0 (avoiding double-start when
   `Restart=always` is active).
@@ -616,10 +616,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Tests: `_run_daemon` tests now redirect log output to `tmp_path` instead of the
-  production log file (`~/.local/share/voxtype/logs/engine.jsonl`). Previously
+  production log file (`~/.local/share/dictare/logs/engine.jsonl`). Previously
   running `pytest` would inject test entries (PID paths, mock state, etc.) into
-  the user's live log stream visible via `voxtype logs -f`.
-  Added `_reset_voxtype_logger` autouse fixture to restore logger handlers after
+  the user's live log stream visible via `dictare logs -f`.
+  Added `_reset_dictare_logger` autouse fixture to restore logger handlers after
   each daemon test, preventing handler leakage across test modules.
 
 ## [0.1.0b174] - 2026-02-20
@@ -658,12 +658,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trigger a service restart on Linux (only crashes did). Now any exit restarts the engine.
   Added `StartLimitIntervalSec=60` / `StartLimitBurst=5` in `[Unit]` to prevent infinite restart
   loops when the engine fails repeatedly at startup.
-- Both `scripts/linux-install.sh` and `voxtype service install` (via `daemon/systemd.py`) updated.
+- Both `scripts/linux-install.sh` and `dictare service install` (via `daemon/systemd.py`) updated.
 
 ## [0.1.0b170] - 2026-02-20
 
 ### Fixed
-- Engine: enforce single instance via PID file (`~/.voxtype/engine.pid`); starting a second
+- Engine: enforce single instance via PID file (`~/.dictare/engine.pid`); starting a second
   engine while one is already running now fails immediately with a clear error message
 - Engine: hard-exit if HTTP server fails to bind the port (e.g. port already in use); previously
   the engine would continue running without an HTTP server, silently grabbing the microphone
@@ -673,7 +673,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0b169] - 2026-02-20
 
 ### Fixed
-- Linux: symlink `voxtype` to `~/.local/bin` so the command works from any shell after install
+- Linux: symlink `dictare` to `~/.local/bin` so the command works from any shell after install
 
 ## [0.1.0b168] - 2026-02-20
 
@@ -715,18 +715,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0b163] - 2026-02-20
 
 ### Fixed
-- Engine startup errors now appear in `voxtype logs` — previously crashed silently
+- Engine startup errors now appear in `dictare logs` — previously crashed silently
   - STT/VAD loading failures: `logger.debug` → `logger.info` + `logger.error` with traceback on failure
   - Daemon startup failures: `controller.start()` exceptions now logged as ERROR before exit
 
 ## [0.1.0b162] - 2026-02-20
 
 ### Added
-- `voxtype logs` — human-readable log viewer
-  - `voxtype logs` — last 50 lines, formatted
-  - `voxtype logs -f` — follow (like `tail -f`)
-  - `voxtype logs -n 100` — last N lines
-  - `voxtype logs --raw` — raw JSONL (pipe-friendly, e.g. `| jq .`)
+- `dictare logs` — human-readable log viewer
+  - `dictare logs` — last 50 lines, formatted
+  - `dictare logs -f` — follow (like `tail -f`)
+  - `dictare logs -n 100` — last N lines
+  - `dictare logs --raw` — raw JSONL (pipe-friendly, e.g. `| jq .`)
   - Falls back gracefully if engine hasn't started yet
 
 ## [0.1.0b161] - 2026-02-20
@@ -757,19 +757,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `ParakeetEngine`: switched from `nemo_toolkit[asr]` (~2 GB) to `onnx-asr` (~122 kB package, no PyTorch)
-- `voxtype[parakeet]` optional dep is now `onnx-asr>=0.1.0` — installs in seconds, not minutes
+- `dictare[parakeet]` optional dep is now `onnx-asr>=0.1.0` — installs in seconds, not minutes
 - Model: `nemo-parakeet-tdt-0.6b-v3` (25 European languages: IT, DE, ES, FR, …, auto language detection)
 
 ### Added
 - Guided install UX: when `onnx-asr` is missing and a console is available, prompts "Install now? [Y/n]"
-  then runs `pip install onnx-asr` with real output. In headless/daemon mode: clear error with `voxtype stt install parakeet-v3`
+  then runs `pip install onnx-asr` with real output. In headless/daemon mode: clear error with `dictare stt install parakeet-v3`
 
 ## [0.1.0b157] - 2026-02-20
 
 ### Added
 - Parakeet V3 STT engine (`ParakeetEngine`) via NVIDIA NeMo ASR
 - Model selection: `model = "parakeet-v3"` (TDT 0.6B, 25 European languages) or `"parakeet-ctc"` (CTC 1.1B)
-- Optional dependency: `pip install 'voxtype[parakeet]'` installs `nemo_toolkit[asr]`
+- Optional dependency: `pip install 'dictare[parakeet]'` installs `nemo_toolkit[asr]`
 - Engine auto-selection: any model name starting with `"parakeet"` routes to `ParakeetEngine`
 - `is_parakeet_model()` helper for engine routing
 - STT advanced template updated with Parakeet install instructions
@@ -965,7 +965,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `type="AudioAdvancedConfig"` for nested Pydantic sub-models instead of
   `"dict"`, causing ComplexField to render instead of the TOML editor.
   Fixed to use `"dict"` for any `BaseModel` instance value.
-- Rebuilt UI (`src/voxtype/ui/dist/`) to include audio.advanced TOML editor.
+- Rebuilt UI (`src/dictare/ui/dist/`) to include audio.advanced TOML editor.
 
 ### Added
 
@@ -998,7 +998,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   form (audio_feedback, silence_ms, headphones_mode, max_duration).
   Advanced fine-tuning fields (sample_rate, channels, device, pre_buffer_ms,
   min_speech_ms, transcribing_sound_min_ms) are hidden from the form and
-  accessible only via `voxtype config edit` or the config.toml directly.
+  accessible only via `dictare config edit` or the config.toml directly.
 - The Sounds TOML editor template now includes a note pointing to the
   advanced [audio] parameters and how to edit them.
 - Introduced `HIDDEN_FORM_KEYS` in field-config.ts: a single place to move
@@ -1029,7 +1029,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `create_partial()`, `create_status()`, `create_error()` from `openvip_messages.py`:
   defined but never called in production code. `create_message(partial=True)` still
   works for when partial transcription is properly implemented.
-- `realtime` parameter from `create_engine()` and `VoxtypeEngine.__init__()`.
+- `realtime` parameter from `create_engine()` and `DictareEngine.__init__()`.
 - `cli/models.py` references to removed `realtime_model` and `qwen3` engine.
 
 ## [0.1.0b139] - 2026-02-19
@@ -1042,7 +1042,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   superseded by the pipeline architecture. Only `agent` phrase remains.
 - `daemon.preload_tts`, `daemon.preload_stt`, `daemon.idle_timeout` config fields: never
   read anywhere in the codebase; removed from `DaemonConfig` and config template.
-- `src/voxtype/ui/__init__.py`: phantom package (0 bytes, no imports, no purpose).
+- `src/dictare/ui/__init__.py`: phantom package (0 bytes, no imports, no purpose).
 - Added `docs/notes/plugin-filter-llm-vision.md`: architecture vision for plugin/filter/LLM
   integration (four model categories: STT, TTS, LLM, Translation).
 
@@ -1075,9 +1075,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `AgentTypeConfig.continue_args`: optional list of args inserted after `argv[0]` when
-  `--continue` / `-C` is passed to `voxtype agent`. Keeps continue syntax inside the
+  `--continue` / `-C` is passed to `dictare agent`. Keeps continue syntax inside the
   agent type config (Claude uses `["-c"]`, Codex could use `["--resume"]`, etc.).
-- `voxtype agent <name> --type <type> --continue` / `-C` flag: continues the previous
+- `dictare agent <name> --type <type> --continue` / `-C` flag: continues the previous
   session using the type's `continue_args`. If `continue_args` is empty, a warning is
   printed and the agent runs normally. Silently ignored when using `--` command override.
 
@@ -1097,7 +1097,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config: agent type names containing dots now use correct TOML quoted-key syntax in
   examples (`[agent_types."sonnet-4.6"]` not `[agent_types.sonnet-4.6]`). Unquoted dot
   keys in TOML are parsed as nested tables, causing pydantic `command field required` error.
-- Config: updated agent_types comment to document the `voxtype agent <name> --type <type>`
+- Config: updated agent_types comment to document the `dictare agent <name> --type <type>`
   syntax and the fact that multiple sessions can share the same agent type.
 - UI: `--destructive` CSS color raised from lightness 30% to 62% — error messages in the
   TOML editor were dark red on dark background (unreadable).
@@ -1126,7 +1126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Linux: `linux-install.sh` now installs `gir1.2-ayatanaappindicator3-0.1` on Ubuntu 22.04+
   (old name `gir1.2-appindicator3-0.1` no longer exists), fixing tray icon on modern Ubuntu.
-- Linux: `linux-install.sh` installs udev rule `99-voxtype.rules` for evdev access —
+- Linux: `linux-install.sh` installs udev rule `99-dictare.rules` for evdev access —
   hotkey (ScrollLock) now works immediately without adding user to `input` group or re-logging in.
 - Linux: `GI_TYPELIB_PATH` in the generated systemd unit is now architecture-aware —
   ARM64 uses `aarch64-linux-gnu`, ARMv7 uses `arm-linux-gnueabihf`, x86_64 unchanged.
@@ -1146,10 +1146,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `voxtype agent`: agent_id (session name) is now independent from the agent type.
+- `dictare agent`: agent_id (session name) is now independent from the agent type.
   Added `--type <type>` option to select the command template from `agent_types` config.
   Without `--type`, `default_agent_type` is used. agent_id is required.
-  Examples: `voxtype agent frontend --type claude-sonnet`, `voxtype agent frontend`
+  Examples: `dictare agent frontend --type claude-sonnet`, `dictare agent frontend`
 - Tests: added `TestAgentCLIContract` — 7 end-to-end CLI tests verifying name is
   required, `--type` selects command, default fallback, and session name independence.
 
@@ -1234,7 +1234,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Agent type presets** — renamed `[agents.*]` → `[agent_types.*]` in config for clarity. Added `default_agent_type` field so `voxtype agent` with no arguments launches the default agent. Added optional `description` field to each agent type.
+- **Agent type presets** — renamed `[agents.*]` → `[agent_types.*]` in config for clarity. Added `default_agent_type` field so `dictare agent` with no arguments launches the default agent. Added optional `description` field to each agent type.
 - **TOML textarea editor in settings UI** — complex config sections (`agent_types`, `keyboard.shortcuts`) now display a CodeMirror-powered TOML editor with syntax highlighting instead of "Edit in config.toml". Server-side validation via Pydantic before saving.
 - **Agents tab in settings UI** — dedicated tab for agent type presets with TOML editor including commented examples.
 - **Shortcuts tab in Hotkey settings** — `keyboard.shortcuts` now visible in the UI via TOML editor (previously hidden).
@@ -1289,7 +1289,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Engine state persistence** — Saves active agent, output mode, and listening state to `~/.voxtype/state.json`. Restores output mode and preferred agent on restart. Config option `daemon.restore_listening` (default: false) controls whether listening state is restored.
+- **Engine state persistence** — Saves active agent, output mode, and listening state to `~/.dictare/state.json`. Restores output mode and preferred agent on restart. Config option `daemon.restore_listening` (default: false) controls whether listening state is restored.
 - **Preferred agent reconnect** — When an agent reconnects after restart and matches the saved preferred agent, it becomes the current agent automatically.
 
 ### Fixed
@@ -1373,7 +1373,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Tray icon color code** — Four distinct colors for four states: red = disconnected (server unreachable), blue = loading/restarting (connected, preparing), yellow = idle (ready), green = listening. Loading previously reused the yellow idle icon; now uses the dedicated blue `voxtype_loading` icon.
+- **Tray icon color code** — Four distinct colors for four states: red = disconnected (server unreachable), blue = loading/restarting (connected, preparing), yellow = idle (ready), green = listening. Loading previously reused the yellow idle icon; now uses the dedicated blue `dictare_loading` icon.
 
 ## [0.1.0b91] - 2026-02-17
 
@@ -1420,7 +1420,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Tray app not reflecting engine mode changes** — SSE status stream was not reading `output.mode` from engine status. Double-tap mode switch worked in the engine but the tray menu stayed stale.
-- **Daemon has no log output** — `setup_logging()` was never called in daemon mode. Python logger had no handler, all `logger.info/warning` calls went nowhere. Now logs to `~/.local/share/voxtype/logs/engine.jsonl`.
+- **Daemon has no log output** — `setup_logging()` was never called in daemon mode. Python logger had no handler, all `logger.info/warning` calls went nowhere. Now logs to `~/.local/share/dictare/logs/engine.jsonl`.
 - **TTS failures logged at wrong level** — `speak_text()` failures logged at DEBUG (invisible). Now: WARNING for TTS engine missing or speak failure, INFO for successful TTS dispatch.
 
 ## [0.1.0b84] - 2026-02-16
@@ -1490,7 +1490,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Split compliance tests into protocol and internal** — `test_openvip_protocol.py` (64 tests) contains the portable protocol compliance suite: zero voxtype imports, all tests via real HTTP/SSE. Can be copied to any OpenVIP implementation's repo as an executable spec. `test_openvip_internal.py` (19 tests) contains voxtype-specific tests using mock engine and TestClient. Shared infrastructure (mock classes, `live_url` fixture) moved to `conftest.py`.
+- **Split compliance tests into protocol and internal** — `test_openvip_protocol.py` (64 tests) contains the portable protocol compliance suite: zero dictare imports, all tests via real HTTP/SSE. Can be copied to any OpenVIP implementation's repo as an executable spec. `test_openvip_internal.py` (19 tests) contains dictare-specific tests using mock engine and TestClient. Shared infrastructure (mock classes, `live_url` fixture) moved to `conftest.py`.
 
 ## [0.1.0b64] - 2026-02-15
 
@@ -1532,7 +1532,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- **Dead code cleanup (~1050 lines)** — removed legacy `VoxtypeApp` orchestrator (`core/app.py`), `LiveStatusPanel` (`ui/status.py`), and `commands/` package (`AppCommands`, `CommandSchema`, `CommandParam`). These were from a previous architecture superseded by `AppController` + `StatusPanel` (HTTP polling). Zero references in production code or tests.
+- **Dead code cleanup (~1050 lines)** — removed legacy `DictareApp` orchestrator (`core/app.py`), `LiveStatusPanel` (`ui/status.py`), and `commands/` package (`AppCommands`, `CommandSchema`, `CommandParam`). These were from a previous architecture superseded by `AppController` + `StatusPanel` (HTTP polling). Zero references in production code or tests.
 
 ## [0.1.0b57] - 2026-02-14
 
@@ -1545,7 +1545,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **TTS dependency check for system engines** — `voxtype dependencies check` now verifies that `espeak`/`say` binaries are actually installed in PATH, instead of silently skipping the check.
+- **TTS dependency check for system engines** — `dictare dependencies check` now verifies that `espeak`/`say` binaries are actually installed in PATH, instead of silently skipping the check.
 - **TTS default engine per platform** — default TTS engine is now `say` on macOS (built-in) and `espeak` on Linux.
 - **Slow test moved to slow suite** — `test_sse_error_reports_reconnecting` (1s) marked as `@pytest.mark.slow`, excluded from default test run.
 
@@ -1553,7 +1553,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Unified display state resolution** — new `voxtype.status.resolve_display_state()` function replaces duplicated state logic in tray and mux. Both now show consistent state names ("loading", "listening", "idle", "standby") and styles. Unicode escape sequences replaced with literal characters (`●`, `○`, `·`).
+- **Unified display state resolution** — new `dictare.status.resolve_display_state()` function replaces duplicated state logic in tray and mux. Both now show consistent state names ("loading", "listening", "idle", "standby") and styles. Unicode escape sequences replaced with literal characters (`●`, `○`, `·`).
 
 ## [0.1.0b54] - 2026-02-14
 
@@ -1647,7 +1647,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Status bar text in macOS menu bar** — shows agent name + state ("Idle" in grey, "Listening" in green) next to the tray icon. Uses NSAttributedString for colored text via pystray monkey-patch.
-- **VoxType capitalization** — fixed "Voxtype" → "VoxType" in tray About menu.
+- **VoxType capitalization** — fixed "Dictare" → "VoxType" in tray About menu.
 
 ## [0.1.0b41] - 2026-02-14
 
@@ -1703,7 +1703,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Pre-release cleanup** — removed dead code (`VoxtypeError` class, unused), extracted shared `_normalize()`/`_tokenize()` from pipeline filters into `pipeline/filters/_text.py`, fixed `pyproject.toml` target-version mismatch (py310 → py311), removed redundant `typer` from dev extras. Added debug logging for partial transcription errors in engine.
+- **Pre-release cleanup** — removed dead code (`DictareError` class, unused), extracted shared `_normalize()`/`_tokenize()` from pipeline filters into `pipeline/filters/_text.py`, fixed `pyproject.toml` target-version mismatch (py310 → py311), removed redundant `typer` from dev extras. Added debug logging for partial transcription errors in engine.
 
 ### Removed
 
@@ -1732,7 +1732,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Tray: Settings menu item** — opens `~/.config/voxtype/config.toml` in the default editor. Uses `open -t` on macOS, `xdg-open` or `$EDITOR` on Linux.
+- **Tray: Settings menu item** — opens `~/.config/dictare/config.toml` in the default editor. Uses `open -t` on macOS, `xdg-open` or `$EDITOR` on Linux.
 - **Tray: About submenu** — version info moved from main menu into an About submenu.
 
 ### Changed
@@ -1770,7 +1770,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **No audio feedback on brew install** — `.gitignore` pattern `sounds/` was excluding `src/voxtype/audio/sounds/*.mp3` from the sdist tarball. Changed to `/sounds/` to only ignore the root-level originals directory.
+- **No audio feedback on brew install** — `.gitignore` pattern `sounds/` was excluding `src/dictare/audio/sounds/*.mp3` from the sdist tarball. Changed to `/sounds/` to only ignore the root-level originals directory.
 
 ## [0.1.0b24] - 2026-02-14
 
@@ -1780,12 +1780,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **`src/voxtype/libs/` — pure Python replacement library** — moved `metaphone()` and `levenshtein_distance()` into `voxtype.libs.jellyfish`, a drop-in module with the same interface as the external `jellyfish` package. To switch back: change `from voxtype.libs.jellyfish import ...` to `from jellyfish import ...`.
+- **`src/dictare/libs/` — pure Python replacement library** — moved `metaphone()` and `levenshtein_distance()` into `dictare.libs.jellyfish`, a drop-in module with the same interface as the external `jellyfish` package. To switch back: change `from dictare.libs.jellyfish import ...` to `from jellyfish import ...`.
 - **`uvicorn[standard]` → `uvicorn`** — removed `[standard]` extras which pulled in `watchfiles` (another Rust extension with the same install_name_tool issue). `watchfiles` is only used for `--reload` in development, not needed in production.
 
 ### Removed
 
-- **jellyfish dependency** — replaced with pure Python in `voxtype.libs.jellyfish`. The jellyfish Rust extension (`_rustyfish.so`) caused Homebrew's `install_name_tool` to fail with "header too small" during `brew install`.
+- **jellyfish dependency** — replaced with pure Python in `dictare.libs.jellyfish`. The jellyfish Rust extension (`_rustyfish.so`) caused Homebrew's `install_name_tool` to fail with "header too small" during `brew install`.
 
 ## [0.1.0b23] - 2026-02-13
 
@@ -1797,9 +1797,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Microphone permission support** — Swift launcher now requests mic permission (shows "Voxtype" in dialog). `NSMicrophoneUsageDescription` added to Info.plist. Without this, macOS silently feeds zeros to the audio stream.
+- **Microphone permission support** — Swift launcher now requests mic permission (shows "Dictare" in dialog). `NSMicrophoneUsageDescription` added to Info.plist. Without this, macOS silently feeds zeros to the audio stream.
 - **Microphone permission in `/status`** — new `platform.permissions.microphone` field. Tray shows "Grant Microphone Permission" menu item when not granted, clicking opens System Settings → Microphone directly.
-- **`voxtype.platform.microphone` module** — `is_microphone_granted()` (cached 5s) and `open_microphone_settings()`.
+- **`dictare.platform.microphone` module** — `is_microphone_granted()` (cached 5s) and `open_microphone_settings()`.
 
 ### Fixed
 
@@ -1809,9 +1809,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **macOS .app bundle via Homebrew** — `brew install` now creates `/Applications/Voxtype.app` so macOS shows "Voxtype" (not "Python") in mic indicator, Accessibility settings, and Activity Monitor.
+- **macOS .app bundle via Homebrew** — `brew install` now creates `/Applications/Dictare.app` so macOS shows "Dictare" (not "Python") in mic indicator, Accessibility settings, and Activity Monitor.
 - **Accessibility permission in `/status`** — new `platform.permissions.accessibility` field reports whether Accessibility is granted. Tray shows "Grant Accessibility Permission" menu item when missing, clicking opens System Settings directly.
-- **Shared accessibility utility** — `voxtype.platform.accessibility` module with `is_accessibility_granted()`, `request_accessibility()`, `open_accessibility_settings()`. Cached (5s TTL) for polling efficiency.
+- **Shared accessibility utility** — `dictare.platform.accessibility` module with `is_accessibility_granted()`, `request_accessibility()`, `open_accessibility_settings()`. Cached (5s TTL) for polling efficiency.
 
 ### Fixed
 
@@ -1833,9 +1833,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Zero-config post-install** — both `brew install` and `curl | bash` produce a ready-to-use install. No extra commands needed: just `voxtype agent claude`. Models auto-download on first engine start, service is managed automatically.
-- **`voxtype setup` skips service if Homebrew is active** — detects `brew services` and avoids creating a duplicate plist.
-- **Simplified Homebrew caveats** — removed `voxtype setup` instruction; models download automatically.
+- **Zero-config post-install** — both `brew install` and `curl | bash` produce a ready-to-use install. No extra commands needed: just `dictare agent claude`. Models auto-download on first engine start, service is managed automatically.
+- **`dictare setup` skips service if Homebrew is active** — detects `brew services` and avoids creating a duplicate plist.
+- **Simplified Homebrew caveats** — removed `dictare setup` instruction; models download automatically.
 
 ## [0.1.0b15] - 2026-02-13
 
@@ -1865,8 +1865,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`install.sh`** — `curl | bash` installer (Ollama-style): detects OS, installs uv + voxtype, runs setup wizard. Supports `--skip-setup` and `--uninstall`.
-- **`scripts/publish.sh`** — interactive PyPI publish workflow: tests, builds + uploads openvip then voxtype, creates GitHub release. Supports `--dry-run`.
+- **`install.sh`** — `curl | bash` installer (Ollama-style): detects OS, installs uv + dictare, runs setup wizard. Supports `--skip-setup` and `--uninstall`.
+- **`scripts/publish.sh`** — interactive PyPI publish workflow: tests, builds + uploads openvip then dictare, creates GitHub release. Supports `--dry-run`.
 
 ## [0.1.0b12] - 2026-02-13
 
@@ -1887,7 +1887,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`voxtype setup`** — first-time wizard: creates config, downloads models, installs service, prompts Accessibility permission.
+- **`dictare setup`** — first-time wizard: creates config, downloads models, installs service, prompts Accessibility permission.
 - **Auto-pull models at engine start** — missing models are downloaded automatically instead of exiting with an error.
 
 ## [0.1.0b11] - 2026-02-13
@@ -1906,7 +1906,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Agent starts without engine** — `voxtype agent` no longer blocks with an error if the engine is not running. It starts immediately showing "connecting..." in the status bar and reconnects automatically when the engine becomes available.
+- **Agent starts without engine** — `dictare agent` no longer blocks with an error if the engine is not running. It starts immediately showing "connecting..." in the status bar and reconnects automatically when the engine becomes available.
 
 ### Changed
 
@@ -1917,21 +1917,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`scripts/generate_icons.py`** — generates all icon assets (SVG + PNG tray icons, `.icns` app icon).
 - **`scripts/brew-rebuild.sh`** — automates sdist build → formula SHA update → `brew reinstall`.
-- **Homebrew `post_uninstall` cleanup** — `brew uninstall voxtype` now stops the tray, unloads the LaunchAgent, and removes the `.app` bundle automatically.
-- **Homebrew caveats** — `brew info voxtype` shows service/tray start instructions.
+- **Homebrew `post_uninstall` cleanup** — `brew uninstall dictare` now stops the tray, unloads the LaunchAgent, and removes the `.app` bundle automatically.
+- **Homebrew caveats** — `brew info dictare` shows service/tray start instructions.
 
 ## [0.1.0b7] - 2026-02-13
 
 ### Fixed
 
-- **Mic indicator shows "Voxtype" instead of "Python"** — the .app bundle launcher script was using `exec` which replaced the bash process with python, causing macOS to attribute mic access to "Python". Now runs python as a child process so the .app bundle identity is preserved.
+- **Mic indicator shows "Dictare" instead of "Python"** — the .app bundle launcher script was using `exec` which replaced the bash process with python, causing macOS to attribute mic access to "Python". Now runs python as a child process so the .app bundle identity is preserved.
 
 ## [0.1.0b6] - 2026-02-13
 
 ### Fixed
 
-- **Service stop now actually stops** — `voxtype service stop` was using `launchctl stop` which only killed the process, but `KeepAlive: true` in the plist caused launchd to restart it immediately. Now uses `launchctl load/unload` to properly register/unregister the agent. Stop means stop.
-- **Service status shows loaded state** — `voxtype service status` now distinguishes between "running", "stopped (service not loaded)", and "not installed".
+- **Service stop now actually stops** — `dictare service stop` was using `launchctl stop` which only killed the process, but `KeepAlive: true` in the plist caused launchd to restart it immediately. Now uses `launchctl load/unload` to properly register/unregister the agent. Stop means stop.
+- **Service status shows loaded state** — `dictare service status` now distinguishes between "running", "stopped (service not loaded)", and "not installed".
 - **Service install no longer double-starts on macOS** — `install()` already calls `launchctl load` (which starts the process); the CLI no longer calls `start()` redundantly after install on macOS.
 - **Linux: added `is_loaded()` to systemd backend** — uses `systemctl --user is-active` for consistent status reporting across platforms.
 
@@ -1951,7 +1951,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **macOS .app bundle** — `voxtype service install` creates `/Applications/Voxtype.app` so macOS shows "Voxtype" with icon in Accessibility / Input Monitoring settings.
+- **macOS .app bundle** — `dictare service install` creates `/Applications/Dictare.app` so macOS shows "Dictare" with icon in Accessibility / Input Monitoring settings.
 - **Tray icons** — green mic (listening), blue (idle), orange (loading), red (muted) PNG icons for the system tray.
 - **App icon** — `.icns` bundle icon with green microphone design.
 
@@ -1964,7 +1964,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Homebrew tap** — `brew install dragfly/voxtype/voxtype`.
+- **Homebrew tap** — `brew install dragfly/dictare/dictare`.
 
 ## [0.1.0b1] - 2026-02-12
 
@@ -1974,12 +1974,12 @@ First public beta release.
 
 - **Voice engine** with Faster Whisper STT, Silero VAD, and configurable TTS (Piper, MLX Audio).
 - **OpenVIP protocol** — HTTP API for voice interaction: `/status`, `/control`, `/speech`, SSE agent messaging.
-- **Agent multiplexer** (`voxtype agent claude`) — PTY-based session with merged stdin + voice input via SSE.
+- **Agent multiplexer** (`dictare agent claude`) — PTY-based session with merged stdin + voice input via SSE.
 - **Single-command launch** — agent templates in config: `[agents.claude] command = ["claude"]`.
-- **System service** — `voxtype service install/start/stop/status` via launchd (macOS) / systemd (Linux).
+- **System service** — `dictare service install/start/stop/status` via launchd (macOS) / systemd (Linux).
 - **Status panel** — Rich Live TUI showing model loading progress, STT state, agents, hotkey info.
 - **Status bar** — persistent last-row indicator (listening/standby/reconnecting) in agent sessions.
-- **Session logging** — JSONL session files in `~/.local/share/voxtype/sessions/` with keystroke tracking.
+- **Session logging** — JSONL session files in `~/.local/share/dictare/sessions/` with keystroke tracking.
 - **Pipeline architecture** — filters (AgentFilter, InputFilter) and executors (InputExecutor, AgentSwitchExecutor) with PipelineLoader DI.
 - **Hotkey support** — tap to toggle listening, double-tap to switch agent (evdev on Linux, pynput on macOS).
 - **Multi-agent switching** — voice-activated agent switching with phonetic matching (jellyfish).
@@ -1987,4 +1987,4 @@ First public beta release.
 - **Audio feedback** — configurable sounds for start/stop/transcribing/ready/sent events.
 - **Tray app** — system tray icon with status polling and quick controls.
 - **OpenVIP SDK integration** — all client-side HTTP uses `openvip.Client` (subscribe, get_status, speak, control).
-- **CLI**: `voxtype engine start/stop/status`, `voxtype agent`, `voxtype speak`, `voxtype listen`, `voxtype config`, `voxtype service`, `voxtype dependencies`.
+- **CLI**: `dictare engine start/stop/status`, `dictare agent`, `dictare speak`, `dictare listen`, `dictare config`, `dictare service`, `dictare dependencies`.

@@ -45,7 +45,7 @@ export TERM=xterm-256color
 If you're using Ghostty terminal, create or edit `~/.config/ghostty/config`:
 
 ```toml
-# REQUIRED for voxtype keyboard mode with auto_enter=false
+# REQUIRED for dictare keyboard mode with auto_enter=false
 # Fix Shift+Enter to send newline instead of escape sequence [27;2;13~
 keybind = shift+enter=text:\n
 
@@ -58,7 +58,7 @@ term = xterm-256color
 Ghostty implements the "modifyOtherKeys" terminal standard which sends detailed escape sequences for modified keys. When you press Shift+Enter, Ghostty sends `[27;2;13~` instead of a simple newline character.
 
 This affects:
-- voxtype with `auto_enter=false` (accumulate mode)
+- dictare with `auto_enter=false` (accumulate mode)
 - Claude Code multi-line input
 - Any app expecting Shift+Enter = newline
 
@@ -83,7 +83,7 @@ If the issue disappears, it's likely a shell configuration problem.
 
 ### Box Drawing Characters Not Displaying
 
-If voxtype's status panel shows broken box characters, your terminal might not support UTF-8 box drawing.
+If dictare's status panel shows broken box characters, your terminal might not support UTF-8 box drawing.
 
 **Solution:**
 Ensure your terminal and locale support UTF-8:
@@ -106,14 +106,14 @@ This is because MLX's Metal GPU acceleration doesn't work in virtualized environ
 
 **Solution:**
 
-voxtype v2.15.3+ automatically detects virtualized macOS and disables hardware acceleration.
+dictare v2.15.3+ automatically detects virtualized macOS and disables hardware acceleration.
 
 For older versions or manual override:
 ```bash
-voxtype listen --no-hw-accel
+dictare listen --no-hw-accel
 ```
 
-Or set in config (`~/.config/voxtype/config.toml`):
+Or set in config (`~/.config/dictare/config.toml`):
 ```toml
 [stt]
 hw_accel = false
@@ -159,7 +159,7 @@ If you're still experiencing issues:
 
 1. Capture debug output:
    ```bash
-   voxtype listen --verbose 2>&1 | tee voxtype_debug.log
+   dictare listen --verbose 2>&1 | tee dictare_debug.log
    ```
 
 2. Include in your report:
@@ -170,4 +170,4 @@ If you're still experiencing issues:
    - Whether running in VM
    - The debug log
 
-3. Report at: https://github.com/anthropics/voxtype/issues (or your repo URL)
+3. Report at: https://github.com/anthropics/dictare/issues (or your repo URL)

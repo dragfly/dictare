@@ -1,4 +1,4 @@
-# GitLab CI/CD Pipeline for voxtype
+# GitLab CI/CD Pipeline for dictare
 # Tests installation and runs test suite (no model download)
 
 stages:
@@ -29,11 +29,11 @@ test-install:
   stage: test
   script:
     - uv pip install -e .
-    - voxtype --version
-    - voxtype --help
-    - python -c "from voxtype import __version__; print('Version:', __version__)"
-    - python -c "from voxtype.core.fsm import StateManager; print('FSM import OK')"
-    - python -c "from voxtype.agent.mux import run_agent; print('Agent import OK')"
+    - dictare --version
+    - dictare --help
+    - python -c "from dictare import __version__; print('Version:', __version__)"
+    - python -c "from dictare.core.fsm import StateManager; print('FSM import OK')"
+    - python -c "from dictare.agent.mux import run_agent; print('Agent import OK')"
 
 # Run the test suite
 test-unit:

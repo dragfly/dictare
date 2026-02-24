@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from voxtype.agent.mux import (
+from dictare.agent.mux import (
     _CTRL_BACKSLASH,
     _CTRL_BACKSLASH_CSI_U,
     _claim_agent,
@@ -146,7 +146,7 @@ class TestStripCtrlBackslashCompat:
 class TestClaimAgent:
     """Test _claim_agent fires correct command."""
 
-    @patch("voxtype.agent.mux.threading.Thread")
+    @patch("dictare.agent.mux.threading.Thread")
     def test_claim_starts_thread(self, mock_thread_cls: MagicMock) -> None:
         """_claim_agent spawns a daemon thread."""
         _claim_agent("claude", "http://127.0.0.1:8770")
@@ -155,7 +155,7 @@ class TestClaimAgent:
         assert call_kwargs.kwargs["daemon"] is True
         mock_thread_cls.return_value.start.assert_called_once()
 
-    @patch("voxtype.agent.mux.threading.Thread")
+    @patch("dictare.agent.mux.threading.Thread")
     def test_claim_thread_calls_control(self, mock_thread_cls: MagicMock) -> None:
         """The thread function calls client.control with correct command."""
         _claim_agent("cursor", "http://127.0.0.1:8770")
@@ -169,7 +169,7 @@ class TestClaimAgent:
             mock_client_cls.assert_called_once_with("http://127.0.0.1:8770", timeout=3)
             mock_client.control.assert_called_once_with("output.set_agent:cursor")
 
-    @patch("voxtype.agent.mux.threading.Thread")
+    @patch("dictare.agent.mux.threading.Thread")
     def test_claim_swallows_exceptions(self, mock_thread_cls: MagicMock) -> None:
         """Engine errors don't crash the thread."""
         _claim_agent("aider", "http://127.0.0.1:9999")
@@ -183,7 +183,7 @@ class TestControllerRouting:
     """Test output.set_agent:<name> routing in controller."""
 
     def _make_controller(self) -> MagicMock:
-        from voxtype.app.controller import AppController
+        from dictare.app.controller import AppController
 
         ctrl = MagicMock(spec=AppController)
         ctrl._handle_app_command = AppController._handle_app_command.__get__(ctrl)
@@ -208,7 +208,7 @@ class TestSwitchToAgentMode:
 
     def test_switch_enables_agent_mode(self) -> None:
         """switch_to_agent switches to agents mode if in keyboard mode."""
-        from voxtype.app.controller import AppController
+        from dictare.app.controller import AppController
 
         ctrl = MagicMock(spec=AppController)
         ctrl.switch_to_agent = AppController.switch_to_agent.__get__(ctrl)
@@ -222,7 +222,7 @@ class TestSwitchToAgentMode:
 
     def test_switch_skips_mode_change_if_already_agents(self) -> None:
         """switch_to_agent does NOT call set_output_mode if already in agents mode."""
-        from voxtype.app.controller import AppController
+        from dictare.app.controller import AppController
 
         ctrl = MagicMock(spec=AppController)
         ctrl.switch_to_agent = AppController.switch_to_agent.__get__(ctrl)

@@ -1,13 +1,13 @@
-# Contributing to voxtype
+# Contributing to dictare
 
-Thank you for your interest in contributing to voxtype! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to dictare! This document provides guidelines and instructions for contributing.
 
 ## Development Setup
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/dragfly/voxtype.git
-   cd voxtype
+   git clone https://github.com/dragfly/dictare.git
+   cd dictare
    ```
 
 2. **Install uv** (if not already installed)
@@ -31,7 +31,7 @@ Thank you for your interest in contributing to voxtype! This document provides g
 
 4. **Verify the setup**
    ```bash
-   uv run voxtype check
+   uv run dictare check
    ```
 
 ## Running Tests
@@ -41,7 +41,7 @@ Thank you for your interest in contributing to voxtype! This document provides g
 uv run pytest tests/
 
 # Run with coverage
-uv run pytest tests/ --cov=src/voxtype --cov-report=term-missing
+uv run pytest tests/ --cov=src/dictare --cov-report=term-missing
 
 # Run specific test file
 uv run pytest tests/test_state.py

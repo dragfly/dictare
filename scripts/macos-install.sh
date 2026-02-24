@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Rebuild voxtype wheel and reinstall via Homebrew.
+# Rebuild dictare wheel and reinstall via Homebrew.
 # Works on both macOS and Linux (Linuxbrew).
 # Usage: ./scripts/brew-rebuild.sh
 set -euo pipefail
 
 BREW_PREFIX="$(brew --prefix)"
 # Homebrew tap path differs: macOS uses $PREFIX/Library, Linux uses $PREFIX/Homebrew/Library
-FORMULA="$(brew --repository)/Library/Taps/dragfly/homebrew-voxtype/Formula/voxtype.rb"
+FORMULA="$(brew --repository)/Library/Taps/dragfly/homebrew-dictare/Formula/dictare.rb"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="${PROJECT_DIR}/dist"
@@ -19,27 +19,27 @@ OPENVIP_TARBALL="${OPENVIP_DIR}/dist/openvip-1.1.0.tar.gz"
 
 stop_services() {
     echo "==> Stopping services..."
-    "${BREW_PREFIX}/bin/voxtype" tray stop 2>/dev/null || true
-    "${BREW_PREFIX}/bin/voxtype" service stop 2>/dev/null || true
+    "${BREW_PREFIX}/bin/dictare" tray stop 2>/dev/null || true
+    "${BREW_PREFIX}/bin/dictare" service stop 2>/dev/null || true
 }
 
 start_services() {
     echo "==> Starting service..."
-    if "${BREW_PREFIX}/bin/voxtype" service status 2>/dev/null | grep -q "installed"; then
-        "${BREW_PREFIX}/bin/voxtype" service start 2>&1
+    if "${BREW_PREFIX}/bin/dictare" service status 2>/dev/null | grep -q "installed"; then
+        "${BREW_PREFIX}/bin/dictare" service start 2>&1
     else
-        "${BREW_PREFIX}/bin/voxtype" service install 2>&1
+        "${BREW_PREFIX}/bin/dictare" service install 2>&1
     fi
-    echo "==> Done. Use 'voxtype tray start' for the tray icon."
+    echo "==> Done. Use 'dictare tray start' for the tray icon."
 }
 
 # ---------- 1. Read version from source ----------
 VERSION=$(.venv/bin/python -c "
 import re, pathlib
-text = pathlib.Path('${PROJECT_DIR}/src/voxtype/__init__.py').read_text()
+text = pathlib.Path('${PROJECT_DIR}/src/dictare/__init__.py').read_text()
 print(re.search(r'__version__\s*=\s*\"(.+?)\"', text).group(1))
 ")
-TARBALL="${DIST_DIR}/voxtype-${VERSION}.tar.gz"
+TARBALL="${DIST_DIR}/dictare-${VERSION}.tar.gz"
 echo "==> Version: ${VERSION}"
 echo "==> Brew prefix: ${BREW_PREFIX}"
 
@@ -83,12 +83,12 @@ fi
 stop_services
 
 # ---------- 6. Reinstall ----------
-echo "==> brew reinstall voxtype..."
+echo "==> brew reinstall dictare..."
 # Note: brew may exit 1 due to dylib linkage warnings (e.g. PyAV) — not fatal
-brew reinstall voxtype 2>&1 || true
+brew reinstall dictare 2>&1 || true
 
 # ---------- 7. Verify ----------
-INSTALLED=$("${BREW_PREFIX}/bin/voxtype" --version 2>&1)
+INSTALLED=$("${BREW_PREFIX}/bin/dictare" --version 2>&1)
 echo "==> Installed: ${INSTALLED}"
 if [[ "$INSTALLED" != *"$VERSION"* ]]; then
     echo "ERROR: installed version does not match expected ${VERSION}" >&2

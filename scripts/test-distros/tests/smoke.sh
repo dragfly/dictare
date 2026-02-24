@@ -4,8 +4,8 @@ set -euo pipefail
 
 echo "=== SMOKE TEST ==="
 
-echo "1. Checking voxtype version..."
-python -m voxtype --version
+echo "1. Checking dictare version..."
+python -m dictare --version
 
 echo "2. Testing PyGObject import..."
 python -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk; print('PyGObject OK')"
@@ -25,6 +25,6 @@ except:
 "
 
 echo "4. Testing TrayApp import..."
-python -c "from voxtype.tray.app import TrayApp; print('TrayApp import OK')"
+python -c "from dictare.tray.app import TrayApp; print('TrayApp import OK')"
 
 echo "=== SMOKE TEST PASSED ==="

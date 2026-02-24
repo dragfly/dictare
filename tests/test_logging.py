@@ -7,8 +7,8 @@ import logging
 import tempfile
 from pathlib import Path
 
-from voxtype.logging.setup import (
-    VoxtypeJsonFormatter,
+from dictare.logging.setup import (
+    DictareJsonFormatter,
     get_default_log_path,
     setup_logging,
     shutdown_logging,
@@ -21,23 +21,23 @@ class TestGetDefaultLogPath:
         """Default name is 'listen'."""
         path = get_default_log_path()
         assert path.name == "listen.jsonl"
-        assert ".local/share/voxtype/logs" in str(path)
+        assert ".local/share/dictare/logs" in str(path)
 
     def test_custom_name(self):
         """Custom name is used."""
         path = get_default_log_path("agent.myagent")
         assert path.name == "agent.myagent.jsonl"
 
-class TestVoxtypeJsonFormatter:
-    """Tests for VoxtypeJsonFormatter."""
+class TestDictareJsonFormatter:
+    """Tests for DictareJsonFormatter."""
 
     def test_format_includes_required_fields(self):
         """Formatted log includes ts, level, event, logger."""
-        formatter = VoxtypeJsonFormatter()
+        formatter = DictareJsonFormatter()
 
         # Create a log record
         record = logging.LogRecord(
-            name="voxtype.test",
+            name="dictare.test",
             level=logging.INFO,
             pathname="test.py",
             lineno=1,
@@ -52,14 +52,14 @@ class TestVoxtypeJsonFormatter:
         assert "ts" in data
         assert data["level"] == "INFO"
         assert data["event"] == "test_event"
-        assert data["logger"] == "voxtype.test"
+        assert data["logger"] == "dictare.test"
 
     def test_extra_fields_included(self):
         """Extra fields from record are included."""
-        formatter = VoxtypeJsonFormatter()
+        formatter = DictareJsonFormatter()
 
         record = logging.LogRecord(
-            name="voxtype.test",
+            name="dictare.test",
             level=logging.INFO,
             pathname="test.py",
             lineno=1,
@@ -90,13 +90,13 @@ class TestSetupLogging:
 
             # Cleanup
             handler.close()
-            logging.getLogger("voxtype").handlers.clear()
+            logging.getLogger("dictare").handlers.clear()
 
     def test_setup_returns_none_without_path(self):
         """setup_logging returns None when no log_path."""
         handler = setup_logging(log_path=None)
         assert handler is None
-        logging.getLogger("voxtype").handlers.clear()
+        logging.getLogger("dictare").handlers.clear()
 
     def test_logging_writes_to_file(self):
         """Log messages are written to file."""
@@ -105,7 +105,7 @@ class TestSetupLogging:
             handler = setup_logging(log_path=log_path, level=logging.DEBUG)
 
             # Log a message
-            logger = logging.getLogger("voxtype.test")
+            logger = logging.getLogger("dictare.test")
             logger.info("test_event", extra={"key": "value"})
 
             # Flush
@@ -125,7 +125,7 @@ class TestSetupLogging:
 
             # Cleanup
             handler.close()
-            logging.getLogger("voxtype").handlers.clear()
+            logging.getLogger("dictare").handlers.clear()
 
     def test_session_start_logged(self):
         """session_start is logged at setup."""
@@ -149,7 +149,7 @@ class TestSetupLogging:
 
             # Cleanup
             handler.close()
-            logging.getLogger("voxtype").handlers.clear()
+            logging.getLogger("dictare").handlers.clear()
 
     def test_creates_parent_directories(self):
         """setup_logging creates parent directories."""
@@ -161,7 +161,7 @@ class TestSetupLogging:
 
             # Cleanup
             handler.close()
-            logging.getLogger("voxtype").handlers.clear()
+            logging.getLogger("dictare").handlers.clear()
 
 class TestShutdownLogging:
     """Tests for shutdown_logging."""
@@ -193,7 +193,7 @@ class TestModuleLogger:
             handler = setup_logging(log_path=log_path)
 
             # This is the pattern used in modules
-            logger = logging.getLogger("voxtype.pipeline.submit_filter")
+            logger = logging.getLogger("dictare.pipeline.submit_filter")
             logger.info("submit_trigger", extra={
                 "pattern": ["ok", "invia"],
                 "matched_tokens": ["ok", "invia"],
@@ -212,7 +212,7 @@ class TestModuleLogger:
                 if data.get("event") == "submit_trigger":
                     assert data["pattern"] == ["ok", "invia"]
                     assert data["confidence"] == 0.95
-                    assert data["logger"] == "voxtype.pipeline.submit_filter"
+                    assert data["logger"] == "dictare.pipeline.submit_filter"
                     found = True
                     break
 
@@ -220,4 +220,4 @@ class TestModuleLogger:
 
             # Cleanup
             handler.close()
-            logging.getLogger("voxtype").handlers.clear()
+            logging.getLogger("dictare").handlers.clear()

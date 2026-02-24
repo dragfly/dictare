@@ -78,3 +78,4 @@ WORKFLOW.md
 # Internal notes — not for public repo
 docs/notes/
 *.private.md
+dist/

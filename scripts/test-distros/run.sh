@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test voxtype installation on multiple distros using Docker.
+# Test dictare installation on multiple distros using Docker.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,7 +22,7 @@ OPENVIP_SDK="/home/user/repos/openvip-dev/sdks/python"
 usage() {
     echo "Usage: $0 [OPTIONS] [DISTROS...]"
     echo ""
-    echo "Test voxtype installation on Linux distros via Docker."
+    echo "Test dictare installation on Linux distros via Docker."
     echo ""
     echo "Options:"
     echo "  --smoke     Import checks only (default, ~1s)"
@@ -61,7 +61,7 @@ if [[ ${#DISTROS[@]} -eq 0 ]]; then
     DISTROS=("${ALL_DISTROS[@]}")
 fi
 
-echo -e "${BOLD}Testing voxtype on: ${DISTROS[*]}${RESET}"
+echo -e "${BOLD}Testing dictare on: ${DISTROS[*]}${RESET}"
 echo -e "${CYAN}Test level: ${TEST_LEVEL}${RESET}"
 echo ""
 
@@ -83,7 +83,7 @@ if [[ "$TEST_LEVEL" == "engine" || "$TEST_LEVEL" == "e2e" ]]; then
     if [[ ! -d "$WHISPER_MODEL" ]]; then
         echo -e "${YELLOW}▶ Downloading required models (first time only)...${RESET}"
         cd "$PROJECT_DIR"
-        uv run python -m voxtype models download
+        uv run python -m dictare models download
         cd - > /dev/null
     else
         echo -e "${GREEN}✓ Models already cached${RESET}"
@@ -103,8 +103,8 @@ for distro in "${DISTROS[@]}"; do
 
     echo -e "${YELLOW}▶ Testing $distro (${TEST_LEVEL})...${RESET}"
 
-    image_name="voxtype-test-$distro"
-    log_file="/tmp/voxtype-test-$distro-$TEST_LEVEL.log"
+    image_name="dictare-test-$distro"
+    log_file="/tmp/dictare-test-$distro-$TEST_LEVEL.log"
 
     # Build the image
     if ! docker build -t "$image_name" -f "$dockerfile" "$PROJECT_DIR" 2>&1 | tee "$log_file"; then
