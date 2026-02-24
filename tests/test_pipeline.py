@@ -645,13 +645,13 @@ class TestAgentFilterDetection:
 
     def test_case_insensitive(self) -> None:
         """Agent matching is case insensitive."""
-        f = AgentFilter(agent_ids=["VoxType"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["Dictare"], subscribe_to_events=False)
         msg = {"text": "agent dictare"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
         # Only switch message when trigger is at start (no text before)
         assert len(result.messages) == 1
-        assert result.messages[0]["x_agent_switch"]["target"] == "VoxType"
+        assert result.messages[0]["x_agent_switch"]["target"] == "Dictare"
 
     def test_no_match_below_threshold(self) -> None:
         """No match if score is below threshold."""
