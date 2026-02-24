@@ -282,12 +282,30 @@ class DictareEngine:
         self._save_state()
 
     def _save_state(self) -> None:
-        """Write current state to session-state.json."""
+        """Write current state to session-state.json.
+
+        Derives output_mode from current agent (ground truth), NOT from the
+        agent_mode flag which can become stale after a corrupted restore.
+        """
         from dictare.utils.state import save_state
+
+        # Ground truth: if current agent is a real SSE agent → agents mode
+        is_agents = (
+            self._current_agent_id is not None
+            and self._current_agent_id not in self.RESERVED_AGENT_IDS
+        )
+        mode = "agents" if is_agents else "keyboard"
+
+        if is_agents != self.agent_mode:
+            logger.warning(
+                "_save_state: agent_mode flag (%r) disagrees with current_agent (%r) "
+                "→ saving mode=%r (derived from agent)",
+                self.agent_mode, self._current_agent_id, mode,
+            )
 
         save_state(
             active_agent=self._current_agent_id,
-            output_mode="agents" if self.agent_mode else "keyboard",
+            output_mode=mode,
             listening=self.is_listening,
         )
 
