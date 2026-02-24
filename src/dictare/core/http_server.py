@@ -96,7 +96,7 @@ class OpenVIPServer:
     def _create_app(self) -> FastAPI:
         """Create FastAPI application with all endpoints."""
         app = FastAPI(
-            title="VoxType OpenVIP Server",
+            title="Dictare OpenVIP Server",
             version=__version__,
             docs_url=None,  # Disable docs in production
             redoc_url=None,

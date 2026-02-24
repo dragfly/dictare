@@ -93,16 +93,16 @@ class TestTrayStates:
                 mock_load.assert_called_with(icon_name), f"state={state}"
 
     def test_hover_tooltip_shows_state(self) -> None:
-        """Hover tooltip should show 'VoxType — <state>'."""
+        """Hover tooltip should show 'Dictare — <state>'."""
         app = TrayApp()
         mock_icon = MagicMock()
         app._icon = mock_icon
 
         expected_titles = {
-            "disconnected": "VoxType — Disconnected",
-            "restarting": "VoxType — Restarting…",
-            "off": "VoxType — Idle",
-            "listening": "VoxType — Listening",
+            "disconnected": "Dictare — Disconnected",
+            "restarting": "Dictare — Restarting…",
+            "off": "Dictare — Idle",
+            "listening": "Dictare — Listening",
         }
         for state, title in expected_titles.items():
             with patch("dictare.tray.app._load_icon", return_value="img"):
@@ -114,7 +114,7 @@ class TestTrayStates:
         with patch("dictare.tray.app._load_icon", return_value="img"):
             with patch.object(app, "_update_menu"):
                 app.set_state("loading", loading_stage="STT")
-        assert mock_icon.title == "VoxType — Loading STT…"
+        assert mock_icon.title == "Dictare — Loading STT…"
 
     def test_menu_status_disconnected(self) -> None:
         app = TrayApp()

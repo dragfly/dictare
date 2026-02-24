@@ -1,4 +1,4 @@
-"""VoxType system tray application."""
+"""Dictare system tray application."""
 
 from __future__ import annotations
 
@@ -141,7 +141,7 @@ def _run_on_main_thread(fn: Callable[[], None]) -> None:
         fn()  # Non-macOS or missing PyObjC — run directly
 
 class TrayApp:
-    """System tray application for VoxType.
+    """System tray application for Dictare.
 
     This is a UI-only component. It communicates with the engine HTTP API
     to control listening, get status, etc. It does NOT spawn processes.
@@ -287,7 +287,7 @@ class TrayApp:
         from dictare import __version__
 
         about_items = [
-            pystray.MenuItem(f"VoxType v{__version__}", None),
+            pystray.MenuItem(f"Dictare v{__version__}", None),
         ]
         items.append(pystray.MenuItem("About", pystray.Menu(*about_items)))
 
@@ -453,14 +453,14 @@ class TrayApp:
             self._icon.icon = _load_icon(icon_name)
 
             title_map = {
-                "disconnected": "VoxType — Disconnected",
-                "restarting": "VoxType — Restarting…",
-                "loading": "VoxType — Loading"
+                "disconnected": "Dictare — Disconnected",
+                "restarting": "Dictare — Restarting…",
+                "loading": "Dictare — Loading"
                 + (f" {self._loading_stage}…" if self._loading_stage else "…"),
-                "off": "VoxType — Idle",
-                "listening": "VoxType — Listening",
+                "off": "Dictare — Idle",
+                "listening": "Dictare — Listening",
             }
-            self._icon.title = title_map.get(self._state, "VoxType")
+            self._icon.title = title_map.get(self._state, "Dictare")
 
         _run_on_main_thread(_do)
 
@@ -628,7 +628,7 @@ class TrayApp:
         self._icon = pystray.Icon(
             name="dictare",
             icon=_load_icon("dictare_muted"),
-            title="VoxType",
+            title="Dictare",
             menu=self._create_menu(),
         )
         # Sync icon to current state — the SSE thread may have already
