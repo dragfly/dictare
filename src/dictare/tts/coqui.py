@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from dictare.tts.base import TTSEngine
+from dictare.tts.base import TTSEngine, play_wav_native
 
 class CoquiTTS(TTSEngine):
     """TTS using Coqui TTS / XTTS - high-quality neural voices.
@@ -68,8 +68,6 @@ class CoquiTTS(TTSEngine):
             return False
 
         try:
-            import sys
-
             # Create temp file for audio
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 wav_path = Path(f.name)
@@ -97,13 +95,8 @@ class CoquiTTS(TTSEngine):
                 wav_path.unlink(missing_ok=True)
                 return False
 
-            # Play audio
-            if sys.platform == "darwin":
-                player = ["afplay", str(wav_path)]
-            else:
-                player = ["aplay", "-q", str(wav_path)]
-
-            subprocess.run(player, capture_output=True, timeout=120)
+            # Play via native system player
+            play_wav_native(wav_path)
             wav_path.unlink(missing_ok=True)
             return True
 

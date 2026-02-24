@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from dictare.tts.base import TTSEngine
+from dictare.tts.base import TTSEngine, play_wav_native
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +106,9 @@ class PiperTTS(TTSEngine):
     def speak(self, text: str) -> bool:
         """Speak text using Piper.
 
-        On macOS, plays via afplay (native CoreAudio resampling).
-        On Linux, plays via the serialized sounddevice audio worker.
+        Plays via native system audio player (afplay on macOS,
+        paplay/aplay on Linux) for correct resampling without crackling.
+        See docs/notes/audio-playback-architecture.md.
 
         Args:
             text: Text to speak.
@@ -115,8 +116,6 @@ class PiperTTS(TTSEngine):
         Returns:
             True if successful.
         """
-        import sys
-
         if not self._piper_cmd:
             return False
 
@@ -144,19 +143,8 @@ class PiperTTS(TTSEngine):
                 wav_path.unlink(missing_ok=True)
                 return False
 
-            # Play audio
-            if sys.platform == "darwin":
-                # afplay handles CoreAudio resampling natively (no crackling)
-                subprocess.run(
-                    ["afplay", str(wav_path)],
-                    capture_output=True,
-                    timeout=120,
-                )
-            else:
-                # Linux: use serialized sounddevice worker (thread-safe)
-                from dictare.audio.beep import play_wav_sync
-
-                play_wav_sync(wav_path, timeout_s=120)
+            # Play via native system player (no sounddevice/PortAudio)
+            play_wav_native(wav_path)
 
             wav_path.unlink(missing_ok=True)
             return True
