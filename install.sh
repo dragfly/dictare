@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Voxtype installer — voice-first control for AI coding agents
+# Dictare installer — voice-first control for AI coding agents
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/dragfly/voxtype/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
 #   bash install.sh [OPTIONS]
 #
 # Modelled after: https://ollama.com/install.sh
 set -euo pipefail
 
-REPO_URL="https://github.com/dragfly/voxtype"
+REPO_URL="https://github.com/dragfly/dictare"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
 BOLD='\033[1m'
@@ -29,22 +29,22 @@ for arg in "$@"; do
     case "$arg" in
         --help|-h)
             cat <<'EOF'
-Voxtype installer — voice-first control for AI coding agents
+Dictare installer — voice-first control for AI coding agents
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/dragfly/voxtype/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
   bash install.sh [OPTIONS]
 
 Options:
-  --skip-setup   Install voxtype only, skip the 'voxtype setup' wizard
-  --uninstall    Remove voxtype
+  --skip-setup   Install dictare only, skip the 'dictare setup' wizard
+  --uninstall    Remove dictare
   --help, -h     Show this help
 
 What happens:
   1. Installs uv (Python package manager) if missing
-  2. Installs voxtype via 'uv tool install'
+  2. Installs dictare via 'uv tool install'
   3. Downloads models, installs background service, configures permissions
-  4. Ready — run 'voxtype agent claude'
+  4. Ready — run 'dictare agent claude'
 EOF
             exit 0
             ;;
@@ -65,21 +65,21 @@ esac
 
 # ─── Uninstall ─────────────────────────────────────────────────────────
 if [[ "$UNINSTALL" == true ]]; then
-    info "Uninstalling voxtype..."
-    if command -v voxtype &>/dev/null; then
-        voxtype service stop 2>/dev/null || true
-        voxtype tray stop 2>/dev/null || true
+    info "Uninstalling dictare..."
+    if command -v dictare &>/dev/null; then
+        dictare service stop 2>/dev/null || true
+        dictare tray stop 2>/dev/null || true
     fi
     if command -v uv &>/dev/null; then
-        uv tool uninstall voxtype 2>/dev/null || true
+        uv tool uninstall dictare 2>/dev/null || true
     fi
-    ok "voxtype uninstalled."
+    ok "dictare uninstalled."
     exit 0
 fi
 
 # ─── Install ───────────────────────────────────────────────────────────
 printf "\n"
-info "Installing voxtype for $PLATFORM ($ARCH)"
+info "Installing dictare for $PLATFORM ($ARCH)"
 printf "\n"
 
 # 1. Check system audio library
@@ -103,8 +103,8 @@ else
     ok "uv installed"
 fi
 
-# 4. Install voxtype
-info "Installing voxtype..."
+# 4. Install dictare
+info "Installing dictare..."
 
 # On Apple Silicon, include mlx extra for hardware-accelerated inference
 EXTRAS=""
@@ -112,23 +112,23 @@ if [[ "$PLATFORM" == "macOS" && "$ARCH" == "arm64" ]]; then
     EXTRAS="[mlx]"
 fi
 
-uv tool install --python 3.11 --prerelease=allow "voxtype${EXTRAS}"
-ok "voxtype installed: $(voxtype --version 2>&1 || echo '(version check failed)')"
+uv tool install --python 3.11 --prerelease=allow "dictare${EXTRAS}"
+ok "dictare installed: $(dictare --version 2>&1 || echo '(version check failed)')"
 
 # 5. Run setup wizard
 if [[ "$SKIP_SETUP" == true ]]; then
-    warn "Skipping setup (--skip-setup). Run 'voxtype setup' when ready."
+    warn "Skipping setup (--skip-setup). Run 'dictare setup' when ready."
 else
     printf "\n"
     info "Running first-time setup..."
-    voxtype setup
+    dictare setup
 fi
 
 printf "\n"
 ok "Done! Launch an agent:"
-printf "  ${BOLD}voxtype agent claude${RESET}    # voice-control Claude Code\n"
-printf "  ${BOLD}voxtype agent cursor${RESET}    # voice-control Cursor\n"
+printf "  ${BOLD}dictare agent claude${RESET}    # voice-control Claude Code\n"
+printf "  ${BOLD}dictare agent cursor${RESET}    # voice-control Cursor\n"
 printf "\n"
 printf "Optional — monitor engine from the menu bar:\n"
-printf "  ${BOLD}voxtype tray start${RESET}\n"
+printf "  ${BOLD}dictare tray start${RESET}\n"
 printf "\n"

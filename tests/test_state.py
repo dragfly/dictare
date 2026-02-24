@@ -8,12 +8,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from voxtype.utils.state import clear_state, load_state, save_state
+from dictare.utils.state import clear_state, load_state, save_state
 
 @pytest.fixture
 def state_dir(tmp_path: Path) -> Path:
     """Redirect state file to a temp directory."""
-    with patch("voxtype.utils.state.get_voxtype_dir", return_value=tmp_path):
+    with patch("dictare.utils.state.get_dictare_dir", return_value=tmp_path):
         yield tmp_path
 
 class TestSaveLoad:
@@ -65,8 +65,8 @@ class TestEnginePersistState:
 
     def _make_engine(self):
         """Create a minimal engine for state tests."""
-        from voxtype.config import TTSConfig
-        from voxtype.core.engine import VoxtypeEngine
+        from dictare.config import TTSConfig
+        from dictare.core.engine import DictareEngine
 
         config = MagicMock()
         config.verbose = False
@@ -94,7 +94,7 @@ class TestEnginePersistState:
         config.pipeline = MagicMock()
         config.pipeline.enabled = False
 
-        return VoxtypeEngine(
+        return DictareEngine(
             config=config,
             agent_mode=True,
             hotkey_enabled=False,
@@ -160,8 +160,8 @@ class TestRegisterAgentPreferred:
     """register_agent activates saved preferred agent."""
 
     def _make_engine(self):
-        from voxtype.config import TTSConfig
-        from voxtype.core.engine import VoxtypeEngine
+        from dictare.config import TTSConfig
+        from dictare.core.engine import DictareEngine
 
         config = MagicMock()
         config.verbose = False
@@ -189,7 +189,7 @@ class TestRegisterAgentPreferred:
         config.pipeline = MagicMock()
         config.pipeline.enabled = False
 
-        return VoxtypeEngine(
+        return DictareEngine(
             config=config,
             agent_mode=True,
             hotkey_enabled=False,

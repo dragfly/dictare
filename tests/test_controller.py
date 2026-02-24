@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from voxtype.core.controller import StateController
-from voxtype.core.fsm import (
+from dictare.core.controller import StateController
+from dictare.core.fsm import (
     AppState,
     DiscardCurrent,
     HotkeyPressed,
@@ -721,19 +721,19 @@ class TestAudioFeedbackSounds:
 
     def test_transcribing_sound_exists(self) -> None:
         """Bundled transcribing sound exists."""
-        from voxtype.audio.beep import DEFAULT_SOUND_TRANSCRIBING
+        from dictare.audio.beep import DEFAULT_SOUND_TRANSCRIBING
 
         assert DEFAULT_SOUND_TRANSCRIBING.exists()
 
     def test_ready_sound_exists(self) -> None:
         """Bundled ready sound exists."""
-        from voxtype.audio.beep import DEFAULT_SOUND_READY
+        from dictare.audio.beep import DEFAULT_SOUND_READY
 
         assert DEFAULT_SOUND_READY.exists()
 
     def test_sound_configs_default_enabled(self) -> None:
         """AudioConfig sounds default to enabled (except transcribing)."""
-        from voxtype.config import AudioConfig
+        from dictare.config import AudioConfig
 
         cfg = AudioConfig()
         for name in ("start", "stop", "ready", "sent", "agent_announce"):
@@ -745,7 +745,7 @@ class TestAudioFeedbackSounds:
 
     def test_transcribing_transition_fires_callback(self) -> None:
         """RECORDING→TRANSCRIBING fires on_state_change callback."""
-        from voxtype.audio.beep import DEFAULT_SOUND_TRANSCRIBING
+        from dictare.audio.beep import DEFAULT_SOUND_TRANSCRIBING
 
         sm = StateManager(initial_state=AppState.RECORDING)
         engine = MockEngine()
@@ -772,7 +772,7 @@ class TestAudioFeedbackSounds:
 
     def test_ready_feedback_played(self) -> None:
         """TRANSCRIBING→LISTENING triggers ready sound."""
-        from voxtype.audio.beep import DEFAULT_SOUND_READY
+        from dictare.audio.beep import DEFAULT_SOUND_READY
 
         sm = StateManager(initial_state=AppState.TRANSCRIBING)
         engine = MockEngine()

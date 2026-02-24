@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from voxtype.cli.agent import _check_engine, _try_start_service
-from voxtype.config import AgentTypesConfig, Config, load_config
+from dictare.cli.agent import _check_engine, _try_start_service
+from dictare.config import AgentTypesConfig, Config, load_config
 
 _runner = CliRunner()
 
@@ -112,8 +112,8 @@ class TestTryStartService:
         monkeypatch.setattr("sys.platform", "darwin")
         mock_start = MagicMock()
         with (
-            patch("voxtype.daemon.launchd.is_installed", return_value=False),
-            patch("voxtype.daemon.launchd.start", mock_start),
+            patch("dictare.daemon.launchd.is_installed", return_value=False),
+            patch("dictare.daemon.launchd.start", mock_start),
         ):
             _try_start_service()  # fire-and-forget, no return value
             mock_start.assert_not_called()
@@ -122,8 +122,8 @@ class TestTryStartService:
         monkeypatch.setattr("sys.platform", "darwin")
         mock_start = MagicMock()
         with (
-            patch("voxtype.daemon.launchd.is_installed", return_value=True),
-            patch("voxtype.daemon.launchd.start", mock_start),
+            patch("dictare.daemon.launchd.is_installed", return_value=True),
+            patch("dictare.daemon.launchd.start", mock_start),
         ):
             _try_start_service()
             mock_start.assert_called_once()
@@ -200,7 +200,7 @@ class TestAgentNeverBlocksOnEngine:
         """_try_start_service is fire-and-forget — exceptions are swallowed."""
         monkeypatch.setattr("sys.platform", "darwin")
         with (
-            patch("voxtype.daemon.launchd.is_installed", side_effect=RuntimeError("boom")),
+            patch("dictare.daemon.launchd.is_installed", side_effect=RuntimeError("boom")),
         ):
             _try_start_service()  # must not raise
 
@@ -208,8 +208,8 @@ class TestAgentNeverBlocksOnEngine:
         """_try_start_service must not return a truthy/falsy gate value."""
         monkeypatch.setattr("sys.platform", "darwin")
         with (
-            patch("voxtype.daemon.launchd.is_installed", return_value=False),
-            patch("voxtype.daemon.launchd.start"),
+            patch("dictare.daemon.launchd.is_installed", return_value=False),
+            patch("dictare.daemon.launchd.start"),
         ):
             result = _try_start_service()
             assert result is None, (
@@ -229,13 +229,13 @@ def _make_config(content: str) -> Path:
 
 def _invoke_agent(args: list[str], config_path: Path):
     """Invoke the agent CLI command with a fake config, engine unreachable."""
-    from voxtype.cli import app
+    from dictare.cli import app
 
     with (
-        patch("voxtype.cli.agent._check_engine", return_value=False),
-        patch("voxtype.cli.agent._try_start_service"),
-        patch("voxtype.agent.run_agent", return_value=0),
-        patch("voxtype.config.get_config_path", return_value=config_path),
+        patch("dictare.cli.agent._check_engine", return_value=False),
+        patch("dictare.cli.agent._try_start_service"),
+        patch("dictare.agent.run_agent", return_value=0),
+        patch("dictare.config.get_config_path", return_value=config_path),
     ):
         return _runner.invoke(app, ["agent"] + args, catch_exceptions=False)
 
@@ -265,7 +265,7 @@ description = "Claude Opus"
         assert result.exit_code != 0
 
     def test_agent_id_with_type_uses_type_command(self):
-        """voxtype agent Pippo --type claude-opus → uses claude-opus command."""
+        """dictare agent Pippo --type claude-opus → uses claude-opus command."""
         launched: list[list[str]] = []
 
         def fake_run_agent(agent_id, command, **_kw):
@@ -273,18 +273,18 @@ description = "Claude Opus"
             return 0
 
         with (
-            patch("voxtype.cli.agent._check_engine", return_value=True),
-            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
-            patch("voxtype.config.get_config_path", return_value=self.config),
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.config.get_config_path", return_value=self.config),
         ):
-            from voxtype.cli import app
+            from dictare.cli import app
             result = _runner.invoke(app, ["agent", "Pippo", "--type", "claude-opus"], catch_exceptions=False)
 
         assert result.exit_code == 0
         assert launched[0] == ("Pippo", ["claude", "--model", "claude-opus-4-6"])
 
     def test_agent_id_without_type_uses_default(self):
-        """voxtype agent Pippo (no --type) → uses agent_types.default command."""
+        """dictare agent Pippo (no --type) → uses agent_types.default command."""
         launched: list[list[str]] = []
 
         def fake_run_agent(agent_id, command, **_kw):
@@ -292,11 +292,11 @@ description = "Claude Opus"
             return 0
 
         with (
-            patch("voxtype.cli.agent._check_engine", return_value=True),
-            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
-            patch("voxtype.config.get_config_path", return_value=self.config),
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.config.get_config_path", return_value=self.config),
         ):
-            from voxtype.cli import app
+            from dictare.cli import app
             result = _runner.invoke(app, ["agent", "Pippo"], catch_exceptions=False)
 
         assert result.exit_code == 0
@@ -328,11 +328,11 @@ command = ["claude"]
             return 0
 
         with (
-            patch("voxtype.cli.agent._check_engine", return_value=True),
-            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
-            patch("voxtype.config.get_config_path", return_value=self.config),
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.config.get_config_path", return_value=self.config),
         ):
-            from voxtype.cli import app
+            from dictare.cli import app
             result = _runner.invoke(
                 app, ["agent", "Pippo", "--", "my-tool", "--flag"], catch_exceptions=False
             )
@@ -349,11 +349,11 @@ command = ["claude"]
             return 0
 
         with (
-            patch("voxtype.cli.agent._check_engine", return_value=True),
-            patch("voxtype.agent.run_agent", side_effect=fake_run_agent),
-            patch("voxtype.config.get_config_path", return_value=self.config),
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.config.get_config_path", return_value=self.config),
         ):
-            from voxtype.cli import app
+            from dictare.cli import app
             _runner.invoke(app, ["agent", "frontend", "--type", "claude-opus"], catch_exceptions=False)
 
         agent_id, command = launched[0]

@@ -20,8 +20,8 @@ Tests `linux-install.sh` on different Linux distributions using Docker.
 1. System packages install correctly (apt/dnf/pacman)
 2. uv installs
 3. Python venv + PyGObject build
-4. voxtype installs from source
-5. `voxtype --version` runs
+4. dictare installs from source
+5. `dictare --version` runs
 
 ## Limitations
 

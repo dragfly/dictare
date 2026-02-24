@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from voxtype.config import AudioConfig, load_config
+from dictare.config import AudioConfig, load_config
 
 class TestAudioDeviceConfig:
     """Test AudioConfig input_device and output_device fields."""
@@ -78,14 +78,14 @@ class TestAudioManagerDeviceWiring:
 
     def test_initialize_uses_input_device(self) -> None:
         """AudioManager.initialize() passes input_device to AudioCapture."""
-        from voxtype.core.audio_manager import AudioManager
+        from dictare.core.audio_manager import AudioManager
 
         cfg = AudioConfig(input_device="My USB Mic")
 
-        with patch("voxtype.core.audio_manager.AudioCapture") as mock_capture, \
-             patch("voxtype.audio.device_monitor.create_device_monitor"), \
-             patch("voxtype.audio.vad.SileroVAD"), \
-             patch("voxtype.audio.vad.StreamingVAD"):
+        with patch("dictare.core.audio_manager.AudioCapture") as mock_capture, \
+             patch("dictare.audio.device_monitor.create_device_monitor"), \
+             patch("dictare.audio.vad.SileroVAD"), \
+             patch("dictare.audio.vad.StreamingVAD"):
             manager = AudioManager(config=cfg)
             manager.initialize(
                 on_speech_start=lambda: None,
@@ -101,15 +101,15 @@ class TestAudioManagerDeviceWiring:
 
     def test_initialize_falls_back_to_advanced_device(self) -> None:
         """When input_device is empty, advanced.device is used."""
-        from voxtype.core.audio_manager import AudioManager
+        from dictare.core.audio_manager import AudioManager
 
         cfg = AudioConfig()
         cfg.advanced.device = "Legacy Device"
 
-        with patch("voxtype.core.audio_manager.AudioCapture") as mock_capture, \
-             patch("voxtype.audio.device_monitor.create_device_monitor"), \
-             patch("voxtype.audio.vad.SileroVAD"), \
-             patch("voxtype.audio.vad.StreamingVAD"):
+        with patch("dictare.core.audio_manager.AudioCapture") as mock_capture, \
+             patch("dictare.audio.device_monitor.create_device_monitor"), \
+             patch("dictare.audio.vad.SileroVAD"), \
+             patch("dictare.audio.vad.StreamingVAD"):
             manager = AudioManager(config=cfg)
             manager.initialize(
                 on_speech_start=lambda: None,
@@ -128,7 +128,7 @@ class TestEngineStatusAudioDevices:
 
     def test_status_contains_audio_devices_default(self) -> None:
         """get_status() includes audio_devices with defaults."""
-        from voxtype.core.engine import VoxtypeEngine
+        from dictare.core.engine import DictareEngine
 
         config = MagicMock()
         config.verbose = False
@@ -157,7 +157,7 @@ class TestEngineStatusAudioDevices:
         config.tts.language = "en"
         config.pipeline.enabled = False
 
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         status = engine.get_status()
 
         assert "audio_devices" in status["platform"]
@@ -166,7 +166,7 @@ class TestEngineStatusAudioDevices:
 
     def test_status_shows_configured_devices(self) -> None:
         """get_status() shows configured device names."""
-        from voxtype.core.engine import VoxtypeEngine
+        from dictare.core.engine import DictareEngine
 
         config = MagicMock()
         config.verbose = False
@@ -195,7 +195,7 @@ class TestEngineStatusAudioDevices:
         config.tts.language = "en"
         config.pipeline.enabled = False
 
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         status = engine.get_status()
 
         assert status["platform"]["audio_devices"]["input"] == "Blue Yeti"
@@ -206,7 +206,7 @@ class TestBeepOutputDevice:
 
     def test_set_output_device(self) -> None:
         """set_output_device sets the module-level device."""
-        from voxtype.audio import beep
+        from dictare.audio import beep
 
         old = beep._output_device
         try:
@@ -226,14 +226,14 @@ class TestAudioCaptureHealthCheck:
 
     def test_is_stale_no_stream(self) -> None:
         """is_stale returns False when no stream exists."""
-        from voxtype.audio.capture import AudioCapture
+        from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         assert cap.is_stale() is False
 
     def test_is_stale_fresh_stream(self) -> None:
         """is_stale returns False when callback was recent."""
-        from voxtype.audio.capture import AudioCapture
+        from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._stream = MagicMock(active=True)
@@ -242,7 +242,7 @@ class TestAudioCaptureHealthCheck:
 
     def test_is_stale_zombie_stream(self) -> None:
         """is_stale returns True when no callback for longer than timeout."""
-        from voxtype.audio.capture import AudioCapture
+        from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._stream = MagicMock(active=True)
@@ -251,7 +251,7 @@ class TestAudioCaptureHealthCheck:
 
     def test_is_stale_inactive_stream(self) -> None:
         """is_stale returns False when stream is not active (handled by needs_reconnect)."""
-        from voxtype.audio.capture import AudioCapture
+        from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._stream = MagicMock(active=False)
@@ -262,7 +262,7 @@ class TestAudioCaptureHealthCheck:
         """_streaming_audio_callback updates _last_callback_time."""
         import numpy as np
 
-        from voxtype.audio.capture import AudioCapture
+        from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._streaming_callback = MagicMock()
@@ -278,7 +278,7 @@ class TestAudioCaptureHealthCheck:
 
     def test_wait_for_data_success(self) -> None:
         """_wait_for_data returns True when callback timestamp advances."""
-        from voxtype.audio.capture import AudioCapture
+        from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         baseline = time.monotonic()
@@ -295,7 +295,7 @@ class TestAudioCaptureHealthCheck:
 
     def test_wait_for_data_timeout(self) -> None:
         """_wait_for_data returns False when no callback arrives."""
-        from voxtype.audio.capture import AudioCapture
+        from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._last_callback_time = time.monotonic()
@@ -306,7 +306,7 @@ class TestAudioManagerStaleDetection:
 
     def test_is_stream_stale_delegates(self) -> None:
         """is_stream_stale delegates to AudioCapture.is_stale()."""
-        from voxtype.core.audio_manager import AudioManager
+        from dictare.core.audio_manager import AudioManager
 
         cfg = AudioConfig()
         manager = AudioManager(config=cfg)
@@ -317,7 +317,7 @@ class TestAudioManagerStaleDetection:
 
     def test_is_stream_stale_no_audio(self) -> None:
         """is_stream_stale returns False when no audio capture."""
-        from voxtype.core.audio_manager import AudioManager
+        from dictare.core.audio_manager import AudioManager
 
         cfg = AudioConfig()
         manager = AudioManager(config=cfg)

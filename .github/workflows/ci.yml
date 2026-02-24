@@ -27,7 +27,7 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          VENV=$HOME/.venvs/voxtype-ci
+          VENV=$HOME/.venvs/dictare-ci
           test -d $VENV || uv venv --python 3.11 $VENV
           echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
           echo "$VENV/bin" >> $GITHUB_PATH
@@ -39,7 +39,7 @@ jobs:
         run: ruff check src/ tests/
 
       - name: Run tests with coverage
-        run: xvfb-run pytest tests/ -v -m '' --cov=voxtype --cov-report=term-missing
+        run: xvfb-run pytest tests/ -v -m '' --cov=dictare --cov-report=term-missing
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
@@ -57,7 +57,7 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          VENV=$HOME/.venvs/voxtype-ci
+          VENV=$HOME/.venvs/dictare-ci
           test -d $VENV || uv venv --python 3.11 $VENV
           echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
           echo "$VENV/bin" >> $GITHUB_PATH
@@ -87,7 +87,7 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          VENV=$HOME/.venvs/voxtype-ci
+          VENV=$HOME/.venvs/dictare-ci
           test -d $VENV || uv venv --python 3.11 $VENV
           echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
           echo "$VENV/bin" >> $GITHUB_PATH

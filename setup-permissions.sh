@@ -1,10 +1,10 @@
 #!/bin/bash
 # Minimal sudo script - easy to review!
-# Sets up permissions for voxtype
+# Sets up permissions for dictare
 
 set -e
 
-echo "Setting up permissions for voxtype..."
+echo "Setting up permissions for dictare..."
 
 # Audio library + clipboard tool for X11
 sudo apt-get install -y libportaudio2 xclip

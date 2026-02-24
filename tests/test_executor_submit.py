@@ -1,7 +1,7 @@
 """Tests for InputExecutor."""
 
-from voxtype.pipeline import PipelineAction
-from voxtype.pipeline.executors import InputExecutor
+from dictare.pipeline import PipelineAction
+from dictare.pipeline.executors import InputExecutor
 
 class TestInputExecutor:
     """Test InputExecutor behavior."""

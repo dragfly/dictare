@@ -1,4 +1,4 @@
-"""Tests for VoxtypeEngine core logic."""
+"""Tests for DictareEngine core logic."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from voxtype.agent.base import OpenVIPMessage
-from voxtype.config import TTSConfig
-from voxtype.core.engine import VoxtypeEngine
-from voxtype.core.fsm import AppState
+from dictare.agent.base import OpenVIPMessage
+from dictare.config import TTSConfig
+from dictare.core.engine import DictareEngine
+from dictare.core.fsm import AppState
 
 class MockAgent:
     """Mock agent for testing."""
@@ -28,7 +28,7 @@ class MockAgent:
         self.messages.append(message)
         return True
 
-def register_test_agents(engine: VoxtypeEngine, agent_ids: list[str]) -> list[MockAgent]:
+def register_test_agents(engine: DictareEngine, agent_ids: list[str]) -> list[MockAgent]:
     """Helper to register mock agents for testing."""
     agents = [MockAgent(aid) for aid in agent_ids]
     for agent in agents:
@@ -101,48 +101,48 @@ class MockEventHandler:
     def on_agent_change(self, agent_name: str, index: int) -> None:
         self.agent_changes.append((agent_name, index))
 
-class TestVoxtypeEngineInit:
-    """Test VoxtypeEngine initialization."""
+class TestDictareEngineInit:
+    """Test DictareEngine initialization."""
 
     def test_initial_state_is_off(self) -> None:
         """Engine starts in OFF state."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         assert engine.state == AppState.OFF
 
     def test_is_off_initially(self) -> None:
         """is_off returns True initially."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         assert engine.is_off is True
         assert engine.is_listening is False
 
     def test_agent_mode_default_false(self) -> None:
         """Agent mode defaults to False (keyboard mode)."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         assert engine.agent_mode is False
 
     def test_events_handler_stored(self) -> None:
         """Event handler is stored."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         assert engine._events is events
 
-class TestVoxtypeEngineProperties:
-    """Test VoxtypeEngine properties."""
+class TestDictareEngineProperties:
+    """Test DictareEngine properties."""
 
     def test_state_property(self) -> None:
         """state property returns current state."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         assert engine.state == AppState.OFF
 
     def test_stats_initially_zero(self) -> None:
         """Stats are zero initially."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         s = engine.stats
         assert s.chars == 0
         assert s.words == 0
@@ -159,7 +159,7 @@ class TestEventEmission:
         """_emit calls the event handler method."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
 
         engine._emit("on_state_change", AppState.OFF, AppState.LISTENING, "test")
         assert len(events.state_changes) == 1
@@ -168,7 +168,7 @@ class TestEventEmission:
     def test_emit_without_handler_does_not_crash(self) -> None:
         """_emit with no handler doesn't crash."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config, events=None)
+        engine = DictareEngine(config=config, events=None)
         # Should not raise
         engine._emit("on_state_change", AppState.OFF, AppState.LISTENING, "test")
 
@@ -176,7 +176,7 @@ class TestEventEmission:
         """_emit with nonexistent event doesn't crash."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         # Should not raise
         engine._emit("nonexistent_event", "arg1", "arg2")
 
@@ -185,7 +185,7 @@ class TestEventEmission:
         config = MockConfig()
         events = MockEventHandler()
         events.on_state_change = MagicMock(side_effect=Exception("Handler error"))
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
 
         # Should not raise
         engine._emit("on_state_change", AppState.OFF, AppState.LISTENING, "test")
@@ -210,7 +210,7 @@ class TestStateControl:
         """Toggle from OFF to LISTENING."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         engine._controller.start()
 
         try:
@@ -226,7 +226,7 @@ class TestStateControl:
         """Toggle from LISTENING to OFF."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         engine._controller.start()
 
         try:
@@ -246,7 +246,7 @@ class TestStateControl:
         """_set_listening(True) turns on listening."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         engine._controller.start()
 
         try:
@@ -260,7 +260,7 @@ class TestStateControl:
         """_set_listening(False) turns off listening."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         engine._controller.start()
 
         try:
@@ -276,7 +276,7 @@ class TestStateControl:
         """_set_listening(True) is noop when already listening."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         engine._controller.start()
 
         try:
@@ -299,7 +299,7 @@ class TestAgentSwitch:
         """Switch to next agent."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
@@ -316,7 +316,7 @@ class TestAgentSwitch:
         """Switch to previous agent."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
@@ -332,7 +332,7 @@ class TestAgentSwitch:
         """Agent switching wraps around."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
 
@@ -350,7 +350,7 @@ class TestAgentSwitch:
         """Switch with no agents does nothing."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         engine._controller.start()
 
         try:
@@ -364,7 +364,7 @@ class TestAgentSwitch:
         """Switch to agent by exact name match."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
@@ -380,7 +380,7 @@ class TestAgentSwitch:
         """Switch to agent by name is case-insensitive."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
@@ -396,7 +396,7 @@ class TestAgentSwitch:
         """Switch to agent by partial name match."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude-code", "cursor", "vscode"])
         engine._controller.start()
 
@@ -412,7 +412,7 @@ class TestAgentSwitch:
         """Switch to agent by name returns False (async, result is always True)."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
 
@@ -430,7 +430,7 @@ class TestAgentSwitch:
         """Switch to agent by index (1-based)."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor", "vscode"])
         engine._controller.start()
 
@@ -447,7 +447,7 @@ class TestAgentSwitch:
         """Switch to agent by invalid index (async, no switch happens)."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
 
@@ -465,7 +465,7 @@ class TestAgentSwitch:
         """Agent switch pushes SSE status update to subscribers."""
         config = MockConfig()
         events = MockEventHandler()
-        engine = VoxtypeEngine(config=config, events=events)
+        engine = DictareEngine(config=config, events=events)
         register_test_agents(engine, ["claude", "cursor"])
 
         status_calls: list[int] = []
@@ -483,7 +483,7 @@ class TestAgentSwitch:
     def test_handle_protocol_command(self) -> None:
         """handle_protocol_command handles stt.*, ping, engine.shutdown."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
 
         result = engine.handle_protocol_command({"command": "ping"})
         assert result["status"] == "ok"
@@ -501,7 +501,7 @@ class TestAgentSwitch:
     def test_handle_protocol_command_unknown(self) -> None:
         """handle_protocol_command returns error for unknown commands."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
 
         result = engine.handle_protocol_command({"command": "output.set_mode:agents"})
         assert result["status"] == "error"
@@ -513,7 +513,7 @@ class TestStatusChangeCallback:
     def test_callback_fires_on_register_agent(self) -> None:
         """Callback is called when an agent is registered."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
 
         calls: list[int] = []
         engine.set_status_change_callback(lambda: calls.append(1))
@@ -525,7 +525,7 @@ class TestStatusChangeCallback:
     def test_callback_fires_on_unregister_agent(self) -> None:
         """Callback is called when an agent is unregistered."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
 
         agent = MockAgent("test-agent")
         engine.register_agent(agent)
@@ -539,7 +539,7 @@ class TestStatusChangeCallback:
     def test_no_error_without_callback(self) -> None:
         """Engine works fine without a status callback registered."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
 
         # No callback registered — should not raise
         agent = MockAgent("test-agent")
@@ -552,17 +552,17 @@ class TestHotwords:
     def test_get_hotwords_from_config(self) -> None:
         """Hotwords from config."""
         config = MockConfig()
-        config.stt.advanced.hotwords = "voxtype,hey claude"
-        engine = VoxtypeEngine(config=config)
+        config.stt.advanced.hotwords = "dictare,hey claude"
+        engine = DictareEngine(config=config)
 
         result = engine._get_hotwords()
-        assert result == "voxtype,hey claude"
+        assert result == "dictare,hey claude"
 
     def test_get_hotwords_none(self) -> None:
         """No hotwords returns None."""
         config = MockConfig()
         config.stt.advanced.hotwords = ""
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
 
         result = engine._get_hotwords()
         assert result is None
@@ -573,7 +573,7 @@ class TestAgentId:
     def test_get_current_agent_id_with_agents(self) -> None:
         """Agent ID with agents configured."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         register_test_agents(engine, ["claude", "cursor"])
 
         result = engine.current_agent
@@ -582,7 +582,7 @@ class TestAgentId:
     def test_get_current_agent_id_after_switch(self) -> None:
         """Agent ID changes after agent switch."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         register_test_agents(engine, ["claude", "cursor"])
         engine._controller.start()
 
@@ -597,7 +597,7 @@ class TestAgentId:
     def test_get_current_agent_id_no_agents(self) -> None:
         """Agent ID is None without agents."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
 
         result = engine.current_agent
         assert result is None
@@ -608,7 +608,7 @@ class TestRegisterAgent:
     def test_register_reserved_agent_does_not_become_current(self) -> None:
         """Registering a reserved agent (__keyboard__) should not set it as current."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         mock_kb = MagicMock()
@@ -623,7 +623,7 @@ class TestRegisterAgent:
     def test_first_real_agent_becomes_current_after_reserved(self) -> None:
         """First non-reserved agent becomes current even if reserved was first."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         mock_kb = MagicMock()
@@ -643,7 +643,7 @@ class TestRegisterAgent:
         go to keyboard injection instead of SSE agent.
         """
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         # Simulate create_engine: keyboard registered first
@@ -668,7 +668,7 @@ class TestRegisterAgent:
     def test_messages_routed_to_sse_agent_not_keyboard(self) -> None:
         """Regression: messages must go to SSE agent, not keyboard, in agent mode."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         mock_kb = MagicMock()
@@ -686,7 +686,7 @@ class TestRegisterAgent:
     def test_agent_mode_no_sse_agents_current_is_none(self) -> None:
         """Agent mode with only keyboard registered: current is None."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         mock_kb = MagicMock()
@@ -700,7 +700,7 @@ class TestRegisterAgent:
     def test_last_sse_agent_disconnects_current_becomes_none(self) -> None:
         """When the only SSE agent disconnects, current becomes None."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         mock_kb = MagicMock()
@@ -716,7 +716,7 @@ class TestRegisterAgent:
     def test_current_agent_disconnect_fallback_skips_keyboard(self) -> None:
         """When current agent disconnects, fallback to next visible, not __keyboard__."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         mock_kb = MagicMock()
@@ -740,7 +740,7 @@ class TestRegisterAgent:
         4. Expected: "voice" becomes current (not stuck on __keyboard__)
         """
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         # Simulate stale state: __keyboard__ was saved as active_agent
@@ -757,7 +757,7 @@ class TestRegisterAgent:
     def test_agents_restart_keeps_current_agent(self) -> None:
         """Regression: restarting both agents must restore current_agent."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         mock_kb = MagicMock()
@@ -779,7 +779,7 @@ class TestRegisterAgent:
     def test_visible_agents_never_includes_keyboard(self) -> None:
         """visible_agents never shows __keyboard__ regardless of mode."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -792,7 +792,7 @@ class TestRegisterAgent:
     def test_keyboard_mode_at_startup(self) -> None:
         """Keyboard mode at startup: __keyboard__ is current, keystroke injection."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = False
 
         mock_kb = MagicMock()
@@ -809,7 +809,7 @@ class TestKeyboardAgentSubmit:
     """Test that KeyboardAgent reads submit from x_input, not top-level."""
 
     def _make_agent(self):
-        from voxtype.agent.keyboard import KeyboardAgent
+        from dictare.agent.keyboard import KeyboardAgent
 
         config = MockConfig()
         config.output.auto_enter = False
@@ -860,7 +860,7 @@ class TestThreadSafety:
     def test_concurrent_state_toggles(self) -> None:
         """Concurrent state toggles don't corrupt state."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         errors = []
 
         def toggle_many_times() -> None:
@@ -885,7 +885,7 @@ class TestThreadSafety:
     def test_concurrent_agent_switches(self) -> None:
         """Concurrent agent switches don't corrupt index."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         register_test_agents(engine, ["a", "b", "c", "d", "e"])
         errors = []
 
@@ -917,7 +917,7 @@ class TestVADCallbacks:
     def test_on_vad_speech_start_transitions_to_recording(self) -> None:
         """VAD speech start transitions to RECORDING."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._controller.start()
 
         try:
@@ -932,7 +932,7 @@ class TestVADCallbacks:
     def test_on_vad_speech_start_ignored_when_off(self) -> None:
         """VAD speech start ignored when OFF."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._controller.start()
 
         try:
@@ -946,7 +946,7 @@ class TestVADCallbacks:
     def test_on_max_speech_duration_does_not_crash(self) -> None:
         """Max speech duration handler doesn't crash."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._on_max_speech_duration()  # Should not raise
 
 class TestDiscardCurrent:
@@ -958,7 +958,7 @@ class TestDiscardCurrent:
     def test_discard_current_resets_to_listening(self) -> None:
         """Discard while recording resets to listening."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._controller.start()
 
         try:
@@ -979,7 +979,7 @@ class TestProcessQueuedAudio:
     def test_queued_numpy_array_does_not_raise(self) -> None:
         """Queued numpy audio data doesn't raise ValueError on truthiness check."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._controller.start()
 
         try:
@@ -1018,7 +1018,7 @@ class TestProcessQueuedAudio:
     def test_queued_empty_array_skipped(self) -> None:
         """Empty numpy array is skipped without error."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._controller.start()
 
         try:
@@ -1046,7 +1046,7 @@ class TestProcessQueuedAudio:
     def test_queued_none_skipped(self) -> None:
         """None from pop_queued_audio is skipped without error."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._controller.start()
 
         try:
@@ -1149,11 +1149,11 @@ class TestMessageSendingLogic:
 class TestTTSIntegration:
     """Tests for TTS engine integration in speak_text / handle_speech."""
 
-    def _make_engine(self, tts_available: bool = True) -> tuple[VoxtypeEngine, MagicMock]:
+    def _make_engine(self, tts_available: bool = True) -> tuple[DictareEngine, MagicMock]:
         config = MockConfig()
         config.audio.audio_feedback = True
         config.audio.headphones_mode = True  # no mic-pausing
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         mock_tts = MagicMock()
         if tts_available:
             engine._tts_engine = mock_tts
@@ -1162,7 +1162,7 @@ class TestTTSIntegration:
             engine._tts_error = "TTS engine 'piper' is not available."
         return engine, mock_tts
 
-    @patch("voxtype.audio.beep.play_audio")
+    @patch("dictare.audio.beep.play_audio")
     def test_speak_text_uses_tts_engine(
         self, mock_play_audio: MagicMock
     ) -> None:
@@ -1177,7 +1177,7 @@ class TestTTSIntegration:
         fn()
         mock_tts.speak.assert_called_once_with("hello world")
 
-    @patch("voxtype.audio.beep.play_audio")
+    @patch("dictare.audio.beep.play_audio")
     def test_speak_text_skips_when_tts_unavailable(
         self, mock_play_audio: MagicMock
     ) -> None:
@@ -1198,7 +1198,7 @@ class TestTTSIntegration:
         assert "duration_ms" in result
         mock_tts.speak.assert_called_once_with("test")
 
-    @patch("voxtype.tts.get_cached_tts_engine")
+    @patch("dictare.tts.get_cached_tts_engine")
     def test_handle_tts_request_override_config(
         self, mock_get_tts: MagicMock
     ) -> None:
@@ -1247,7 +1247,7 @@ class TestSetOutputMode:
     def test_switch_to_keyboard_sets_mode(self) -> None:
         """Switching to keyboard mode sets agent_mode=False and current to __keyboard__."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
         # Register keyboard agent (as create_engine does)
         mock_kb = MagicMock()
@@ -1267,7 +1267,7 @@ class TestSetOutputMode:
     def test_switch_to_agents_restores_mode(self) -> None:
         """Switching to agents mode sets agent_mode=True and keeps keyboard registered."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = False
         # Register keyboard agent (as create_engine does)
         mock_kb = MagicMock()
@@ -1289,7 +1289,7 @@ class TestSetOutputMode:
     def test_switch_same_mode_is_noop(self) -> None:
         """Switching to the already-active mode does nothing."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         engine.set_output_mode("agents")
@@ -1300,7 +1300,7 @@ class TestSetOutputMode:
     def test_switch_to_keyboard_preserves_existing_agents(self) -> None:
         """Switching to keyboard doesn't disconnect existing SSE agents."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
         # Register keyboard agent (as create_engine does)
         mock_kb = MagicMock()
@@ -1320,7 +1320,7 @@ class TestSetOutputMode:
     def test_switch_to_keyboard_saves_last_agent(self) -> None:
         """Switching to keyboard saves the current SSE agent for later restore."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -1339,7 +1339,7 @@ class TestSetOutputMode:
     def test_switch_back_to_agents_restores_last_selected(self) -> None:
         """Switching back to agents restores the last selected SSE agent, not first."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -1360,7 +1360,7 @@ class TestSetOutputMode:
     def test_switch_back_to_agents_fallback_first(self) -> None:
         """If last agent was unregistered, fall back to first available."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = False
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -1378,7 +1378,7 @@ class TestSetOutputMode:
     def test_switch_invalid_mode_is_noop(self) -> None:
         """Invalid mode string does nothing."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         engine.set_output_mode("invalid")
@@ -1388,7 +1388,7 @@ class TestSetOutputMode:
     def test_double_tap_toggles_output_mode(self) -> None:
         """Double-tap hotkey toggles between agents and keyboard mode."""
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine.agent_mode = True
 
         mock_kb = MagicMock()
@@ -1415,7 +1415,7 @@ class TestResendLast:
         from unittest.mock import patch
 
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._last_text = "hello world"
 
         with patch.object(engine, "_inject_text") as mock_inject:
@@ -1429,7 +1429,7 @@ class TestResendLast:
         from unittest.mock import patch
 
         config = MockConfig()
-        engine = VoxtypeEngine(config=config)
+        engine = DictareEngine(config=config)
         engine._last_text = ""
 
         with patch.object(engine, "_inject_text") as mock_inject:

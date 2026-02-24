@@ -1,6 +1,6 @@
-"""OpenVIP Internal Tests — voxtype implementation details.
+"""OpenVIP Internal Tests — dictare implementation details.
 
-These tests verify voxtype-specific behavior that is NOT part of the OpenVIP
+These tests verify dictare-specific behavior that is NOT part of the OpenVIP
 protocol specification. They use mock internals (TestClient, mock engine) and
 are automatically skipped when running with --openvip-url.
 
@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from voxtype.core.http_server import OpenVIPServer
+from dictare.core.http_server import OpenVIPServer
 
 # =============================================================================
 # Fixtures — TestClient for fast in-process testing

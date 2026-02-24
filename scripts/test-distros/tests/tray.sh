@@ -30,7 +30,7 @@ sleep 1
 
 # Start tray app in background (standalone mode, no engine connection)
 echo "3. Starting tray app..."
-python -m voxtype tray &
+python -m dictare tray &
 TRAY_PID=$!
 
 # Give it time to initialize

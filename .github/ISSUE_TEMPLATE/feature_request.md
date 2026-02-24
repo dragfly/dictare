@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for voxtype
+about: Suggest an idea for dictare
 title: ''
 labels: enhancement
 assignees: ''

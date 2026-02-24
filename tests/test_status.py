@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from voxtype.status import resolve_display_state
+from dictare.status import resolve_display_state
 
 class TestResolveDisplayState:
     """Test resolve_display_state()."""
