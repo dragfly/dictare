@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b291] - 2026-02-24
+
+### Fixed
+- **Parakeet download via capabilities** — `_run_capability_install` and
+  `_run_model_download` now always use `snapshot_download(repo)` for model
+  downloads. Previously, onnx-asr models tried `load_model()` which initializes
+  the ONNX runtime (crashing with "model_path must not be empty").
+
 ## [0.1.0b290] - 2026-02-24
 
 ### Changed
