@@ -150,7 +150,9 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
             raise typer.Exit(1) from e
 
         _logger.info(
-            "Engine ready (%s)", "LISTENING" if controller.is_listening else "IDLE",
+            "Engine ready (state=%s, is_listening=%r)",
+            controller._engine.state.name if controller._engine else "no_engine",
+            controller.is_listening,
         )
 
         # Signal handlers
