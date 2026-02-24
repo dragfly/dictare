@@ -659,6 +659,27 @@ def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
         venv_installed=outetts_venv,
     ))
 
+    # --- kokoro (universal, ONNX) ---
+    kokoro_venv = is_venv_installed("kokoro")
+    kokoro_available = False
+    try:
+        from importlib.util import find_spec
+        kokoro_available = find_spec("kokoro_onnx") is not None
+    except (ImportError, ModuleNotFoundError):
+        pass
+    if not kokoro_available and kokoro_venv:
+        kokoro_available = True
+    results.append(EngineStatus(
+        name="kokoro",
+        available=kokoro_available,
+        description="Kokoro neural TTS (lightweight ONNX)",
+        platform_ok=True,
+        install_hint="" if kokoro_available else get_install_command("kokoro-onnx"),
+        configured=configured_engine == "kokoro",
+        needs_venv="kokoro" in VENV_ENGINES,
+        venv_installed=kokoro_venv,
+    ))
+
     return [r.to_dict() for r in results]
 
 

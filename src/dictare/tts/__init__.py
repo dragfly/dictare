@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from dictare.tts.base import TTSEngine
 from dictare.tts.coqui import CoquiTTS
 from dictare.tts.espeak import EspeakTTS
+from dictare.tts.kokoro import KokoroTTS
 from dictare.tts.outetts import OuteTTS
 from dictare.tts.piper import PiperTTS
 from dictare.tts.say import SayTTS
@@ -19,6 +20,7 @@ __all__ = [
     "TTSEngine",
     "CoquiTTS",
     "EspeakTTS",
+    "KokoroTTS",
     "OuteTTS",
     "PiperTTS",
     "SayTTS",
@@ -99,6 +101,11 @@ def create_tts_engine(config: TTSConfig) -> TTSEngine:
             language=config.language,
             speed=1.0,  # OuteTTS uses multiplier (1.0), not WPM
             voice="",   # Don't pass voice, use model default
+        ),
+        "kokoro": lambda: KokoroTTS(
+            language=config.language,
+            speed=1.0,  # Kokoro uses multiplier (1.0), not WPM
+            voice=config.voice or "af_heart",
         ),
     }
 

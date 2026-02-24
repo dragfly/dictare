@@ -130,6 +130,7 @@ OPTIONAL_DEPENDENCIES = {
     "piper": ("piper-tts pathvalidate", "Piper neural TTS"),
     "coqui": ("TTS", "Coqui XTTS neural TTS"),
     "outetts": ("mlx-audio", "OuteTTS neural TTS (Apple Silicon)"),
+    "kokoro": ("kokoro-onnx", "Kokoro neural TTS"),
     # Hardware acceleration
     "mlx": ("mlx-whisper>=0.4.0", "Apple Silicon MLX acceleration"),
     "cuda": ("nvidia-cudnn-cu12>=9.1.0,<9.2.0", "NVIDIA CUDA acceleration"),

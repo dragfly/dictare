@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b286] - 2026-02-24
+
+### Added
+- **Kokoro TTS engine** — 82M-parameter neural TTS via `kokoro-onnx` (ONNX runtime,
+  no PyTorch). #1 on HuggingFace TTS Arena, 9 languages, ~300MB model, 5x real-time
+  on CPU. Set `tts.engine = "kokoro"` in config. Installable via Dashboard.
+
+### Fixed
+- **TTS venv install** — removed `openvip` from `_SHARED_DEPS` (not on PyPI).
+  PYTHONPATH injection already makes it available. Unblocks all venv installs.
+
 ## [0.1.0b285] - 2026-02-24
 
 ### Fixed

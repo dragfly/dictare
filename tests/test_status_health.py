@@ -8,13 +8,13 @@ from unittest.mock import patch
 class TestCheckAllTTSEngines:
     """Test check_all_tts_engines()."""
 
-    def test_returns_five_engines(self) -> None:
-        """All 5 TTS engines are always reported."""
+    def test_returns_all_engines(self) -> None:
+        """All 6 TTS engines are always reported."""
         from dictare.utils.platform import check_all_tts_engines
 
         results = check_all_tts_engines()
         names = [r["name"] for r in results]
-        assert names == ["say", "espeak", "piper", "coqui", "outetts"]
+        assert names == ["say", "espeak", "piper", "coqui", "outetts", "kokoro"]
 
     def test_all_dicts_have_required_keys(self) -> None:
         """Every result dict has the expected keys."""
