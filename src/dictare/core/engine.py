@@ -1535,45 +1535,25 @@ class DictareEngine:
         """Run the engine main loop (blocking).
 
         Call start_runtime() first. This keeps the main thread alive and
-        handles audio device reconnection and zombie stream detection.
+        handles audio device reconnection (callback errors, dead streams,
+        zombie streams).
         """
-        stale_check_interval = 0  # counter to throttle is_stale checks
         try:
             while self._running:
                 time.sleep(0.1)
                 if not self._audio_manager:
                     continue
 
-                # Fast path: explicit reconnect needed (device unplugged, etc.)
-                if self._audio_manager.needs_reconnect():
-                    logger.warning("Audio device needs reconnect")
+                reason = self._audio_manager.reconnect_reason
+                if reason:
+                    logger.warning("Audio reconnect needed: %s", reason)
                     if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
                         logger.info("Audio reconnect succeeded")
                     else:
-                        logger.error(
-                            "Audio reconnect failed — waiting 30s before retry "
-                            "(engine still running)"
-                        )
+                        logger.error("Audio reconnect failed — waiting 30s before retry")
                         _deadline = time.monotonic() + 30.0
                         while self._running and time.monotonic() < _deadline:
                             time.sleep(0.5)
-                    continue
-
-                # Slow path: zombie stream detection (check every ~3s)
-                stale_check_interval += 1
-                if stale_check_interval >= 30:  # 30 * 0.1s = 3s
-                    stale_check_interval = 0
-                    if self._audio_manager.is_stream_stale():
-                        logger.warning("Audio stream stale (no data) — forcing reconnect")
-                        if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
-                            logger.info("Audio reconnect succeeded after stale detection")
-                        else:
-                            logger.error(
-                                "Audio reconnect failed after stale — waiting 30s"
-                            )
-                            _deadline = time.monotonic() + 30.0
-                            while self._running and time.monotonic() < _deadline:
-                                time.sleep(0.5)
         except KeyboardInterrupt:
             pass
 

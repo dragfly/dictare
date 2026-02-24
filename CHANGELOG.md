@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b272] - 2026-02-24
+
+### Changed
+- **Audio reconnect circuit breaker**: max 5 reconnects in 60s window prevents
+  reconnect storms from flaky USB hubs or rapid device changes.
+- **Consecutive error threshold**: 3 consecutive PortAudio errors required before
+  triggering reconnect (ignores transient single-frame glitches).
+- **Unified `reconnect_reason` property** replaces `needs_reconnect()` + `is_stale()`
+  on both `AudioCapture` and `AudioManager`. Returns `None` (healthy),
+  `"callback_error"`, `"stream_inactive"`, or `"stream_stale"`.
+- **Post-reconnect cooldown** (3s) lets the new stream stabilize before resuming.
+- **`wait_for_audio()` verification** after each reconnect attempt catches zombie
+  streams immediately instead of waiting for the 3s stale timeout.
+- **Skip Pa_Terminate on first reconnect attempt** to avoid CoreAudio deadlocks.
+- **Simplified engine main loop**: collapsed two-path reconnect (fast + slow stale
+  check) into a single `reconnect_reason` check every 100ms.
+
 ## [0.1.0b269] - 2026-02-24
 
 ### Fixed
