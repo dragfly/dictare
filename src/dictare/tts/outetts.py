@@ -17,7 +17,7 @@ import tempfile
 import warnings
 from pathlib import Path
 
-from dictare.tts.base import TTSEngine
+from dictare.tts.base import TTSEngine, play_wav_native
 from dictare.utils.hardware import is_apple_silicon
 
 
@@ -197,12 +197,7 @@ class OuteTTS(TTSEngine):
                     # Find and play the generated audio file
                     audio_files = list(Path(tmpdir).glob("audio_*.wav"))
                     if audio_files:
-                        # Play with afplay (macOS)
-                        subprocess.run(
-                            ["afplay", str(audio_files[0])],
-                            capture_output=True,
-                            timeout=60,
-                        )
+                        play_wav_native(audio_files[0], timeout=60.0)
                         return True
 
                     return False
