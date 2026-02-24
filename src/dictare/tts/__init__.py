@@ -105,7 +105,7 @@ def create_tts_engine(config: TTSConfig) -> TTSEngine:
         "kokoro": lambda: KokoroTTS(
             language=config.language,
             speed=1.0,  # Kokoro uses multiplier (1.0), not WPM
-            voice=config.voice or "af_heart",
+            voice=config.voice,  # empty → _resolve_voice() picks per-language default
         ),
     }
 
