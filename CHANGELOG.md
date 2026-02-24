@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b274] - 2026-02-24
+
+### Added
+- **Persistent TTS worker subprocess** — heavy TTS engines (outetts, piper, coqui)
+  now run in a long-lived worker process that loads the model once. Eliminates
+  8-9s startup penalty on every `speak()` call.
+- **WorkerTTSEngine proxy** (`tts/proxy.py`) — implements `TTSEngine` interface,
+  routes `speak()` to worker via SSE queue, blocks until completion.
+- **TTS worker** (`tts/worker.py`) — connects as `__tts__` agent via openvip SDK,
+  processes speech messages with persistent model.
+- **Scoped Bearer token bypass** — `__tts__` (and other reserved agent IDs) can
+  register via SSE with a scoped `register_tts` token generated per engine instance.
+- **`POST /internal/tts/complete`** — endpoint for worker to signal speak completion.
+- **OpenVIP protocol fixes** — `Message` base schema in OpenAPI spec, `SpeechRequest`
+  now includes `id` + `timestamp` (was missing), `agent_id` optional field added.
+- **OpenVIP SDK fixes** — `Message` base class, `parse_message()` factory,
+  `Client(headers=...)` for Bearer auth, `subscribe()` yields `Message` (not just
+  `Transcription`), `create_speech_request()` auto-generates `id` + `timestamp`.
+
 ## [0.1.0b273] - 2026-02-24
 
 ### Fixed
