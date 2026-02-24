@@ -15,7 +15,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _CACHE_DIR = Path.home() / ".local" / "share" / "dictare" / "tts-cache"
-_MAX_CACHED = 500
+_MAX_CACHED = 1000
 
 
 def cache_key(engine: str, text: str, language: str, voice: str) -> str:
