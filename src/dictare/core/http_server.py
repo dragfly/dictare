@@ -798,7 +798,6 @@ class OpenVIPServer:
         from dictare.utils.hf_download import get_cache_size, get_repo_size
 
         repo: str = info["repo"]
-        runtime: str = info.get("runtime", "hf")
         size_gb: float = info["size_gb"]
 
         logger.info("Downloading model %s (%.1f GB)", model_id, size_gb)
@@ -831,12 +830,8 @@ class OpenVIPServer:
 
         def _do_download() -> None:
             try:
-                if runtime == "onnx-asr":
-                    from onnx_asr import load_model as _onnx_load
-                    _onnx_load(info["onnx_asr_model"])
-                else:
-                    from huggingface_hub import snapshot_download
-                    snapshot_download(repo)
+                from huggingface_hub import snapshot_download
+                snapshot_download(repo)
             except Exception as exc:
                 errors.append(exc)
             finally:
@@ -988,13 +983,8 @@ class OpenVIPServer:
 
             def _do_download() -> None:
                 try:
-                    runtime = info.get("runtime", "hf")
-                    if runtime == "onnx-asr":
-                        from onnx_asr import load_model as _onnx_load
-                        _onnx_load(info["onnx_asr_model"])
-                    else:
-                        from huggingface_hub import snapshot_download
-                        snapshot_download(repo)
+                    from huggingface_hub import snapshot_download
+                    snapshot_download(repo)
                 except Exception as exc:
                     errors.append(exc)
                 finally:
