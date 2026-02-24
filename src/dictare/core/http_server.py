@@ -51,11 +51,16 @@ class OpenVIPServer:
         controller: AppController | None = None,
         host: str = "127.0.0.1",
         port: int = 8770,
+        auth_tokens: dict[str, str] | None = None,
     ) -> None:
         self._engine = engine
         self._controller = controller
         self._host = host
         self._port = port
+        self._auth_tokens: dict[str, str] = auth_tokens or {}
+
+        # Event set when __tts__ agent connects, cleared on disconnect
+        self._tts_connected_event = threading.Event()
 
         # Agent queues: agent_id -> asyncio.Queue
         self._agent_queues: dict[str, asyncio.Queue] = {}
@@ -81,6 +86,14 @@ class OpenVIPServer:
         # FastAPI app
         self._app = self._create_app()
 
+    def _has_permission(self, request: Request, permission: str) -> bool:
+        """Check if request carries a valid Bearer token for *permission*."""
+        token = self._auth_tokens.get(permission)
+        if not token:
+            return False
+        auth = request.headers.get("authorization", "")
+        return auth == f"Bearer {token}"
+
     def _create_app(self) -> FastAPI:
         """Create FastAPI application with all endpoints."""
         app = FastAPI(
@@ -100,12 +113,13 @@ class OpenVIPServer:
             """SSE endpoint - connection IS the agent registration."""
             from dictare.core.engine import DictareEngine
 
-            # Reject reserved agent IDs
+            # Reject reserved agent IDs unless caller has the right token
             if agent_id in DictareEngine.RESERVED_AGENT_IDS:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Reserved agent ID",
-                )
+                if not self._has_permission(request, "register_tts"):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Reserved agent ID",
+                    )
             # Check for duplicate connection
             with self._agent_queues_lock:
                 if agent_id in self._agent_queues:
@@ -121,6 +135,9 @@ class OpenVIPServer:
 
             agent = SSEAgent(agent_id, self)
             self._engine.register_agent(agent)
+            is_tts = agent_id == DictareEngine.TTS_AGENT_ID
+            if is_tts:
+                self._tts_connected_event.set()
             logger.info(f"SSE agent connected: {agent_id}")
 
             async def event_generator():
@@ -147,6 +164,8 @@ class OpenVIPServer:
                     with self._agent_queues_lock:
                         self._agent_queues.pop(agent_id, None)
                     self._engine.unregister_agent(agent_id)
+                    if is_tts:
+                        self._tts_connected_event.clear()
                     logger.info(f"SSE agent disconnected: {agent_id}")
 
             return EventSourceResponse(event_generator())
@@ -176,6 +195,20 @@ class OpenVIPServer:
                 return result
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
+
+        @app.post("/internal/tts/complete")
+        async def tts_complete(request: Request):
+            """Worker signals that a speak() call finished."""
+            if not self._has_permission(request, "register_tts"):
+                raise HTTPException(status_code=403, detail="Forbidden")
+            body = await request.json()
+            request_id = body.get("request_id", "")
+            ok = body.get("ok", False)
+            duration_ms = body.get("duration_ms", 0)
+            proxy = getattr(self._engine, "_tts_proxy", None)
+            if proxy is not None:
+                proxy.complete(request_id, ok=ok, duration_ms=duration_ms)
+            return {"status": "ok"}
 
         @app.get("/status")
         async def get_status():

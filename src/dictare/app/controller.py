@@ -267,6 +267,7 @@ class AppController:
         self._http_server = OpenVIPServer(
             self._engine, self,
             self._config.server.host, self._config.server.port,
+            auth_tokens=self._engine._auth_tokens,
         )
         self._http_server.start()
 
@@ -291,7 +292,9 @@ class AppController:
         )
 
         # 5. Initialize engine (load models — HTTP server serves loading progress)
-        self._engine.init_components(headless=True)
+        self._engine.init_components(
+            headless=True, http_server=self._http_server,
+        )
 
         # 6. Start engine runtime (audio streaming, hotkey, state controller)
         self._engine.start_runtime(start_listening=start_listening)

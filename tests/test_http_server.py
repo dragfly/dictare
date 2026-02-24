@@ -13,7 +13,8 @@ from dictare.core.http_server import OpenVIPServer
 class MockEngine:
     """Mock engine for HTTP server tests."""
 
-    RESERVED_AGENT_IDS = {"__keyboard__"}
+    RESERVED_AGENT_IDS = {"__keyboard__", "__tts__"}
+    TTS_AGENT_ID = "__tts__"
 
     def __init__(self) -> None:
         self._registered_agents: list = []
