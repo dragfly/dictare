@@ -69,12 +69,6 @@
     "size_gb": 0.1,
     "venv": "piper"
   },
-  "coqui-xtts-v2": {
-    "type": "tts",
-    "description": "Coqui XTTS v2 (16 languages, voice cloning)",
-    "size_gb": 1.5,
-    "venv": "coqui"
-  },
   "outetts": {
     "type": "tts",
     "description": "OuteTTS via mlx-audio (Apple Silicon)",
