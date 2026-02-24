@@ -50,7 +50,7 @@ class TestGetSettingsPage:
     def test_ui_contains_sveltekit_app(self, client):
         r = client.get("/ui/")
         html = r.text
-        assert "<title>VoxType Settings</title>" in html
+        assert "<title>Dictare Settings</title>" in html
 
 
 class TestGetSettingsSchema:

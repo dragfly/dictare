@@ -37,7 +37,7 @@ def get_runtime_dir() -> Path:
 
 
 def get_socket_dir() -> Path:
-    """Get the directory for VoxType Unix sockets.
+    """Get the directory for Dictare Unix sockets.
 
     Creates a dictare subdirectory in the runtime dir for organization.
     """

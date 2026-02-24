@@ -4,7 +4,7 @@
 </script>
 
 <svelte:head>
-	<title>VoxType Settings</title>
+	<title>Dictare Settings</title>
 </svelte:head>
 
 <SettingsLayout {tabs} />
