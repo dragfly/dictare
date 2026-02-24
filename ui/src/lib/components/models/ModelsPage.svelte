@@ -88,6 +88,7 @@
 	}
 
 	async function handleUninstall(capId: string) {
+		if (!confirm(`Uninstall ${capId}? The isolated environment will be removed.`)) return;
 		try {
 			await uninstallCapability(capId);
 			await load();
@@ -241,7 +242,7 @@
 						<Download class="size-3.5" />
 					</Button>
 				{/if}
-				{#if cap.ready && !cap.builtin && cap.venv_installed && !isInstalling}
+				{#if cap.ready && !cap.builtin && cap.venv_installed && !cap.configured && !isInstalling}
 					<Button
 						variant="ghost"
 						size="sm"
