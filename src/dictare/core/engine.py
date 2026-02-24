@@ -710,9 +710,12 @@ class DictareEngine:
         self._tts_proxy = proxy
         self._tts_engine = proxy
 
-        # Wait for worker to connect (it loads the model first, which can take time)
-        if not http_server._tts_connected_event.wait(timeout=120.0):
-            # Check if process died
+        # Wait for worker to connect, polling for early crash every 0.5s
+        import time as _time
+
+        deadline = _time.monotonic() + 120.0
+        while not http_server._tts_connected_event.is_set():
+            # Check if process died (fail fast instead of waiting 120s)
             if self._tts_worker_process.poll() is not None:
                 stderr = self._tts_worker_process.stderr
                 err_output = stderr.read().decode() if stderr else ""
@@ -720,7 +723,9 @@ class DictareEngine:
                     f"TTS worker exited with code {self._tts_worker_process.returncode}: "
                     f"{err_output[:500]}"
                 )
-            raise RuntimeError("TTS worker failed to connect within 120s")
+            if _time.monotonic() > deadline:
+                raise RuntimeError("TTS worker failed to connect within 120s")
+            http_server._tts_connected_event.wait(timeout=0.5)
 
         logger.info("TTS worker connected")
 
