@@ -358,8 +358,9 @@ class AppController:
             self._engine.run()
 
     def request_shutdown(self) -> None:
-        """Request graceful shutdown."""
+        """Request graceful shutdown.  Saves session state before stopping."""
         if self._engine:
+            self._engine.save_session_before_shutdown()
             self._engine._running = False
         self._shutdown_event.set()
 

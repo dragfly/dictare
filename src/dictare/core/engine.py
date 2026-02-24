@@ -143,6 +143,7 @@ class DictareEngine:
         # Grace period after restart: give the preferred agent time to reconnect
         # before auto-assigning any first-come agent.  Set in _restore_state().
         self._preferred_agent_deadline: float | None = None
+        self._restore_listening: bool = False  # Set by _restore_state(), applied in start_runtime()
 
         # Tap detection (isolated state machine)
         # Single tap: toggle listening on/off
@@ -236,7 +237,24 @@ class DictareEngine:
         """
         if not self._running:
             return
+        self._save_state()
 
+    def save_session_before_shutdown(self) -> None:
+        """Save session state explicitly before shutdown (SIGTERM, engine.shutdown, etc.).
+
+        Bypasses the _running guard because this is called right before
+        _running is set to False — the state is still valid.
+        """
+        self._save_state()
+        logger.info(
+            "session_save_before_shutdown: agent=%r, mode=%s, listening=%r",
+            self._current_agent_id,
+            "agents" if self.agent_mode else "keyboard",
+            self.is_listening,
+        )
+
+    def _save_state(self) -> None:
+        """Write current state to session-state.json."""
         from dictare.utils.state import save_state
 
         save_state(
@@ -248,33 +266,43 @@ class DictareEngine:
     def _restore_state(self) -> None:
         """Restore engine state from session-state.json after restart.
 
-        If the session is fresh (< 60 min), restores output_mode and
-        preferred agent from the saved state.  Otherwise, uses config.toml
-        defaults (cold start).
+        If the session is fresh (< 60 min), restores output_mode, listening
+        state, and preferred agent.  Otherwise, uses config.toml defaults
+        (cold start).
         """
         from dictare.utils.state import load_state
 
         saved = load_state()
 
         if saved is None:
-            logger.info("restore_state: no fresh session, using config.toml defaults")
+            logger.info(
+                "restore_state: no fresh session → cold start from config.toml "
+                "(agent_mode=%r, listening=False)",
+                self.agent_mode,
+            )
             return
 
         logger.info(
-            "restore_state: session data = %s (before: agent_mode=%r, "
-            "current_agent=%r, last_sse_agent=%r)",
+            "restore_state: fresh session found → %s "
+            "(config defaults were: agent_mode=%r, current_agent=%r)",
             saved, self.agent_mode, self._current_agent_id,
-            self._last_sse_agent_id,
         )
 
         # Restore output mode from session
         saved_mode = saved.get("output_mode")
         if saved_mode == "agents" and not self.agent_mode:
             self.agent_mode = True
-            logger.info("restore_state: switched agent_mode False → True (from session)")
+            logger.info("restore_state: output_mode → agents (was keyboard from config)")
         elif saved_mode == "keyboard" and self.agent_mode:
             self.agent_mode = False
-            logger.info("restore_state: switched agent_mode True → False (from session)")
+            logger.info("restore_state: output_mode → keyboard (was agents from config)")
+        else:
+            logger.info("restore_state: output_mode unchanged (%s)", saved_mode)
+
+        # Restore listening state — will be applied in start_runtime()
+        self._restore_listening = saved.get("listening", False)
+        if self._restore_listening:
+            logger.info("restore_state: will start listening (session was listening)")
 
         # Remember preferred agent for when it reconnects, with grace period
         saved_agent = saved.get("active_agent")
@@ -285,15 +313,16 @@ class DictareEngine:
             grace_seconds = 20.0
             self._preferred_agent_deadline = _time.monotonic() + grace_seconds
             logger.info(
-                "restore_state: preferred agent=%r, grace period %.0fs "
-                "(will activate on reconnect, or fall back to first available)",
+                "restore_state: waiting for agent %r (grace period %.0fs)",
                 saved_agent, grace_seconds,
             )
+        else:
+            logger.info("restore_state: no preferred agent to wait for")
 
         logger.info(
-            "restore_state done: agent_mode=%r, current_agent=%r, "
-            "last_sse_agent=%r",
-            self.agent_mode, self._current_agent_id,
+            "restore_state done: agent_mode=%r, restore_listening=%r, "
+            "preferred_agent=%r",
+            self.agent_mode, self._restore_listening,
             self._last_sse_agent_id,
         )
 
@@ -1450,14 +1479,7 @@ class DictareEngine:
             self.toggle_listening()
             return {"status": "ok"}
         elif command == "engine.shutdown":
-            # Persist current state before shutdown (bypasses the _running guard in
-            # _persist_state so the correct listening/agent state is saved for restore)
-            from dictare.utils.state import save_state
-            save_state(
-                active_agent=self._current_agent_id,
-                output_mode="agents" if self.agent_mode else "keyboard",
-                listening=self.is_listening,
-            )
+            self.save_session_before_shutdown()
             self._running = False
             # Watchdog: force-exit if graceful stop() hangs (e.g. audio deadlock).
             # Exit code 1 so both Restart=always and Restart=on-failure trigger a restart.
@@ -1465,14 +1487,7 @@ class DictareEngine:
             return {"status": "ok"}
         elif command == "engine.restart":
             # Persist state, then exit — the service manager (Restart=always) restarts us.
-            # No bootstrap subprocess: that approach breaks systemd/launchd PID tracking
-            # because the bootstrap-started process is not the service manager's child.
-            from dictare.utils.state import save_state
-            save_state(
-                active_agent=self._current_agent_id,
-                output_mode="agents" if self.agent_mode else "keyboard",
-                listening=self.is_listening,
-            )
+            self.save_session_before_shutdown()
             self._running = False
             self._start_exit_watchdog(exit_code=0)
             return {"status": "ok"}
@@ -1544,7 +1559,11 @@ class DictareEngine:
                 is_running=lambda: self._running,
             )
 
-        # Transition to initial state
+        # Transition to initial state — session restore can override the default
+        if self._restore_listening:
+            start_listening = True
+            self._restore_listening = False
+            logger.info("start_runtime: restoring listening=True from session")
         if start_listening:
             old_state = self.state
             self._state_manager.transition(AppState.LISTENING)
