@@ -16,7 +16,6 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
 
 from dictare import __version__
@@ -266,35 +265,26 @@ class OpenVIPServer:
 
         from pathlib import Path as _Path
 
+        from starlette.responses import RedirectResponse
+        from starlette.staticfiles import StaticFiles
+
         _ui_dist = _Path(__file__).parent.parent / "ui" / "dist"
 
-        if _ui_dist.is_dir():
-            from starlette.responses import RedirectResponse
-            from starlette.staticfiles import StaticFiles
+        @app.get("/settings")
+        async def settings_redirect():
+            """Redirect to Settings SPA."""
+            return RedirectResponse(url="/ui/")
 
-            @app.get("/settings")
-            async def settings_redirect():
-                """Redirect to new Settings SPA."""
-                return RedirectResponse(url="/ui/")
+        @app.get("/ui")
+        async def ui_redirect():
+            """Redirect /ui to /ui/."""
+            return RedirectResponse(url="/ui/")
 
-            @app.get("/ui")
-            async def ui_redirect():
-                """Redirect /ui to /ui/."""
-                return RedirectResponse(url="/ui/")
-
-            app.mount(
-                "/ui",
-                StaticFiles(directory=str(_ui_dist), html=True),
-                name="ui",
-            )
-        else:
-
-            @app.get("/settings", response_class=HTMLResponse)
-            async def settings_page():
-                """Serve the fallback Settings UI page."""
-                from dictare.core.settings_ui import get_settings_html
-
-                return get_settings_html()
+        app.mount(
+            "/ui",
+            StaticFiles(directory=str(_ui_dist), html=True),
+            name="ui",
+        )
 
         @app.get("/settings/schema")
         async def settings_schema():
