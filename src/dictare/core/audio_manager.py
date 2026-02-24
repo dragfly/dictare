@@ -25,12 +25,17 @@ class AudioManager:
     Encapsulates:
     - AudioCapture for microphone input
     - SileroVAD and StreamingVAD for voice activity detection
-    - Audio device reconnection logic
+    - Audio device reconnection logic with circuit breaker
     - Audio queue for buffered speech during transcription
 
     This class is UI-agnostic. Use event callbacks to receive notifications
     about loading progress, reconnection attempts, etc.
     """
+
+    # Circuit breaker: stop reconnecting if too many attempts in a window
+    _MAX_RECONNECTS = 5
+    _RECONNECT_WINDOW_S = 60.0
+    _RECONNECT_COOLDOWN_S = 3.0
 
     def __init__(
         self,
@@ -72,6 +77,9 @@ class AudioManager:
 
         # Device monitor (detects device changes at OS level)
         self._device_monitor: DeviceMonitor | None = None
+
+        # Circuit breaker: timestamps of recent reconnect attempts
+        self._reconnect_timestamps: list[float] = []
 
         # State check callbacks (set by start_streaming)
         # These are internal - use the properties should_process_audio / is_engine_running
@@ -245,28 +253,41 @@ class AudioManager:
             if streaming_vad:
                 streaming_vad.process_chunk(chunk)
 
-    def needs_reconnect(self) -> bool:
-        """Check if audio device needs reconnection."""
-        return self._audio is not None and self._audio.needs_reconnect()
-
-    def is_stream_stale(self, timeout_s: float = 3.0) -> bool:
-        """Check if audio stream is alive but not delivering data.
-
-        Detects zombie streams where PortAudio reports active but
-        CoreAudio has stopped (e.g. after device change with error -50).
-        """
-        return self._audio is not None and self._audio.is_stale(timeout_s)
+    @property
+    def reconnect_reason(self) -> str | None:
+        """Why audio needs reconnection, or None if healthy."""
+        if self._audio is None:
+            return None
+        return self._audio.reconnect_reason
 
     def reconnect(self, on_chunk_callback: Callable[[Any], None]) -> bool:
-        """Attempt to reconnect audio device.
+        """Attempt to reconnect audio device with circuit breaker.
+
+        Circuit breaker: stops after _MAX_RECONNECTS in _RECONNECT_WINDOW_S
+        to prevent reconnect storms (e.g. flaky USB hub).
 
         Args:
             on_chunk_callback: Callback for audio chunks after reconnection
 
         Returns:
-            True if reconnection succeeded
+            True if reconnection succeeded, False if failed or circuit breaker tripped
         """
         import sounddevice as sd
+
+        # Circuit breaker: too many reconnects in window?
+        now = time.monotonic()
+        self._reconnect_timestamps = [
+            t for t in self._reconnect_timestamps
+            if now - t < self._RECONNECT_WINDOW_S
+        ]
+        if len(self._reconnect_timestamps) >= self._MAX_RECONNECTS:
+            logger.error(
+                "Circuit breaker: %d reconnects in %ds — stopping reconnect attempts",
+                self._MAX_RECONNECTS,
+                int(self._RECONNECT_WINDOW_S),
+            )
+            return False
+        self._reconnect_timestamps.append(now)
 
         # Stop device monitor during reconnection
         if self._device_monitor:
@@ -294,9 +315,10 @@ class AudioManager:
             )
 
             try:
-                # Refresh PortAudio device list with timeout — Pa_Terminate()
-                # can deadlock when CoreAudio is corrupted (error -50)
-                self._reinit_portaudio(sd, timeout_s=3.0)
+                # Skip Pa_Terminate on first attempt — avoids deadlock when
+                # CoreAudio is still processing the device change
+                if attempt > 0:
+                    self._reinit_portaudio(sd, timeout_s=3.0)
 
                 self._audio = AudioCapture(
                     sample_rate=self._config.advanced.sample_rate,
@@ -304,6 +326,13 @@ class AudioManager:
                     device=use_device,
                 )
                 self._audio.start_streaming(on_chunk_callback)
+
+                # Verify audio is actually flowing (not a zombie stream)
+                if not self._audio.wait_for_audio(timeout_s=2.0):
+                    logger.warning("Reconnect attempt %d/5: no audio data — zombie stream", attempt + 1)
+                    self._audio.stop_streaming()
+                    self._audio = None
+                    continue
 
                 # Reset VAD state for new device (LSTM hidden state from old
                 # device's noise floor can prevent speech detection)
@@ -318,6 +347,9 @@ class AudioManager:
                     device_info = AudioCapture.get_default_device()
                     device_name = device_info['name'] if device_info else None
                     self._on_reconnect_success(device_name)
+
+                # Cooldown: let the stream stabilize before returning
+                time.sleep(self._RECONNECT_COOLDOWN_S)
                 return True
             except Exception as exc:
                 logger.warning("Reconnect attempt %d/5 failed: %s", attempt + 1, exc)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 import time
@@ -14,6 +15,8 @@ import sounddevice as sd
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+logger = logging.getLogger(__name__)
+
 
 class AudioCapture:
     """Records audio from microphone using sounddevice.
@@ -21,6 +24,11 @@ class AudioCapture:
     Uses callback-based streaming for low latency.
     Automatically reconnects if audio device is unplugged.
     """
+
+    # Require N consecutive PortAudio errors before flagging reconnect.
+    # A single transient error (e.g. brief USB glitch) shouldn't trigger
+    # a full reconnect cycle.
+    _CALLBACK_ERROR_THRESHOLD = 3
 
     def __init__(
         self,
@@ -46,6 +54,7 @@ class AudioCapture:
         self._recording = False
         self._lock = threading.Lock()
         self._needs_reconnect = False
+        self._callback_error_count = 0  # consecutive PortAudio errors
         self._streaming_callback: Callable[[Any], None] | None = None
         self._last_callback_time: float = 0.0  # monotonic timestamp of last callback
 
@@ -214,9 +223,16 @@ class AudioCapture:
                 # Process the chunk anyway (data is valid, just slightly late).
                 pass
             else:
-                # Real device error (output underflow, priming output) — reconnect
-                self._needs_reconnect = True
+                # Real device error — count consecutive failures before reconnect
+                self._callback_error_count += 1
+                if self._callback_error_count >= self._CALLBACK_ERROR_THRESHOLD:
+                    logger.warning(
+                        "PortAudio: %d consecutive errors, flagging reconnect",
+                        self._callback_error_count,
+                    )
+                    self._needs_reconnect = True
                 return
+        self._callback_error_count = 0  # reset on success
         self._last_callback_time = time.monotonic()
         if self._streaming_callback is not None:
             self._streaming_callback(indata.flatten().copy())
@@ -266,51 +282,28 @@ class AudioCapture:
             except Exception:
                 pass
 
-    def needs_reconnect(self) -> bool:
-        """Check if audio device needs reconnection."""
-        if self._needs_reconnect:
-            return True
-        # Also check if stream died unexpectedly
-        if self._stream is not None and not self._stream.active:
-            return True
-        return False
+    @property
+    def reconnect_reason(self) -> str | None:
+        """Why audio needs reconnection, or None if healthy.
 
-    def is_stale(self, timeout_s: float = 3.0) -> bool:
-        """Check if audio stream is alive but not delivering data.
-
-        Detects zombie streams where PortAudio reports active=True but
-        CoreAudio has stopped delivering audio (e.g. after device change).
-
-        Args:
-            timeout_s: Seconds without a callback before stream is stale.
-
-        Returns:
-            True if stream exists and no callback received within timeout.
+        Unifies three failure modes:
+        - "callback_error": PortAudio reported N consecutive errors
+        - "stream_inactive": stream.active is False (device unplugged)
+        - "stream_stale": stream reports active but no data for 3s (zombie)
         """
-        if self._stream is None or not self._stream.active:
-            return False
-        return (time.monotonic() - self._last_callback_time) > timeout_s
+        if self._needs_reconnect:
+            return "callback_error"
+        if self._stream is not None and not self._stream.active:
+            return "stream_inactive"
+        if (
+            self._stream is not None
+            and self._stream.active
+            and (time.monotonic() - self._last_callback_time) > 3.0
+        ):
+            return "stream_stale"
+        return None
 
-    def reconnect_streaming(self, callback: Callable[[NDArray[np.float32]], None]) -> bool:
-        """Reconnect audio stream after device change."""
-        self._needs_reconnect = False
-        self.stop_streaming()
-
-        # Retry a few times - PortAudio needs time to reset after device change
-        for attempt in range(5):
-            time.sleep(1.0)
-            try:
-                self.start_streaming(callback)
-                # Verify audio is actually flowing (not a zombie stream)
-                if not self._wait_for_data(timeout_s=2.0):
-                    self.stop_streaming()
-                    continue
-                return True
-            except Exception:
-                pass
-        return False
-
-    def _wait_for_data(self, timeout_s: float = 2.0) -> bool:
+    def wait_for_audio(self, timeout_s: float = 2.0) -> bool:
         """Wait for at least one audio callback after stream start.
 
         Args:

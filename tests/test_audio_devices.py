@@ -226,42 +226,58 @@ class TestBeepOutputDevice:
             beep._output_device = old
 
 
-class TestAudioCaptureHealthCheck:
-    """Test AudioCapture stale stream detection."""
+class TestReconnectReason:
+    """Test AudioCapture.reconnect_reason property."""
 
-    def test_is_stale_no_stream(self) -> None:
-        """is_stale returns False when no stream exists."""
+    def test_no_stream_returns_none(self) -> None:
+        """No stream → None (healthy)."""
         from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
-        assert cap.is_stale() is False
+        assert cap.reconnect_reason is None
 
-    def test_is_stale_fresh_stream(self) -> None:
-        """is_stale returns False when callback was recent."""
+    def test_fresh_stream_returns_none(self) -> None:
+        """Active stream with recent callback → None."""
         from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._stream = MagicMock(active=True)
         cap._last_callback_time = time.monotonic()
-        assert cap.is_stale(timeout_s=1.0) is False
+        assert cap.reconnect_reason is None
 
-    def test_is_stale_zombie_stream(self) -> None:
-        """is_stale returns True when no callback for longer than timeout."""
+    def test_callback_error(self) -> None:
+        """_needs_reconnect flag → 'callback_error'."""
+        from dictare.audio.capture import AudioCapture
+
+        cap = AudioCapture()
+        cap._needs_reconnect = True
+        assert cap.reconnect_reason == "callback_error"
+
+    def test_stream_inactive(self) -> None:
+        """Stream exists but not active → 'stream_inactive'."""
+        from dictare.audio.capture import AudioCapture
+
+        cap = AudioCapture()
+        cap._stream = MagicMock(active=False)
+        assert cap.reconnect_reason == "stream_inactive"
+
+    def test_stream_stale(self) -> None:
+        """Active stream with no data for >3s → 'stream_stale'."""
         from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._stream = MagicMock(active=True)
         cap._last_callback_time = time.monotonic() - 5.0
-        assert cap.is_stale(timeout_s=3.0) is True
+        assert cap.reconnect_reason == "stream_stale"
 
-    def test_is_stale_inactive_stream(self) -> None:
-        """is_stale returns False when stream is not active (handled by needs_reconnect)."""
+    def test_inactive_stream_not_stale(self) -> None:
+        """Inactive stream returns 'stream_inactive', not 'stream_stale'."""
         from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._stream = MagicMock(active=False)
         cap._last_callback_time = time.monotonic() - 10.0
-        assert cap.is_stale() is False
+        assert cap.reconnect_reason == "stream_inactive"
 
     def test_streaming_callback_updates_timestamp(self) -> None:
         """_streaming_audio_callback updates _last_callback_time."""
@@ -281,50 +297,149 @@ class TestAudioCaptureHealthCheck:
 
         assert cap._last_callback_time > old_time
 
-    def test_wait_for_data_success(self) -> None:
-        """_wait_for_data returns True when callback timestamp advances."""
+    def test_streaming_callback_resets_error_count(self) -> None:
+        """Successful callback resets _callback_error_count."""
+        import numpy as np
+
         from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
-        baseline = time.monotonic()
-        cap._last_callback_time = baseline
+        cap._streaming_callback = MagicMock()
+        cap._callback_error_count = 2
 
-        # Simulate callback arriving after 50ms
+        status = MagicMock()
+        status.__bool__ = lambda s: False
+        indata = np.zeros((512, 1), dtype=np.float32)
+        cap._streaming_audio_callback(indata, 512, {}, status)
+
+        assert cap._callback_error_count == 0
+
+    def test_consecutive_errors_below_threshold(self) -> None:
+        """Errors below threshold don't trigger reconnect."""
+        import numpy as np
+
+        from dictare.audio.capture import AudioCapture
+
+        cap = AudioCapture()
+        cap._streaming_callback = MagicMock()
+
+        # Simulate error status (not input_overflow)
+        status = MagicMock()
+        status.__bool__ = lambda s: True
+        status.input_overflow = False
+        indata = np.zeros((512, 1), dtype=np.float32)
+
+        # 2 errors (below threshold of 3) — no reconnect
+        cap._streaming_audio_callback(indata, 512, {}, status)
+        cap._streaming_audio_callback(indata, 512, {}, status)
+        assert cap._callback_error_count == 2
+        assert not cap._needs_reconnect
+
+    def test_consecutive_errors_at_threshold(self) -> None:
+        """Errors at threshold trigger reconnect."""
+        import numpy as np
+
+        from dictare.audio.capture import AudioCapture
+
+        cap = AudioCapture()
+        cap._streaming_callback = MagicMock()
+
+        status = MagicMock()
+        status.__bool__ = lambda s: True
+        status.input_overflow = False
+        indata = np.zeros((512, 1), dtype=np.float32)
+
+        for _ in range(3):
+            cap._streaming_audio_callback(indata, 512, {}, status)
+
+        assert cap._callback_error_count == 3
+        assert cap._needs_reconnect
+
+    def test_wait_for_audio_success(self) -> None:
+        """wait_for_audio returns True when callback timestamp advances."""
         import threading
-        def bump():
-            time.sleep(0.05)
-            cap._last_callback_time = time.monotonic()
-        threading.Thread(target=bump, daemon=True).start()
 
-        assert cap._wait_for_data(timeout_s=1.0) is True
-
-    def test_wait_for_data_timeout(self) -> None:
-        """_wait_for_data returns False when no callback arrives."""
         from dictare.audio.capture import AudioCapture
 
         cap = AudioCapture()
         cap._last_callback_time = time.monotonic()
-        assert cap._wait_for_data(timeout_s=0.15) is False
+
+        def bump() -> None:
+            time.sleep(0.05)
+            cap._last_callback_time = time.monotonic()
+
+        threading.Thread(target=bump, daemon=True).start()
+        assert cap.wait_for_audio(timeout_s=1.0) is True
+
+    def test_wait_for_audio_timeout(self) -> None:
+        """wait_for_audio returns False when no callback arrives."""
+        from dictare.audio.capture import AudioCapture
+
+        cap = AudioCapture()
+        cap._last_callback_time = time.monotonic()
+        assert cap.wait_for_audio(timeout_s=0.15) is False
 
 
-class TestAudioManagerStaleDetection:
-    """Test AudioManager zombie stream detection."""
+class TestAudioManagerReconnectReason:
+    """Test AudioManager.reconnect_reason delegates to AudioCapture."""
 
-    def test_is_stream_stale_delegates(self) -> None:
-        """is_stream_stale delegates to AudioCapture.is_stale()."""
+    def test_delegates_to_capture(self) -> None:
+        """reconnect_reason delegates to AudioCapture.reconnect_reason."""
         from dictare.core.audio_manager import AudioManager
 
         cfg = AudioConfig()
         manager = AudioManager(config=cfg)
         manager._audio = MagicMock()
-        manager._audio.is_stale.return_value = True
-        assert manager.is_stream_stale() is True
-        manager._audio.is_stale.assert_called_once_with(3.0)
+        manager._audio.reconnect_reason = "stream_stale"
+        assert manager.reconnect_reason == "stream_stale"
 
-    def test_is_stream_stale_no_audio(self) -> None:
-        """is_stream_stale returns False when no audio capture."""
+    def test_no_audio_returns_none(self) -> None:
+        """reconnect_reason returns None when no audio capture."""
         from dictare.core.audio_manager import AudioManager
 
         cfg = AudioConfig()
         manager = AudioManager(config=cfg)
-        assert manager.is_stream_stale() is False
+        assert manager.reconnect_reason is None
+
+
+class TestCircuitBreaker:
+    """Test AudioManager reconnect circuit breaker."""
+
+    def test_circuit_breaker_trips(self) -> None:
+        """Reconnect fails after too many attempts in window."""
+        from dictare.core.audio_manager import AudioManager
+
+        cfg = AudioConfig()
+        manager = AudioManager(config=cfg)
+        manager._audio = MagicMock()
+
+        # Fill up the reconnect timestamps to trip circuit breaker
+        now = time.monotonic()
+        manager._reconnect_timestamps = [now - i for i in range(5)]
+
+        result = manager.reconnect(MagicMock())
+        assert result is False
+
+    def test_old_timestamps_pruned(self) -> None:
+        """Timestamps older than window are pruned."""
+        from dictare.core.audio_manager import AudioManager
+
+        cfg = AudioConfig()
+        manager = AudioManager(config=cfg)
+
+        # Add old timestamps outside the window
+        old = time.monotonic() - 120.0
+        manager._reconnect_timestamps = [old - i for i in range(5)]
+
+        # Should NOT trip circuit breaker (all old)
+        # Will fail on actual reconnect (no audio), but circuit breaker won't block
+        manager._audio = MagicMock()
+        with patch.object(manager, "_reinit_portaudio"):
+            with patch("dictare.core.audio_manager.AudioCapture"):
+                # Let it fail naturally (no real device)
+                manager.reconnect(MagicMock())
+        # Old timestamps should be pruned
+        assert all(
+            time.monotonic() - t < AudioManager._RECONNECT_WINDOW_S
+            for t in manager._reconnect_timestamps
+        )
