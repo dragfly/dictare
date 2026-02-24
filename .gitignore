@@ -5,7 +5,7 @@ __pycache__/
 *.so
 .Python
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
@@ -67,7 +67,8 @@ ui/node_modules/
 ui/.svelte-kit/
 # Override generic dist/ and lib/ patterns for UI files
 !ui/src/lib/
-!src/voxtype/ui/dist/
+!src/dictare/ui/dist/
+!src/dictare/ui/dist/**
 
 
 # Claude Code
@@ -79,5 +80,4 @@ WORKFLOW.md
 # Internal notes — not for public repo
 docs/notes/
 *.private.md
-dist/
 private/
