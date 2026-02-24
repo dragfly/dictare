@@ -604,9 +604,10 @@ class DictareEngine:
         logger.info("VAD model loaded in %.1fs", vad_elapsed)
 
         # Load TTS engine (optional — engine continues if unavailable)
-        # Heavy engines (outetts, piper, coqui) run in a worker subprocess
-        # to avoid blocking the main process with model loading.
-        _worker_engines = {"outetts", "piper", "coqui"}
+        # Venv-based engines run in a worker subprocess to use their
+        # isolated environment and avoid blocking the main process.
+        from dictare.tts.venv import VENV_ENGINES
+        _worker_engines = set(VENV_ENGINES.keys())
         use_worker = (
             tts_engine_name in _worker_engines and http_server is not None
         )
