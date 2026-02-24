@@ -4,7 +4,9 @@
 		fetchCapabilities,
 		installCapability,
 		uninstallCapability,
+		selectCapability,
 		createPullProgressSource,
+		pingEngine,
 		type CapabilityInfo,
 	} from "$lib/api";
 	import { Button } from "$lib/components/ui/button";
@@ -26,6 +28,10 @@
 	// Per-capability install button state
 	let installing = $state<Record<string, boolean>>({});
 	let installErrors = $state<Record<string, string>>({});
+
+	// Selection state: pending selection (before save)
+	let pendingSelection = $state<{ type: "stt" | "tts"; id: string } | null>(null);
+	let saving = $state(false);
 
 	let es: EventSource | null = null;
 
@@ -91,6 +97,52 @@
 		}
 	}
 
+	function handleRadioSelect(cap: CapabilityInfo) {
+		if (!cap.ready || cap.configured) return;
+		pendingSelection = { type: cap.type, id: cap.id };
+	}
+
+	function handleCancel() {
+		pendingSelection = null;
+	}
+
+	async function handleSave() {
+		if (!pendingSelection) return;
+		saving = true;
+		try {
+			await selectCapability(pendingSelection.id);
+			pendingSelection = null;
+			// Wait for engine to come back after restart
+			await waitForEngine();
+			await load();
+		} catch (e) {
+			installErrors = { ...installErrors, [pendingSelection.id]: String(e) };
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function waitForEngine() {
+		// Wait for engine to go down
+		for (let i = 0; i < 10; i++) {
+			await new Promise<void>((r) => setTimeout(r, 500));
+			if (!(await pingEngine())) break;
+		}
+		// Wait for engine to come back up
+		for (let i = 0; i < 30; i++) {
+			await new Promise<void>((r) => setTimeout(r, 1000));
+			if (await pingEngine()) return;
+		}
+	}
+
+	/** Is this capability effectively selected (configured or pending)? */
+	function isSelected(cap: CapabilityInfo): boolean {
+		if (pendingSelection && pendingSelection.type === cap.type) {
+			return pendingSelection.id === cap.id;
+		}
+		return cap.configured;
+	}
+
 	onMount(() => {
 		load();
 		connectSSE();
@@ -112,16 +164,15 @@
 		if (!cap.platform_ok) {
 			return "Unavailable on this platform";
 		}
-		// Show platform hint based on description
 		if (cap.description.includes("Apple Silicon")) return "Apple Silicon";
 		if (cap.description.includes("macOS")) return "macOS only";
 		return null;
 	}
 </script>
 
-{#if loading}
+{#if loading && capabilities.length === 0}
 	<div class="text-muted-foreground py-20 text-center text-sm">Loading capabilities...</div>
-{:else if loadError}
+{:else if loadError && capabilities.length === 0}
 	<div class="flex flex-col items-center gap-3 py-20">
 		<AlertCircle class="size-6 text-destructive" />
 		<p class="text-sm text-destructive">{loadError}</p>
@@ -140,16 +191,36 @@
 						{@const isInstalling = !!snap || cap.downloading}
 						{@const pct = snap ? Math.round(snap.fraction * 100) : 0}
 						{@const platLabel = platformLabel(cap)}
+						{@const selected = isSelected(cap)}
+						{@const radioEnabled = cap.ready && !isInstalling && !saving}
 
-						<div class="rounded-lg border bg-card px-4 py-3" class:opacity-50={!cap.platform_ok}>
-							<!-- Header row -->
-							<div class="flex items-start justify-between gap-3">
+						<button
+							type="button"
+							class="w-full text-left rounded-lg border-2 bg-card px-4 py-3 transition-colors
+								{selected ? 'border-green-500/70' : 'border-transparent'}
+								{!cap.platform_ok ? 'opacity-50' : ''}
+								{radioEnabled && !selected ? 'hover:border-muted-foreground/30 cursor-pointer' : ''}
+								{!radioEnabled ? 'cursor-default' : ''}"
+							onclick={() => radioEnabled && handleRadioSelect(cap)}
+							disabled={!cap.platform_ok}
+						>
+							<div class="flex items-start gap-3">
+								<!-- Radio button -->
+								<div class="pt-0.5 shrink-0">
+									<div
+										class="size-4 rounded-full border-2 flex items-center justify-center transition-colors
+											{selected ? 'border-green-500' : radioEnabled ? 'border-muted-foreground/40' : 'border-muted-foreground/20'}"
+									>
+										{#if selected}
+											<div class="size-2 rounded-full bg-green-500"></div>
+										{/if}
+									</div>
+								</div>
+
+								<!-- Content -->
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center gap-2 flex-wrap">
 										<span class="font-medium text-sm">{cap.id}</span>
-										{#if cap.configured}
-											<Badge class="text-[10px] px-1.5 py-0">in use</Badge>
-										{/if}
 										{#if cap.ready && !isInstalling}
 											<span class="flex items-center gap-1 text-xs text-green-500">
 												<CheckCircle class="size-3" /> Ready
@@ -179,7 +250,7 @@
 											size="sm"
 											variant="outline"
 											disabled={installing[cap.id]}
-											onclick={() => handleInstall(cap.id)}
+											onclick={(e: MouseEvent) => { e.stopPropagation(); handleInstall(cap.id); }}
 										>
 											<Download class="mr-1.5 size-3.5" />
 											Download
@@ -190,7 +261,7 @@
 											variant="ghost"
 											size="sm"
 											class="text-muted-foreground hover:text-destructive px-2"
-											onclick={() => handleUninstall(cap.id)}
+											onclick={(e: MouseEvent) => { e.stopPropagation(); handleUninstall(cap.id); }}
 											title="Remove isolated environment"
 										>
 											<Trash2 class="size-3" />
@@ -201,7 +272,7 @@
 
 							<!-- Progress bar -->
 							{#if isInstalling}
-								<div class="mt-3 space-y-1">
+								<div class="mt-3 ml-7 space-y-1">
 									<div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
 										<div
 											class="h-full rounded-full bg-blue-500 transition-all duration-500"
@@ -214,14 +285,50 @@
 								</div>
 							{/if}
 
-							<!-- Error -->
+							<!-- Error with hover tooltip -->
 							{#if installErrors[cap.id]}
-								<p class="mt-2 text-xs text-destructive">{installErrors[cap.id]}</p>
+								<div class="mt-2 ml-7 group relative">
+									<p class="text-xs text-destructive flex items-center gap-1">
+										<AlertCircle class="size-3 shrink-0" />
+										<span>Download failed</span>
+									</p>
+									<div class="absolute left-0 bottom-full mb-1 hidden group-hover:block
+										bg-popover text-popover-foreground border rounded-md px-3 py-2
+										text-xs max-w-[300px] shadow-md z-10 whitespace-pre-wrap">
+										{installErrors[cap.id]}
+									</div>
+								</div>
 							{/if}
-						</div>
+						</button>
 					{/each}
 				</div>
 			</section>
 		{/each}
 	</div>
+
+	<!-- Save bar -->
+	{#if pendingSelection}
+		<div class="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur px-6 py-3 z-50">
+			<div class="max-w-2xl mx-auto flex items-center justify-between">
+				<p class="text-sm text-muted-foreground">
+					Switch {pendingSelection.type === "stt" ? "STT model" : "TTS engine"} to
+					<span class="font-medium text-foreground">{pendingSelection.id}</span>?
+					Engine will restart.
+				</p>
+				<div class="flex items-center gap-2">
+					<Button variant="outline" size="sm" onclick={handleCancel} disabled={saving}>
+						Cancel
+					</Button>
+					<Button size="sm" onclick={handleSave} disabled={saving}>
+						{#if saving}
+							<Loader class="size-3 animate-spin mr-1.5" />
+							Restarting...
+						{:else}
+							Save
+						{/if}
+					</Button>
+				</div>
+			</div>
+		</div>
+	{/if}
 {/if}
