@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b290] - 2026-02-24
+
+### Changed
+- **Aligned card heights** — Models page uses a single CSS grid so STT and TTS
+  cards in the same row share the same height. No more jagged columns.
+- **Download button icon-only** — Download button now matches trash button style:
+  ghost icon-only with tooltip on hover, saves card space.
+- **Extracted capCard snippet** — card rendering uses a Svelte snippet for
+  cleaner code reuse.
+
 ## [0.1.0b289] - 2026-02-24
 
 ### Added
