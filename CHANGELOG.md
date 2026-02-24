@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b267] - 2026-02-24
+
+### Fixed
+- **`_restore_state()` enforces agent/mode consistency.** If the saved agent is
+  a real SSE agent (e.g. `voice`), the mode is forced to `agents` regardless of
+  what the file says. Prevents corrupted session files from putting the engine in
+  an impossible state (keyboard mode with an SSE agent active).
+
 ## [0.1.0b266] - 2026-02-24
 
 ### Fixed
