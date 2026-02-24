@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -122,13 +122,14 @@ def register(app: typer.Typer) -> None:
                 f"http://{config.server.host}:{config.server.port}",
                 timeout=30.0,
             )
-            response = client.speak(
-                text,
-                language=tts_config.language,
-                engine=tts_config.engine,
-                voice=tts_config.voice or None,
-                speed=tts_config.speed,
-            )
+            kwargs: dict[str, Any] = {
+                "language": tts_config.language,
+                "engine": tts_config.engine,
+                "speed": tts_config.speed,
+            }
+            if tts_config.voice:
+                kwargs["voice"] = tts_config.voice
+            response = client.speak(text, **kwargs)
             if not quiet:
                 duration = response.duration_ms or "?"
                 console.print(f"[dim]Spoken via engine ({duration}ms)[/]")

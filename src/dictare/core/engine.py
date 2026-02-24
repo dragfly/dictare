@@ -1447,10 +1447,10 @@ class DictareEngine:
         if has_override:
             base = self.config.tts
             tts_config = TTSConfig(
-                engine=body.get("engine", base.engine),
-                language=body.get("language", base.language),
-                voice=body.get("voice", base.voice),
-                speed=body.get("speed", base.speed),
+                engine=body.get("engine") or base.engine,
+                language=body.get("language") or base.language,
+                voice=body.get("voice") or base.voice,
+                speed=body.get("speed") or base.speed,
             )
             try:
                 tts = get_cached_tts_engine(tts_config)
