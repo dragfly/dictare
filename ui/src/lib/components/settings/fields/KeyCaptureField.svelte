@@ -125,16 +125,27 @@
 
 	const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
 
-	// Shortcut mode: browser keydown (engine doesn't intercept modifier combos)
+	// Browser keydown handler — active for both formats while capturing.
+	// For evdev: runs in parallel with engine capture (fallback if engine
+	// has no listener, e.g. macOS daemon mode). Captures any key including
+	// pure modifiers (Right ⌘, Left Shift, etc.).
+	// For shortcut: captures key combos (skips pure modifier presses).
 	function handleKeyDown(e: KeyboardEvent) {
-		if (!capturing || format !== "shortcut") return;
+		if (!capturing) return;
 		e.preventDefault();
 		e.stopPropagation();
 		if (e.key === "Escape") { stopCapture(); return; }
-		const shortcut = eventToShortcut(e);
-		if (!shortcut) return; // pure modifier press, keep waiting
-		onchange(shortcut);
-		stopCapture();
+
+		if (format === "evdev") {
+			const evdev = codeToEvdev(e.code);
+			onchange(evdev);
+			stopCapture();
+		} else {
+			const shortcut = eventToShortcut(e);
+			if (!shortcut) return; // pure modifier press, keep waiting
+			onchange(shortcut);
+			stopCapture();
+		}
 	}
 
 	function stopCapture() {
@@ -148,12 +159,16 @@
 		capturing = true;
 
 		if (format === "evdev") {
-			// Engine-side capture: the global keyboard listener intercepts the key
-			// before the browser sees it, so we ask the engine to capture it for us.
+			// Try engine-side capture (works on Linux, macOS with bindings).
+			// Browser keydown is armed simultaneously as fallback — if the
+			// engine has no listener (macOS daemon mode), browser captures.
+			// Whichever fires first wins; stopCapture() aborts the other.
 			abortController = new AbortController();
 			try {
 				const key = await captureHotkey(abortController.signal);
-				if (key && key !== "KEY_ESC") onchange(key);
+				if (key && key !== "KEY_ESC" && capturing) onchange(key);
+			} catch {
+				// Aborted (browser keydown fired first) or fetch failed
 			} finally {
 				capturing = false;
 				abortController = null;

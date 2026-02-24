@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b298] - 2026-02-24
+
+### Fixed
+- **Hotkey Capture button** — evdev capture now falls back to browser-side
+  key detection when engine has no listener (macOS daemon mode). Browser
+  keydown runs in parallel with engine capture — whichever fires first wins.
+  Captures any key including pure modifiers (Right Command, Left Shift, etc.).
+
 ## [0.1.0b297] - 2026-02-24
 
 ### Fixed
