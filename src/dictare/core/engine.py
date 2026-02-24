@@ -172,7 +172,7 @@ class DictareEngine:
         self._status_change_callback: Callable[[], None] | None = None
 
         # Loading progress tracking (for /status endpoint)
-        self._loading_active = False
+        self._loading = False
         self._loading_models: list[dict[str, Any]] = []
         # TTS engine (loaded at startup, None if unavailable)
         self._tts_engine: Any = None
@@ -530,7 +530,7 @@ class DictareEngine:
 
         tts_engine_name = self.config.tts.engine
 
-        self._loading_active = True
+        self._loading = True
         self._loading_models = [
             {"name": "stt", "status": "pending", "start_time": 0, "elapsed": 0,
              "estimated": get_model_load_time(stt_model_id) or 25},
@@ -623,10 +623,6 @@ class DictareEngine:
         if self.config.audio.output_device:
             from dictare.audio.beep import set_output_device
             set_output_device(self.config.audio.output_device)
-
-        # Loading complete — notify SSE subscribers to clear loading state
-        self._loading_active = False
-        self._notify_status()
 
     # -------------------------------------------------------------------------
     # VAD Callbacks
@@ -1291,7 +1287,7 @@ class DictareEngine:
                 },
                 "permissions": self._get_permissions(),
                 "loading": {
-                    "active": self._loading_active,
+                    "active": self._loading,
                     "models": [
                         {
                             "name": m["name"],
@@ -1519,17 +1515,25 @@ class DictareEngine:
             )
 
         # Start audio streaming (always needed for VAD to work)
+        _t0 = time.monotonic()
         if self._audio_manager:
             self._audio_manager.start_streaming(
                 should_process=lambda: self._state_manager.should_process_audio,
                 is_running=lambda: self._running,
             )
+        _audio_ms = (time.monotonic() - _t0) * 1000
+        if _audio_ms > 500:
+            logger.warning("start_runtime: start_streaming took %.0fms", _audio_ms)
 
         if start_listening:
             old_state = self.state
             self._state_manager.transition(AppState.LISTENING)
             logger.info("start_runtime: transitioned %s → LISTENING", old_state.name)
             self._emit("on_state_change", old_state, AppState.LISTENING, "start")
+
+        # Everything ready — clear loading state for SSE subscribers
+        self._loading = False
+        self._notify_status()
 
     def run(self) -> None:
         """Run the engine main loop (blocking).
