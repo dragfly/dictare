@@ -211,9 +211,9 @@ class TestEmergencyAbort:
 
     def test_sets_needs_reconnect(self) -> None:
         capture = AudioCapture()
-        assert not capture.needs_reconnect()
+        assert capture.reconnect_reason is None
         capture.emergency_abort()
-        assert capture.needs_reconnect()
+        assert capture.reconnect_reason == "callback_error"
 
     def test_aborts_active_stream(self) -> None:
         capture = AudioCapture()
