@@ -34,6 +34,13 @@ def service_install() -> None:
     configuration (plist / unit file) and restarts the service.
     """
     backend = _get_backend()
+
+    from dictare.config import create_default_config, get_config_path
+
+    if not get_config_path().exists():
+        path = create_default_config()
+        console.print(f"[dim]Created default config: {path}[/]")
+
     console.print("[dim]Installing service...[/]")
     try:
         backend.install()
