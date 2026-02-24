@@ -20,6 +20,8 @@ from pathlib import Path
 from dictare.tts.base import TTSEngine, play_wav_native
 from dictare.utils.hardware import is_apple_silicon
 
+logger = logging.getLogger(__name__)
+
 
 def _has_mlx_audio() -> bool:
     """Check if mlx-audio is available."""
@@ -141,15 +143,20 @@ class OuteTTS(TTSEngine):
         self._models_ready = True
         return True
 
-    def speak(self, text: str) -> bool:
+    def speak(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> bool:
         """Speak text using OuteTTS via mlx-audio.
 
-        Args:
-            text: Text to speak.
-
-        Returns:
-            True if successful.
+        Per-request voice/language overrides are ignored (outetts uses
+        config values set at init time).
         """
+        if voice or language:
+            logger.debug("outetts ignores per-request voice/language overrides")
         if not self.is_available():
             return False
 

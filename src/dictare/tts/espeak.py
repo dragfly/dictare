@@ -44,15 +44,20 @@ class EspeakTTS(TTSEngine):
         """Check if espeak is available."""
         return self._cmd is not None
 
-    def speak(self, text: str) -> bool:
+    def speak(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> bool:
         """Speak text using espeak.
 
-        Args:
-            text: Text to speak.
-
-        Returns:
-            True if successful.
+        Per-request voice/language overrides are ignored (espeak uses
+        config values set at init time).
         """
+        if voice or language:
+            logger.debug("espeak ignores per-request voice/language overrides")
         if not self._cmd:
             logger.warning("espeak: no binary found")
             return False

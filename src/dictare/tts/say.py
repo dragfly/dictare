@@ -31,15 +31,20 @@ class SayTTS(TTSEngine):
         """Check if say is available (macOS only)."""
         return sys.platform == "darwin" and shutil.which("say") is not None
 
-    def speak(self, text: str) -> bool:
+    def speak(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> bool:
         """Speak text using macOS say.
 
-        Args:
-            text: Text to speak.
-
-        Returns:
-            True if successful.
+        Per-request voice/language overrides are ignored (say uses
+        config values set at init time).
         """
+        if voice or language:
+            logger.debug("say ignores per-request voice/language overrides")
         if not self.is_available():
             logger.warning("say: not available (platform=%s)", sys.platform)
             return False

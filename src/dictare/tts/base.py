@@ -46,11 +46,19 @@ class TTSEngine(ABC):
     """Abstract text-to-speech interface."""
 
     @abstractmethod
-    def speak(self, text: str) -> bool:
+    def speak(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> bool:
         """Speak text aloud.
 
         Args:
             text: Text to speak.
+            voice: Per-request voice override (engine-dependent, optional).
+            language: Per-request language override (engine-dependent, optional).
 
         Returns:
             True if successful.

@@ -72,15 +72,20 @@ class CoquiTTS(TTSEngine):
         """Check if Coqui TTS is available."""
         return self._tts_cmd is not None
 
-    def speak(self, text: str) -> bool:
+    def speak(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> bool:
         """Speak text using Coqui TTS.
 
-        Args:
-            text: Text to speak.
-
-        Returns:
-            True if successful.
+        Per-request voice/language overrides are ignored (coqui uses
+        config values set at init time).
         """
+        if voice or language:
+            logger.debug("coqui ignores per-request voice/language overrides")
         if not self._tts_cmd:
             return False
 
