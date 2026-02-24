@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -94,6 +95,28 @@ def _print_line(line: str, use_rich: bool) -> None:
         console.print(line, highlight=False)
 
 
+def _show_plain_log(log_path: Path, follow: bool, last: int) -> None:
+    """Show a plain-text log file (not JSONL)."""
+    if not log_path.exists():
+        typer.echo(f"No log file found: {log_path}", err=True)
+        raise typer.Exit(1)
+
+    lines = log_path.read_text().splitlines()
+    for line in lines[-last:]:
+        print(line)
+
+    if follow:
+        with open(log_path) as f:
+            f.seek(0, 2)
+            while True:
+                line = f.readline()
+                if line:
+                    print(line.rstrip())
+                    sys.stdout.flush()
+                else:
+                    time.sleep(0.1)
+
+
 def register(app: typer.Typer) -> None:
     """Register the logs command on the main app."""
 
@@ -104,18 +127,25 @@ def register(app: typer.Typer) -> None:
         name: Annotated[str, typer.Option("--name", help="Log name (engine, agent.*)")] = "engine",
         source: Annotated[str, typer.Option("--source", "-s", help="Filter by source (engine, tray)")] = "",
         raw: Annotated[bool, typer.Option("--raw", help="Output raw JSONL (pipe-friendly)")] = False,
+        tts: Annotated[bool, typer.Option("--tts", help="Show TTS worker log (plain text)")] = False,
     ) -> None:
         """Show engine logs in human-readable format.
 
         Examples:
             dictare logs              # last 50 lines (all sources)
             dictare logs -f           # follow (like tail -f)
+            dictare logs --tts        # TTS worker log
+            dictare logs --tts -f     # follow TTS worker log
             dictare logs -s tray      # only tray entries
             dictare logs -s engine    # only engine entries
             dictare logs -n 100       # last 100 lines
             dictare logs --raw | jq . # raw JSONL for scripting
         """
         from dictare.logging.setup import DEFAULT_LOG_DIR
+
+        if tts:
+            _show_plain_log(DEFAULT_LOG_DIR / "tts-worker.log", follow, last)
+            return
 
         log_path = DEFAULT_LOG_DIR / f"{name}.jsonl"
 
