@@ -62,6 +62,12 @@
 4. **Aspetta** che l'utente scelga ("fixalo", "fallo", "vai")
 5. **MAI cambiare comportamento architetturale senza approvazione** — se qualcosa sembra "inutile" (es. mic muting durante play), chiedere PERCHÉ esiste prima di rimuoverlo. Spesso c'è una ragione non ovvia (es. utente può configurare TTS al posto del beep).
 
+### Verify before asserting
+- **Never present commands, paths, or factual claims to the user without verifying them first** using available tools (ls, find, grep, read, etc.)
+- If you can check it in 2 seconds with a tool, check it before responding — not after the user reports an error
+- If you cannot verify something, say so explicitly ("I haven't verified this")
+- The user cannot review everything at the speed you produce it — you are the quality gate, not the user
+
 ### Principi Python
 - **Senior Python Architect**: codice idiomatico, librerie standard, type hints
 - **No reinventare la ruota** — se esiste una soluzione standard, usala
