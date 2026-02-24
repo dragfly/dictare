@@ -709,10 +709,11 @@ class DictareEngine:
         if self.config.tts.voice:
             cmd.extend(["--voice", self.config.tts.voice])
 
-        # When using venv python, inject PYTHONPATH so worker can import dictare
-        env = None
+        # Build env for worker subprocess
+        env = {**os.environ, "COQUI_TOS_AGREED": "1"}
         if venv_python:
-            env = {**os.environ, "PYTHONPATH": get_dictare_src_path()}
+            # When using venv python, inject PYTHONPATH so worker can import dictare
+            env["PYTHONPATH"] = get_dictare_src_path()
 
         logger.info("Spawning TTS worker: %s", " ".join(cmd))
         self._tts_worker_process = subprocess.Popen(

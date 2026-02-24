@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -102,11 +103,13 @@ class CoquiTTS(TTSEngine):
             if self.voice and Path(self.voice).exists():
                 cmd.extend(["--speaker_wav", self.voice])
 
-            # Generate audio
+            # Generate audio — accept Coqui license automatically
+            env = {**os.environ, "COQUI_TOS_AGREED": "1"}
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 timeout=120,  # TTS can be slow on first run (model download)
+                env=env,
             )
 
             if result.returncode != 0 or not wav_path.exists():

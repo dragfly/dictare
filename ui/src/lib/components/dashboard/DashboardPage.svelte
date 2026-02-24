@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
-	import { fetchStatus, type StatusResponse } from "$lib/api";
+	import { fetchStatus, setOutputMode, type StatusResponse } from "$lib/api";
 	import { Badge } from "$lib/components/ui/badge";
 	import { Button } from "$lib/components/ui/button";
 	import { CheckCircle, XCircle, AlertCircle } from "lucide-svelte";
@@ -64,6 +64,12 @@
 	});
 
 	const p = $derived(status?.platform);
+	const outputMode = $derived(p?.output.mode ?? "agents");
+
+	async function switchMode(mode: "keyboard" | "agents") {
+		if (mode === outputMode) return;
+		await setOutputMode(mode);
+	}
 </script>
 
 {#if loading && !status}
@@ -99,6 +105,27 @@
 							<span class="text-destructive text-xs ml-1">unavailable</span>
 						{/if}
 					</div>
+				</div>
+				<!-- Output mode toggle -->
+				<div class="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+					<button
+						onclick={() => switchMode("keyboard")}
+						class="flex-1 py-1.5 text-xs rounded-md transition-colors
+							{outputMode === 'keyboard'
+								? 'bg-primary text-primary-foreground font-medium'
+								: 'bg-muted text-muted-foreground hover:text-foreground'}"
+					>
+						Keyboard
+					</button>
+					<button
+						onclick={() => switchMode("agents")}
+						class="flex-1 py-1.5 text-xs rounded-md transition-colors
+							{outputMode === 'agents'
+								? 'bg-primary text-primary-foreground font-medium'
+								: 'bg-muted text-muted-foreground hover:text-foreground'}"
+					>
+						Agents
+					</button>
 				</div>
 			</div>
 
