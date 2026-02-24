@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b303] - 2026-02-24
+
+### Added
+- **Per-request `voice` and `language` overrides** in `/speech` endpoint.
+  Kokoro uses them to switch voice/language on the fly without restart.
+  Other engines log and ignore unsupported overrides gracefully.
+
 ## [0.1.0b302] - 2026-02-24
 
 ### Fixed

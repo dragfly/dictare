@@ -123,11 +123,13 @@ def main(argv: list[str] | None = None) -> None:
 
         text = msg.text
         request_id = msg.additional_properties.get("request_id", "")
-        logger.info("Speaking: %r (request_id=%s)", text, request_id)
+        voice = msg.additional_properties.get("voice")
+        language = msg.additional_properties.get("language")
+        logger.info("Speaking: %r (request_id=%s, voice=%s, lang=%s)", text, request_id, voice, language)
 
         start = time.time()
         try:
-            ok = tts_engine.speak(text)
+            ok = tts_engine.speak(text, voice=voice, language=language)
         except Exception:
             logger.warning("TTS speak failed for %r", text, exc_info=True)
             ok = False
