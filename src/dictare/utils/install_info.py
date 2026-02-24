@@ -10,6 +10,7 @@ from pathlib import Path
 class InstallMode(Enum):
     """How dictare was installed."""
 
+    HOMEBREW = "homebrew"  # brew install dictare (Homebrew formula with uv-tools)
     UV_TOOL = "uv_tool"  # uv tool install dictare
     PIPX = "pipx"  # pipx install dictare
     PIP = "pip"  # pip install dictare
@@ -28,6 +29,11 @@ def detect_install_mode() -> InstallMode:
         import dictare
 
         dictare_path = str(Path(dictare.__file__).resolve())
+
+        # Homebrew formula installs to /opt/homebrew/Cellar/ or /usr/local/Cellar/
+        # with uv-tools venv inside the Cellar prefix
+        if "/Cellar/dictare/" in dictare_path:
+            return InstallMode.HOMEBREW
 
         # Check for uv tool installation FIRST (highest priority)
         # uv tool installs to ~/.local/share/uv/tools/dictare/lib/.../site-packages/
@@ -56,8 +62,21 @@ def detect_install_mode() -> InstallMode:
     return InstallMode.UNKNOWN
 
 
+def _get_env_python() -> str:
+    """Get the Python path for the current dictare environment.
+
+    Uses sys.prefix (the venv root) rather than sys.executable
+    (which resolves symlinks to the base interpreter that uv marks
+    as externally-managed).
+    """
+    venv_python = Path(sys.prefix) / "bin" / "python"
+    if venv_python.exists():
+        return str(venv_python)
+    return sys.executable
+
+
 def get_install_command(package: str, mode: InstallMode | None = None) -> str:
-    """Get the command to install an optional dependency.
+    """Get the exact, copy-pasteable command to install an optional dependency.
 
     Args:
         package: Package name (e.g., 'piper-tts', 'TTS').
@@ -69,10 +88,13 @@ def get_install_command(package: str, mode: InstallMode | None = None) -> str:
     if mode is None:
         mode = detect_install_mode()
 
+    if mode == InstallMode.HOMEBREW:
+        # Homebrew uses a uv-tools venv inside the Cellar — target that Python
+        return f"uv pip install --python {_get_env_python()} {package}"
+
     if mode == InstallMode.UV_TOOL:
         # For uv tool, install directly into the tool's environment
-        tool_python = Path.home() / ".local/share/uv/tools/dictare/bin/python"
-        return f"uv pip install --python {tool_python} {package}"
+        return f"uv pip install --python {_get_env_python()} {package}"
 
     commands = {
         InstallMode.PIPX: f"pipx inject dictare {package}",

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b281] - 2026-02-24
+
+### Added
+- **`dictare status` CLI command** — top-level command showing engine health,
+  all TTS/STT engine availability with install hints, agent connections,
+  and system permissions. Supports `--json` for scripting.
+- **Dashboard tab in Settings UI** — first tab showing real-time engine status,
+  TTS/STT engine availability with copy-to-clipboard install commands,
+  agent list, and permission status. Updates via SSE.
+- **All-engine health checks** — `check_all_tts_engines()` and
+  `check_all_stt_engines()` in `utils/platform.py` probe all 5 TTS and 3 STT
+  engines with lightweight availability checks.
+- **Enhanced `/status` endpoint** — `engines` field in platform section reports
+  availability of all TTS and STT backends (cached at startup).
+- **Homebrew install mode detection** — install hints now show exact
+  copy-pasteable commands with the correct Python path for Homebrew installs.
+
+### Fixed
+- **espeak install hint** — `brew install espeak` → `brew install espeak-ng`
+  (espeak is deprecated upstream).
+- **espeak detection in launchd** — fallback to `/opt/homebrew/bin/espeak-ng`
+  when Homebrew PATH is not inherited by the service process.
+
 ## [0.1.0b279] - 2026-02-24
 
 ### Fixed

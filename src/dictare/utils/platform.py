@@ -500,3 +500,203 @@ def check_dependencies() -> list[CheckResult]:
     results.extend(_check_display_deps())
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# All-engine health checks (for `dictare status` and Dashboard UI)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class EngineStatus:
+    """Availability status of a single engine."""
+
+    name: str
+    available: bool
+    description: str
+    platform_ok: bool
+    install_hint: str
+    configured: bool = False
+
+    def to_dict(self) -> dict:
+        """Serialize for JSON API."""
+        return {
+            "name": self.name,
+            "available": self.available,
+            "description": self.description,
+            "platform_ok": self.platform_ok,
+            "install_hint": self.install_hint,
+            "configured": self.configured,
+        }
+
+
+def _find_in_python_bin(name: str) -> bool:
+    """Check if a script exists in the same dir as the Python executable."""
+    python_bin = Path(sys.executable).parent
+    return (python_bin / name).exists()
+
+
+def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
+    """Probe every TTS engine and return availability info.
+
+    Lightweight checks only — no heavy imports, no model loading.
+
+    Args:
+        configured_engine: Currently configured TTS engine name (for the 'configured' flag).
+
+    Returns:
+        List of dicts with name, available, description, platform_ok, install_hint, configured.
+    """
+    from dictare.utils.install_info import get_install_command
+
+    results: list[EngineStatus] = []
+
+    # --- say (macOS only) ---
+    say_platform = sys.platform == "darwin"
+    say_available = say_platform and shutil.which("say") is not None
+    results.append(EngineStatus(
+        name="say",
+        available=say_available,
+        description="macOS built-in",
+        platform_ok=say_platform,
+        install_hint="" if say_platform else "macOS only",
+        configured=configured_engine == "say",
+    ))
+
+    # --- espeak ---
+    espeak_available = (
+        shutil.which("espeak-ng") is not None
+        or shutil.which("espeak") is not None
+        # Fallback: launchd services don't inherit Homebrew PATH
+        or Path("/opt/homebrew/bin/espeak-ng").exists()
+        or Path("/usr/local/bin/espeak-ng").exists()
+    )
+    if espeak_available:
+        hint = ""
+    elif is_macos():
+        hint = "brew install espeak-ng"
+    else:
+        hint = "sudo apt install espeak-ng"
+    results.append(EngineStatus(
+        name="espeak",
+        available=espeak_available,
+        description="espeak-ng speech synthesizer",
+        platform_ok=True,
+        install_hint=hint,
+        configured=configured_engine == "espeak",
+    ))
+
+    # --- piper ---
+    piper_available = (
+        shutil.which("piper") is not None
+        or shutil.which("piper-tts") is not None
+        or _find_in_python_bin("piper")
+    )
+    results.append(EngineStatus(
+        name="piper",
+        available=piper_available,
+        description="Piper neural TTS",
+        platform_ok=True,
+        install_hint="" if piper_available else get_install_command("piper-tts"),
+        configured=configured_engine == "piper",
+    ))
+
+    # --- coqui ---
+    coqui_available = (
+        shutil.which("tts") is not None
+        or _find_in_python_bin("tts")
+    )
+    results.append(EngineStatus(
+        name="coqui",
+        available=coqui_available,
+        description="Coqui XTTS neural TTS",
+        platform_ok=True,
+        install_hint="" if coqui_available else get_install_command("TTS"),
+        configured=configured_engine == "coqui",
+    ))
+
+    # --- outetts (Apple Silicon only) ---
+    from dictare.utils.hardware import is_apple_silicon
+
+    outetts_platform = is_apple_silicon()
+    outetts_available = False
+    if outetts_platform:
+        try:
+            from importlib.util import find_spec
+            outetts_available = find_spec("mlx_audio") is not None
+        except (ImportError, ModuleNotFoundError):
+            pass
+    results.append(EngineStatus(
+        name="outetts",
+        available=outetts_available,
+        description="OuteTTS via mlx-audio (Apple Silicon)",
+        platform_ok=outetts_platform,
+        install_hint=(
+            "" if outetts_available
+            else ("Apple Silicon only" if not outetts_platform
+                  else get_install_command("mlx-audio"))
+        ),
+        configured=configured_engine == "outetts",
+    ))
+
+    return [r.to_dict() for r in results]
+
+
+def check_all_stt_engines(configured_model: str = "") -> list[dict]:
+    """Probe every STT backend and return availability info.
+
+    Args:
+        configured_model: Currently configured STT model name.
+
+    Returns:
+        List of dicts with name, available, description, platform_ok, install_hint, configured.
+    """
+    from importlib.util import find_spec
+
+    from dictare.utils.hardware import is_apple_silicon
+    from dictare.utils.install_info import get_install_command
+
+    results: list[EngineStatus] = []
+    is_parakeet_model = configured_model.startswith("parakeet")
+    is_whisper_model = not is_parakeet_model and configured_model != ""
+
+    # --- parakeet (onnx-asr) ---
+    parakeet_available = find_spec("onnx_asr") is not None
+    results.append(EngineStatus(
+        name="parakeet",
+        available=parakeet_available,
+        description="Parakeet v3 via onnx-asr",
+        platform_ok=True,
+        install_hint="" if parakeet_available else get_install_command("onnx-asr"),
+        configured=is_parakeet_model,
+    ))
+
+    # --- mlx-whisper (Apple Silicon) ---
+    mlx_platform = is_apple_silicon()
+    mlx_available = False
+    if mlx_platform:
+        mlx_available = find_spec("mlx_whisper") is not None
+    results.append(EngineStatus(
+        name="mlx-whisper",
+        available=mlx_available,
+        description="Whisper on Apple Silicon (MLX)",
+        platform_ok=mlx_platform,
+        install_hint=(
+            "" if mlx_available
+            else ("Apple Silicon only" if not mlx_platform
+                  else get_install_command("mlx-whisper"))
+        ),
+        configured=is_whisper_model and mlx_platform and mlx_available,
+    ))
+
+    # --- faster-whisper (CTranslate2) ---
+    fw_available = find_spec("faster_whisper") is not None
+    results.append(EngineStatus(
+        name="faster-whisper",
+        available=fw_available,
+        description="Whisper via CTranslate2",
+        platform_ok=True,
+        install_hint="" if fw_available else get_install_command("faster-whisper"),
+        configured=is_whisper_model and (not mlx_platform or not mlx_available),
+    ))
+
+    return [r.to_dict() for r in results]

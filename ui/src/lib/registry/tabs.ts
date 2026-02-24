@@ -1,4 +1,5 @@
 import {
+  Activity,
   AudioWaveform,
   Bot,
   HardDrive,
@@ -13,6 +14,13 @@ import {
 import type { TabDef } from "$lib/types";
 
 export const tabs: TabDef[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: Activity,
+    sections: [],
+    desc: "Engine health and system status",
+  },
   {
     id: "general",
     label: "General",
