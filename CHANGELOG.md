@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b287] - 2026-02-24
+
+### Fixed
+- **Coqui TTS uses XTTS v2 model** — without explicit `--model_name`, coqui CLI
+  defaulted to Tacotron2-DDC (English-only), silently ignoring `--language_idx`.
+  Now always specifies `tts_models/multilingual/multi-dataset/xtts_v2`.
+- **Coqui TTS logs errors** — `speak()` now logs stderr on subprocess failure
+  instead of swallowing it silently.
+- **Venv tests use tmp_path** — tests for missing venvs no longer fail when real
+  venvs exist on the developer's machine.
+
 ## [0.1.0b286] - 2026-02-24
 
 ### Added

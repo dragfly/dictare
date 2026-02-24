@@ -21,13 +21,13 @@ def test_venv_paths():
         assert venv_dir == Path.home() / ".local" / "share" / "dictare" / "tts-env" / engine
 
 
-def test_get_venv_python_returns_none_for_missing():
+def test_get_venv_python_returns_none_for_missing(tmp_path: Path):
     """get_venv_python returns None when venv doesn't exist."""
     from dictare.tts.venv import get_venv_python
 
-    # These venvs don't exist in the test environment
-    for engine in ("piper", "coqui", "outetts", "kokoro"):
-        assert get_venv_python(engine) is None
+    with patch("dictare.tts.venv._VENV_ROOT", tmp_path):
+        for engine in ("piper", "coqui", "outetts", "kokoro"):
+            assert get_venv_python(engine) is None
 
 
 def test_get_venv_python_returns_none_for_system_engines():
@@ -38,12 +38,13 @@ def test_get_venv_python_returns_none_for_system_engines():
     assert get_venv_python("espeak") is None
 
 
-def test_get_venv_bin_dir_returns_none_for_missing():
+def test_get_venv_bin_dir_returns_none_for_missing(tmp_path: Path):
     """get_venv_bin_dir returns None when venv doesn't exist."""
     from dictare.tts.venv import get_venv_bin_dir
 
-    for engine in ("piper", "coqui", "outetts", "kokoro"):
-        assert get_venv_bin_dir(engine) is None
+    with patch("dictare.tts.venv._VENV_ROOT", tmp_path):
+        for engine in ("piper", "coqui", "outetts", "kokoro"):
+            assert get_venv_bin_dir(engine) is None
 
 
 def test_get_venv_bin_dir_returns_none_for_non_venv_engines():
@@ -75,12 +76,13 @@ def test_get_dictare_src_path():
 # ---------------------------------------------------------------------------
 
 
-def test_is_venv_installed_false_when_missing():
+def test_is_venv_installed_false_when_missing(tmp_path: Path):
     """is_venv_installed returns False when venv doesn't exist."""
     from dictare.tts.venv import is_venv_installed
 
-    for engine in ("piper", "coqui", "outetts", "kokoro"):
-        assert is_venv_installed(engine) is False
+    with patch("dictare.tts.venv._VENV_ROOT", tmp_path):
+        for engine in ("piper", "coqui", "outetts", "kokoro"):
+            assert is_venv_installed(engine) is False
 
 
 def test_is_venv_installed_with_existing_python(tmp_path: Path):
