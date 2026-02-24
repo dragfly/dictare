@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b278] - 2026-02-24
+
+### Changed
+- **Unified native audio playback** — all TTS engines (piper, coqui, outetts)
+  now use `play_wav_native()`: afplay on macOS, paplay/aplay on Linux.
+  Eliminates sounddevice/PortAudio crackling from sample rate mismatch.
+  See `docs/notes/audio-playback-architecture.md`.
+
 ## [0.1.0b277] - 2026-02-24
 
 ### Fixed
