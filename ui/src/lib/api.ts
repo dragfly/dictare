@@ -150,6 +150,46 @@ export function createPullProgressSource(): EventSource {
 	return new EventSource("/models/pull-progress");
 }
 
+// ----- Status / Dashboard API -----
+
+export type EngineInfo = {
+	name: string;
+	available: boolean;
+	description: string;
+	platform_ok: boolean;
+	install_hint: string;
+	configured: boolean;
+};
+
+export type StatusResponse = {
+	protocol_version: string;
+	state: string;
+	connected_agents: string[];
+	platform: {
+		name: string;
+		version: string;
+		mode: string;
+		state: string;
+		uptime_seconds: number;
+		stt: { model_name: string; device: string; last_text: string };
+		tts: { engine: string; language: string; available: boolean; error: string | null };
+		output: { mode: string; current_agent: string; available_agents: string[] };
+		hotkey: { key: string; bound: boolean };
+		permissions: Record<string, boolean>;
+		engines: {
+			tts: EngineInfo[];
+			stt: EngineInfo[];
+		};
+		loading: { active: boolean; models: { name: string; status: string }[] };
+	};
+};
+
+export async function fetchStatus(): Promise<StatusResponse> {
+	const r = await fetch("/status");
+	if (!r.ok) throw new Error(`Failed to load status: ${r.status}`);
+	return r.json();
+}
+
 export async function restartEngine(): Promise<void> {
 	try {
 		await fetch("/control", {

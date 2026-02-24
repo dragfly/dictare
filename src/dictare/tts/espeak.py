@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+from pathlib import Path
 
 from dictare.tts.base import TTSEngine
 
@@ -32,6 +33,10 @@ class EspeakTTS(TTSEngine):
         path = shutil.which("espeak")
         if path:
             return path
+        # Fallback: launchd services don't inherit Homebrew PATH
+        for fallback in ("/opt/homebrew/bin/espeak-ng", "/usr/local/bin/espeak-ng"):
+            if Path(fallback).exists():
+                return fallback
         return None
 
     def is_available(self) -> bool:

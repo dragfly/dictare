@@ -194,6 +194,9 @@ class DictareEngine:
         # Last transcribed text (for /status endpoint)
         self._last_text = ""
 
+        # Cached engine availability (computed once at startup — doesn't change at runtime)
+        self._engines_cache: dict | None = None
+
         # Note: No more _injector - each Agent handles its own transport
 
     def _handle_state_change(self, old: Any, new: Any, trigger: str) -> None:
@@ -1401,8 +1404,20 @@ class DictareEngine:
                         for m in self._loading_models
                     ],
                 },
+                "engines": self._get_engines_cache(),
             },
         }
+
+    def _get_engines_cache(self) -> dict:
+        """Return cached engine availability (computed once, lazy)."""
+        if self._engines_cache is None:
+            from dictare.utils.platform import check_all_stt_engines, check_all_tts_engines
+
+            self._engines_cache = {
+                "tts": check_all_tts_engines(self.config.tts.engine),
+                "stt": check_all_stt_engines(self.config.stt.model),
+            }
+        return self._engines_cache
 
     @staticmethod
     def _get_permissions() -> dict:
