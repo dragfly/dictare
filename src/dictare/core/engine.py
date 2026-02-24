@@ -1531,6 +1531,7 @@ class DictareEngine:
         if start_listening:
             old_state = self.state
             self._state_manager.transition(AppState.LISTENING)
+            logger.info("start_runtime: transitioned %s → LISTENING", old_state.name)
             self._emit("on_state_change", old_state, AppState.LISTENING, "start")
 
     def run(self) -> None:

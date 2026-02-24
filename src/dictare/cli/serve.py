@@ -149,7 +149,9 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
             console.print(f"[red]Failed to start engine: {e}[/]")
             raise typer.Exit(1) from e
 
-        _logger.info("Engine ready (IDLE — waiting for trigger)")
+        _logger.info(
+            "Engine ready (%s)", "LISTENING" if controller.is_listening else "IDLE",
+        )
 
         # Signal handlers
         def signal_handler(signum: int, frame: Any) -> None:
