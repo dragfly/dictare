@@ -70,12 +70,15 @@ def _get_configured_models(config=None) -> dict[str, str]:
         if stt_key in registry:
             configured[stt_key] = "stt"
 
-    # TTS model: find model by engine
-    # e.g., "outetts" -> "outetts"
+    # TTS capability: match by key or venv field
+    # e.g., "coqui" -> "coqui-xtts-v2" (via venv field)
+    # e.g., "piper" -> "piper" (direct key match)
     tts_engine = config.tts.engine
-    if tts_engine in ("outetts",):
+    if tts_engine in registry and registry[tts_engine]["type"] == "tts":
+        configured[tts_engine] = "tts"
+    else:
         for name, info in registry.items():
-            if info.get("engine") == tts_engine:
+            if info.get("type") == "tts" and info.get("venv") == tts_engine:
                 configured[name] = "tts"
                 break
 
@@ -103,6 +106,8 @@ def ensure_required_models(config=None) -> bool:
     for name in configured.keys():
         if name in registry:
             info = registry[name]
+            if not info.get("repo"):
+                continue
             check_file = info.get("check_file", "config.json")
             if not is_repo_cached(info["repo"], check_file):
                 missing.append(name)
@@ -169,7 +174,12 @@ def _show_models_list(config=None) -> None:
     table.add_column("Size", justify="right")
 
     for name, info in _get_model_registry().items():
-        repo = info["repo"]
+        # Skip builtins (no repo to check)
+        if info.get("builtin"):
+            continue
+        repo = info.get("repo")
+        if not repo:
+            continue
         model_type = info["type"].upper()
         usage = configured.get(name, "")
 
@@ -269,7 +279,10 @@ def models_pull(
         raise typer.Exit(1)
 
     info = _get_model_registry()[model]
-    repo = info["repo"]
+    repo = info.get("repo")
+    if not repo:
+        console.print(f"[yellow]Model '{model}' is a builtin — nothing to download[/]")
+        raise typer.Exit(0)
 
     from huggingface_hub import snapshot_download
 
@@ -321,6 +334,8 @@ def models_rm(
 
         cleared = 0
         for name, info in _get_model_registry().items():
+            if not info.get("repo"):
+                continue
             cache_dir = get_hf_cache_dir(info["repo"])
             if cache_dir.exists():
                 shutil.rmtree(cache_dir)
@@ -339,7 +354,11 @@ def models_rm(
         raise typer.Exit(1)
 
     info = _get_model_registry()[model]
-    cache_dir = get_hf_cache_dir(info["repo"])
+    repo = info.get("repo")
+    if not repo:
+        console.print(f"[yellow]Model '{model}' is a builtin — nothing to remove[/]")
+        raise typer.Exit(0)
+    cache_dir = get_hf_cache_dir(repo)
 
     if not cache_dir.exists():
         console.print(f"[yellow]Model '{model}' is not cached[/]")

@@ -50,28 +50,46 @@
     "check_file": "model.bin",
     "description": "Whisper large-v3-turbo (fast + accurate)"
   },
-  "vyvotts-4bit": {
+  "say": {
     "type": "tts",
-    "repo": "mlx-community/VyvoTTS-EN-Beta-4bit",
-    "size_gb": 1.0,
-    "check_file": "config.json",
-    "engine": "qwen3",
-    "description": "VyvoTTS 4-bit (qwen3 engine, fastest)"
+    "description": "macOS built-in speech",
+    "size_gb": 0,
+    "builtin": true,
+    "platform": "darwin"
   },
-  "vyvotts-8bit": {
+  "espeak": {
     "type": "tts",
-    "repo": "mlx-community/VyvoTTS-EN-Beta-8bit",
+    "description": "espeak-ng speech synthesizer",
+    "size_gb": 0,
+    "builtin": true
+  },
+  "piper": {
+    "type": "tts",
+    "description": "Piper neural TTS",
+    "size_gb": 0.1,
+    "venv": "piper"
+  },
+  "coqui-xtts-v2": {
+    "type": "tts",
+    "description": "Coqui XTTS v2 (16 languages, voice cloning)",
     "size_gb": 1.5,
-    "check_file": "config.json",
-    "engine": "qwen3",
-    "description": "VyvoTTS 8-bit (qwen3 engine)"
+    "venv": "coqui",
+    "repo": "coqui/XTTS-v2",
+    "check_file": "config.json"
   },
   "outetts": {
     "type": "tts",
-    "repo": "OuteAI/OuteTTS-0.3-1B-GGUF",
-    "size_gb": 1.2,
+    "description": "OuteTTS via mlx-audio (Apple Silicon)",
+    "size_gb": 0.7,
+    "venv": "outetts",
+    "repo": "mlx-community/Llama-OuteTTS-1.0-1B-4bit",
     "check_file": "config.json",
-    "engine": "outetts",
-    "description": "OuteTTS (outetts engine)"
+    "platform": "apple_silicon"
+  },
+  "kokoro": {
+    "type": "tts",
+    "description": "Kokoro neural TTS (lightweight ONNX)",
+    "size_gb": 0.3,
+    "venv": "kokoro"
   }
 }

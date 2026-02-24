@@ -462,7 +462,9 @@ class OpenVIPServer:
 
             result = []
             for model_id, info in registry.items():
-                repo = info["repo"]
+                repo = info.get("repo")
+                if not repo:
+                    continue  # skip builtins in legacy /models endpoint
                 check_file = info.get("check_file", "config.json")
                 cached = await asyncio.to_thread(is_repo_cached, repo, check_file)
                 cache_size = await asyncio.to_thread(get_cache_size, repo) if cached else 0
@@ -546,7 +548,7 @@ class OpenVIPServer:
 
             return EventSourceResponse(event_generator())
 
-        # ----- TTS Venv Install/Uninstall API -----
+        # ----- TTS Venv Install/Uninstall API (legacy, kept for compat) -----
 
         @app.post("/tts-engines/{engine}/install")
         async def tts_engine_install(engine: str):
@@ -587,6 +589,148 @@ class OpenVIPServer:
             await asyncio.to_thread(uninstall_venv, engine)
             return {"status": "ok"}
 
+        # ----- Capabilities API (unified models + engines) -----
+
+        @app.get("/capabilities")
+        async def capabilities_list():
+            """List all STT/TTS capabilities with install and config status."""
+            import shutil
+            import sys
+
+            from dictare.cli.models import _get_configured_models, _get_model_registry
+            from dictare.config import load_config
+            from dictare.tts.venv import is_venv_installed
+            from dictare.utils.hardware import is_apple_silicon
+            from dictare.utils.hf_download import is_repo_cached
+
+            config = load_config()
+            registry = _get_model_registry()
+            configured = _get_configured_models(config)
+
+            result = []
+            for cap_id, info in registry.items():
+                cap_type = info["type"]
+                builtin = info.get("builtin", False)
+                platform_req = info.get("platform")
+                venv_name = info.get("venv")
+                repo = info.get("repo")
+                check_file = info.get("check_file", "config.json")
+
+                # Platform check
+                if platform_req == "darwin":
+                    platform_ok = sys.platform == "darwin"
+                elif platform_req == "apple_silicon":
+                    platform_ok = await asyncio.to_thread(is_apple_silicon)
+                else:
+                    platform_ok = True
+
+                # Venv check
+                if venv_name:
+                    venv_installed = await asyncio.to_thread(is_venv_installed, venv_name)
+                else:
+                    venv_installed = True  # no venv needed
+
+                # Model cache check
+                if repo:
+                    model_cached = await asyncio.to_thread(is_repo_cached, repo, check_file)
+                else:
+                    model_cached = True  # no model to download
+
+                # Builtin readiness: check binary exists
+                if builtin:
+                    if cap_id == "say":
+                        ready = platform_ok and await asyncio.to_thread(
+                            lambda: shutil.which("say") is not None
+                        )
+                    elif cap_id == "espeak":
+                        ready = await asyncio.to_thread(
+                            lambda: (
+                                shutil.which("espeak-ng") is not None
+                                or shutil.which("espeak") is not None
+                            )
+                        )
+                    else:
+                        ready = platform_ok
+                else:
+                    ready = platform_ok and venv_installed and model_cached
+
+                # Download state
+                job = self._download_jobs.get(cap_id) or self._download_jobs.get(f"tts-install-{venv_name}")
+                downloading = job is not None and job.get("status") == "downloading"
+
+                result.append({
+                    "id": cap_id,
+                    "type": cap_type,
+                    "description": info["description"],
+                    "size_gb": info["size_gb"],
+                    "platform_ok": platform_ok,
+                    "ready": ready,
+                    "venv_installed": venv_installed if venv_name else None,
+                    "model_cached": model_cached if repo else None,
+                    "configured": cap_id in configured,
+                    "builtin": builtin,
+                    "downloading": downloading,
+                    "download_fraction": job.get("fraction") if downloading else None,
+                })
+
+            return {"capabilities": result}
+
+        @app.post("/capabilities/{cap_id}/install")
+        async def capability_install(cap_id: str):
+            """Install a capability (venv + model download)."""
+            from dictare.cli.models import _get_model_registry
+            from dictare.tts.venv import is_venv_installed
+            from dictare.utils.hf_download import is_repo_cached
+
+            registry = _get_model_registry()
+            if cap_id not in registry:
+                raise HTTPException(status_code=404, detail=f"Unknown capability: {cap_id}")
+
+            info = registry[cap_id]
+            if info.get("builtin"):
+                raise HTTPException(status_code=400, detail="Builtin capability — nothing to install")
+
+            venv_name = info.get("venv")
+            repo = info.get("repo")
+
+            # Already fully installed?
+            venv_ok = not venv_name or is_venv_installed(venv_name)
+            model_ok = not repo or is_repo_cached(repo, info.get("check_file", "config.json"))
+            if venv_ok and model_ok:
+                return {"status": "ready"}
+
+            # Check for existing job
+            if cap_id in self._download_jobs and self._download_jobs[cap_id].get("status") == "downloading":
+                return {"status": "installing"}
+
+            loop = asyncio.get_running_loop()
+            t = threading.Thread(
+                target=self._run_capability_install,
+                args=(cap_id, info, loop),
+                daemon=True,
+                name=f"cap-install-{cap_id}",
+            )
+            t.start()
+            return {"status": "started"}
+
+        @app.delete("/capabilities/{cap_id}/install")
+        async def capability_uninstall(cap_id: str):
+            """Uninstall a capability's venv (model cache stays)."""
+            from dictare.cli.models import _get_model_registry
+            from dictare.tts.venv import VENV_ENGINES, uninstall_venv
+
+            registry = _get_model_registry()
+            if cap_id not in registry:
+                raise HTTPException(status_code=404, detail=f"Unknown capability: {cap_id}")
+
+            info = registry[cap_id]
+            venv_name = info.get("venv")
+            if not venv_name or venv_name not in VENV_ENGINES:
+                raise HTTPException(status_code=400, detail="This capability has no venv to uninstall")
+
+            await asyncio.to_thread(uninstall_venv, venv_name)
+            return {"status": "ok"}
+
         return app
 
     def _run_model_download(
@@ -604,6 +748,8 @@ class OpenVIPServer:
         repo: str = info["repo"]
         runtime: str = info.get("runtime", "hf")
         size_gb: float = info["size_gb"]
+
+        logger.info("Downloading model %s (%.1f GB)", model_id, size_gb)
 
         # Get total size (API call, best-effort)
         total_bytes = int(size_gb * 1024 ** 3)
@@ -657,9 +803,11 @@ class OpenVIPServer:
             _push({"model_id": model_id, **self._download_jobs[model_id]})
 
         if errors:
+            logger.error("Model %s download failed: %s", model_id, errors[0])
             job = {"status": "error", "message": str(errors[0]), "fraction": 0.0, "downloaded_bytes": 0, "total_bytes": total_bytes}
         else:
             current = get_cache_size(repo)
+            logger.info("Model %s downloaded (%.1f MB)", model_id, current / 1e6)
             job = {"status": "done", "fraction": 1.0, "downloaded_bytes": current, "total_bytes": total_bytes}
 
         self._download_jobs[model_id] = job
@@ -678,6 +826,7 @@ class OpenVIPServer:
         from dictare.tts.venv import install_venv
 
         job_id = f"tts-install-{engine}"
+        logger.info("Installing TTS venv for %s", engine)
 
         def _push(event: dict) -> None:
             with self._progress_queues_lock:
@@ -699,8 +848,10 @@ class OpenVIPServer:
         ok = install_venv(engine, on_progress=on_progress)
 
         if ok:
+            logger.info("TTS venv for %s installed successfully", engine)
             job = {"status": "done", "fraction": 1.0, "message": f"TTS venv for {engine} installed"}
         else:
+            logger.error("TTS venv install failed for %s", engine)
             job = {"status": "error", "fraction": 0.0, "message": f"Failed to install TTS venv for {engine}"}
 
         self._download_jobs[job_id] = job
@@ -708,6 +859,124 @@ class OpenVIPServer:
 
         time.sleep(10)
         self._download_jobs.pop(job_id, None)
+
+    def _run_capability_install(
+        self, cap_id: str, info: dict, loop: asyncio.AbstractEventLoop
+    ) -> None:
+        """Install a capability: venv first, then model download.
+
+        Orchestrates multi-step install, streaming progress via SSE.
+        """
+        import time
+
+        from dictare.tts.venv import install_venv, is_venv_installed
+        from dictare.utils.hf_download import get_cache_size, get_repo_size, is_repo_cached
+
+        venv_name = info.get("venv")
+        repo = info.get("repo")
+        check_file = info.get("check_file", "config.json")
+        size_gb: float = info.get("size_gb", 0)
+
+        logger.info("Installing capability %s", cap_id)
+
+        def _push(event: dict) -> None:
+            with self._progress_queues_lock:
+                queues = list(self._progress_queues)
+            for q in queues:
+                loop.call_soon_threadsafe(q.put_nowait, event)
+
+        self._download_jobs[cap_id] = {
+            "status": "downloading",
+            "fraction": 0.0,
+            "message": f"Installing {cap_id}...",
+        }
+        _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+
+        # Step 1: Install venv if needed
+        if venv_name and not is_venv_installed(venv_name):
+            self._download_jobs[cap_id].update({"message": f"Creating venv for {venv_name}...", "fraction": 0.1})
+            _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+
+            def on_progress(msg: str) -> None:
+                self._download_jobs[cap_id].update({"message": msg, "fraction": 0.3})
+                _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+
+            ok = install_venv(venv_name, on_progress=on_progress)
+            if not ok:
+                logger.error("Capability %s: venv install failed", cap_id)
+                job = {"status": "error", "fraction": 0.0, "message": f"Venv install failed for {venv_name}"}
+                self._download_jobs[cap_id] = job
+                _push({"model_id": cap_id, **job})
+                time.sleep(10)
+                self._download_jobs.pop(cap_id, None)
+                return
+
+        # Step 2: Download model if needed
+        if repo and not is_repo_cached(repo, check_file):
+            total_bytes = int(size_gb * 1024 ** 3)
+            try:
+                actual = get_repo_size(repo)
+                if actual:
+                    total_bytes = actual
+            except Exception:
+                pass
+
+            self._download_jobs[cap_id].update({
+                "message": "Downloading model...",
+                "fraction": 0.5,
+                "downloaded_bytes": 0,
+                "total_bytes": total_bytes,
+            })
+            _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+
+            import threading as _threading
+
+            done_event = _threading.Event()
+            errors: list[Exception] = []
+
+            def _do_download() -> None:
+                try:
+                    runtime = info.get("runtime", "hf")
+                    if runtime == "onnx-asr":
+                        from onnx_asr import load_model as _onnx_load
+                        _onnx_load(info["onnx_asr_model"])
+                    else:
+                        from huggingface_hub import snapshot_download
+                        snapshot_download(repo)
+                except Exception as exc:
+                    errors.append(exc)
+                finally:
+                    done_event.set()
+
+            _threading.Thread(target=_do_download, daemon=True).start()
+
+            while not done_event.is_set():
+                done_event.wait(timeout=0.5)
+                current = get_cache_size(repo)
+                fraction = 0.5 + 0.49 * min(current / total_bytes, 1.0) if total_bytes > 0 else 0.5
+                self._download_jobs[cap_id].update({
+                    "fraction": fraction,
+                    "downloaded_bytes": current,
+                    "message": "Downloading model...",
+                })
+                _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+
+            if errors:
+                logger.error("Capability %s: model download failed: %s", cap_id, errors[0])
+                job = {"status": "error", "fraction": 0.0, "message": str(errors[0])}
+                self._download_jobs[cap_id] = job
+                _push({"model_id": cap_id, **job})
+                time.sleep(10)
+                self._download_jobs.pop(cap_id, None)
+                return
+
+        logger.info("Capability %s installed successfully", cap_id)
+        job = {"status": "done", "fraction": 1.0, "message": f"{cap_id} installed"}
+        self._download_jobs[cap_id] = job
+        _push({"model_id": cap_id, **job})
+
+        time.sleep(10)
+        self._download_jobs.pop(cap_id, None)
 
     def start(self) -> None:
         """Start the HTTP server in a background thread."""

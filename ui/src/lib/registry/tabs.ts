@@ -7,7 +7,6 @@ import {
   Mic,
   MonitorSpeaker,
   Server,
-  Settings,
   SlidersHorizontal,
   Volume2,
 } from "lucide-svelte";
@@ -22,11 +21,11 @@ export const tabs: TabDef[] = [
     desc: "Engine health and system status",
   },
   {
-    id: "general",
-    label: "General",
-    icon: Settings,
-    sections: [""],
-    desc: "General settings",
+    id: "models",
+    label: "Models",
+    icon: HardDrive,
+    sections: [],
+    desc: "Download and manage STT & TTS capabilities",
   },
   {
     id: "audio",
@@ -78,19 +77,13 @@ export const tabs: TabDef[] = [
     desc: "OpenVIP HTTP server",
   },
   {
-    id: "models",
-    label: "Models",
-    icon: HardDrive,
-    sections: [],
-    desc: "Download and manage STT and TTS models",
-  },
-  {
     id: "advanced",
     label: "Advanced",
     icon: SlidersHorizontal,
-    sections: ["client", "logging", "stats", "daemon", "pipeline"],
+    sections: ["", "client", "logging", "stats", "daemon", "pipeline"],
     desc: "Client, logging, daemon, and pipeline settings",
     children: [
+      { id: "advanced-general", label: "General", sections: [""], desc: "Editor and verbose" },
       { id: "advanced-client", label: "Client", sections: ["client"], desc: "Agent client settings" },
       { id: "advanced-logging", label: "Logging", sections: ["logging"], desc: "Log file and level" },
       { id: "advanced-stats", label: "Statistics", sections: ["stats"], desc: "Typing statistics" },
@@ -99,4 +92,3 @@ export const tabs: TabDef[] = [
     ],
   },
 ];
-
