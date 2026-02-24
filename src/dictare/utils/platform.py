@@ -495,6 +495,8 @@ class EngineStatus:
     platform_ok: bool
     install_hint: str
     configured: bool = False
+    venv_installed: bool = False
+    needs_venv: bool = False
 
     def to_dict(self) -> dict:
         """Serialize for JSON API."""
@@ -505,6 +507,8 @@ class EngineStatus:
             "platform_ok": self.platform_ok,
             "install_hint": self.install_hint,
             "configured": self.configured,
+            "venv_installed": self.venv_installed,
+            "needs_venv": self.needs_venv,
         }
 
 def _find_in_python_bin(name: str) -> bool:
@@ -523,6 +527,7 @@ def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
     Returns:
         List of dicts with name, available, description, platform_ok, install_hint, configured.
     """
+    from dictare.tts.venv import VENV_ENGINES, get_venv_bin_dir, is_venv_installed
     from dictare.utils.install_info import get_install_command
 
     results: list[EngineStatus] = []
@@ -563,10 +568,13 @@ def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
     ))
 
     # --- piper ---
+    piper_venv = is_venv_installed("piper")
+    piper_venv_bin = get_venv_bin_dir("piper")
     piper_available = (
         shutil.which("piper") is not None
         or shutil.which("piper-tts") is not None
         or _find_in_python_bin("piper")
+        or (piper_venv_bin is not None and (piper_venv_bin / "piper").exists())
     )
     results.append(EngineStatus(
         name="piper",
@@ -575,12 +583,17 @@ def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
         platform_ok=True,
         install_hint="" if piper_available else get_install_command("piper-tts"),
         configured=configured_engine == "piper",
+        needs_venv="piper" in VENV_ENGINES,
+        venv_installed=piper_venv,
     ))
 
     # --- coqui ---
+    coqui_venv = is_venv_installed("coqui")
+    coqui_venv_bin = get_venv_bin_dir("coqui")
     coqui_available = (
         shutil.which("tts") is not None
         or _find_in_python_bin("tts")
+        or (coqui_venv_bin is not None and (coqui_venv_bin / "tts").exists())
     )
     results.append(EngineStatus(
         name="coqui",
@@ -589,12 +602,15 @@ def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
         platform_ok=True,
         install_hint="" if coqui_available else get_install_command("TTS"),
         configured=configured_engine == "coqui",
+        needs_venv="coqui" in VENV_ENGINES,
+        venv_installed=coqui_venv,
     ))
 
     # --- outetts (Apple Silicon only) ---
     from dictare.utils.hardware import is_apple_silicon
 
     outetts_platform = is_apple_silicon()
+    outetts_venv = is_venv_installed("outetts")
     outetts_available = False
     if outetts_platform:
         try:
@@ -602,6 +618,9 @@ def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
             outetts_available = find_spec("mlx_audio") is not None
         except (ImportError, ModuleNotFoundError):
             pass
+        # Also check the venv for mlx-audio availability
+        if not outetts_available and outetts_venv:
+            outetts_available = True
     results.append(EngineStatus(
         name="outetts",
         available=outetts_available,
@@ -613,6 +632,8 @@ def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
                   else get_install_command("mlx-audio"))
         ),
         configured=configured_engine == "outetts",
+        needs_venv="outetts" in VENV_ENGINES,
+        venv_installed=outetts_venv,
     ))
 
     return [r.to_dict() for r in results]

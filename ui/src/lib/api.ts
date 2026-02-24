@@ -159,6 +159,8 @@ export type EngineInfo = {
 	platform_ok: boolean;
 	install_hint: string;
 	configured: boolean;
+	venv_installed: boolean;
+	needs_venv: boolean;
 };
 
 export type StatusResponse = {
@@ -200,4 +202,18 @@ export async function restartEngine(): Promise<void> {
 	} catch {
 		// Expected: engine shuts down mid-restart, connection drops
 	}
+}
+
+// ----- TTS Venv Install/Uninstall API -----
+
+export async function installTtsEngine(engine: string): Promise<string> {
+	const r = await fetch(`/tts-engines/${engine}/install`, { method: "POST" });
+	if (!r.ok) throw new Error(`Install failed: ${r.status}`);
+	const data = await r.json();
+	return data.status as string;
+}
+
+export async function uninstallTtsEngine(engine: string): Promise<void> {
+	const r = await fetch(`/tts-engines/${engine}/install`, { method: "DELETE" });
+	if (!r.ok) throw new Error(`Uninstall failed: ${r.status}`);
 }

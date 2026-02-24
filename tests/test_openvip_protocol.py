@@ -727,10 +727,9 @@ class TestEdgeCases:
         assert r.status_code in (200, 400, 500)
 
     def test_empty_speech_text(self, e2e_client) -> None:
-        """Empty speech text returns error, not crash."""
+        """Empty speech text returns 422 error, not crash."""
         r = e2e_client.post("/speech", json={"text": ""})
-        assert r.status_code == 200
-        assert r.json()["status"] == "error"
+        assert r.status_code == 422
 
     def test_agent_id_with_special_chars(self, e2e_client) -> None:
         """Agent IDs with dashes and underscores work."""

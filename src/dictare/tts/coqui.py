@@ -49,6 +49,15 @@ class CoquiTTS(TTSEngine):
         if tts_path.exists():
             return str(tts_path)
 
+        # Try tts in the isolated TTS venv
+        from dictare.tts.venv import get_venv_bin_dir
+
+        venv_bin = get_venv_bin_dir("coqui")
+        if venv_bin:
+            venv_tts = venv_bin / "tts"
+            if venv_tts.exists():
+                return str(venv_tts)
+
         return None
 
     def is_available(self) -> bool:
