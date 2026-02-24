@@ -90,12 +90,41 @@ class KokoroTTS(TTSEngine):
 
         from kokoro_onnx import Kokoro
 
-        self._kokoro = Kokoro.from_pretrained(
-            model_id="hexgrad/Kokoro-82M-v1.1-ONNX",
-            model_filename="model.onnx",
-            voices_filename="voices-v1.1.bin",
-        )
+        model_dir = self._model_dir()
+        model_path = model_dir / "model.onnx"
+        voices_path = model_dir / "voices.bin"
+
+        if not model_path.exists() or not voices_path.exists():
+            self._download_model(model_dir)
+
+        self._kokoro = Kokoro(str(model_path), str(voices_path))
         return self._kokoro
+
+    @staticmethod
+    def _model_dir() -> Path:
+        """Return the directory for kokoro model files."""
+        return Path.home() / ".local" / "share" / "dictare" / "models" / "kokoro"
+
+    @staticmethod
+    def _download_model(model_dir: Path) -> None:
+        """Download kokoro model files from GitHub releases."""
+        import urllib.request
+
+        model_dir.mkdir(parents=True, exist_ok=True)
+
+        base = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+        files = {
+            "model.onnx": f"{base}/kokoro-v1.0.onnx",
+            "voices.bin": f"{base}/voices-v1.0.bin",
+        }
+
+        for filename, url in files.items():
+            dest = model_dir / filename
+            if dest.exists():
+                continue
+            logger.info("Downloading kokoro %s (~%s)...", filename, "310MB" if "model" in filename else "27MB")
+            urllib.request.urlretrieve(url, str(dest))
+            logger.info("Downloaded %s", filename)
 
     def _resolve_lang(self) -> str:
         """Map dictare language code to kokoro lang code."""

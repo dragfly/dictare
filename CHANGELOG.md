@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b301] - 2026-02-24
+
+### Fixed
+- **Kokoro TTS API update** — `Kokoro.from_pretrained()` was removed in
+  kokoro-onnx 0.5.0. Now downloads model files from GitHub releases
+  (~310MB model + 27MB voices) to `~/.local/share/dictare/models/kokoro/`
+  and passes paths to `Kokoro(model_path, voices_path)`.
+- **`dictare logs --tts`** — new flag to view TTS worker log (plain text).
+
 ## [0.1.0b300] - 2026-02-24
 
 ### Fixed
