@@ -217,3 +217,39 @@ export async function uninstallTtsEngine(engine: string): Promise<void> {
 	const r = await fetch(`/tts-engines/${engine}/install`, { method: "DELETE" });
 	if (!r.ok) throw new Error(`Uninstall failed: ${r.status}`);
 }
+
+// ----- Capabilities API (unified models + engines) -----
+
+export type CapabilityInfo = {
+	id: string;
+	type: "stt" | "tts";
+	description: string;
+	size_gb: number;
+	platform_ok: boolean;
+	ready: boolean;
+	venv_installed: boolean | null;
+	model_cached: boolean | null;
+	configured: boolean;
+	builtin: boolean;
+	downloading: boolean;
+	download_fraction: number | null;
+};
+
+export async function fetchCapabilities(): Promise<CapabilityInfo[]> {
+	const r = await fetch("/capabilities");
+	if (!r.ok) throw new Error(`Failed to load capabilities: ${r.status}`);
+	const data = await r.json();
+	return data.capabilities as CapabilityInfo[];
+}
+
+export async function installCapability(id: string): Promise<string> {
+	const r = await fetch(`/capabilities/${id}/install`, { method: "POST" });
+	if (!r.ok) throw new Error(`Install failed: ${r.status}`);
+	const data = await r.json();
+	return data.status as string;
+}
+
+export async function uninstallCapability(id: string): Promise<void> {
+	const r = await fetch(`/capabilities/${id}/install`, { method: "DELETE" });
+	if (!r.ok) throw new Error(`Uninstall failed: ${r.status}`);
+}

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b288] - 2026-02-24
+
+### Added
+- **Unified capabilities API** — `GET /capabilities` merges models.json with
+  runtime checks (venv installed, model cached, platform, configured). Replaces
+  separate model + engine status queries with one unified view.
+- **Capability install/uninstall** — `POST /capabilities/{id}/install` orchestrates
+  venv creation + model download in one step. `DELETE` removes the venv.
+- **TTS capabilities in models.json** — say, espeak, piper, coqui-xtts-v2,
+  outetts, kokoro registered alongside STT models. New fields: `venv`, `platform`,
+  `builtin`.
+- **Download/install logging** — model downloads and venv installs log start,
+  completion, and errors.
+
+### Changed
+- **Models page redesign** — two-column layout (STT | TTS) showing all
+  capabilities with download/uninstall buttons and progress bars.
+- **Dashboard simplified** — removed TTS/STT engine sections (moved to Models).
+  Dashboard now shows Engine status, Agents, and Permissions only.
+- **General settings moved to Advanced** — editor and verbose now under
+  Advanced > General sub-tab.
+- **Models tab moved up** — now second in nav (after Dashboard).
+- **Restart Engine button** — only shown on Advanced > Daemon sub-tab.
+
+### Removed
+- Old vyvotts-4bit, vyvotts-8bit, and legacy outetts model entries.
+
 ## [0.1.0b287] - 2026-02-24
 
 ### Fixed

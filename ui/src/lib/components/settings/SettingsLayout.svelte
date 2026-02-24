@@ -52,7 +52,6 @@
 	const activeSections = $derived(activeView()?.child?.sections ?? activeView()?.tab.sections ?? []);
 	const activeLabel   = $derived(activeView()?.child?.label   ?? activeView()?.tab.label   ?? "");
 	const activeDesc    = $derived(activeView()?.child?.desc    ?? activeView()?.tab.desc    ?? "");
-	const isAdvanced    = $derived(activeNavId.startsWith("advanced"));
 
 	let restarting = $state(false);
 
@@ -95,7 +94,7 @@
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
 					<p class="text-sm text-muted-foreground">{activeDesc}</p>
 				</div>
-				{#if isAdvanced}
+				{#if activeNavId === "advanced-daemon"}
 					<div class="px-4 mb-4">
 						<Button variant="outline" onclick={handleRestart} disabled={restarting}>
 							<RotateCcw class="size-3.5 mr-1.5 {restarting ? 'animate-spin' : ''}" />
@@ -103,7 +102,7 @@
 						</Button>
 					</div>
 				{/if}
-				<SettingsSection sections={activeSections} isGeneral={activeNavId === "general"} {schema} />
+				<SettingsSection sections={activeSections} isGeneral={activeNavId === "advanced-general"} {schema} />
 			{:else}
 				<div class="text-muted-foreground py-20 text-center text-sm">Loading settings...</div>
 			{/if}
