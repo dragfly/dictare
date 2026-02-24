@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b279] - 2026-02-24
+
+### Fixed
+- **TTS worker crash detection** — engine now polls worker process every 0.5s
+  instead of blocking 120s. If worker crashes immediately (e.g. missing
+  dependency), engine detects it in <1s and falls back gracefully.
+
 ## [0.1.0b278] - 2026-02-24
 
 ### Changed
