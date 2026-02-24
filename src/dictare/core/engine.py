@@ -332,8 +332,21 @@ class DictareEngine:
             saved, self.agent_mode, self._current_agent_id,
         )
 
-        # Restore output mode from session
+        # Restore preferred agent and output mode.
+        # The saved agent is ground truth — if it's a real agent, mode MUST
+        # be "agents" regardless of what the file says (guards against
+        # corrupted saves from older versions).
+        saved_agent = saved.get("active_agent")
         saved_mode = saved.get("output_mode")
+        is_real_agent = saved_agent and saved_agent not in self.RESERVED_AGENT_IDS
+
+        if is_real_agent and saved_mode != "agents":
+            logger.warning(
+                "restore_state: saved agent=%r contradicts mode=%r → forcing agents",
+                saved_agent, saved_mode,
+            )
+            saved_mode = "agents"
+
         if saved_mode == "agents" and not self.agent_mode:
             self.agent_mode = True
             logger.info("restore_state: output_mode → agents (was keyboard from config)")
@@ -349,8 +362,7 @@ class DictareEngine:
             logger.info("restore_state: will start listening (session was listening)")
 
         # Remember preferred agent for when it reconnects, with grace period
-        saved_agent = saved.get("active_agent")
-        if saved_agent and saved_agent != "__keyboard__":
+        if is_real_agent:
             import time as _time
 
             self._last_sse_agent_id = saved_agent
