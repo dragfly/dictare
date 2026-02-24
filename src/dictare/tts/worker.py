@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> None:
         text = msg.text
         request_id = msg.additional_properties.get("request_id", "")
         voice = msg.additional_properties.get("voice")
-        language = msg.additional_properties.get("language")
+        language = msg.language  # SpeechRequest has language as a native field
         logger.info("Speaking: %r (request_id=%s, voice=%s, lang=%s)", text, request_id, voice, language)
 
         start = time.time()
