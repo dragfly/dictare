@@ -3,6 +3,7 @@
 	import SettingsSection from "./SettingsSection.svelte";
 	import RestartBanner from "./RestartBanner.svelte";
 	import SaveBar from "./SaveBar.svelte";
+	import EngineStatusBar from "./EngineStatusBar.svelte";
 	import DashboardPage from "$lib/components/dashboard/DashboardPage.svelte";
 	import ModelsPage from "$lib/components/models/ModelsPage.svelte";
 	import { Button } from "$lib/components/ui/button";
@@ -109,4 +110,5 @@
 			<SaveBar />
 		</div>
 	</main>
+	<EngineStatusBar />
 </div>
