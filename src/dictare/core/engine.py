@@ -140,6 +140,9 @@ class DictareEngine:
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
         self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
         self._last_sse_agent_id: str | None = None  # Remember last SSE agent for mode switch
+        # Grace period after restart: give the preferred agent time to reconnect
+        # before auto-assigning any first-come agent.  Set in _restore_state().
+        self._preferred_agent_deadline: float | None = None
 
         # Tap detection (isolated state machine)
         # Single tap: toggle listening on/off
@@ -197,9 +200,33 @@ class DictareEngine:
 
     def _notify_status(self) -> None:
         """Notify status change via registered callback."""
+        self._check_grace_period()
         if self._status_change_callback is not None:
             self._status_change_callback()
         self._persist_state()
+
+    def _check_grace_period(self) -> None:
+        """Assign first available agent once the preferred-agent grace period expires."""
+        import time as _time
+
+        if self._preferred_agent_deadline is None:
+            return
+        if _time.monotonic() < self._preferred_agent_deadline:
+            return
+        # Grace period expired without the preferred agent reconnecting
+        self._preferred_agent_deadline = None
+        if self.agent_mode and (
+            self._current_agent_id is None
+            or self._current_agent_id in self.RESERVED_AGENT_IDS
+        ):
+            visible = self.visible_agents
+            if visible:
+                self._current_agent_id = visible[0]
+                logger.info(
+                    "grace_period_expired: preferred agent never reconnected, "
+                    "activating first available agent %r",
+                    visible[0],
+                )
 
     def _persist_state(self) -> None:
         """Save current engine state to disk for restore after restart.
@@ -219,36 +246,49 @@ class DictareEngine:
         )
 
     def _restore_state(self) -> None:
-        """Restore engine state from disk after restart."""
+        """Restore engine state from session-state.json after restart.
+
+        If the session is fresh (< 60 min), restores output_mode and
+        preferred agent from the saved state.  Otherwise, uses config.toml
+        defaults (cold start).
+        """
         from dictare.utils.state import load_state
 
         saved = load_state()
+
+        if saved is None:
+            logger.info("restore_state: no fresh session, using config.toml defaults")
+            return
+
         logger.info(
-            "restore_state: loaded state.json = %s (before: agent_mode=%r, "
+            "restore_state: session data = %s (before: agent_mode=%r, "
             "current_agent=%r, last_sse_agent=%r)",
             saved, self.agent_mode, self._current_agent_id,
             self._last_sse_agent_id,
         )
 
-        # Restore output mode
-        saved_mode = saved.get("output_mode", "keyboard")
+        # Restore output mode from session
+        saved_mode = saved.get("output_mode")
         if saved_mode == "agents" and not self.agent_mode:
             self.agent_mode = True
-            logger.info("restore_state: switched agent_mode False → True (from state.json)")
+            logger.info("restore_state: switched agent_mode False → True (from session)")
         elif saved_mode == "keyboard" and self.agent_mode:
             self.agent_mode = False
-            logger.info("restore_state: switched agent_mode True → False (from state.json)")
-        else:
-            logger.info(
-                "restore_state: agent_mode unchanged (%r), saved_mode=%r",
-                self.agent_mode, saved_mode,
-            )
+            logger.info("restore_state: switched agent_mode True → False (from session)")
 
-        # Remember preferred agent for when it reconnects
+        # Remember preferred agent for when it reconnects, with grace period
         saved_agent = saved.get("active_agent")
         if saved_agent and saved_agent != "__keyboard__":
+            import time as _time
+
             self._last_sse_agent_id = saved_agent
-            logger.info("restore_state: preferred agent=%r (will activate on reconnect)", saved_agent)
+            grace_seconds = 20.0
+            self._preferred_agent_deadline = _time.monotonic() + grace_seconds
+            logger.info(
+                "restore_state: preferred agent=%r, grace period %.0fs "
+                "(will activate on reconnect, or fall back to first available)",
+                saved_agent, grace_seconds,
+            )
 
         logger.info(
             "restore_state done: agent_mode=%r, current_agent=%r, "

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b262] - 2026-02-24
+
+### Changed
+- **Session-based state restore.** `state.json` → `session-state.json` with a
+  `last_active` timestamp. If the last session is < 60 min old (quick restart,
+  reboot), output_mode and preferred agent are restored. Otherwise, config.toml
+  defaults apply (cold start after long pause or reinstall).
+- **Preferred agent grace period (20s).** After restart, the engine waits 20s
+  for the preferred agent to reconnect before falling back to the first
+  available agent.
+
+### Added
+- **`dictare service install` auto-creates default config.** If `config.toml`
+  doesn't exist, creates one from the template with commented defaults.
+
 ## [0.1.0b261] - 2026-02-24
 
 ### Added
