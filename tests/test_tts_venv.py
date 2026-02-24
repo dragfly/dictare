@@ -15,7 +15,7 @@ def test_venv_paths():
     """Venv dirs use correct structure under ~/.local/share/dictare/tts-env/."""
     from dictare.tts.venv import get_venv_dir
 
-    for engine in ("piper", "coqui", "outetts"):
+    for engine in ("piper", "coqui", "outetts", "kokoro"):
         venv_dir = get_venv_dir(engine)
         assert venv_dir == Path.home() / ".local" / "share" / "dictare" / "tts-env" / engine
 
@@ -24,7 +24,7 @@ def test_get_venv_python_returns_none_for_missing():
     from dictare.tts.venv import get_venv_python
 
     # These venvs don't exist in the test environment
-    for engine in ("piper", "coqui", "outetts"):
+    for engine in ("piper", "coqui", "outetts", "kokoro"):
         assert get_venv_python(engine) is None
 
 def test_get_venv_python_returns_none_for_system_engines():
@@ -38,7 +38,7 @@ def test_get_venv_bin_dir_returns_none_for_missing():
     """get_venv_bin_dir returns None when venv doesn't exist."""
     from dictare.tts.venv import get_venv_bin_dir
 
-    for engine in ("piper", "coqui", "outetts"):
+    for engine in ("piper", "coqui", "outetts", "kokoro"):
         assert get_venv_bin_dir(engine) is None
 
 def test_get_venv_bin_dir_returns_none_for_non_venv_engines():
@@ -70,7 +70,7 @@ def test_is_venv_installed_false_when_missing():
     """is_venv_installed returns False when venv doesn't exist."""
     from dictare.tts.venv import is_venv_installed
 
-    for engine in ("piper", "coqui", "outetts"):
+    for engine in ("piper", "coqui", "outetts", "kokoro"):
         assert is_venv_installed(engine) is False
 
 def test_is_venv_installed_with_existing_python(tmp_path: Path):
@@ -94,7 +94,7 @@ def test_engine_status_venv_fields():
     from dictare.utils.platform import check_all_tts_engines
 
     engines = check_all_tts_engines()
-    assert len(engines) >= 5  # say, espeak, piper, coqui, outetts
+    assert len(engines) >= 6  # say, espeak, piper, coqui, outetts, kokoro
 
     # System engines don't need venvs
     for eng in engines:
@@ -103,7 +103,7 @@ def test_engine_status_venv_fields():
             assert eng["venv_installed"] is False
 
     # Venv engines should have needs_venv=True
-    venv_names = {"piper", "coqui", "outetts"}
+    venv_names = {"piper", "coqui", "outetts", "kokoro"}
     for eng in engines:
         if eng["name"] in venv_names:
             assert eng["needs_venv"] is True

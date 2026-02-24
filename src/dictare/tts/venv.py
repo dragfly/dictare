@@ -26,10 +26,13 @@ VENV_ENGINES: dict[str, list[str]] = {
     "piper": ["piper-tts", "pathvalidate"],
     "coqui": ["TTS"],
     "outetts": ["mlx-audio"],
+    "kokoro": ["kokoro-onnx", "soundfile"],
 }
 
-# Shared deps installed in every TTS venv (needed by worker.py imports)
-_SHARED_DEPS = ["openvip", "pydantic"]
+# Shared deps installed in every TTS venv (needed by worker.py imports).
+# NOTE: openvip is NOT listed here — the PYTHONPATH injection already makes
+# it available (same site-packages for Homebrew, src/ for dev installs).
+_SHARED_DEPS = ["pydantic"]
 
 # Root directory for TTS venvs
 _VENV_ROOT = Path.home() / ".local" / "share" / "dictare" / "tts-env"
