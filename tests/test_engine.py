@@ -616,7 +616,7 @@ class TestRegisterAgent:
         """Registering a reserved agent (__keyboard__) should not set it as current."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -624,14 +624,14 @@ class TestRegisterAgent:
 
         # __keyboard__ is registered but NOT current
         assert "__keyboard__" in engine.agents
-        assert engine._current_agent_id is None
+        assert engine._agent_mgr._current_agent_id is None
         assert engine.visible_current_agent is None
 
     def test_first_real_agent_becomes_current_after_reserved(self) -> None:
         """First non-reserved agent becomes current even if reserved was first."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -651,7 +651,7 @@ class TestRegisterAgent:
         """
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         # Simulate create_engine: keyboard registered first
         mock_kb = MagicMock()
@@ -660,7 +660,7 @@ class TestRegisterAgent:
         engine.register_agent(mock_kb)
 
         # At this point, current should NOT be __keyboard__
-        assert engine._current_agent_id is None
+        assert engine._agent_mgr._current_agent_id is None
 
         # SSE agents arrive later
         register_test_agents(engine, ["varie", "voce"])
@@ -676,7 +676,7 @@ class TestRegisterAgent:
         """Regression: messages must go to SSE agent, not keyboard, in agent mode."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -694,7 +694,7 @@ class TestRegisterAgent:
         """Agent mode with only keyboard registered: current is None."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -708,7 +708,7 @@ class TestRegisterAgent:
         """When the only SSE agent disconnects, current becomes None."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -724,7 +724,7 @@ class TestRegisterAgent:
         """When current agent disconnects, fallback to next visible, not __keyboard__."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -735,27 +735,27 @@ class TestRegisterAgent:
         # "voce" disconnects — should fall back to "varie", NOT "__keyboard__"
         engine.unregister_agent("voce")
         assert engine.current_agent == "varie"
-        assert engine._current_agent_id != "__keyboard__"
+        assert engine._agent_mgr._current_agent_id != "__keyboard__"
 
     def test_keyboard_mode_agent_registers_but_does_not_activate(self) -> None:
         """In keyboard mode, agents register but __keyboard__ stays current."""
         config = MockConfig()
         config.output.mode = "keyboard"
         engine = DictareEngine(config=config)
-        assert engine._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
+        assert engine._agent_mgr._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
 
         register_test_agents(engine, ["voice"])
 
         # keyboard stays current — agent_mode is False so no auto-activation
-        assert engine._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
+        assert engine._agent_mgr._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
         assert engine.agent_mode is False
-        assert "voice" in engine._agents
+        assert "voice" in engine._agent_mgr._agents
 
     def test_agents_restart_keeps_current_agent(self) -> None:
         """Regression: restarting both agents must restore current_agent."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
@@ -766,7 +766,7 @@ class TestRegisterAgent:
         # Both agents disconnect (restart)
         engine.unregister_agent("voce")  # Falls back to "varie"
         engine.unregister_agent("varie")  # No visible agents → None
-        assert engine._current_agent_id is None
+        assert engine._agent_mgr._current_agent_id is None
 
         # Both reconnect
         register_test_agents(engine, ["voce", "varie"])
@@ -790,15 +790,15 @@ class TestRegisterAgent:
         """Keyboard mode at startup: __keyboard__ is current, keystroke injection."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = DictareEngine.KEYBOARD_AGENT_ID
+        engine._agent_mgr._current_agent_id = DictareEngine.KEYBOARD_AGENT_ID
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
         engine.register_agent(mock_kb)
-        engine._current_agent_id = "__keyboard__"  # As create_engine does
+        engine._agent_mgr._current_agent_id = "__keyboard__"  # As create_engine does
 
-        assert engine._current_agent_id == "__keyboard__"
+        assert engine._agent_mgr._current_agent_id == "__keyboard__"
         agent = engine._get_current_agent()
         assert agent is mock_kb
 
@@ -1231,13 +1231,13 @@ class TestSetOutputMode:
         """Switching to keyboard mode sets agent_mode=False and current to __keyboard__."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
         # Register keyboard agent (as create_engine does)
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
-        engine._agents["__keyboard__"] = mock_kb
-        engine._agent_order.append("__keyboard__")
+        engine._agent_mgr._agents["__keyboard__"] = mock_kb
+        engine._agent_mgr._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude"])
 
         engine.set_output_mode("keyboard")
@@ -1251,14 +1251,14 @@ class TestSetOutputMode:
         """Switching to agents mode sets agent_mode=True and keeps keyboard registered."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = DictareEngine.KEYBOARD_AGENT_ID
+        engine._agent_mgr._current_agent_id = DictareEngine.KEYBOARD_AGENT_ID
         # Register keyboard agent (as create_engine does)
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
-        engine._agents["__keyboard__"] = mock_kb
-        engine._agent_order.append("__keyboard__")
-        engine._current_agent_id = "__keyboard__"
+        engine._agent_mgr._agents["__keyboard__"] = mock_kb
+        engine._agent_mgr._agent_order.append("__keyboard__")
+        engine._agent_mgr._current_agent_id = "__keyboard__"
         register_test_agents(engine, ["claude"])
 
         engine.set_output_mode("agents")
@@ -1273,7 +1273,7 @@ class TestSetOutputMode:
         """Switching to the already-active mode does nothing."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         engine.set_output_mode("agents")
 
@@ -1284,13 +1284,13 @@ class TestSetOutputMode:
         """Switching to keyboard doesn't disconnect existing SSE agents."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
         # Register keyboard agent (as create_engine does)
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
-        engine._agents["__keyboard__"] = mock_kb
-        engine._agent_order.append("__keyboard__")
+        engine._agent_mgr._agents["__keyboard__"] = mock_kb
+        engine._agent_mgr._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude", "aider"])
 
         engine.set_output_mode("keyboard")
@@ -1304,34 +1304,34 @@ class TestSetOutputMode:
         """Switching to keyboard saves the current SSE agent for later restore."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
-        engine._agents["__keyboard__"] = mock_kb
-        engine._agent_order.append("__keyboard__")
+        engine._agent_mgr._agents["__keyboard__"] = mock_kb
+        engine._agent_mgr._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude", "cursor"])
         # Select cursor as current
-        engine._current_agent_id = "cursor"
+        engine._agent_mgr._current_agent_id = "cursor"
 
         engine.set_output_mode("keyboard")
 
         assert engine.current_agent == "__keyboard__"
-        assert engine._last_sse_agent_id == "cursor"
+        assert engine._agent_mgr._last_sse_agent_id == "cursor"
 
     def test_switch_back_to_agents_restores_last_selected(self) -> None:
         """Switching back to agents restores the last selected SSE agent, not first."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
-        engine._agents["__keyboard__"] = mock_kb
-        engine._agent_order.append("__keyboard__")
+        engine._agent_mgr._agents["__keyboard__"] = mock_kb
+        engine._agent_mgr._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude", "cursor"])
         # Select cursor, then switch to keyboard, then back
-        engine._current_agent_id = "cursor"
+        engine._agent_mgr._current_agent_id = "cursor"
 
         engine.set_output_mode("keyboard")
         assert engine.current_agent == "__keyboard__"
@@ -1344,16 +1344,16 @@ class TestSetOutputMode:
         """If last agent was unregistered, fall back to first available."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = DictareEngine.KEYBOARD_AGENT_ID
+        engine._agent_mgr._current_agent_id = DictareEngine.KEYBOARD_AGENT_ID
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
-        engine._agents["__keyboard__"] = mock_kb
-        engine._agent_order.append("__keyboard__")
-        engine._current_agent_id = "__keyboard__"
+        engine._agent_mgr._agents["__keyboard__"] = mock_kb
+        engine._agent_mgr._agent_order.append("__keyboard__")
+        engine._agent_mgr._current_agent_id = "__keyboard__"
         register_test_agents(engine, ["claude", "cursor"])
         # Set a last_sse_agent that no longer exists
-        engine._last_sse_agent_id = "aider"
+        engine._agent_mgr._last_sse_agent_id = "aider"
 
         engine.set_output_mode("agents")
         assert engine.current_agent == "claude"
@@ -1362,7 +1362,7 @@ class TestSetOutputMode:
         """Invalid mode string does nothing."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         engine.set_output_mode("invalid")
 
@@ -1372,19 +1372,19 @@ class TestSetOutputMode:
         """Double-tap hotkey toggles between agents and keyboard mode."""
         config = MockConfig()
         engine = DictareEngine(config=config)
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
 
         mock_kb = MagicMock()
         mock_kb.id = "__keyboard__"
         engine._keyboard_agent = mock_kb
-        engine._agents["__keyboard__"] = mock_kb
-        engine._agent_order.append("__keyboard__")
+        engine._agent_mgr._agents["__keyboard__"] = mock_kb
+        engine._agent_mgr._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude"])
 
         # Simulate double-tap: should toggle to keyboard
         engine._tap_detector._on_double_tap()
         assert engine.agent_mode is False
-        assert engine._current_agent_id == "__keyboard__"
+        assert engine._agent_mgr._current_agent_id == "__keyboard__"
 
         # Second double-tap: should toggle back to agents
         engine._tap_detector._on_double_tap()
