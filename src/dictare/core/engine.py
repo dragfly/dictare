@@ -53,6 +53,31 @@ class SessionStats:
     start_time: float | None = None
 
 
+@dataclass
+class _MutableStats:
+    """Internal mutable session counters. Use engine.stats for the public snapshot."""
+
+    chars: int = 0
+    words: int = 0
+    count: int = 0
+    audio_seconds: float = 0.0
+    transcription_seconds: float = 0.0
+    injection_seconds: float = 0.0
+    start_time: float | None = None
+
+    def snapshot(self) -> SessionStats:
+        """Return a frozen SessionStats copy."""
+        return SessionStats(
+            chars=self.chars,
+            words=self.words,
+            count=self.count,
+            audio_seconds=self.audio_seconds,
+            transcription_seconds=self.transcription_seconds,
+            injection_seconds=self.injection_seconds,
+            start_time=self.start_time,
+        )
+
+
 class DictareEngine:
     """Core engine for voice-to-text processing.
 
@@ -106,14 +131,8 @@ class DictareEngine:
         self.config = config
         self._events = events
 
-        # Session stats
-        self._stats_chars = 0
-        self._stats_words = 0
-        self._stats_audio_seconds = 0.0
-        self._stats_transcription_seconds = 0.0
-        self._stats_injection_seconds = 0.0
-        self._stats_count = 0
-        self._stats_start_time: float | None = None
+        # Session stats (single mutable container)
+        self._stats = _MutableStats()
 
         # Lock for STT engine (MLX is not thread-safe)
         self._stt_lock = threading.Lock()
@@ -377,15 +396,7 @@ class DictareEngine:
     @property
     def stats(self) -> SessionStats:
         """Immutable snapshot of current session statistics."""
-        return SessionStats(
-            chars=self._stats_chars,
-            words=self._stats_words,
-            count=self._stats_count,
-            audio_seconds=self._stats_audio_seconds,
-            transcription_seconds=self._stats_transcription_seconds,
-            injection_seconds=self._stats_injection_seconds,
-            start_time=self._stats_start_time,
-        )
+        return self._stats.snapshot()
 
     # -------------------------------------------------------------------------
     # Factory Methods
@@ -874,11 +885,11 @@ class DictareEngine:
 
                     # Update session stats
                     audio_duration = len(audio_data) / self.config.audio.advanced.sample_rate
-                    self._stats_count += 1
-                    self._stats_chars += len(text)
-                    self._stats_words += len(text.split())
-                    self._stats_audio_seconds += audio_duration
-                    self._stats_transcription_seconds += transcribe_time
+                    self._stats.count += 1
+                    self._stats.chars += len(text)
+                    self._stats.words += len(text.split())
+                    self._stats.audio_seconds += audio_duration
+                    self._stats.transcription_seconds += transcribe_time
 
                     # Log transcription
                     if self._logger:
@@ -1023,7 +1034,7 @@ class DictareEngine:
                 method = "none"
 
             inject_elapsed = time.time() - inject_start
-            self._stats_injection_seconds += inject_elapsed
+            self._stats.injection_seconds += inject_elapsed
 
         # Determine final text and input info (after pipeline processing)
         first_msg = messages_to_send[0] if messages_to_send else {}
@@ -1404,8 +1415,8 @@ class DictareEngine:
         stt_state = state_map.get(self.state, "idle")
 
         uptime = (
-            time.time() - self._stats_start_time
-            if self._stats_start_time
+            time.time() - self._stats.start_time
+            if self._stats.start_time
             else 0
         )
 
@@ -1744,7 +1755,7 @@ class DictareEngine:
         )
 
         self._running = True
-        self._stats_start_time = time.time()
+        self._stats.start_time = time.time()
 
         # Start keyboard agent if in keyboard mode (special built-in agent)
         if self._keyboard_agent:
