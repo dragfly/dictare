@@ -30,9 +30,9 @@ VENV_ENGINES: dict[str, list[str]] = {
 }
 
 # Shared deps installed in every TTS venv (needed by worker.py imports).
-# NOTE: openvip is NOT listed here — the PYTHONPATH injection already makes
-# it available (same site-packages for Homebrew, src/ for dev installs).
-_SHARED_DEPS = ["pydantic"]
+# openvip source is injected via PYTHONPATH, but its dependencies must be
+# installed in the venv (they're not available via PYTHONPATH alone).
+_SHARED_DEPS = ["pydantic", "urllib3", "python-dateutil", "typing-extensions"]
 
 # Root directory for TTS venvs
 _VENV_ROOT = Path.home() / ".local" / "share" / "dictare" / "tts-env"
