@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.12] - 2026-02-25
+
+### Fixed
+- **TTS worker cannot import openvip on dev installs** — PYTHONPATH now
+  includes both dictare and openvip source paths. Editable/dev installs have
+  them in different directories; the worker subprocess needs both.
+
 ## [0.1.11] - 2026-02-25
 
 ### Fixed
