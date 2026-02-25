@@ -140,8 +140,9 @@ class TTSManager:
                 self._tts_proxy = None
                 logger.warning(
                     "TTS engine '%s' not available — install via Dashboard or: "
-                    "dictare dependencies resolve",
+                    "dictare dependencies resolve\n  error: %s",
                     engine_name,
+                    exc,
                 )
         else:
             self._load_in_process(engine_name, save_model_load_time)

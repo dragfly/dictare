@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] - 2026-02-25
+
+### Fixed
+- **TTS worker crash logging** — worker errors (e.g., missing openvip import,
+  subscribe failures) now log full details to `tts-worker.log` instead of
+  being swallowed. Engine warning includes the actual error message.
+- **Config template headers** — `[pipeline.submit_filter]` and
+  `[pipeline.agent_filter]` headers are now always present (not commented).
+  Users only uncomment values.
+
 ## [0.1.10] - 2026-02-25
 
 ### Fixed
