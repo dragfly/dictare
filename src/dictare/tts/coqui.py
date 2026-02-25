@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from dictare.tts.base import TTSEngine, play_wav_native
+from dictare.tts.cache import cache_evict, cache_hit, cache_key, cache_save
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,20 @@ class CoquiTTS(TTSEngine):
         """Check if Coqui TTS is available."""
         return self._tts_cmd is not None
 
+    def _cache_key(self, text: str) -> str:
+        """Compute cache key using current language/voice."""
+        return cache_key("coqui", text, self.language, self.voice)
+
+    def check_cache(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> Path | None:
+        """Check if audio for *text* is cached. Returns WAV path or None."""
+        return cache_hit(self._cache_key(text))
+
     def speak(
         self,
         text: str,
@@ -90,13 +105,20 @@ class CoquiTTS(TTSEngine):
             return False
 
         try:
-            # Create temp file for audio
+            key = self._cache_key(text)
+
+            # Cache hit → play directly
+            cached = cache_hit(key)
+            if cached:
+                logger.debug("TTS cache hit: %s", key[:12])
+                play_wav_native(cached, timeout=120.0)
+                return True
+
+            # Cache miss → generate
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 wav_path = Path(f.name)
 
             # Build command — always use XTTS v2 for multilingual support.
-            # Without --model_name, coqui defaults to tacotron2 (English only)
-            # which ignores --language_idx and fails silently.
             cmd = [
                 self._tts_cmd,
                 "--model_name", _XTTS_MODEL,
@@ -114,7 +136,7 @@ class CoquiTTS(TTSEngine):
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                timeout=120,  # TTS can be slow on first run (model download)
+                timeout=120,
                 env=env,
             )
 
@@ -124,9 +146,14 @@ class CoquiTTS(TTSEngine):
                 wav_path.unlink(missing_ok=True)
                 return False
 
-            # Play via native system player
-            play_wav_native(wav_path)
-            wav_path.unlink(missing_ok=True)
+            # Save to cache → play → evict
+            try:
+                cached_path = cache_save(key, wav_path)
+                play_wav_native(cached_path, timeout=120.0)
+                cache_evict()
+            finally:
+                wav_path.unlink(missing_ok=True)
+
             return True
 
         except Exception:

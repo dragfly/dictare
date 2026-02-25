@@ -18,6 +18,7 @@ import warnings
 from pathlib import Path
 
 from dictare.tts.base import TTSEngine, play_wav_native
+from dictare.tts.cache import cache_evict, cache_hit, cache_key, cache_save
 from dictare.utils.hardware import is_apple_silicon
 
 logger = logging.getLogger(__name__)
@@ -143,6 +144,22 @@ class OuteTTS(TTSEngine):
         self._models_ready = True
         return True
 
+    def _cache_key(self, text: str) -> str:
+        """Compute cache key using current model/language/voice."""
+        return cache_key(
+            f"outetts-{self.model_size}", text, self.language, self.voice,
+        )
+
+    def check_cache(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> Path | None:
+        """Check if audio for *text* is cached. Returns WAV path or None."""
+        return cache_hit(self._cache_key(text))
+
     def speak(
         self,
         text: str,
@@ -164,22 +181,33 @@ class OuteTTS(TTSEngine):
         if not self._ensure_models_downloaded():
             return False
 
-        # Generate and play audio with suppressed verbose output
-        return self._generate_and_play(text)
-
-    def _generate_and_play(self, text: str) -> bool:
-        """Generate audio and play it, suppressing verbose output."""
         try:
-            # Suppress all the noisy output
+            key = self._cache_key(text)
+
+            # Cache hit → play directly
+            cached = cache_hit(key)
+            if cached:
+                logger.debug("TTS cache hit: %s", key[:12])
+                play_wav_native(cached, timeout=120.0)
+                return True
+
+            # Cache miss → generate and cache
+            return self._generate_and_cache(text, key)
+
+        except Exception as e:
+            logging.error(f"TTS exception: {e}")
+            return False
+
+    def _generate_and_cache(self, text: str, key: str) -> bool:
+        """Generate audio, save to cache, and play."""
+        try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
 
-                # Suppress transformers warnings
                 logging.getLogger("transformers").setLevel(logging.ERROR)
                 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
                 with tempfile.TemporaryDirectory() as tmpdir:
-                    # Run generation silently
                     cmd = [
                         sys.executable, "-m", "mlx_audio.tts.generate",
                         "--model", self._model_repo,
@@ -189,7 +217,6 @@ class OuteTTS(TTSEngine):
                         "--file_prefix", f"{tmpdir}/audio",
                     ]
 
-                    # Run with suppressed output
                     result = subprocess.run(
                         cmd,
                         capture_output=True,
@@ -201,13 +228,15 @@ class OuteTTS(TTSEngine):
                         logging.error(f"TTS generation failed: {result.stderr.decode()}")
                         return False
 
-                    # Find and play the generated audio file
                     audio_files = list(Path(tmpdir).glob("audio_*.wav"))
-                    if audio_files:
-                        play_wav_native(audio_files[0], timeout=120.0)
-                        return True
+                    if not audio_files:
+                        return False
 
-                    return False
+                    # Save to cache → play → evict
+                    cached_path = cache_save(key, audio_files[0])
+                    play_wav_native(cached_path, timeout=120.0)
+                    cache_evict()
+                    return True
 
         except Exception as e:
             logging.error(f"TTS exception: {e}")

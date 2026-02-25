@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-02-25
+
+### Added
+- **TTS caching for all engines** — every TTS engine now caches generated audio
+  to `~/.local/share/dictare/tts-cache/` with LRU eviction (max 1000 files).
+  Previously only Kokoro cached; now Piper, espeak, say, Coqui, and OuteTTS all
+  cache too. Repeated phrases play instantly from cache.
+
 ## [0.1.2] - 2026-02-25
 
 ### Fixed

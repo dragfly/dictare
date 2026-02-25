@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
-from dictare.tts.base import TTSEngine
+from dictare.tts.base import TTSEngine, play_wav_native
+from dictare.tts.cache import cache_evict, cache_hit, cache_key, cache_save
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,20 @@ class EspeakTTS(TTSEngine):
         """Check if espeak is available."""
         return self._cmd is not None
 
+    def _cache_key(self, text: str) -> str:
+        """Compute cache key using current language/speed."""
+        return cache_key("espeak", text, self.language, str(self.speed))
+
+    def check_cache(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> Path | None:
+        """Check if audio for *text* is cached. Returns WAV path or None."""
+        return cache_hit(self._cache_key(text))
+
     def speak(
         self,
         text: str,
@@ -63,11 +79,25 @@ class EspeakTTS(TTSEngine):
             return False
 
         try:
+            key = self._cache_key(text)
+
+            # Cache hit → play directly
+            cached = cache_hit(key)
+            if cached:
+                logger.debug("TTS cache hit: %s", key[:12])
+                play_wav_native(cached, timeout=120.0)
+                return True
+
+            # Cache miss → generate WAV file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                wav_path = Path(f.name)
+
             result = subprocess.run(
                 [
                     self._cmd,
                     "-v", self.language,
                     "-s", str(self.speed),
+                    "-w", str(wav_path),
                     text,
                 ],
                 capture_output=True,
@@ -79,7 +109,17 @@ class EspeakTTS(TTSEngine):
                     result.returncode,
                     result.stderr.decode(errors="replace").strip(),
                 )
+                wav_path.unlink(missing_ok=True)
                 return False
+
+            # Save to cache → play → evict
+            try:
+                cached_path = cache_save(key, wav_path)
+                play_wav_native(cached_path, timeout=120.0)
+                cache_evict()
+            finally:
+                wav_path.unlink(missing_ok=True)
+
             return True
         except Exception:
             logger.warning("espeak subprocess failed", exc_info=True)
