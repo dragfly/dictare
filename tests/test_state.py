@@ -148,19 +148,19 @@ class TestAgentModeProperty:
 
     def test_none_is_agent_mode(self) -> None:
         engine = _make_engine("agents")
-        assert engine._current_agent_id is None
+        assert engine._agent_mgr._current_agent_id is None
         assert engine.agent_mode is True
 
     def test_keyboard_is_keyboard_mode(self) -> None:
         engine = _make_engine("keyboard")
         from dictare.core.engine import DictareEngine
 
-        assert engine._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
+        assert engine._agent_mgr._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
         assert engine.agent_mode is False
 
     def test_real_agent_is_agent_mode(self) -> None:
         engine = _make_engine("agents")
-        engine._current_agent_id = "voice"
+        engine._agent_mgr._current_agent_id = "voice"
         assert engine.agent_mode is True
 
     def test_mode_follows_current_agent(self) -> None:
@@ -168,9 +168,9 @@ class TestAgentModeProperty:
         from dictare.core.engine import DictareEngine
 
         engine = _make_engine("agents")
-        engine._current_agent_id = DictareEngine.KEYBOARD_AGENT_ID
+        engine._agent_mgr._current_agent_id = DictareEngine.KEYBOARD_AGENT_ID
         assert engine.agent_mode is False
-        engine._current_agent_id = "voice"
+        engine._agent_mgr._current_agent_id = "voice"
         assert engine.agent_mode is True
 
 class TestEngineSaveState:
@@ -179,7 +179,7 @@ class TestEngineSaveState:
     def test_save_agent_and_listening(self, state_dir: Path) -> None:
         engine = _make_engine()
         engine._running = True
-        engine._current_agent_id = "claude"
+        engine._agent_mgr._current_agent_id = "claude"
         engine._save_state()
 
         loaded = load_state()
@@ -189,11 +189,11 @@ class TestEngineSaveState:
     def test_save_skipped_during_shutdown(self, state_dir: Path) -> None:
         engine = _make_engine()
         engine._running = True
-        engine._current_agent_id = "voice"
+        engine._agent_mgr._current_agent_id = "voice"
         engine._save_state()
 
         engine._running = False
-        engine._current_agent_id = None
+        engine._agent_mgr._current_agent_id = None
         engine._save_state()  # Should be a no-op
 
         loaded = load_state()
@@ -203,7 +203,7 @@ class TestEngineSaveState:
     def test_save_before_shutdown_bypasses_running_guard(self, state_dir: Path) -> None:
         engine = _make_engine()
         engine._running = True
-        engine._current_agent_id = "voice"
+        engine._agent_mgr._current_agent_id = "voice"
         engine.save_session_before_shutdown()
 
         loaded = load_state()
@@ -217,8 +217,8 @@ class TestEngineRestoreState:
         save_state(active_agent="claude")
         engine = _make_engine()
         engine._restore_state(start_listening=False)
-        assert engine._last_sse_agent_id == "claude"
-        assert engine._preferred_agent_deadline is not None
+        assert engine._agent_mgr._last_sse_agent_id == "claude"
+        assert engine._agent_mgr._preferred_agent_deadline is not None
 
     def test_restore_keyboard_agent(self, state_dir: Path) -> None:
         from dictare.core.engine import DictareEngine
@@ -226,9 +226,9 @@ class TestEngineRestoreState:
         save_state(active_agent=DictareEngine.KEYBOARD_AGENT_ID)
         engine = _make_engine()
         engine._restore_state(start_listening=False)
-        assert engine._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
+        assert engine._agent_mgr._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
         assert engine.agent_mode is False
-        assert engine._last_sse_agent_id is None
+        assert engine._agent_mgr._last_sse_agent_id is None
 
     def test_restore_listening(self, state_dir: Path) -> None:
         save_state(active_agent="claude", listening=True)
@@ -272,12 +272,12 @@ class TestGracePeriod:
         save_state(active_agent="claude")
         engine = _make_engine()
         engine._restore_state(start_listening=False)
-        assert engine._preferred_agent_deadline is not None
+        assert engine._agent_mgr._preferred_agent_deadline is not None
 
     def test_no_session_no_grace_period(self, state_dir: Path) -> None:
         engine = _make_engine()
         engine._restore_state(start_listening=False)
-        assert engine._preferred_agent_deadline is None
+        assert engine._agent_mgr._preferred_agent_deadline is None
 
     def test_grace_expired_activates_first_agent(self, state_dir: Path) -> None:
         save_state(active_agent="claude")
@@ -288,11 +288,11 @@ class TestGracePeriod:
         agent.id = "aider"
         engine.register_agent(agent)
 
-        engine._preferred_agent_deadline = 0.0
+        engine._agent_mgr._preferred_agent_deadline = 0.0
         engine._check_grace_period()
 
-        assert engine._current_agent_id == "aider"
-        assert engine._preferred_agent_deadline is None
+        assert engine._agent_mgr._current_agent_id == "aider"
+        assert engine._agent_mgr._preferred_agent_deadline is None
 
     def test_grace_not_expired_waits(self, state_dir: Path) -> None:
         import time as _time
@@ -301,8 +301,8 @@ class TestGracePeriod:
         engine = _make_engine()
         engine._restore_state(start_listening=False)
 
-        assert engine._preferred_agent_deadline is not None
-        assert engine._preferred_agent_deadline > _time.monotonic()
+        assert engine._agent_mgr._preferred_agent_deadline is not None
+        assert engine._agent_mgr._preferred_agent_deadline > _time.monotonic()
         engine._check_grace_period()
 
     def test_preferred_agent_arrives_within_grace(self, state_dir: Path) -> None:
@@ -313,7 +313,7 @@ class TestGracePeriod:
         agent = MagicMock()
         agent.id = "claude"
         engine.register_agent(agent)
-        assert engine._current_agent_id == "claude"
+        assert engine._agent_mgr._current_agent_id == "claude"
 
 # ---------------------------------------------------------------------------
 # register_agent with preferred agent
@@ -324,23 +324,23 @@ class TestRegisterAgentPreferred:
 
     def test_preferred_agent_activated_on_register(self) -> None:
         engine = _make_engine()
-        engine._last_sse_agent_id = "aider"
+        engine._agent_mgr._last_sse_agent_id = "aider"
 
         agent1 = MagicMock()
         agent1.id = "claude"
         engine.register_agent(agent1)
-        assert engine._current_agent_id == "claude"
+        assert engine._agent_mgr._current_agent_id == "claude"
 
         agent2 = MagicMock()
         agent2.id = "aider"
         engine.register_agent(agent2)
-        assert engine._current_agent_id == "aider"
+        assert engine._agent_mgr._current_agent_id == "aider"
 
     def test_first_agent_becomes_current_without_preference(self) -> None:
         engine = _make_engine()
-        engine._last_sse_agent_id = None
+        engine._agent_mgr._last_sse_agent_id = None
 
         agent = MagicMock()
         agent.id = "claude"
         engine.register_agent(agent)
-        assert engine._current_agent_id == "claude"
+        assert engine._agent_mgr._current_agent_id == "claude"

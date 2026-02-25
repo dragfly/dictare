@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from dictare import __version__
 from dictare.agent.base import Agent
+from dictare.core.agent_manager import AgentManager
 from dictare.core.audio_manager import AudioManager
-from dictare.core.bus import bus
 from dictare.core.controller import StateController
 from dictare.core.events import EngineEvents
 from dictare.core.fsm import (
@@ -106,7 +106,7 @@ class DictareEngine:
     @property
     def agent_mode(self) -> bool:
         """True when outputting to agents, False when keyboard."""
-        return self._current_agent_id != self.KEYBOARD_AGENT_ID
+        return self._agent_mgr.agent_mode
 
     def __init__(
         self,
@@ -137,9 +137,17 @@ class DictareEngine:
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
 
-        self._agents: dict[str, Agent] = {}  # ID -> Agent instance
-        # Note: Agent registration is handled externally via register_agent()/
-        # unregister_agent() API. The app creates the appropriate AgentRegistrar.
+        # Agent manager — owns all agent state (registry, switching, output mode)
+        initial_agent_id: str | None = (
+            None if config.output.mode == "agents" else self.KEYBOARD_AGENT_ID
+        )
+        self._agent_mgr = AgentManager(initial_agent_id=initial_agent_id)
+        self._agent_mgr._on_notify = self._notify_status
+        self._agent_mgr._on_agent_change = lambda aid, idx: self._emit(
+            "on_agent_change", aid, idx
+        )
+        self._agent_mgr._on_speak = lambda text: self.speak_text(text)
+
         # State machine handles all state (OFF/LISTENING/RECORDING/etc)
         self._state_manager = StateManager(initial_state=AppState.OFF)
 
@@ -155,23 +163,11 @@ class DictareEngine:
         self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
 
-        # Agent state (must be initialized before pipeline)
-        # _current_agent_id drives agent_mode property:
-        #   KEYBOARD_AGENT_ID → keyboard mode, anything else → agent mode
-        self._current_agent_id: str | None = (
-            None if config.output.mode == "agents" else self.KEYBOARD_AGENT_ID
-        )
-        self._agent_order: list[str] = []  # Ordered list of agent IDs for cycling
-
         # Pipelines for message processing
         self._pipeline = self._create_pipeline()
         self._executor_pipeline = self._create_executor_pipeline()
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
         self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
-        self._last_sse_agent_id: str | None = None  # Remember last SSE agent for mode switch
-        # Grace period after restart: give the preferred agent time to reconnect
-        # before auto-assigning any first-come agent.  Set in _restore_state().
-        self._preferred_agent_deadline: float | None = None
 
         # Tap detection (isolated state machine)
         # Single tap: toggle listening on/off
@@ -252,26 +248,7 @@ class DictareEngine:
 
     def _check_grace_period(self) -> None:
         """Assign first available agent once the preferred-agent grace period expires."""
-        import time as _time
-
-        if self._preferred_agent_deadline is None:
-            return
-        if _time.monotonic() < self._preferred_agent_deadline:
-            return
-        # Grace period expired without the preferred agent reconnecting
-        self._preferred_agent_deadline = None
-        if self.agent_mode and (
-            self._current_agent_id is None
-            or self._current_agent_id in self.RESERVED_AGENT_IDS
-        ):
-            visible = self.visible_agents
-            if visible:
-                self._current_agent_id = visible[0]
-                logger.info(
-                    "grace_period_expired: preferred agent never reconnected, "
-                    "activating first available agent %r",
-                    visible[0],
-                )
+        self._agent_mgr.check_grace_period()
 
     def _save_state(self) -> None:
         """Save current state to session-state.json.  Skipped during shutdown."""
@@ -279,16 +256,16 @@ class DictareEngine:
             return
         from dictare.utils.state import save_state
 
-        save_state(active_agent=self._current_agent_id, listening=self.is_listening)
+        save_state(active_agent=self._agent_mgr.current_agent, listening=self.is_listening)
 
     def save_session_before_shutdown(self) -> None:
         """Save session state before SIGTERM / engine.shutdown / engine.restart."""
         from dictare.utils.state import save_state
 
-        save_state(active_agent=self._current_agent_id, listening=self.is_listening)
+        save_state(active_agent=self._agent_mgr.current_agent, listening=self.is_listening)
         logger.info(
             "session_saved: agent=%r, mode=%s, listening=%r",
-            self._current_agent_id,
+            self._agent_mgr.current_agent,
             "agents" if self.agent_mode else "keyboard",
             self.is_listening,
         )
@@ -315,17 +292,7 @@ class DictareEngine:
 
         logger.info("restore_state: fresh session → agent=%r, listening=%r", saved_agent, saved_listening)
 
-        # Restore agent: if it's a real agent, wait for it to reconnect
-        if saved_agent and saved_agent != self.KEYBOARD_AGENT_ID:
-            import time as _time
-
-            self._current_agent_id = None  # agents mode, waiting
-            self._last_sse_agent_id = saved_agent
-            self._preferred_agent_deadline = _time.monotonic() + 20.0
-            logger.info("restore_state: waiting for agent %r (20s grace)", saved_agent)
-        elif saved_agent == self.KEYBOARD_AGENT_ID:
-            self._current_agent_id = self.KEYBOARD_AGENT_ID
-            logger.info("restore_state: keyboard mode")
+        self._agent_mgr.restore_session(saved_agent)
 
         return saved_listening
 
@@ -349,42 +316,36 @@ class DictareEngine:
         return self._state_manager.is_off
 
     # Agent IDs reserved for internal use — hidden from API, rejected by HTTP
-    RESERVED_AGENT_IDS = frozenset({KEYBOARD_AGENT_ID, TTS_AGENT_ID})
+    RESERVED_AGENT_IDS = AgentManager.RESERVED_AGENT_IDS
 
     @property
     def agents(self) -> list[str]:
         """Get list of ALL registered agent IDs (including internal)."""
-        return self._agent_order.copy()
+        return self._agent_mgr.agents
 
     @property
     def visible_agents(self) -> list[str]:
         """Get list of user-visible agent IDs (excludes internal agents)."""
-        return [a for a in self._agent_order if a not in self.RESERVED_AGENT_IDS]
+        return self._agent_mgr.visible_agents
 
     @property
     def current_agent(self) -> str | None:
         """Get the ID of the current agent, or None if no agents."""
-        return self._current_agent_id
+        return self._agent_mgr.current_agent
 
     @property
     def visible_current_agent(self) -> str | None:
         """Get current agent ID, or None if it's an internal agent."""
-        if self._current_agent_id in self.RESERVED_AGENT_IDS:
-            return None
-        return self._current_agent_id
+        return self._agent_mgr.visible_current_agent
 
     @property
     def current_agent_index(self) -> int:
         """Get the index of the current agent (0-based)."""
-        if self._current_agent_id and self._current_agent_id in self._agent_order:
-            return self._agent_order.index(self._current_agent_id)
-        return 0
+        return self._agent_mgr.current_agent_index
 
     def _get_current_agent(self) -> Agent | None:
         """Get the current Agent instance."""
-        if self._current_agent_id:
-            return self._agents.get(self._current_agent_id)
-        return None
+        return self._agent_mgr.get_current()
 
     # -------------------------------------------------------------------------
     # Session Stats
@@ -1071,167 +1032,28 @@ class DictareEngine:
     # -------------------------------------------------------------------------
 
     def set_output_mode(self, mode: str) -> None:
-        """Switch output mode at runtime (keyboard <-> agents).
-
-        In keyboard mode, a built-in KeyboardAgent injects keystrokes.
-        In agents mode, agents self-register via SSE.
-        """
-        if mode not in ("keyboard", "agents"):
-            return
-
-        want_agent_mode = mode == "agents"
-        if want_agent_mode == self.agent_mode:
-            logger.debug("set_output_mode(%r): already in this mode, no-op", mode)
-            return  # Already in this mode
-
-        logger.info(
-            "set_output_mode: %s → %s (current_agent=%r, last_sse_agent=%r)",
-            "agents" if self.agent_mode else "keyboard", mode,
-            self._current_agent_id, self._last_sse_agent_id,
-        )
-
-        if want_agent_mode:
-            # Switch to agents: restore last SSE agent as current
-            restore_id = self._last_sse_agent_id
-            real_agents = self.visible_agents
-            if restore_id and restore_id in self._agents:
-                self._current_agent_id = restore_id
-            elif real_agents:
-                self._current_agent_id = real_agents[0]
-            else:
-                self._current_agent_id = None  # agents mode, waiting for connection
-            self.speak_text("agent mode")
-        else:
-            # Switch to keyboard: save current agent, make __keyboard__ current
-            if self._current_agent_id and self._current_agent_id != self.KEYBOARD_AGENT_ID:
-                self._last_sse_agent_id = self._current_agent_id
-            self._current_agent_id = self.KEYBOARD_AGENT_ID
-            self.speak_text("keyboard mode")
-
-        self._notify_status()
-
-    def _set_current_agent(self, agent_id: str, idx: int = 0) -> None:
-        """Set current agent, emit event, and push SSE status update.
-
-        Single place for the set + emit + notify tripletta. Use this for
-        intentional agent switches (voice filter, hotkey, API, mode switch).
-        """
-        logger.info("_set_current_agent: %s (idx=%d)", agent_id, idx)
-        self._current_agent_id = agent_id
-        self._emit("on_agent_change", agent_id, idx)
-        self._notify_status()
+        """Switch output mode at runtime (keyboard <-> agents)."""
+        self._agent_mgr.set_output_mode(mode)
 
     # -------------------------------------------------------------------------
     # Agent Control
     # -------------------------------------------------------------------------
 
     def register_agent(self, agent: Agent) -> bool:
-        """Register an agent.
-
-        This is the public API for adding agents. Can be called by any
-        discovery mechanism (manual CLI args, auto-discovery watcher, etc.)
-
-        Args:
-            agent: The Agent instance to register.
-
-        Returns:
-            True if agent was added, False if already registered.
-        """
-        if agent.id in self._agents:
-            return False
-
-        self._agents[agent.id] = agent
-        self._agent_order.append(agent.id)
-
-        # Activate this agent if:
-        # 1. It's the saved preferred agent from last session, OR
-        # 2. No current agent OR current is internal (like __keyboard__) in agents mode
-        if agent.id not in self.RESERVED_AGENT_IDS:
-            if self._last_sse_agent_id and agent.id == self._last_sse_agent_id:
-                self._current_agent_id = agent.id
-                logger.info(
-                    "register_agent(%s): activated (matches preferred agent from saved state)",
-                    agent.id,
-                )
-            elif self._current_agent_id is None or (
-                self.agent_mode and self._current_agent_id in self.RESERVED_AGENT_IDS
-            ):
-                self._current_agent_id = agent.id
-                logger.info(
-                    "register_agent(%s): activated as first real agent "
-                    "(current_agent was %r, agent_mode=%r)",
-                    agent.id, self._current_agent_id, self.agent_mode,
-                )
-            else:
-                logger.info(
-                    "register_agent(%s): registered but not activated "
-                    "(current_agent=%r, preferred=%r)",
-                    agent.id, self._current_agent_id, self._last_sse_agent_id,
-                )
-        else:
-            logger.info("register_agent(%s): reserved agent registered", agent.id)
-
-        bus.publish("agent.registered", agent_id=agent.id)
-        self._notify_status()
-        return True
+        """Register an agent."""
+        return self._agent_mgr.register(agent)
 
     def unregister_agent(self, agent_id: str) -> bool:
-        """Unregister an agent by ID.
-
-        This is the public API for removing agents.
-
-        Args:
-            agent_id: The agent identifier to remove.
-
-        Returns:
-            True if agent was removed, False if not found.
-        """
-        if agent_id not in self._agents:
-            return False
-
-        was_current = self._current_agent_id == agent_id
-
-        # Remove from both dict and order list
-        del self._agents[agent_id]
-        self._agent_order = [a for a in self._agent_order if a != agent_id]
-
-        # Adjust current agent if needed
-        if was_current:
-            visible = self.visible_agents
-            if visible:
-                self._set_current_agent(visible[0])
-            else:
-                self._current_agent_id = None
-
-        bus.publish("agent.unregistered", agent_id=agent_id)
-        self._notify_status()
-        return True
+        """Unregister an agent by ID."""
+        return self._agent_mgr.unregister(agent_id)
 
     def switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent - sends event to controller."""
         self._controller.send(SwitchAgent(direction=direction, source="api"))
 
     def _switch_agent_internal(self, direction: int) -> None:
-        """Internal: Actually switch agent. Called by controller.
-
-        Switches to the next agent in the specified direction.
-        Agent liveness is verified lazily on send() - if an agent is dead,
-        repeated send failures will trigger auto-deregistration.
-        """
-        if not self._agent_order:
-            return
-
-        # Get current index
-        current_idx = 0
-        if self._current_agent_id and self._current_agent_id in self._agent_order:
-            current_idx = self._agent_order.index(self._current_agent_id)
-
-        # Switch to next agent (simple circular)
-        new_idx = (current_idx + direction) % len(self._agent_order)
-        new_agent_id = self._agent_order[new_idx]
-
-        if new_agent_id in self._agents:
-            self._set_current_agent(new_agent_id, new_idx)
+        """Internal: Actually switch agent. Called by controller."""
+        self._agent_mgr.switch_by_direction(direction)
 
     def switch_to_agent_by_name(self, name: str) -> bool:
         """Switch to a specific agent by name - sends event to controller."""
@@ -1239,33 +1061,8 @@ class DictareEngine:
         return True  # Actual success determined asynchronously
 
     def _switch_to_agent_by_name_internal(self, name: str) -> bool:
-        """Internal: Actually switch by name. Called by controller.
-
-        Agent liveness is verified lazily on send().
-        """
-        if not self._agent_order:
-            return False
-
-        name_lower = name.lower()
-
-        def try_switch(agent_id: str, idx: int) -> bool:
-            """Try to switch to an agent."""
-            if agent_id not in self._agents:
-                return False
-            self._set_current_agent(agent_id, idx)
-            return True
-
-        # Try exact match first
-        for i, agent_id in enumerate(self._agent_order):
-            if agent_id.lower() == name_lower:
-                return try_switch(agent_id, i)
-
-        # Try partial match
-        for i, agent_id in enumerate(self._agent_order):
-            if name_lower in agent_id.lower():
-                return try_switch(agent_id, i)
-
-        return False
+        """Internal: Actually switch by name. Called by controller."""
+        return self._agent_mgr.switch_by_name(name)
 
     def switch_to_agent_by_index(self, index: int) -> bool:
         """Switch to a specific agent by index (1-based) - sends event."""
@@ -1273,23 +1070,8 @@ class DictareEngine:
         return True  # Actual success determined asynchronously
 
     def _switch_to_agent_by_index_internal(self, index: int) -> bool:
-        """Internal: Actually switch by index. Called by controller.
-
-        Agent liveness is verified lazily on send().
-        """
-        if not self._agent_order:
-            return False
-
-        idx = index - 1  # Convert from 1-based to 0-based
-        if idx < 0 or idx >= len(self._agent_order):
-            return False
-
-        agent_id = self._agent_order[idx]
-        if agent_id not in self._agents:
-            return False
-
-        self._set_current_agent(agent_id, idx)
-        return True
+        """Internal: Actually switch by index. Called by controller."""
+        return self._agent_mgr.switch_by_index(index)
 
     def discard_current(self) -> None:
         """Discard current recording/transcription - sends event."""
@@ -1742,10 +1524,9 @@ class DictareEngine:
         """
         logger.info(
             "start_runtime: agent_mode=%r, current_agent=%r, "
-            "last_sse_agent=%r, agents=%s, hotkey=%r, start_listening=%r",
-            self.agent_mode, self._current_agent_id,
-            self._last_sse_agent_id,
-            list(self._agents.keys()),
+            "agents=%s, hotkey=%r, start_listening=%r",
+            self.agent_mode, self._agent_mgr.current_agent,
+            self._agent_mgr.agents,
             self._hotkey is not None,
             start_listening,
         )
@@ -1912,6 +1693,6 @@ def create_engine(
 
     _log.info(
         "create_engine done: agent_mode=%r, current_agent=%r",
-        engine.agent_mode, engine._current_agent_id,
+        engine.agent_mode, engine.current_agent,
     )
     return engine
