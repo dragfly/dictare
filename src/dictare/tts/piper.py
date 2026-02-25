@@ -145,7 +145,7 @@ class PiperTTS(TTSEngine):
                 ],
                 input=text.encode(),
                 capture_output=True,
-                timeout=60,
+                timeout=120,
             )
 
             if result.returncode != 0:

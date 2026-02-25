@@ -777,7 +777,7 @@ class DictareEngine:
         import time as _time
 
         deadline = _time.monotonic() + 120.0
-        while not http_server._tts_connected_event.is_set():
+        while not http_server.is_tts_connected():
             # Check if process died (fail fast instead of waiting 120s)
             if self._tts_worker_process.poll() is not None:
                 stderr = self._tts_worker_process.stderr
@@ -788,7 +788,7 @@ class DictareEngine:
                 )
             if _time.monotonic() > deadline:
                 raise RuntimeError("TTS worker failed to connect within 120s")
-            http_server._tts_connected_event.wait(timeout=0.5)
+            http_server.wait_tts_connected(timeout=0.5)
 
         logger.info("TTS worker connected")
 
