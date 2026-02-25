@@ -5,8 +5,8 @@ wants to submit/send the message. When detected, the trigger words
 are removed and x_input is set with submit, trigger, and confidence.
 
 Trigger words are organized by language. The filter checks triggers for:
-1. The detected language of the message (from Whisper)
-2. English (always, as a lingua franca)
+1. Wildcard ("*") triggers — always active regardless of language
+2. The detected language of the message (from Whisper)
 
 Pattern types:
 - Multi-word: ["ok", "send"] - position-weighted confidence (closer to end = higher)
@@ -52,11 +52,15 @@ class InputFilter:
     are removed from the text and x_input is set with submit action.
 
     Triggers are organized by language code. The filter checks:
-    1. Triggers for the message's detected language
-    2. English triggers (always, as lingua franca)
+    1. Wildcard ("*") triggers — always active regardless of language
+    2. Triggers for the message's detected language
+
+    Use "*" for language-agnostic triggers that should work regardless of
+    what language Whisper detects (e.g., English triggers when you speak
+    multiple languages).
 
     Attributes:
-        triggers: Dict mapping language codes to trigger patterns.
+        triggers: Dict mapping language codes (or "*") to trigger patterns.
         confidence_threshold: Minimum confidence to trigger submit (0.0-1.0).
         max_scan_words: Maximum words from end to scan for triggers.
         decay_rate: How fast confidence decays with position (0.95 = 5% per word).
@@ -76,8 +80,8 @@ class InputFilter:
     def _get_triggers_for_message(self, message: dict) -> list[list[str]]:
         """Get combined trigger patterns for a message based on its language.
 
-        Returns triggers for the message's language plus English (always).
-        Language-specific triggers come first (higher priority).
+        Returns wildcard ("*") triggers plus language-specific triggers.
+        Wildcard triggers come first (always active regardless of language).
 
         Args:
             message: OpenVIP message with optional 'language' field.
@@ -95,13 +99,13 @@ class InputFilter:
 
         combined: list[list[str]] = []
 
-        # Add language-specific triggers first (higher priority)
-        if lang in self.triggers:
-            combined.extend(self.triggers[lang])
+        # Always add wildcard triggers (language-agnostic)
+        if "*" in self.triggers:
+            combined.extend(self.triggers["*"])
 
-        # Always add English triggers (lingua franca)
-        if lang != "en" and "en" in self.triggers:
-            combined.extend(self.triggers["en"])
+        # Add language-specific triggers
+        if lang != "*" and lang in self.triggers:
+            combined.extend(self.triggers[lang])
 
         return combined
 
