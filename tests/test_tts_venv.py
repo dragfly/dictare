@@ -177,7 +177,7 @@ def test_uninstall_venv_when_not_installed(tmp_path: Path):
 
 
 def test_spawn_worker_uses_venv_python():
-    """_spawn_tts_worker uses venv python and injects PYTHONPATH when venv exists."""
+    """_spawn_worker uses venv python and injects PYTHONPATH when venv exists."""
     mock_config = MagicMock()
     mock_config.tts.engine = "piper"
     mock_config.tts.language = "en"
@@ -201,17 +201,10 @@ def test_spawn_worker_uses_venv_python():
         mock_proc.poll.return_value = None
         mock_popen.return_value = mock_proc
 
-        # Import and create a minimal engine to test _spawn_tts_worker
-        from dictare.core.engine import DictareEngine
+        from dictare.core.tts_manager import TTSManager
 
-        engine = object.__new__(DictareEngine)
-        engine.config = mock_config
-        engine._auth_tokens = {"register_tts": "test-token"}
-        engine._tts_worker_process = None
-        engine._tts_proxy = None
-        engine._tts_engine = None
-
-        engine._spawn_tts_worker(mock_http)
+        mgr = TTSManager(mock_config)
+        mgr._spawn_worker(mock_http)
 
         # Verify Popen was called with venv python
         popen_call = mock_popen.call_args
@@ -226,7 +219,7 @@ def test_spawn_worker_uses_venv_python():
 
 
 def test_spawn_worker_uses_sys_executable_without_venv():
-    """_spawn_tts_worker falls back to sys.executable when no venv exists."""
+    """_spawn_worker falls back to sys.executable when no venv exists."""
     import sys
 
     mock_config = MagicMock()
@@ -245,16 +238,10 @@ def test_spawn_worker_uses_sys_executable_without_venv():
         mock_proc.poll.return_value = None
         mock_popen.return_value = mock_proc
 
-        from dictare.core.engine import DictareEngine
+        from dictare.core.tts_manager import TTSManager
 
-        engine = object.__new__(DictareEngine)
-        engine.config = mock_config
-        engine._auth_tokens = {"register_tts": "test-token"}
-        engine._tts_worker_process = None
-        engine._tts_proxy = None
-        engine._tts_engine = None
-
-        engine._spawn_tts_worker(mock_http)
+        mgr = TTSManager(mock_config)
+        mgr._spawn_worker(mock_http)
 
         popen_call = mock_popen.call_args
         cmd = popen_call[0][0]

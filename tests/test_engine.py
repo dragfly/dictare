@@ -1176,10 +1176,10 @@ class TestTTSIntegration:
         engine = DictareEngine(config=config)
         mock_tts = MagicMock()
         if tts_available:
-            engine._tts_engine = mock_tts
+            engine._tts_mgr._tts_engine = mock_tts
         else:
-            engine._tts_engine = None
-            engine._tts_error = "TTS engine 'piper' is not available."
+            engine._tts_mgr._tts_engine = None
+            engine._tts_mgr._tts_error = "TTS engine 'piper' is not available."
         return engine, mock_tts
 
     @patch("dictare.audio.beep.play_audio")

@@ -28,6 +28,7 @@ from dictare.core.fsm import (
     TranscriptionCompleted,
 )
 from dictare.core.openvip_messages import create_message
+from dictare.core.tts_manager import TTSManager
 from dictare.hotkey.base import HotkeyListener
 from dictare.hotkey.tap_detector import TapDetector
 from dictare.pipeline import Pipeline, PipelineLoader
@@ -194,22 +195,8 @@ class DictareEngine:
         # Loading progress tracking (for /status endpoint)
         self._loading = False
         self._loading_models: list[dict[str, Any]] = []
-        # TTS engine (loaded at startup, None if unavailable)
-        self._tts_engine: Any = None
-        self._tts_error: str = ""
-
-        # Play counter for mic-pausing: mic stays paused while any play is active.
-        # Incremented before speak(), decremented after. 0→1 pauses mic, N→0 resumes.
-        self._active_plays = 0
-        self._play_lock = threading.Lock()
-        self._tts_proxy: Any = None  # WorkerTTSEngine (set when using worker)
-        self._tts_worker_process: Any = None  # subprocess.Popen for TTS worker
-
-        # Scoped auth tokens for internal services
-        import secrets
-        self._auth_tokens: dict[str, str] = {
-            "register_tts": secrets.token_urlsafe(32),
-        }
+        # TTS manager — owns engine loading, worker subprocess, speech, mic-pausing
+        self._tts_mgr = TTSManager(config, controller=self._controller)
         # Watchdog cancel event — allows tests to prevent os._exit()
         self._exit_watchdog_cancel = threading.Event()
 
@@ -581,41 +568,11 @@ class DictareEngine:
         logger.info("VAD model loaded in %.1fs", vad_elapsed)
 
         # Load TTS engine (optional — engine continues if unavailable)
-        # Venv-based engines run in a worker subprocess to use their
-        # isolated environment and avoid blocking the main process.
-        from dictare.tts.venv import VENV_ENGINES
-        _worker_engines = set(VENV_ENGINES.keys())
-        use_worker = (
-            tts_engine_name in _worker_engines and http_server is not None
+        self._tts_mgr.load(
+            http_server=http_server,
+            estimated=get_model_load_time(tts_engine_name) or 1,
         )
-
-        logger.debug("Loading TTS engine: %s (worker=%s)", tts_engine_name, use_worker)
-        self._loading_models[2]["start_time"] = time.time()
-        self._loading_models[2]["status"] = "loading"
-
-        if use_worker:
-            try:
-                self._spawn_tts_worker(http_server)
-                tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
-                self._loading_models[2]["elapsed"] = tts_elapsed
-                self._loading_models[2]["status"] = "done"
-                save_model_load_time(tts_engine_name, tts_elapsed)
-                logger.info("TTS worker spawned in %.1fs", tts_elapsed)
-            except Exception as exc:
-                tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
-                self._loading_models[2]["elapsed"] = tts_elapsed
-                self._loading_models[2]["status"] = "error"
-                self._tts_error = str(exc)
-                # Clean up the broken proxy so status shows unavailable
-                self._tts_engine = None
-                self._tts_proxy = None
-                logger.warning(
-                    "TTS engine '%s' not available — install via Dashboard or: "
-                    "dictare dependencies resolve",
-                    tts_engine_name,
-                )
-        else:
-            self._load_tts_in_process(tts_engine_name, save_model_load_time)
+        self._loading_models[2] = self._tts_mgr.loading_status
 
         # Create hotkey listener for toggle (if available and enabled)
         # Note: hotkey disabled in daemon mode - macOS requires main thread
@@ -631,130 +588,6 @@ class DictareEngine:
         if self.config.audio.output_device:
             from dictare.audio.beep import set_output_device
             set_output_device(self.config.audio.output_device)
-
-    # -------------------------------------------------------------------------
-    # TTS Loading Helpers
-    # -------------------------------------------------------------------------
-
-    def _load_tts_in_process(
-        self, engine_name: str, save_fn: Any = None,
-    ) -> None:
-        """Load a TTS engine in the main process (lightweight engines)."""
-        try:
-            from dictare.tts import get_cached_tts_engine
-
-            self._tts_engine = get_cached_tts_engine(self.config.tts)
-            if hasattr(self._tts_engine, "_get_model_path"):
-                self._tts_engine._get_model_path()
-            tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
-            self._loading_models[2]["elapsed"] = tts_elapsed
-            self._loading_models[2]["status"] = "done"
-            if save_fn:
-                save_fn(engine_name, tts_elapsed)
-            logger.debug("TTS engine loaded in-process in %.1fs", tts_elapsed)
-        except ValueError as exc:
-            tts_elapsed = round(time.time() - self._loading_models[2]["start_time"], 1)
-            self._loading_models[2]["elapsed"] = tts_elapsed
-            self._loading_models[2]["status"] = "error"
-            self._tts_error = str(exc)
-            logger.warning(
-                "TTS engine '%s' not available — fix: dictare dependencies resolve",
-                engine_name,
-            )
-
-    @staticmethod
-    def _kill_orphaned_tts_workers() -> None:
-        """Kill any orphaned TTS worker processes from a previous engine run."""
-        import os
-        import signal
-        import subprocess
-
-        try:
-            result = subprocess.run(
-                ["pgrep", "-f", "dictare.tts.worker"],
-                capture_output=True, text=True, timeout=5,
-            )
-            if result.returncode != 0:
-                return  # No matching processes
-
-            for line in result.stdout.strip().splitlines():
-                pid = int(line.strip())
-                if pid == os.getpid():
-                    continue
-                logger.info("Killing orphaned TTS worker (PID %d)", pid)
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-        except Exception:
-            pass  # Best-effort cleanup
-
-    def _spawn_tts_worker(self, http_server: Any) -> None:
-        """Spawn a persistent TTS worker subprocess and create the proxy engine."""
-        import os
-        import subprocess
-
-        from dictare.tts.proxy import WorkerTTSEngine
-        from dictare.tts.venv import get_dictare_src_path, get_venv_python
-
-        self._kill_orphaned_tts_workers()
-
-        token = self._auth_tokens["register_tts"]
-        port = http_server.port
-        engine_name = self.config.tts.engine
-
-        # Use venv python if the engine has an isolated venv, else sys.executable
-        venv_python = get_venv_python(engine_name)
-        python = venv_python or sys.executable
-
-        cmd = [
-            python, "-m", "dictare.tts.worker",
-            "--url", f"http://127.0.0.1:{port}",
-            "--token", token,
-            "--engine", engine_name,
-            "--language", self.config.tts.language,
-            "--speed", str(self.config.tts.speed),
-        ]
-        if self.config.tts.voice:
-            cmd.extend(["--voice", self.config.tts.voice])
-
-        # Build env for worker subprocess
-        env = {**os.environ, "COQUI_TOS_AGREED": "1"}
-        if venv_python:
-            # When using venv python, inject PYTHONPATH so worker can import dictare
-            env["PYTHONPATH"] = get_dictare_src_path()
-
-        logger.info("Spawning TTS worker: %s", " ".join(cmd))
-        self._tts_worker_process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            env=env,
-        )
-
-        # Create proxy engine — it will wait for worker to connect
-        proxy = WorkerTTSEngine(http_server)
-        self._tts_proxy = proxy
-        self._tts_engine = proxy
-
-        # Wait for worker to connect, polling for early crash every 0.5s
-        import time as _time
-
-        deadline = _time.monotonic() + 120.0
-        while not http_server.is_tts_connected():
-            # Check if process died (fail fast instead of waiting 120s)
-            if self._tts_worker_process.poll() is not None:
-                stderr = self._tts_worker_process.stderr
-                err_output = stderr.read().decode() if stderr else ""
-                raise RuntimeError(
-                    f"TTS worker exited with code {self._tts_worker_process.returncode}: "
-                    f"{err_output[:500]}"
-                )
-            if _time.monotonic() > deadline:
-                raise RuntimeError("TTS worker failed to connect within 120s")
-            http_server.wait_tts_connected(timeout=0.5)
-
-        logger.info("TTS worker connected")
 
     # -------------------------------------------------------------------------
     # VAD Callbacks
@@ -1087,28 +920,8 @@ class DictareEngine:
             self._audio_manager.reset_vad()  # Use reset, not flush
 
     # -------------------------------------------------------------------------
-    # TTS / Audio Feedback
+    # TTS / Audio Feedback (delegated to TTSManager)
     # -------------------------------------------------------------------------
-
-    def _load_tts_phrases(self) -> dict:
-        """Load TTS phrases from config file or use defaults."""
-        import json
-        from pathlib import Path
-
-        default_phrases = {
-            "agent": "agent",
-        }
-
-        phrases_path = Path.home() / ".config" / "dictare" / "tts_phrases.json"
-        if phrases_path.exists():
-            try:
-                with open(phrases_path) as f:
-                    custom = json.load(f)
-                return {**default_phrases, **custom}
-            except Exception:
-                pass
-
-        return default_phrases
 
     def resend_last(self) -> bool:
         """Resend the last transcription to the current agent.
@@ -1127,50 +940,12 @@ class DictareEngine:
         return True
 
     def speak_text(self, text: str) -> None:
-        """Speak text using the pre-loaded TTS engine, optionally pausing the mic.
-
-        Args:
-            text: Text to speak.
-        """
-        if self._tts_engine is None:
-            logger.warning("speak_text(%r): TTS engine not loaded", text)
-            return
-
-        from dictare.audio.beep import get_sound_for_event
-
-        enabled, _ = get_sound_for_event(self.config.audio, "agent_announce")
-        if not enabled:
-            return
-
-        from dictare.audio.beep import play_audio
-
-        tts = self._tts_engine
-        logger.info("TTS: %r", text)
-
-        def _do_tts() -> None:
-            try:
-                ok = tts.speak(text)
-                if not ok:
-                    logger.warning("TTS speak(%r) returned False", text)
-            except Exception:
-                logger.warning("TTS speak failed for %r", text, exc_info=True)
-
-        pause = not self.config.audio.headphones_mode
-        play_audio(_do_tts, pause_mic=pause, controller=self._controller)
+        """Speak text using TTS (delegates to TTSManager)."""
+        self._tts_mgr.speak_text(text)
 
     def speak_agent(self, agent_name: str) -> None:
-        """Speak agent name using OS TTS.
-
-        Announces "{agent_prefix} {agent_name}" (e.g., "agent claude").
-        The prefix is configurable via ~/.config/dictare/tts_phrases.json.
-
-        Args:
-            agent_name: Name of the agent to announce.
-        """
-        phrases = self._load_tts_phrases()
-        agent_prefix = phrases.get("agent", "agent")
-        display_name = agent_name.strip("_")
-        self.speak_text(f"{agent_prefix} {display_name}")
+        """Announce agent name via TTS (delegates to TTSManager)."""
+        self._tts_mgr.speak_agent(agent_name)
 
     # -------------------------------------------------------------------------
     # Public Domain API (called by HTTP adapter and tests)
@@ -1231,8 +1006,8 @@ class DictareEngine:
                 "tts": {
                     "engine": self.config.tts.engine,
                     "language": self.config.tts.language,
-                    "available": self._tts_engine is not None,
-                    "error": self._tts_error or None,
+                    "available": self._tts_mgr.available,
+                    "error": self._tts_mgr.error or None,
                 },
                 "audio_devices": {
                     "input": self.config.audio.input_device or "(default)",
@@ -1287,154 +1062,13 @@ class DictareEngine:
             "microphone_url": MICROPHONE_SETTINGS_URL,
         }
 
-    # ------------------------------------------------------------------
-    # Play counter for mic-pausing (thread-safe)
-    # ------------------------------------------------------------------
-
-    def _play_start(self) -> None:
-        """Increment active play count. Pauses mic on first play (0→1)."""
-        with self._play_lock:
-            self._active_plays += 1
-            first = self._active_plays == 1
-
-        if first and self._controller is not None:
-            from dictare.core.fsm import AppState, PlayStarted
-
-            if self._controller.state != AppState.OFF:
-                try:
-                    self._controller.send(PlayStarted(text="", source="tts"))
-                except Exception:
-                    pass
-
-    def _play_end(self) -> None:
-        """Decrement active play count. Resumes mic when last play ends (N→0)."""
-        with self._play_lock:
-            self._active_plays = max(0, self._active_plays - 1)
-            last = self._active_plays == 0
-
-        if last and self._controller is not None:
-            from dictare.core.fsm import PlayCompleted
-
-            try:
-                self._controller.send(PlayCompleted(source="tts"))
-            except Exception:
-                pass
-
     def handle_speech(self, body: dict) -> dict:
-        """Handle a speech (TTS) request.
-
-        Uses the running TTS worker. Accepts ``language`` and ``speed``
-        overrides for future per-request support.
-
-        If ``engine`` is specified and differs from the configured engine,
-        returns an error — switching engines requires a config change.
-
-        Args:
-            body: Request body with ``text`` (required) and optional
-                ``engine``, ``language``, ``speed``.
-
-        Returns:
-            Response dict with status and duration.
-
-        Raises:
-            ValueError: If requested engine differs from configured engine.
-        """
-        text = body.get("text", "")
-        if not text:
-            return {"status": "error", "error": "No text provided"}
-
-        # Reject engine mismatch early
-        requested_engine = body.get("engine")
-        if requested_engine and requested_engine != self.config.tts.engine:
-            raise ValueError(
-                f"Requested engine '{requested_engine}' is not the configured "
-                f"engine ('{self.config.tts.engine}'). "
-                f"Change it in Settings → Speech."
-            )
-
-        if self._tts_engine is None:
-            error = self._tts_error or "TTS engine not loaded"
-            return {"status": "error", "error": error}
-
-        tts = self._tts_engine
-
-        # Per-request overrides (optional, protocol fields)
-        voice = body.get("voice") or None
-        language = body.get("language") or None
-        speak_kwargs: dict[str, str] = {}
-        if voice:
-            speak_kwargs["voice"] = voice
-        if language:
-            speak_kwargs["language"] = language
-
-        # Mic-pausing via play counter: mic stays paused while any play is active.
-        # 0→1 sends PlayStarted, N→0 sends PlayCompleted.
-        pause = not self.config.audio.headphones_mode
-
-        start = time.time()
-
-        if pause:
-            self._play_start()
-        try:
-            ok = tts.speak(text, **speak_kwargs)
-        finally:
-            if pause:
-                self._play_end()
-
-        duration_ms = int((time.time() - start) * 1000)
-
-        if not ok:
-            return {"status": "error", "error": "TTS engine failed to speak"}
-
-        return {"status": "ok", "duration_ms": duration_ms}
+        """Handle a speech (TTS) request (delegates to TTSManager)."""
+        return self._tts_mgr.handle_speech(body)
 
     def list_voices(self) -> list[str]:
-        """Return available voices for the configured TTS engine."""
-        from dictare.tts.venv import VENV_ENGINES
-
-        engine_name = self.config.tts.engine
-
-        # Worker-based engines: query via venv subprocess
-        if engine_name in VENV_ENGINES:
-            return self._list_voices_via_venv(engine_name)
-
-        # Direct engines: call list_voices() on the loaded engine
-        if self._tts_engine is not None:
-            return self._tts_engine.list_voices()
-
-        return []
-
-    @staticmethod
-    def _list_voices_via_venv(engine_name: str) -> list[str]:
-        """List voices by running a script in the engine's venv."""
-        import subprocess as sp
-
-        from dictare.tts.venv import get_venv_python
-
-        venv_python = get_venv_python(engine_name)
-        if venv_python is None:
-            return []
-
-        if engine_name == "kokoro":
-            script = (
-                "from kokoro_onnx import Kokoro; from pathlib import Path; "
-                "d = Path.home() / '.local/share/dictare/models/kokoro'; "
-                "k = Kokoro(str(d / 'model.onnx'), str(d / 'voices.bin')); "
-                "print('\\n'.join(sorted(k.voices.keys())))"
-            )
-        else:
-            return []
-
-        try:
-            result = sp.run(
-                [venv_python, "-c", script],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode != 0:
-                return []
-            return [v for v in result.stdout.strip().splitlines() if v]
-        except Exception:
-            return []
+        """Return available voices (delegates to TTSManager)."""
+        return self._tts_mgr.list_voices()
 
     def _start_exit_watchdog(self, exit_code: int, timeout: float = 6) -> None:
         """Start a watchdog that force-exits after *timeout* seconds.
@@ -1646,14 +1280,7 @@ class DictareEngine:
             self._hotkey.stop()
 
         # Terminate TTS worker subprocess
-        if self._tts_worker_process is not None:
-            logger.info("Stopping TTS worker (PID %d)", self._tts_worker_process.pid)
-            self._tts_worker_process.terminate()
-            try:
-                self._tts_worker_process.wait(timeout=5)
-            except Exception:
-                self._tts_worker_process.kill()
-            self._tts_worker_process = None
+        self._tts_mgr.stop()
 
 
 def create_engine(
