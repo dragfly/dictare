@@ -97,7 +97,7 @@ class WorkerTTSEngine(TTSEngine):
         return result["ok"]
 
     def is_available(self) -> bool:
-        return self._server._tts_connected_event.is_set()
+        return self._server.is_tts_connected()
 
     def get_name(self) -> str:
         return "worker"

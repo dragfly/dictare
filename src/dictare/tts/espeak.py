@@ -71,7 +71,7 @@ class EspeakTTS(TTSEngine):
                     text,
                 ],
                 capture_output=True,
-                timeout=60,
+                timeout=120,
             )
             if result.returncode != 0:
                 logger.warning(

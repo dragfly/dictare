@@ -204,7 +204,7 @@ class OuteTTS(TTSEngine):
                     # Find and play the generated audio file
                     audio_files = list(Path(tmpdir).glob("audio_*.wav"))
                     if audio_files:
-                        play_wav_native(audio_files[0], timeout=60.0)
+                        play_wav_native(audio_files[0], timeout=120.0)
                         return True
 
                     return False

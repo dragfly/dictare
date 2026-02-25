@@ -662,10 +662,20 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
     result = []
     config = Config()
 
-    # Top-level fields
+    # Derive sections from Config fields: any field whose type is a BaseModel subclass
+    # (except agent_types which is dynamic)
+    _skip_sections = {"agent_types"}
+    sections: list[tuple[str, type]] = []
     for field_name, field_info in Config.model_fields.items():
-        if field_name in ("audio", "stt", "tts", "hotkey", "output", "keyboard", "server", "client", "logging", "stats", "daemon", "pipeline", "agent_types"):
-            # These are sections, handle below (agent_types is dynamic, skip)
+        field_type = field_info.annotation
+        if field_type is not None and isinstance(field_type, type) and issubclass(field_type, BaseModel) and field_name not in _skip_sections:
+            sections.append((field_name, field_type))
+
+    section_names = {name for name, _ in sections}
+
+    # Top-level fields (skip sections)
+    for field_name, field_info in Config.model_fields.items():
+        if field_name in section_names or field_name in _skip_sections:
             continue
         value = getattr(config, field_name)
         env_var = _key_to_env_var(field_name)
@@ -678,21 +688,6 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
         ))
 
     # Sections
-    sections = [
-        ("audio", AudioConfig),
-        ("stt", STTConfig),
-        ("tts", TTSConfig),
-        ("hotkey", HotkeyConfig),
-        ("output", OutputConfig),
-        ("keyboard", KeyboardConfig),
-        ("server", ServerConfig),
-        ("client", ClientConfig),
-        ("logging", LoggingConfig),
-        ("stats", StatsConfig),
-        ("daemon", DaemonConfig),
-        ("pipeline", PipelineConfig),
-    ]
-
     for section_name, section_class in sections:
         section_config = section_class()
         for field_name, field_info in section_class.model_fields.items():  # type: ignore[attr-defined]

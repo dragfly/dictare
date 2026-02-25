@@ -86,6 +86,14 @@ class OpenVIPServer:
         # FastAPI app
         self._app = self._create_app()
 
+    def is_tts_connected(self) -> bool:
+        """Check if the TTS worker has connected."""
+        return self._tts_connected_event.is_set()
+
+    def wait_tts_connected(self, timeout: float = 0.5) -> bool:
+        """Wait for TTS worker to connect. Returns True if connected."""
+        return self._tts_connected_event.wait(timeout=timeout)
+
     def _has_permission(self, request: Request, permission: str) -> bool:
         """Check if request carries a valid Bearer token for *permission*."""
         token = self._auth_tokens.get(permission)
