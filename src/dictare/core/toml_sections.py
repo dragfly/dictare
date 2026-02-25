@@ -19,6 +19,12 @@ if TYPE_CHECKING:
 # Public API
 # ---------------------------------------------------------------------------
 
+import re
+
+# A TOML section header: [name] or [[name]], NOT an array literal like ["ok", "send"].
+# Section names start with a letter, underscore, or digit after the opening bracket(s).
+_TOML_HEADER_RE = re.compile(r"^\[{1,2}\s*[A-Za-z_]")
+
 SUPPORTED_SECTIONS = frozenset([
     "agent_types",
     "keyboard.shortcuts",
@@ -286,7 +292,7 @@ def _extract_section_lines(text: str, section: str) -> str | None:
     for line in text.splitlines(keepends=True):
         stripped = line.strip()
 
-        if stripped.startswith("["):
+        if _TOML_HEADER_RE.match(stripped):
             is_owned = any(stripped.startswith(p) for p in owned_prefixes)
             if is_owned:
                 # Flush buffered comments — they belong to this owned section
@@ -357,7 +363,7 @@ def _strip_section_lines(text: str, section: str) -> str:
     for line in text.splitlines(keepends=True):
         stripped = line.strip()
 
-        if stripped.startswith("["):
+        if _TOML_HEADER_RE.match(stripped):
             is_owned = any(stripped.startswith(p) for p in owned_prefixes)
             if is_owned:
                 # Discard buffered comments — they belong to this owned header

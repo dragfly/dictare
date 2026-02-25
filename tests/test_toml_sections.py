@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from dictare.core.toml_sections import (
+    _TOML_HEADER_RE,
     _extract_section_lines,
     _strip_section_lines,
     apply_section,
@@ -186,3 +187,159 @@ description = "Claude Sonnet"
         assert size_after_1 == size_after_2, (
             f"File grew from {size_after_1} to {size_after_2} bytes on second save"
         )
+
+
+# ---------------------------------------------------------------------------
+# TOML header regex — distinguishes [section] from ["array", "literal"]
+# ---------------------------------------------------------------------------
+
+
+class TestTomlHeaderRegex:
+    """_TOML_HEADER_RE must match section headers, not array literals."""
+
+    def test_simple_section(self) -> None:
+        assert _TOML_HEADER_RE.match("[stt]")
+
+    def test_dotted_section(self) -> None:
+        assert _TOML_HEADER_RE.match("[pipeline.submit_filter]")
+
+    def test_double_bracket_array_table(self) -> None:
+        assert _TOML_HEADER_RE.match("[[keyboard.shortcuts]]")
+
+    def test_array_literal_not_matched(self) -> None:
+        """TOML array value like ["ok", "send"] must NOT match as a header."""
+        assert not _TOML_HEADER_RE.match('["ok", "send"]')
+
+    def test_array_literal_single_quotes(self) -> None:
+        assert not _TOML_HEADER_RE.match("['ok', 'send']")
+
+    def test_nested_array_literal(self) -> None:
+        assert not _TOML_HEADER_RE.match('[["ok", "invia"], ["ok", "manda"]]')
+
+    def test_indented_array_literal(self) -> None:
+        """Indented array value (common in multi-line TOML)."""
+        # After strip(), this becomes ["ok", "invia"]
+        assert not _TOML_HEADER_RE.match('["ok", "invia"]')
+
+    def test_section_with_spaces(self) -> None:
+        assert _TOML_HEADER_RE.match("[ stt ]")
+
+    def test_section_with_underscore(self) -> None:
+        assert _TOML_HEADER_RE.match("[agent_types]")
+
+
+# ---------------------------------------------------------------------------
+# Multi-line array values inside sections
+# ---------------------------------------------------------------------------
+
+
+class TestMultiLineArrayValues:
+    """Sections with multi-line TOML arrays must be extracted/stripped correctly."""
+
+    def test_extract_submit_filter_with_multiline_arrays(self) -> None:
+        """Multi-line array values are part of the section, not headers."""
+        text = """\
+[stt]
+model = "parakeet-v3"
+
+[pipeline.submit_filter.triggers]
+"*" = [
+    ["ok", "invia"],
+    ["ok", "manda"],
+]
+
+[agent_types]
+default = "sonnet"
+"""
+        extracted = _extract_section_lines(text, "pipeline.submit_filter")
+        assert extracted is not None
+        assert "[pipeline.submit_filter.triggers]" in extracted
+        assert '["ok", "invia"]' in extracted
+        assert '["ok", "manda"]' in extracted
+        assert "[agent_types]" not in extracted
+        assert "[stt]" not in extracted
+
+    def test_strip_submit_filter_with_multiline_arrays(self) -> None:
+        """Stripping removes multi-line array values with the section."""
+        text = """\
+[stt]
+model = "parakeet-v3"
+
+[pipeline.submit_filter.triggers]
+"*" = [
+    ["ok", "invia"],
+    ["ok", "manda"],
+]
+
+[agent_types]
+default = "sonnet"
+"""
+        stripped = _strip_section_lines(text, "pipeline.submit_filter")
+        assert "[pipeline.submit_filter" not in stripped
+        assert '["ok", "invia"]' not in stripped
+        assert "[stt]" in stripped
+        assert "[agent_types]" in stripped
+
+    def test_extract_with_multiple_language_keys(self) -> None:
+        """Section with multiple language keys and multi-line arrays."""
+        text = """\
+[pipeline.submit_filter.triggers]
+"*" = [
+    ["ok", "send"],
+    ["ok", "submit"],
+]
+it = [
+    ["ok", "invia"],
+    ["ok", "manda"],
+]
+"""
+        extracted = _extract_section_lines(text, "pipeline.submit_filter")
+        assert extracted is not None
+        assert '["ok", "send"]' in extracted
+        assert '["ok", "submit"]' in extracted
+        assert '["ok", "invia"]' in extracted
+        assert '["ok", "manda"]' in extracted
+
+    def test_roundtrip_multiline_arrays(self, tmp_path: Path) -> None:
+        """Save/load roundtrip preserves multi-line array content."""
+        initial = """\
+[stt]
+model = "parakeet-v3"
+"""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(initial, encoding="utf-8")
+
+        section_content = """\
+[pipeline.submit_filter.triggers]
+"*" = [
+    ["ok", "send"],
+    ["ok", "submit"],
+]
+"""
+        apply_section("pipeline.submit_filter", section_content, config_path)
+
+        # Read back and verify
+        result = config_path.read_text(encoding="utf-8")
+        assert '["ok", "send"]' in result
+        assert '["ok", "submit"]' in result
+        assert "[stt]" in result
+
+        # Extract and verify section is complete
+        extracted = _extract_section_lines(result, "pipeline.submit_filter")
+        assert extracted is not None
+        assert '["ok", "send"]' in extracted
+        assert '["ok", "submit"]' in extracted
+
+    def test_inline_array_not_affected(self) -> None:
+        """Inline arrays (single line) still work correctly."""
+        text = """\
+[pipeline.submit_filter.triggers]
+"*" = [["ok", "send"], ["ok", "submit"]]
+
+[agent_types]
+default = "sonnet"
+"""
+        extracted = _extract_section_lines(text, "pipeline.submit_filter")
+        assert extracted is not None
+        assert '[["ok", "send"], ["ok", "submit"]]' in extracted
+        assert "[agent_types]" not in extracted
