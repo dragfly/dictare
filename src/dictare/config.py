@@ -840,19 +840,18 @@ def create_default_config() -> Path:
 [pipeline]
 # enabled = true
 
-# [pipeline.submit_filter]
+[pipeline.submit_filter]
 # enabled = true
 # confidence_threshold = 0.85
 # max_scan_words = 15
 # decay_rate = 0.95               # 5% confidence decay per word from end
-#
+
 # Submit triggers by language. No triggers active by default.
 # Each trigger is a multi-word sequence — all words must appear in order.
 # Single words trigger too easily; always use 2+ word sequences.
 # Use "*" for language-agnostic triggers (always active regardless of detected language).
 # Uncomment and customize for your language.
-#
-# [pipeline.submit_filter.triggers]
+[pipeline.submit_filter.triggers]
 # "*" = [
 #     ["ok", "send"],
 #     ["ok", "submit"],
@@ -870,7 +869,7 @@ def create_default_config() -> Path:
 #     ["ok", "soumettre"],
 # ]
 
-# [pipeline.agent_filter]
+[pipeline.agent_filter]
 # enabled = false
 # triggers = ["agent"]
 # match_threshold = 0.5
