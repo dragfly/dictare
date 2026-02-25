@@ -75,8 +75,8 @@ class SayTTS(TTSEngine):
                 play_wav_native(cached, timeout=120.0)
                 return True
 
-            # Cache miss → generate audio file
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            # Cache miss → generate audio file (macOS say only writes AIFF)
+            with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f:
                 wav_path = Path(f.name)
 
             cmd = ["say", "-r", str(self.speed), "-o", str(wav_path)]
