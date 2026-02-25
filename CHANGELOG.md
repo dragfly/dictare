@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-02-25
+
+Code quality refactoring on the v0.1.0 stable baseline. Zero behavior changes,
+838 tests passing throughout.
+
+### Changed
+- **kokoro.py** — `_resolve_lang()`/`_resolve_voice()` are now pure `@staticmethod`s
+  instead of temporarily mutating instance state. Added `_get_cache_key()` helper
+  to DRY up `check_cache()`/`speak()`.
+- **engine.py** — replaced 6 scattered `_stats_*` attributes with a single
+  `_MutableStats` dataclass. Public `engine.stats` returns frozen snapshot via
+  `_stats.snapshot()`.
+- **controller.py** — extracted `ControllerEvents` from a nested class inside
+  `start()` (200-line method with closures) to a top-level `_ControllerEvents`
+  class with explicit constructor args.
+- **http_server.py** — added `is_tts_connected()`/`wait_tts_connected()` public
+  methods, replacing direct access to `_tts_connected_event` from proxy.py and
+  engine.py.
+- **TTS timeouts** — normalized subprocess timeouts to 120s across all engines
+  (outetts, piper, espeak previously used 60s).
+- **config.py** — section list in `get_all_settings()` is now derived from
+  Config model fields instead of a hardcoded list.
+
 ## [0.1.0] - 2026-02-25
 
 First stable release. 838 tests passing, all lints clean.
