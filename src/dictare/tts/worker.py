@@ -112,12 +112,33 @@ def main(argv: list[str] | None = None) -> None:
 
     # 3. Process speech messages (reconnect=True for resilience)
     import time
+    import urllib.error as _urlerr
+
+    _consecutive_403 = 0
+    _max_403 = 3  # Exit after 3 consecutive 403s (token expired → engine restarted)
+
+    def _on_connect() -> None:
+        nonlocal _consecutive_403
+        _consecutive_403 = 0
+        logger.info("Connected as %s", TTS_AGENT_ID)
+
+    def _on_disconnect(exc: BaseException | None) -> None:
+        nonlocal _consecutive_403
+        if isinstance(exc, _urlerr.HTTPError) and exc.code == 403:
+            _consecutive_403 += 1
+            logger.warning("SSE HTTP 403 (%d/%d)", _consecutive_403, _max_403)
+            if _consecutive_403 >= _max_403:
+                logger.info("Token expired — exiting (engine was restarted)")
+                sys.exit(0)
+        else:
+            _consecutive_403 = 0
+            logger.warning("Disconnected: %s", exc)
 
     for msg in client.subscribe(
         TTS_AGENT_ID,
         reconnect=True,
-        on_connect=lambda: logger.info("Connected as %s", TTS_AGENT_ID),
-        on_disconnect=lambda exc: logger.warning("Disconnected: %s", exc),
+        on_connect=_on_connect,
+        on_disconnect=_on_disconnect,
     ):
         if not isinstance(msg, SpeechRequest):
             logger.debug("Ignoring non-speech message: type=%s", msg.type)
