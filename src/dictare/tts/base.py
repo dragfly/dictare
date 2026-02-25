@@ -73,6 +73,20 @@ class TTSEngine(ABC):
         """Get engine name."""
         pass
 
+    def check_cache(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> Path | None:
+        """Check if audio for *text* is already cached.
+
+        Returns the WAV file path on cache hit, ``None`` on miss.
+        Override in engines that support caching (e.g. Kokoro).
+        """
+        return None
+
     def list_voices(self) -> list[str]:
         """Return available voice names for this engine.
 
