@@ -849,25 +849,25 @@ def create_default_config() -> Path:
 # Submit triggers by language. No triggers active by default.
 # Each trigger is a multi-word sequence — all words must appear in order.
 # Single words trigger too easily; always use 2+ word sequences.
+# Use "*" for language-agnostic triggers (always active regardless of detected language).
 # Uncomment and customize for your language.
 #
 # [pipeline.submit_filter.triggers]
-# en = [
+# "*" = [
 #     ["ok", "send"],
 #     ["ok", "submit"],
 # ]
-# it = [
-#     ["ok", "invia"],
-#     ["ok", "manda"],
-# ]
 # es = [
 #     ["ok", "enviar"],
+#     ["ok", "mandar"],
 # ]
 # de = [
 #     ["ok", "senden"],
+#     ["ok", "abschicken"],
 # ]
 # fr = [
 #     ["ok", "envoyer"],
+#     ["ok", "soumettre"],
 # ]
 
 # [pipeline.agent_filter]
