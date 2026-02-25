@@ -180,6 +180,11 @@ class DictareEngine:
         # TTS engine (loaded at startup, None if unavailable)
         self._tts_engine: Any = None
         self._tts_error: str = ""
+
+        # Play counter for mic-pausing: mic stays paused while any play is active.
+        # Incremented before speak(), decremented after. 0→1 pauses mic, N→0 resumes.
+        self._active_plays = 0
+        self._play_lock = threading.Lock()
         self._tts_proxy: Any = None  # WorkerTTSEngine (set when using worker)
         self._tts_worker_process: Any = None  # subprocess.Popen for TTS worker
 
@@ -1487,6 +1492,39 @@ class DictareEngine:
             "microphone_url": MICROPHONE_SETTINGS_URL,
         }
 
+    # ------------------------------------------------------------------
+    # Play counter for mic-pausing (thread-safe)
+    # ------------------------------------------------------------------
+
+    def _play_start(self) -> None:
+        """Increment active play count. Pauses mic on first play (0→1)."""
+        with self._play_lock:
+            self._active_plays += 1
+            first = self._active_plays == 1
+
+        if first and self._controller is not None:
+            from dictare.core.fsm import AppState, PlayStarted
+
+            if self._controller.state != AppState.OFF:
+                try:
+                    self._controller.send(PlayStarted(text="", source="tts"))
+                except Exception:
+                    pass
+
+    def _play_end(self) -> None:
+        """Decrement active play count. Resumes mic when last play ends (N→0)."""
+        with self._play_lock:
+            self._active_plays = max(0, self._active_plays - 1)
+            last = self._active_plays == 0
+
+        if last and self._controller is not None:
+            from dictare.core.fsm import PlayCompleted
+
+            try:
+                self._controller.send(PlayCompleted(source="tts"))
+            except Exception:
+                pass
+
     def handle_speech(self, body: dict) -> dict:
         """Handle a speech (TTS) request.
 
@@ -1534,35 +1572,19 @@ class DictareEngine:
         if language:
             speak_kwargs["language"] = language
 
-        # Mic-pausing: blocking speak with PlayStart/PlayComplete events
+        # Mic-pausing via play counter: mic stays paused while any play is active.
+        # 0→1 sends PlayStarted, N→0 sends PlayCompleted.
         pause = not self.config.audio.headphones_mode
 
         start = time.time()
 
-        ok = False
-        if pause and self._controller is not None:
-            from dictare.core.fsm import AppState, PlayCompleted, PlayStarted
-
-            if self._controller.state != AppState.OFF:
-                started = False
-                try:
-                    self._controller.send(PlayStarted(text="", source="tts"))
-                    started = True
-                except Exception:
-                    pass
-
-                try:
-                    ok = tts.speak(text, **speak_kwargs)
-                finally:
-                    if started:
-                        try:
-                            self._controller.send(PlayCompleted(source="tts"))
-                        except Exception:
-                            pass
-            else:
-                ok = tts.speak(text, **speak_kwargs)
-        else:
+        if pause:
+            self._play_start()
+        try:
             ok = tts.speak(text, **speak_kwargs)
+        finally:
+            if pause:
+                self._play_end()
 
         duration_ms = int((time.time() - start) * 1000)
 
