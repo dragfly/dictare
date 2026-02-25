@@ -98,8 +98,16 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("TTS engine loaded: %s", tts_engine.get_name())
 
     # 2. Connect as __tts__ via openvip SDK
-    from openvip import Client
-    from openvip.models.speech_request import SpeechRequest
+    try:
+        from openvip import Client
+        from openvip.models.speech_request import SpeechRequest
+    except ImportError:
+        logger.error(
+            "Cannot import openvip — PYTHONPATH=%s, sys.path=%s",
+            __import__("os").environ.get("PYTHONPATH", ""),
+            sys.path,
+        )
+        sys.exit(1)
 
     client = Client(
         args.url,
@@ -191,4 +199,8 @@ def main(argv: list[str] | None = None) -> None:
             _post_completion(args.url, args.token, request_id, ok, duration_ms)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        logging.getLogger(__name__).error("TTS worker crashed", exc_info=True)
+        sys.exit(1)
