@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.14] - 2026-02-25
+
+### Fixed
+- **TTS worker crash on Linux** — worker used `Client(url, headers=...)` but
+  openvip SDK v1.0.0 removed the `headers` parameter. Updated to use the new
+  `Client(url, token=...)` API (added in SDK `09ae808`). Mac was unaffected
+  because the Homebrew-installed openvip still had the old API.
+
 ## [0.1.13] - 2026-02-25
 
 ### Fixed

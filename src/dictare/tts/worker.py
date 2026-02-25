@@ -109,10 +109,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         sys.exit(1)
 
-    client = Client(
-        args.url,
-        headers={"Authorization": f"Bearer {args.token}"},
-    )
+    client = Client(args.url, token=args.token)
 
     logger.info("Subscribing as %s at %s", TTS_AGENT_ID, args.url)
 
