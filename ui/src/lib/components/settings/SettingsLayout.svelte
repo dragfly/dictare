@@ -58,15 +58,11 @@
 	async function handleRestart() {
 		restarting = true;
 		await restartEngine();
-		// Wait for engine to go DOWN
-		while (true) {
-			await new Promise<void>((r) => setTimeout(r, 500));
-			if (!(await pingEngine())) break;
-		}
-		// Wait for engine to come back UP
+		// Poll until engine is healthy again
 		while (true) {
 			await new Promise<void>((r) => setTimeout(r, 1000));
-			if (await pingEngine()) break;
+			const up = await pingEngine().catch(() => false);
+			if (up) break;
 		}
 		restarting = false;
 	}
