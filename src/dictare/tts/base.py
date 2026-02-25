@@ -11,16 +11,14 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-def play_wav_native(path: str | Path, *, timeout: float = 120.0) -> None:
-    """Play a WAV file using the native system audio player.
+def play_audio_native(path: str | Path, *, timeout: float = 120.0) -> None:
+    """Play an audio file using the native system player.
 
-    Uses afplay on macOS, paplay/aplay on Linux.  Native players handle
-    sample-rate resampling correctly (no crackling).
-
-    See docs/notes/audio-playback-architecture.md for rationale.
+    Uses afplay on macOS, paplay/aplay on Linux.  All three read file
+    headers (not extensions) so WAV, AIFF, and other formats work.
 
     Args:
-        path: Path to WAV file.
+        path: Path to audio file (WAV, AIFF, etc.).
         timeout: Maximum playback time in seconds.
     """
     path_str = str(path)

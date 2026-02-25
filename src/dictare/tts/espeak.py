@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from dictare.tts.base import TTSEngine, play_wav_native
+from dictare.tts.base import TTSEngine, play_audio_native
 from dictare.tts.cache import cache_evict, cache_hit, cache_key, cache_save
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ class EspeakTTS(TTSEngine):
             cached = cache_hit(key)
             if cached:
                 logger.debug("TTS cache hit: %s", key[:12])
-                play_wav_native(cached, timeout=120.0)
+                play_audio_native(cached, timeout=120.0)
                 return True
 
             # Cache miss → generate WAV file
@@ -114,7 +114,7 @@ class EspeakTTS(TTSEngine):
             # Save to cache → play → evict
             try:
                 cached_path = cache_save(key, wav_path)
-                play_wav_native(cached_path, timeout=120.0)
+                play_audio_native(cached_path, timeout=120.0)
                 cache_evict()
             finally:
                 wav_path.unlink(missing_ok=True)

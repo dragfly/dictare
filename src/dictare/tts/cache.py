@@ -1,6 +1,6 @@
-"""TTS audio cache — deterministic WAV file caching with LRU eviction.
+"""TTS audio cache — deterministic audio file caching with LRU eviction.
 
-Cache key = sha256(engine|text|language|voice) → {hash}.wav
+Cache key = sha256(engine|text|language|voice) → {hash}.audio
 Hit = instant playback from cache. Miss = generate + save + play.
 LRU via filesystem mtime (touch on use, evict oldest).
 """
@@ -23,11 +23,11 @@ def cache_key(engine: str, text: str, language: str, voice: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 def cache_path(key: str) -> Path:
-    """Return the WAV file path for a cache key."""
-    return _CACHE_DIR / f"{key}.wav"
+    """Return the audio file path for a cache key."""
+    return _CACHE_DIR / f"{key}.audio"
 
 def cache_hit(key: str) -> Path | None:
-    """Check if cached WAV exists. If yes, touch mtime and return path."""
+    """Check if cached audio exists. If yes, touch mtime and return path."""
     path = cache_path(key)
     if path.exists():
         # Touch mtime → LRU tracking
@@ -35,13 +35,13 @@ def cache_hit(key: str) -> Path | None:
         return path
     return None
 
-def cache_save(key: str, wav_path: Path) -> Path:
-    """Copy a WAV file into the cache. Returns the cached path."""
+def cache_save(key: str, audio_path: Path) -> Path:
+    """Copy an audio file into the cache. Returns the cached path."""
     import shutil
 
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest = cache_path(key)
-    shutil.copy2(str(wav_path), str(dest))
+    shutil.copy2(str(audio_path), str(dest))
     return dest
 
 def cache_evict() -> None:
@@ -49,7 +49,7 @@ def cache_evict() -> None:
     if not _CACHE_DIR.exists():
         return
 
-    files = sorted(_CACHE_DIR.glob("*.wav"), key=lambda p: p.stat().st_mtime)
+    files = sorted(_CACHE_DIR.glob("*.audio"), key=lambda p: p.stat().st_mtime)
     excess = len(files) - _MAX_CACHED
     if excess <= 0:
         return
