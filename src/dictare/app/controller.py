@@ -22,12 +22,102 @@ import sys
 import threading
 from typing import TYPE_CHECKING, Any
 
+from dictare.core.events import EngineEvents
+
 if TYPE_CHECKING:
     from dictare.app.bindings import KeyboardBindingManager
     from dictare.config import Config
     from dictare.core.engine import DictareEngine
 
 logger = logging.getLogger(__name__)
+
+
+class _ControllerEvents(EngineEvents):
+    """Event handler for audio feedback during engine state changes.
+
+    Plays start/stop sounds, typewriter loop during transcription,
+    and announces agent switches via TTS.
+    """
+
+    def __init__(self, config: Config) -> None:
+        self._config = config
+        self._engine_ref: DictareEngine | None = None
+
+    def set_engine(self, engine: DictareEngine) -> None:
+        """Wire the engine reference (called after engine creation)."""
+        self._engine_ref = engine
+
+    def on_state_change(self, old: Any, new: Any, trigger: str) -> None:
+        from dictare.audio.beep import (
+            get_sound_for_event,
+            is_looping,
+            play_audio,
+            play_sound_file_async,
+            start_loop,
+            stop_loop,
+        )
+        from dictare.core.fsm import AppState
+
+        config = self._config
+        eng = self._engine_ref
+        ctrl = eng._controller if eng else None
+        pause = not config.audio.headphones_mode
+
+        # Check loop state before stopping — used to gate the ready sound.
+        was_looping = old == AppState.TRANSCRIBING and is_looping()
+
+        # Stop any active loop whenever we leave TRANSCRIBING
+        if old == AppState.TRANSCRIBING:
+            stop_loop()
+
+        if new == AppState.LISTENING and old == AppState.OFF:
+            enabled, path = get_sound_for_event(config.audio, "start")
+            if enabled:
+                play_audio(path, pause_mic=pause, controller=ctrl)
+        elif new == AppState.OFF:
+            enabled, path = get_sound_for_event(config.audio, "stop")
+            if enabled:
+                play_audio(path, pause_mic=False)
+        elif new == AppState.TRANSCRIBING:
+            # Only play typewriter loop for long recordings (>= 8 s of audio).
+            audio_ms = 0.0
+            if trigger.startswith("speech_end:"):
+                try:
+                    audio_ms = float(trigger.split(":", 1)[1])
+                except ValueError:
+                    pass
+            if audio_ms >= config.audio.advanced.transcribing_sound_min_ms:
+                enabled, path = get_sound_for_event(config.audio, "transcribing")
+                if enabled:
+                    scfg = config.audio.sounds.get("transcribing")
+                    vol = scfg.volume if scfg is not None else 1.0
+                    start_loop(path, volume=vol)
+        elif new == AppState.LISTENING and old in (
+            AppState.TRANSCRIBING,
+            AppState.INJECTING,
+        ):
+            # Only play carriage-return if typewriter was playing.
+            if was_looping:
+                enabled, path = get_sound_for_event(config.audio, "ready")
+                if enabled:
+                    scfg = config.audio.sounds.get("ready")
+                    vol = scfg.volume if scfg is not None else 1.0
+                    play_sound_file_async(path, volume=vol)
+
+    def on_agent_change(self, agent_name: str, index: int) -> None:
+        logger.info("on_agent_change: %s (index=%d)", agent_name, index)
+
+        from dictare.audio.beep import get_sound_for_event
+
+        enabled, _ = get_sound_for_event(self._config.audio, "agent_announce")
+        if not enabled:
+            logger.info("on_agent_change: agent_announce disabled")
+            return
+        eng = self._engine_ref
+        if eng:
+            eng.speak_agent(agent_name)
+        else:
+            logger.warning("on_agent_change: engine_ref not set")
 
 
 class AppController:
@@ -135,90 +225,8 @@ class AppController:
 
         from dictare.app.bindings import KeyboardBindingManager
         from dictare.core.engine import create_engine
-        from dictare.core.events import EngineEvents
 
-        engine_ref: list[DictareEngine | None] = [None]
-        config = self._config  # Capture for closure
-
-        class ControllerEvents(EngineEvents):
-            """Event handler for audio feedback and logging."""
-
-            def on_state_change(self, old: Any, new: Any, trigger: str) -> None:
-                from dictare.audio.beep import (
-                    get_sound_for_event,
-                    is_looping,
-                    play_audio,
-                    play_sound_file_async,
-                    start_loop,
-                    stop_loop,
-                )
-                from dictare.core.fsm import AppState
-
-                eng = engine_ref[0]
-                ctrl = eng._controller if eng else None
-                pause = not config.audio.headphones_mode
-
-                # Check loop state before stopping — used to gate the ready sound.
-                # is_looping() will be False after stop_loop(), so capture it first.
-                was_looping = old == AppState.TRANSCRIBING and is_looping()
-
-                # Stop any active loop whenever we leave TRANSCRIBING
-                if old == AppState.TRANSCRIBING:
-                    stop_loop()
-
-                if new == AppState.LISTENING and old == AppState.OFF:
-                    enabled, path = get_sound_for_event(config.audio, "start")
-                    if enabled:
-                        play_audio(path, pause_mic=pause, controller=ctrl)
-                elif new == AppState.OFF:
-                    enabled, path = get_sound_for_event(config.audio, "stop")
-                    if enabled:
-                        play_audio(path, pause_mic=False)
-                elif new == AppState.TRANSCRIBING:
-                    # Only play typewriter loop for long recordings (≥ 8 s of audio).
-                    # Short utterances finish transcribing in < 500 ms — no feedback needed.
-                    audio_ms = 0.0
-                    if trigger.startswith("speech_end:"):
-                        try:
-                            audio_ms = float(trigger.split(":", 1)[1])
-                        except ValueError:
-                            pass
-                    if audio_ms >= config.audio.advanced.transcribing_sound_min_ms:
-                        enabled, path = get_sound_for_event(config.audio, "transcribing")
-                        if enabled:
-                            scfg = config.audio.sounds.get("transcribing")
-                            vol = scfg.volume if scfg is not None else 1.0
-                            start_loop(path, volume=vol)
-                elif new == AppState.LISTENING and old in (
-                    AppState.TRANSCRIBING,
-                    AppState.INJECTING,
-                ):
-                    # Only play carriage-return if typewriter was playing.
-                    # Both sounds share the same 8s threshold: no typewriter = no ready.
-                    if was_looping:
-                        enabled, path = get_sound_for_event(config.audio, "ready")
-                        if enabled:
-                            scfg = config.audio.sounds.get("ready")
-                            vol = scfg.volume if scfg is not None else 1.0
-                            play_sound_file_async(path, volume=vol)
-
-            def on_agent_change(self, agent_name: str, index: int) -> None:
-                import logging as _logging
-
-                _log = _logging.getLogger(__name__)
-                _log.info("on_agent_change: %s (index=%d)", agent_name, index)
-
-                from dictare.audio.beep import get_sound_for_event
-
-                enabled, _ = get_sound_for_event(config.audio, "agent_announce")
-                if not enabled:
-                    _log.info("on_agent_change: agent_announce disabled")
-                    return
-                eng = engine_ref[0]
-                if eng:
-                    eng.speak_agent(agent_name)
-                else:
-                    _log.warning("on_agent_change: engine_ref not set")
+        events = _ControllerEvents(self._config)
 
         # 1. Create logger for engine
         from dictare import __version__
@@ -251,11 +259,11 @@ class AppController:
         )
         self._engine = create_engine(
             config=self._config,
-            events=ControllerEvents(),
+            events=events,
             hotkey_enabled=enable_hotkey,
             logger=self._logger,
         )
-        engine_ref[0] = self._engine
+        events.set_engine(self._engine)
 
         # 3. Restore saved state BEFORE HTTP server starts.
         #    Overrides config defaults with saved session if fresh.
