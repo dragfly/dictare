@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> None:
 
     import threading
 
-    from dictare.tts.base import play_wav_native
+    from dictare.tts.base import play_audio_native
 
     def _play_cached_thread(
         path: str, request_id: str, url: str, token: str,
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> None:
         start_t = time.time()
         ok = True
         try:
-            play_wav_native(path, timeout=120.0)
+            play_audio_native(path, timeout=120.0)
         except Exception:
             logger.warning("Cached play failed: %s", path, exc_info=True)
             ok = False

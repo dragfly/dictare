@@ -17,7 +17,7 @@ import tempfile
 import warnings
 from pathlib import Path
 
-from dictare.tts.base import TTSEngine, play_wav_native
+from dictare.tts.base import TTSEngine, play_audio_native
 from dictare.tts.cache import cache_evict, cache_hit, cache_key, cache_save
 from dictare.utils.hardware import is_apple_silicon
 
@@ -188,7 +188,7 @@ class OuteTTS(TTSEngine):
             cached = cache_hit(key)
             if cached:
                 logger.debug("TTS cache hit: %s", key[:12])
-                play_wav_native(cached, timeout=120.0)
+                play_audio_native(cached, timeout=120.0)
                 return True
 
             # Cache miss → generate and cache
@@ -234,7 +234,7 @@ class OuteTTS(TTSEngine):
 
                     # Save to cache → play → evict
                     cached_path = cache_save(key, audio_files[0])
-                    play_wav_native(cached_path, timeout=120.0)
+                    play_audio_native(cached_path, timeout=120.0)
                     cache_evict()
                     return True
 

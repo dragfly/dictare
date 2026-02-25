@@ -14,7 +14,7 @@ import logging
 import tempfile
 from pathlib import Path
 
-from dictare.tts.base import TTSEngine, play_wav_native
+from dictare.tts.base import TTSEngine, play_audio_native
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,7 @@ class KokoroTTS(TTSEngine):
             cached = cache_hit(key)
             if cached:
                 logger.debug("TTS cache hit: %s", key[:12])
-                play_wav_native(cached, timeout=120.0)
+                play_audio_native(cached, timeout=120.0)
                 return True
 
             # Cache miss — generate
@@ -251,7 +251,7 @@ class KokoroTTS(TTSEngine):
                 key = _cache_key("kokoro", text, lang, resolved_voice)
                 cached = cache_hit(key)
                 if cached:
-                    play_wav_native(cached, timeout=120.0)
+                    play_audio_native(cached, timeout=120.0)
                     return True
                 samples, sample_rate = kokoro.create(  # type: ignore[attr-defined]
                     text,
@@ -267,7 +267,7 @@ class KokoroTTS(TTSEngine):
             sf.write(str(tmp_path), samples, sample_rate)
             try:
                 cached_path = cache_save(key, tmp_path)
-                play_wav_native(cached_path, timeout=120.0)
+                play_audio_native(cached_path, timeout=120.0)
                 cache_evict()
             finally:
                 tmp_path.unlink(missing_ok=True)
