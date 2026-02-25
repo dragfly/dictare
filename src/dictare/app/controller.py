@@ -273,7 +273,7 @@ class AppController:
         self._http_server = OpenVIPServer(
             self._engine, self,
             self._config.server.host, self._config.server.port,
-            auth_tokens=self._engine._auth_tokens,
+            auth_tokens={"register_tts": self._engine._tts_mgr.auth_token},
         )
         self._http_server.start()
 

@@ -16,6 +16,12 @@ from dictare.tts.proxy import WorkerTTSEngine
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+class _MockTTSMgr:
+    """Minimal mock TTSManager for proxy access."""
+
+    def __init__(self) -> None:
+        self._tts_proxy: WorkerTTSEngine | None = None
+
 class MockEngine:
     """Minimal mock engine for TTS worker tests."""
 
@@ -25,7 +31,7 @@ class MockEngine:
     def __init__(self) -> None:
         self._registered_agents: list = []
         self._unregistered_agents: list[str] = []
-        self._tts_proxy: WorkerTTSEngine | None = None
+        self._tts_mgr = _MockTTSMgr()
 
     def register_agent(self, agent) -> bool:
         self._registered_agents.append(agent)
@@ -126,7 +132,7 @@ class TestTTSCompleteEndpoint:
     ) -> None:
         """POST /internal/tts/complete triggers proxy.complete()."""
         proxy = MagicMock()
-        engine._tts_proxy = proxy
+        engine._tts_mgr._tts_proxy = proxy
 
         client.post(
             "/internal/tts/complete",

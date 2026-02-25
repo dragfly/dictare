@@ -227,7 +227,7 @@ class OpenVIPServer:
             request_id = body.get("request_id", "")
             ok = body.get("ok", False)
             duration_ms = body.get("duration_ms", 0)
-            proxy = getattr(self._engine, "_tts_proxy", None)
+            proxy = getattr(getattr(self._engine, "_tts_mgr", None), "_tts_proxy", None)
             if proxy is not None:
                 proxy.complete(request_id, ok=ok, duration_ms=duration_ms)
             return {"status": "ok"}
