@@ -145,12 +145,16 @@ _SOUNDS_HEADER = """\
 """
 
 _SUBMIT_FILTER_HEADER = """\
-# Submit filter — detects voice trigger phrases to submit text
-# No triggers active by default — uncomment and customize for your language.
+[pipeline.submit_filter]
+# enabled = true
+# confidence_threshold = 0.85
+# max_scan_words = 15
+# decay_rate = 0.95               # 5% confidence decay per word from end
+
+# Submit triggers by language. No triggers active by default.
 # Each trigger is a multi-word sequence; single words trigger too easily.
 # Use "*" for language-agnostic triggers (always active regardless of detected language).
-#
-# [pipeline.submit_filter.triggers]
+[pipeline.submit_filter.triggers]
 # "*" = [
 #     ["ok", "send"],
 #     ["ok", "submit"],
@@ -170,12 +174,10 @@ _SUBMIT_FILTER_HEADER = """\
 """
 
 _AGENT_FILTER_HEADER = """\
-# Agent filter — voice-controlled agent switching
-# Say a trigger word followed by the agent name to switch.
-# Example: "agent claude", "agent sonnet"
-#
-# triggers = ["agent"]    # words that precede the agent name
-# match_threshold = 0.5   # fuzzy match score (0.0 = loose, 1.0 = exact)
+[pipeline.agent_filter]
+# enabled = false
+# triggers = ["agent"]             # words that precede the agent name
+# match_threshold = 0.5            # fuzzy match score (0.0 = loose, 1.0 = exact)
 """
 
 _SECTION_HEADERS: dict[str, str] = {
