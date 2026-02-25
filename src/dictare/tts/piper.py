@@ -78,33 +78,57 @@ class PiperTTS(TTSEngine):
         return None
 
     def _get_model_path(self) -> Path:
-        """Get path to voice model ONNX file, downloading if needed."""
-        model_path = _VOICES_DIR / f"{self.voice}.onnx"
+        """Get path to voice model ONNX file, downloading if needed.
+
+        Voice is best-effort: if the requested voice cannot be downloaded,
+        falls back to the language default and tries again.
+        """
+        path = self._download_voice(self.voice)
+        if path:
+            return path
+
+        # Fallback to language default
+        default_voice = self.DEFAULT_VOICES.get(self.language, "en_US-lessac-medium")
+        if default_voice != self.voice:
+            logger.warning(
+                "Voice %r unavailable, falling back to %r", self.voice, default_voice,
+            )
+            self.voice = default_voice
+            path = self._download_voice(default_voice)
+            if path:
+                return path
+
+        raise RuntimeError(f"Failed to download any Piper voice for language {self.language!r}")
+
+    @staticmethod
+    def _download_voice(voice: str) -> Path | None:
+        """Download a voice model from HuggingFace. Returns path or None on failure."""
+        model_path = _VOICES_DIR / f"{voice}.onnx"
         if model_path.exists():
             return model_path
 
-        # Download model and config from HuggingFace
         _VOICES_DIR.mkdir(parents=True, exist_ok=True)
 
         # Voice name format: en_US-lessac-medium → en/en_US/lessac/medium/
-        parts = self.voice.split("-")
+        parts = voice.split("-")
         lang_region = parts[0]  # e.g., "en_US"
         lang = lang_region.split("_")[0]  # e.g., "en"
         name = parts[1] if len(parts) > 1 else "default"
         quality = parts[2] if len(parts) > 2 else "medium"
         hf_path = f"{lang}/{lang_region}/{name}/{quality}"
 
+        import urllib.request
+
         for suffix in [".onnx", ".onnx.json"]:
-            url = f"{_HF_BASE}/{hf_path}/{self.voice}{suffix}"
-            dest = _VOICES_DIR / f"{self.voice}{suffix}"
+            url = f"{_HF_BASE}/{hf_path}/{voice}{suffix}"
+            dest = _VOICES_DIR / f"{voice}{suffix}"
             logger.info("Downloading piper voice: %s", url)
             try:
-                import urllib.request
                 urllib.request.urlretrieve(url, dest)
             except Exception:
                 logger.warning("Failed to download %s", url)
                 dest.unlink(missing_ok=True)
-                raise
+                return None
 
         return model_path
 

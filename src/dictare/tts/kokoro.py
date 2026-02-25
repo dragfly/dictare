@@ -227,12 +227,37 @@ class KokoroTTS(TTSEngine):
             kokoro = self._get_kokoro()
 
             # kokoro.create() returns (samples, sample_rate)
-            samples, sample_rate = kokoro.create(  # type: ignore[attr-defined]
-                text,
-                voice=resolved_voice,
-                speed=self.speed,
-                lang=lang,
-            )
+            # Voice is best-effort: if it fails, fall back to language default.
+            try:
+                samples, sample_rate = kokoro.create(  # type: ignore[attr-defined]
+                    text,
+                    voice=resolved_voice,
+                    speed=self.speed,
+                    lang=lang,
+                )
+            except Exception as voice_err:
+                fallback_voice = self._resolve_voice(lang, "")
+                if fallback_voice == resolved_voice:
+                    raise
+                logger.warning(
+                    "Kokoro voice %r failed (%s), falling back to %r",
+                    resolved_voice, voice_err, fallback_voice,
+                )
+                resolved_voice = fallback_voice
+                # Recompute cache key for the fallback voice
+                from dictare.tts.cache import cache_key as _cache_key
+
+                key = _cache_key("kokoro", text, lang, resolved_voice)
+                cached = cache_hit(key)
+                if cached:
+                    play_wav_native(cached, timeout=120.0)
+                    return True
+                samples, sample_rate = kokoro.create(  # type: ignore[attr-defined]
+                    text,
+                    voice=resolved_voice,
+                    speed=self.speed,
+                    lang=lang,
+                )
 
             # Write to temp WAV → save to cache → play
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
