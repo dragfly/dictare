@@ -23,8 +23,8 @@ from dictare.pipeline.filters.input_filter import (
 
 # Triggers used in tests only — production default is empty dict (must configure in config.toml)
 _TEST_TRIGGERS: dict[str, list[list[str]]] = {
+    "*": [["ok", "send"], ["ok", "submit"], ["go", "ahead"]],
     "it": [["ok", "invia"], ["ok", "in", "via"], ["ok", "manda"], ["vai."]],
-    "en": [["ok", "send"], ["ok", "submit"], ["go", "ahead"]],
 }
 
 def _make_filter(**kwargs: object) -> InputFilter:
@@ -390,31 +390,31 @@ class TestLanguageBasedTriggers:
         assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_input"]["submit"] is True
 
-    def test_english_message_uses_english_triggers(self) -> None:
-        """English message uses English triggers."""
+    def test_english_message_uses_wildcard_triggers(self) -> None:
+        """English message uses wildcard triggers."""
         f = _make_filter()
         msg = {"text": "test ok send", "language": "en"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["x_input"]["submit"] is True
 
-    def test_italian_message_also_checks_english(self) -> None:
-        """Italian message also checks English triggers."""
+    def test_italian_message_also_checks_wildcard(self) -> None:
+        """Italian message also checks wildcard triggers."""
         f = _make_filter()
-        # English trigger "ok submit" should work even with Italian language
+        # Wildcard trigger "ok submit" should work even with Italian language
         msg = {"text": "test ok submit", "language": "it"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
 
-    def test_unknown_language_falls_back_to_english(self) -> None:
-        """Unknown language uses only English triggers."""
+    def test_unknown_language_uses_wildcard(self) -> None:
+        """Unknown language uses wildcard triggers."""
         f = _make_filter()
         msg = {"text": "test ok send", "language": "xyz"}
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
 
-    def test_no_language_defaults_to_english(self) -> None:
-        """Message without language defaults to English."""
+    def test_no_language_uses_wildcard(self) -> None:
+        """Message without language uses wildcard triggers."""
         f = _make_filter()
         msg = {"text": "test ok send"}  # No language field
         result = f.process(msg)
@@ -427,21 +427,21 @@ class TestLanguageBasedTriggers:
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
 
-    def test_italian_trigger_not_matched_for_english_only(self) -> None:
-        """Italian trigger not matched when only English triggers available."""
-        # Filter with only English triggers
-        f = InputFilter(triggers={"en": [["submit"]]})
+    def test_language_specific_trigger_not_matched_cross_language(self) -> None:
+        """Language-specific trigger not matched for a different language."""
+        # Filter with only Italian language triggers (no wildcard)
+        f = InputFilter(triggers={"it": [["invia"]]})
         msg = {"text": "test invia", "language": "en"}
         result = f.process(msg)
-        # "invia" is not in English triggers
+        # "invia" is Italian-only, not matched for English
         assert result.action == PipelineAction.PASS
 
-    def test_language_specific_priority(self) -> None:
-        """Language-specific triggers have priority over English."""
+    def test_wildcard_plus_language_specific(self) -> None:
+        """Wildcard and language-specific triggers both active."""
         f = InputFilter(
             triggers={
-                "it": [["manda"]],  # Italian
-                "en": [["send"]],  # English
+                "*": [["send"]],  # Always active
+                "it": [["manda"]],  # Italian only
             }
         )
         # Italian message with Italian trigger
@@ -449,6 +449,11 @@ class TestLanguageBasedTriggers:
         result = f.process(msg)
         assert result.action == PipelineAction.AUGMENT
         assert result.messages[0]["text"] == "test"
+
+        # Italian message with wildcard trigger
+        msg2 = {"text": "test send", "language": "it"}
+        result2 = f.process(msg2)
+        assert result2.action == PipelineAction.AUGMENT
 
 class TestEdgeCases:
     """Test edge cases and special scenarios."""
