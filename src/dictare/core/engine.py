@@ -683,6 +683,33 @@ class DictareEngine:
                 engine_name,
             )
 
+    @staticmethod
+    def _kill_orphaned_tts_workers() -> None:
+        """Kill any orphaned TTS worker processes from a previous engine run."""
+        import os
+        import signal
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", "dictare.tts.worker"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode != 0:
+                return  # No matching processes
+
+            for line in result.stdout.strip().splitlines():
+                pid = int(line.strip())
+                if pid == os.getpid():
+                    continue
+                logger.info("Killing orphaned TTS worker (PID %d)", pid)
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+        except Exception:
+            pass  # Best-effort cleanup
+
     def _spawn_tts_worker(self, http_server: Any) -> None:
         """Spawn a persistent TTS worker subprocess and create the proxy engine."""
         import os
@@ -690,6 +717,8 @@ class DictareEngine:
 
         from dictare.tts.proxy import WorkerTTSEngine
         from dictare.tts.venv import get_dictare_src_path, get_venv_python
+
+        self._kill_orphaned_tts_workers()
 
         token = self._auth_tokens["register_tts"]
         port = http_server.port
