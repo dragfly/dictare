@@ -56,18 +56,12 @@ def test_kokoro_resolve_lang():
     """_resolve_lang maps dictare codes to kokoro codes."""
     from dictare.tts.kokoro import KokoroTTS
 
-    engine = KokoroTTS(language="en")
-    assert engine._resolve_lang() == "en-us"
-
-    engine = KokoroTTS(language="it")
-    assert engine._resolve_lang() == "it"
-
-    engine = KokoroTTS(language="fr")
-    assert engine._resolve_lang() == "fr-fr"
+    assert KokoroTTS._resolve_lang("en") == "en-us"
+    assert KokoroTTS._resolve_lang("it") == "it"
+    assert KokoroTTS._resolve_lang("fr") == "fr-fr"
 
     # Unknown language falls back to en-us
-    engine = KokoroTTS(language="xx")
-    assert engine._resolve_lang() == "en-us"
+    assert KokoroTTS._resolve_lang("xx") == "en-us"
 
 
 def test_kokoro_resolve_voice():
@@ -75,13 +69,10 @@ def test_kokoro_resolve_voice():
     from dictare.tts.kokoro import KokoroTTS
 
     # Explicit voice takes priority
-    engine = KokoroTTS(language="en", voice="bf_emma")
-    assert engine._resolve_voice() == "bf_emma"
+    assert KokoroTTS._resolve_voice("en", "bf_emma") == "bf_emma"
 
     # Empty voice → language default
-    engine = KokoroTTS(language="it", voice="")
-    assert engine._resolve_voice() == "if_sara"
+    assert KokoroTTS._resolve_voice("it", "") == "if_sara"
 
     # Unknown language → af_heart fallback
-    engine = KokoroTTS(language="xx", voice="")
-    assert engine._resolve_voice() == "af_heart"
+    assert KokoroTTS._resolve_voice("xx", "") == "af_heart"
