@@ -113,16 +113,25 @@ class SayTTS(TTSEngine):
         return "say"
 
     def list_voices(self) -> list[str]:
-        """Return available macOS voices."""
+        """Return available macOS voices.
+
+        Output format: ``Name (locale)  lang_code  # description``
+        The voice name (everything before the lang_code) is the unique ID.
+        """
         if not self.is_available():
             return []
         try:
+            import re
+
             result = subprocess.run(
                 ["say", "-v", "?"], capture_output=True, text=True, timeout=10,
             )
-            # Format: "Name  lang_code  # description"
-            return sorted(
-                line.split()[0] for line in result.stdout.splitlines() if line.strip()
-            )
+            voices: list[str] = []
+            for line in result.stdout.splitlines():
+                # Format: "Voice Name    xx_XX    # description"
+                m = re.match(r"^(.+?)\s+([a-z]{2}_[A-Z]{2})\s", line)
+                if m:
+                    voices.append(m.group(1).strip())
+            return sorted(set(voices))
         except Exception:
             return []
