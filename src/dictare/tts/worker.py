@@ -134,6 +134,25 @@ def main(argv: list[str] | None = None) -> None:
             _consecutive_403 = 0
             logger.warning("Disconnected: %s", exc)
 
+    import threading
+
+    from dictare.tts.base import play_wav_native
+
+    def _play_cached_thread(
+        path: str, request_id: str, url: str, token: str,
+    ) -> None:
+        """Play cached WAV on a background thread and post completion."""
+        start_t = time.time()
+        ok = True
+        try:
+            play_wav_native(path, timeout=120.0)
+        except Exception:
+            logger.warning("Cached play failed: %s", path, exc_info=True)
+            ok = False
+        dur = int((time.time() - start_t) * 1000)
+        if request_id:
+            _post_completion(url, token, request_id, ok, dur)
+
     for msg in client.subscribe(
         TTS_AGENT_ID,
         reconnect=True,
@@ -150,6 +169,18 @@ def main(argv: list[str] | None = None) -> None:
         language = msg.language  # SpeechRequest has language as a native field
         logger.info("Speaking: %r (request_id=%s, voice=%s, lang=%s)", text, request_id, voice, language)
 
+        # Fast-path: cached audio → play on background thread (non-blocking)
+        cached_path = tts_engine.check_cache(text, voice=voice, language=language)
+        if cached_path:
+            logger.info("Cache hit — parallel play: %s", cached_path.name[:12])
+            threading.Thread(
+                target=_play_cached_thread,
+                args=(str(cached_path), request_id, args.url, args.token),
+                daemon=True,
+            ).start()
+            continue
+
+        # Cache miss — blocking generate + play
         start = time.time()
         try:
             ok = tts_engine.speak(text, voice=voice, language=language)

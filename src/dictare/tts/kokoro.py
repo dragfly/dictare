@@ -146,6 +146,40 @@ class KokoroTTS(TTSEngine):
         base = self.language.lower().split("-")[0]
         return _DEFAULT_VOICES.get(base, "af_heart")
 
+    def check_cache(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> Path | None:
+        """Check if audio for *text* is cached. Returns WAV path or None."""
+        from dictare.tts.cache import cache_hit, cache_key
+
+        lang, resolved_voice = self._resolve_params(voice=voice, language=language)
+        key = cache_key("kokoro", text, lang, resolved_voice)
+        return cache_hit(key)
+
+    def _resolve_params(
+        self,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> tuple[str, str]:
+        """Resolve lang/voice with optional per-request overrides.
+
+        Returns (kokoro_lang, resolved_voice) without mutating instance state.
+        """
+        orig_lang, orig_voice = self.language, self.voice
+        if language:
+            self.language = language
+        if voice:
+            self.voice = voice
+        lang = self._resolve_lang()
+        resolved_voice = self._resolve_voice()
+        self.language, self.voice = orig_lang, orig_voice
+        return lang, resolved_voice
+
     def speak(
         self,
         text: str,
@@ -169,15 +203,7 @@ class KokoroTTS(TTSEngine):
         try:
             from dictare.tts.cache import cache_evict, cache_hit, cache_key, cache_save
 
-            # Per-request overrides: temporarily swap, resolve, restore
-            orig_lang, orig_voice = self.language, self.voice
-            if language:
-                self.language = language
-            if voice:
-                self.voice = voice
-            lang = self._resolve_lang()
-            resolved_voice = self._resolve_voice()
-            self.language, self.voice = orig_lang, orig_voice
+            lang, resolved_voice = self._resolve_params(voice=voice, language=language)
 
             # Cache check
             key = cache_key("kokoro", text, lang, resolved_voice)

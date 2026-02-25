@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0b311] - 2026-02-25
+
+### Added
+- **Parallel cached TTS playback** — cached audio plays on background threads
+  in the worker, bypassing the serialized generation queue. Multiple cached
+  phrases play simultaneously instead of waiting in line.
+- **Play counter for mic-pausing** — atomic counter tracks active plays across
+  concurrent requests. Mic pauses on first play (0→1), resumes only when all
+  plays finish (N→0). Replaces per-request PlayStarted/PlayCompleted.
+- **`TTSEngine.check_cache()`** — base method for cache-aware engines.
+  KokoroTTS implements it using resolved lang/voice parameters.
+
 ## [0.1.0b310] - 2026-02-25
 
 ### Fixed
