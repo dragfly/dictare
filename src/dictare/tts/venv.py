@@ -100,19 +100,48 @@ def is_venv_installed(engine: str) -> bool:
     return python is not None
 
 
+def get_worker_pythonpath() -> str:
+    """Return PYTHONPATH for the TTS worker subprocess.
+
+    The worker needs to import both ``dictare`` and ``openvip``. For
+    site-packages installs (Homebrew, pip), both live in the same directory.
+    For editable/dev installs, they may be in different source trees —
+    we return both paths joined with ``os.pathsep``.
+
+    Returns:
+        Colon-separated (or semicolon on Windows) path string.
+    """
+    import os
+
+    import dictare
+
+    paths: set[str] = set()
+
+    # dictare/__init__.py → dictare/ → parent (src/ or site-packages/)
+    dictare_init = Path(dictare.__file__).resolve()
+    paths.add(str(dictare_init.parent.parent))
+
+    # openvip may live in a different source tree (editable install)
+    try:
+        import openvip
+
+        openvip_init = Path(openvip.__file__).resolve()
+        paths.add(str(openvip_init.parent.parent))
+    except ImportError:
+        pass  # Will fail in worker too — logged there
+
+    return os.pathsep.join(sorted(paths))
+
+
 def get_dictare_src_path() -> str:
     """Return the path to inject via PYTHONPATH so the worker can import dictare.
 
-    For editable/dev installs, this is the ``src/`` directory.
-    For site-packages installs, it's the site-packages directory containing dictare.
-
-    Returns:
-        Absolute path string for PYTHONPATH.
+    .. deprecated:: 0.1.12
+        Use :func:`get_worker_pythonpath` instead, which also includes openvip.
     """
     import dictare
 
     dictare_init = Path(dictare.__file__).resolve()
-    # dictare/__init__.py → dictare/ → parent (src/ or site-packages/)
     return str(dictare_init.parent.parent)
 
 

@@ -194,7 +194,7 @@ def test_spawn_worker_uses_venv_python():
 
     with (
         patch("dictare.tts.venv.get_venv_python", return_value=fake_venv_python),
-        patch("dictare.tts.venv.get_dictare_src_path", return_value=fake_src_path),
+        patch("dictare.tts.venv.get_worker_pythonpath", return_value=fake_src_path),
         patch("subprocess.Popen") as mock_popen,
     ):
         mock_proc = MagicMock()

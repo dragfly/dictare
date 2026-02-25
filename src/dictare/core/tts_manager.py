@@ -206,7 +206,7 @@ class TTSManager:
         import subprocess
 
         from dictare.tts.proxy import WorkerTTSEngine
-        from dictare.tts.venv import get_dictare_src_path, get_venv_python
+        from dictare.tts.venv import get_venv_python, get_worker_pythonpath
 
         self.kill_orphaned_workers()
 
@@ -232,8 +232,9 @@ class TTSManager:
         # Build env for worker subprocess
         env = {**os.environ, "COQUI_TOS_AGREED": "1"}
         if venv_python:
-            # When using venv python, inject PYTHONPATH so worker can import dictare
-            env["PYTHONPATH"] = get_dictare_src_path()
+            # When using venv python, inject PYTHONPATH so worker can import
+            # dictare + openvip (may be in different source trees for dev installs)
+            env["PYTHONPATH"] = get_worker_pythonpath()
 
         logger.info("Spawning TTS worker: %s", " ".join(cmd))
         self._tts_worker_process = subprocess.Popen(
