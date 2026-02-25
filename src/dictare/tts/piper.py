@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from dictare.tts.base import TTSEngine, play_wav_native
+from dictare.tts.cache import cache_evict, cache_hit, cache_key, cache_save
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,20 @@ class PiperTTS(TTSEngine):
         """Check if piper is available."""
         return self._piper_cmd is not None
 
+    def _cache_key(self, text: str) -> str:
+        """Compute cache key using resolved voice/language."""
+        return cache_key("piper", text, self.language, self.voice)
+
+    def check_cache(
+        self,
+        text: str,
+        *,
+        voice: str | None = None,
+        language: str | None = None,
+    ) -> Path | None:
+        """Check if audio for *text* is cached. Returns WAV path or None."""
+        return cache_hit(self._cache_key(text))
+
     def speak(
         self,
         text: str,
@@ -155,12 +170,19 @@ class PiperTTS(TTSEngine):
 
         try:
             model_path = self._get_model_path()
+            key = self._cache_key(text)
 
-            # Create temp file for audio
+            # Cache hit → play directly
+            cached = cache_hit(key)
+            if cached:
+                logger.debug("TTS cache hit: %s", key[:12])
+                play_wav_native(cached, timeout=120.0)
+                return True
+
+            # Cache miss → generate
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 wav_path = Path(f.name)
 
-            # Generate audio with piper
             result = subprocess.run(
                 [
                     self._piper_cmd,
@@ -177,10 +199,14 @@ class PiperTTS(TTSEngine):
                 wav_path.unlink(missing_ok=True)
                 return False
 
-            # Play via native system player (no sounddevice/PortAudio)
-            play_wav_native(wav_path)
+            # Save to cache → play → evict
+            try:
+                cached_path = cache_save(key, wav_path)
+                play_wav_native(cached_path, timeout=120.0)
+                cache_evict()
+            finally:
+                wav_path.unlink(missing_ok=True)
 
-            wav_path.unlink(missing_ok=True)
             return True
 
         except Exception:
