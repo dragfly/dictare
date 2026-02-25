@@ -101,11 +101,11 @@ def main(argv: list[str] | None = None) -> None:
     try:
         from openvip import Client
         from openvip.models.speech_request import SpeechRequest
-    except ImportError:
+    except Exception:
         logger.error(
-            "Cannot import openvip — PYTHONPATH=%s, sys.path=%s",
+            "Cannot import openvip — PYTHONPATH=%s",
             __import__("os").environ.get("PYTHONPATH", ""),
-            sys.path,
+            exc_info=True,
         )
         sys.exit(1)
 
