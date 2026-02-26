@@ -2,8 +2,8 @@
 set -e
 
 if [ "$1" = "purge" ] || [ "$1" = "remove" ]; then
-    # Remove voxtype venv
-    rm -rf /opt/voxtype
+    # Remove dictare venv
+    rm -rf /opt/dictare
 
     # Remove ydotoold service file
     SUDO_USER_HOME=$(eval echo "~${SUDO_USER:-$USER}")
