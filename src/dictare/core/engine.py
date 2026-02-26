@@ -976,12 +976,14 @@ class DictareEngine:
             else 0
         )
 
+        stt_active = stt_state in ("listening", "recording", "transcribing")
+
         return {
             # OpenVIP protocol-level fields
-            "protocol_version": "1.0",
-            "state": stt_state,
+            "openvip": "1.0",
+            "stt": {"enabled": True, "active": stt_active},
+            "tts": {"enabled": self._tts_mgr.available},
             "connected_agents": self.visible_agents,
-            "uptime_seconds": uptime,
             # Implementation-specific details (StatusPanel)
             "platform": {
                 "name": "Dictare",

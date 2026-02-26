@@ -38,10 +38,10 @@ class TestStatusInternal:
     """Internal: GET /status reflects engine internals."""
 
     def test_state_reflects_engine(self, client, engine) -> None:
-        """Status state reflects engine state."""
+        """Status stt.active reflects engine state."""
         engine._state = "listening"
         data = client.get("/status").json()
-        assert data["state"] == "listening"
+        assert data["stt"]["active"] is True
 
 
 # =============================================================================

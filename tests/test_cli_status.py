@@ -15,8 +15,9 @@ runner = CliRunner()
 def _mock_status() -> MagicMock:
     """Create a mock openvip Status object."""
     status = MagicMock()
-    status.protocol_version = "1.0"
-    status.state = "idle"
+    status.openvip = "1.0"
+    status.stt = {"enabled": True, "active": False}
+    status.tts = {"enabled": True}
     status.connected_agents = ["claude"]
     status.platform = {
         "name": "Dictare",
