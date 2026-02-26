@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Test voxtype install on Fedora 40
+# Test dictare install on Fedora 40
 FROM fedora:40
 
 # Install system deps (cached)
@@ -20,14 +20,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy dependency files (hatch needs pyproject.toml, __init__.py, README.md)
 COPY pyproject.toml README.md /app/
-COPY src/voxtype/__init__.py /app/src/voxtype/
+COPY src/dictare/__init__.py /app/src/dictare/
 COPY _openvip_sdk/ /app/_openvip_sdk/
 
 WORKDIR /app
 
 # Install dependencies (cached if pyproject.toml doesn't change)
 RUN pip install /app/_openvip_sdk && \
-    pip install ".[tts]" && \
+    pip install . && \
     pip install PyGObject pycairo
 
 # Copy the rest of the code
@@ -36,7 +36,7 @@ COPY . /app/
 # Make test scripts executable
 RUN chmod +x /app/scripts/test-distros/tests/*.sh
 
-# Install voxtype editable (fast, no deps)
+# Install dictare editable (fast, no deps)
 RUN pip install -e . --no-deps
 
 # Run smoke test (verifies imports work)
