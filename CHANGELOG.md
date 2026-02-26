@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-02-26
+
+### Fixed
+- `dictare speak -v if_sara -l fr` now respects the explicit `-l` override.
+  Priority: explicit `-l` > voice prefix > worker default language.
+  The CLI no longer passes `language="en"` by default (would silently override
+  voice-inferred language); the worker already knows its configured language.
+
 ## [0.1.28] - 2026-02-26
 
 ### Fixed

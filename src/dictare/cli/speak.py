@@ -203,10 +203,14 @@ def register(app: typer.Typer) -> None:
                 timeout=30.0,
             )
             kwargs: dict[str, Any] = {
-                "language": tts_config.language,
                 "engine": tts_config.engine,
                 "speed": tts_config.speed,
             }
+            # Only pass language when user explicitly specified -l.
+            # The worker already knows its configured language; passing the
+            # default "en" here would override voice-inferred language.
+            if language:
+                kwargs["language"] = language
             if tts_config.voice:
                 kwargs["voice"] = tts_config.voice
             response = client.speak(text, **kwargs)
