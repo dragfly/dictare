@@ -493,6 +493,42 @@ class TTSManager:
     # Lifecycle
     # ------------------------------------------------------------------
 
+    def stop_speaking(self) -> bool:
+        """Interrupt the currently playing audio.
+
+        For worker-based engines (kokoro/piper/etc.): sends SIGUSR2 to the
+        worker subprocess, which kills the audio player subprocess.
+
+        For in-process engines (say/espeak): calls stop_audio_native() directly.
+
+        Returns:
+            True if a stop signal was delivered, False if nothing to stop.
+        """
+        import sys
+
+        if self._tts_worker_process is not None:
+            # Worker-based engine: signal the worker
+            if sys.platform == "win32":
+                return False  # SIGUSR2 not available on Windows
+            import os
+            import signal as _signal
+
+            pid = self._tts_worker_process.pid
+            try:
+                os.kill(pid, _signal.SIGUSR2)
+                logger.info("Sent SIGUSR2 to TTS worker (PID %d)", pid)
+                return True
+            except (ProcessLookupError, OSError):
+                return False
+        else:
+            # In-process engine: kill the audio subprocess directly
+            from dictare.tts.base import stop_audio_native
+
+            stopped = stop_audio_native()
+            if stopped:
+                logger.info("Stopped in-process audio playback")
+            return stopped
+
     def stop(self) -> None:
         """Stop the TTS worker subprocess if running."""
         if self._tts_worker_process is not None:

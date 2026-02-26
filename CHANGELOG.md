@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.31] - 2026-02-26
+
+### Added
+- `dictare speak stop` — interrupts the currently playing TTS audio immediately.
+  Sends SIGUSR2 to the TTS worker subprocess (kokoro/piper/etc.), which kills
+  the audio player (`afplay`/`paplay`/`aplay`) mid-playback. Works for
+  in-process engines (say/espeak) too via `stop_audio_native()`.
+- `dictare speak --timeout` (`-t`) — configurable request timeout (default 300s,
+  was previously hard-coded to 30s). Avoids "Engine not running" errors when
+  piping long texts.
+
 ## [0.1.30] - 2026-02-26
 
 ### Fixed
