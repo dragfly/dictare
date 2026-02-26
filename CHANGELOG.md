@@ -7,27 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-02-26
+
+### Added
+- Test coverage for status bar: `_format_cwd`, right-side label construction,
+  `_write_to_pty` error handling, agent label computation (17 new tests)
+
 ## [0.1.19] - 2026-02-26
 
 ### Added
 - OpenVIP v1.0 message validation on `/agents/{id}/messages` and `/speech`
   endpoints — non-compliant payloads are rejected with 422 and a clear
   "Not OpenVIP v1.0 compliant" error message
-- Bundled OpenVIP v1.0 JSON Schema (`fastjsonschema`, compiled, ~2μs/call)
-- 55+ invalid-message test cases covering missing fields, wrong types,
-  bad versions, enum violations, confidence bounds, extension type checks,
-  and dependentRequired constraints
-
-## [0.1.18] - 2026-02-26
-
-### Changed
-- Alignment with OpenVIP v1.0 spec
 
 ## [0.1.18] - 2026-02-26
 
 ### Added
 - Current directory shown in status bar right side — `~/repos/proj · [opus] · dictare 0.1.18`;
   home prefix replaced with `~`, long paths truncated from the left with `…`
+
+### Changed
+- Alignment with OpenVIP v1.0 spec
 
 ## [0.1.17] - 2026-02-26
 
