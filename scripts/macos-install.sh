@@ -34,17 +34,21 @@ start_services() {
     echo "==> Done. Use 'dictare tray start' for the tray icon."
 }
 
-# ---------- 1. Read version from source ----------
-VERSION=$(.venv/bin/python -c "
-import re, pathlib
-text = pathlib.Path('${PROJECT_DIR}/src/dictare/__init__.py').read_text()
-print(re.search(r'__version__\s*=\s*\"(.+?)\"', text).group(1))
-")
+# ---------- 1. Ensure uv is available ----------
+if ! command -v uv &>/dev/null; then
+    echo "==> Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+    command -v uv &>/dev/null || { echo "ERROR: uv installation failed" >&2; exit 1; }
+fi
+
+# ---------- 2. Read version from source (no venv needed) ----------
+VERSION=$(grep -E '^__version__' "${PROJECT_DIR}/src/dictare/__init__.py" | sed 's/.*"\(.*\)"/\1/')
 TARBALL="${DIST_DIR}/dictare-${VERSION}.tar.gz"
 echo "==> Version: ${VERSION}"
 echo "==> Brew prefix: ${BREW_PREFIX}"
 
-# ---------- 2. Build sdist ----------
+# ---------- 3. Build sdist ----------
 echo "==> Building sdist..."
 cd "$PROJECT_DIR"
 uv build --sdist --quiet
@@ -53,7 +57,7 @@ if [[ ! -f "$TARBALL" ]]; then
     exit 1
 fi
 
-# ---------- 3. Compute sha256 ----------
+# ---------- 4. Compute sha256 ----------
 if command -v shasum &>/dev/null; then
     SHA=$(shasum -a 256 "$TARBALL" | awk '{print $1}')
 else
@@ -61,7 +65,7 @@ else
 fi
 echo "==> SHA256: ${SHA}"
 
-# ---------- 4. Update Homebrew formula ----------
+# ---------- 5. Update Homebrew formula ----------
 echo "==> Updating formula..."
 # sed -i differs between macOS (BSD) and Linux (GNU)
 if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -80,15 +84,15 @@ fi
     -e "s|\"/.*/openvip-.*\.tar\.gz\"|\"${OPENVIP_TARBALL}\"|" \
     "$FORMULA"
 
-# ---------- 5. Stop running services ----------
+# ---------- 6. Stop running services ----------
 stop_services
 
-# ---------- 6. Reinstall ----------
+# ---------- 7. Reinstall ----------
 echo "==> brew reinstall dictare..."
 # Note: brew may exit 1 due to dylib linkage warnings (e.g. PyAV) — not fatal
 brew reinstall dictare 2>&1 || true
 
-# ---------- 6b. Restore formula to clean public state ----------
+# ---------- 7b. Restore formula to clean public state ----------
 # The formula was temporarily modified with local file:// paths for the dev
 # build. Restore it immediately after reinstall so the tap repo never has
 # local paths committed (prevents accidental leaks if someone pushes the tap).
@@ -96,7 +100,7 @@ TAP_DIR="$(brew --repository)/Library/Taps/dragfly/homebrew-tap"
 git -C "$TAP_DIR" checkout -- Formula/dictare.rb
 echo "==> Formula restored to clean state"
 
-# ---------- 7. Verify ----------
+# ---------- 8. Verify ----------
 INSTALLED=$("${BREW_PREFIX}/bin/dictare" --version 2>&1)
 echo "==> Installed: ${INSTALLED}"
 if [[ "$INSTALLED" != *"$VERSION"* ]]; then
@@ -104,5 +108,5 @@ if [[ "$INSTALLED" != *"$VERSION"* ]]; then
     exit 1
 fi
 
-# ---------- 8. Restart service ----------
+# ---------- 9. Restart service ----------
 start_services
