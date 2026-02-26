@@ -80,6 +80,22 @@ def _list_voices(engine_override: str | None, config_file: Path | None) -> None:
     console.print("[dim]  dictare service start[/]")
 
 
+def _send_stop(config: Any) -> None:
+    """Send a fire-and-forget stop request to the engine (best-effort)."""
+    import urllib.request
+
+    url = f"http://{config.server.host}:{config.server.port}/speech/stop"
+    req = urllib.request.Request(
+        url, data=b"{}", method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            resp.read()
+    except Exception:
+        pass  # Best-effort
+
+
 def register(app: typer.Typer) -> None:
     """Register speak command on the main app."""
 
@@ -254,11 +270,25 @@ def register(app: typer.Typer) -> None:
             if not quiet:
                 console.print(f"[red]TTS failed: {detail}[/]")
             raise typer.Exit(1)
-        except (urllib.error.URLError, ConnectionRefusedError, OSError):
-            logger.debug("Engine not reachable for TTS")
-            if not quiet:
-                console.print("[red]Engine not running.[/]")
-                console.print("[dim]Start it with: dictare service start[/]")
+        except (urllib.error.URLError, ConnectionRefusedError, OSError) as e:
+            # Distinguish timeout (audio still playing) from connection refused
+            reason = getattr(e, "reason", e)
+            is_timeout = isinstance(reason, (TimeoutError, OSError)) and (
+                "timed out" in str(reason).lower() or isinstance(reason, TimeoutError)
+            )
+            if is_timeout:
+                # Audio may still be playing — stop it automatically
+                _send_stop(config)
+                logger.debug("TTS request timed out after %ss — sent stop", timeout)
+                if not quiet:
+                    console.print(
+                        f"[yellow]Timed out after {timeout}s — audio stopped.[/]"
+                    )
+            else:
+                logger.debug("Engine not reachable for TTS")
+                if not quiet:
+                    console.print("[red]Engine not running.[/]")
+                    console.print("[dim]Start it with: dictare service start[/]")
             raise typer.Exit(1)
         except Exception as e:
             logger.error("TTS error: %s", e, exc_info=True)
