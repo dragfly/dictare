@@ -89,6 +89,7 @@ fi
 "${SED_INPLACE[@]}" \
     -e "s|url \".*\"|url \"file://${TARBALL}\"|" \
     -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" \
+    -e "s|dictare_tarball = \".*\"|dictare_tarball = \"${TARBALL}\"|" \
     -e "s|openvip_tarball = \".*\"|openvip_tarball = \"${OPENVIP_TARBALL}\"|" \
     -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
     "$FORMULA"
