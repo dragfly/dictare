@@ -874,15 +874,22 @@ class TestInvalidMessageRejection:
     JSON Schema. Non-compliant payloads are rejected before processing.
     """
 
+    @pytest.fixture(autouse=True, scope="class")
+    def _shared_agent(self, live_url):
+        """One SSE agent shared across all parametrized tests."""
+        conn = SSEConnection(live_url, f"validator-{uuid.uuid4().hex[:8]}")
+        conn.start()
+        conn.wait_connected()
+        self.__class__._agent_url = f"/agents/{conn.agent_id}/messages"
+        yield
+        conn.stop()
+
     @pytest.mark.parametrize("message", INVALID_MESSAGES_POST)
     def test_post_message_invalid_returns_422(
-        self, e2e_client, sse_connect, message,
+        self, e2e_client, message,
     ) -> None:
         """Invalid message posted to /agents/{id}/messages returns 422."""
-        conn = sse_connect("validator")
-        r = e2e_client.post(
-            f"/agents/{conn.agent_id}/messages", json=message,
-        )
+        r = e2e_client.post(self._agent_url, json=message)
         assert r.status_code == 422
         assert "Not OpenVIP v1.0 compliant" in r.json()["detail"]
 
@@ -950,29 +957,34 @@ class TestInvalidSpeechRejection:
 class TestValidationErrorMessages:
     """OpenVIP: Validation error responses are informative."""
 
-    def test_missing_field_mentions_field_name(self, e2e_client, sse_connect) -> None:
+    @pytest.fixture(autouse=True, scope="class")
+    def _shared_agent(self, live_url):
+        """One SSE agent shared across all tests in this class."""
+        conn = SSEConnection(live_url, f"validator-err-{uuid.uuid4().hex[:8]}")
+        conn.start()
+        conn.wait_connected()
+        self.__class__._agent_url = f"/agents/{conn.agent_id}/messages"
+        yield
+        conn.stop()
+
+    def test_missing_field_mentions_field_name(self, e2e_client) -> None:
         """422 detail mentions which required field is missing."""
-        conn = sse_connect("validator")
         msg = {"type": "transcription", "id": _uuid(),
                "timestamp": _timestamp(), "text": "hello"}
-        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=msg)
+        r = e2e_client.post(self._agent_url, json=msg)
         assert r.status_code == 422
         detail = r.json()["detail"]
         assert "Not OpenVIP v1.0 compliant" in detail
 
-    def test_wrong_version_rejected(self, e2e_client, sse_connect) -> None:
+    def test_wrong_version_rejected(self, e2e_client) -> None:
         """Wrong protocol version is rejected with clear error."""
-        conn = sse_connect("validator")
         msg = _transcription(openvip="2.0")
-        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=msg)
+        r = e2e_client.post(self._agent_url, json=msg)
         assert r.status_code == 422
 
-    def test_valid_message_still_accepted(self, e2e_client, sse_connect) -> None:
+    def test_valid_message_still_accepted(self, e2e_client) -> None:
         """Valid messages pass validation and return 200."""
-        conn = sse_connect("validator")
-        r = e2e_client.post(
-            f"/agents/{conn.agent_id}/messages", json=_transcription(),
-        )
+        r = e2e_client.post(self._agent_url, json=_transcription())
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
