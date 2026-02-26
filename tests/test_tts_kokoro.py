@@ -76,3 +76,44 @@ def test_kokoro_resolve_voice():
 
     # Unknown language → af_heart fallback
     assert KokoroTTS._resolve_voice("xx", "") == "af_heart"
+
+
+def test_kokoro_lang_from_voice():
+    """_lang_from_voice infers language from voice name prefix."""
+    from dictare.tts.kokoro import KokoroTTS
+
+    assert KokoroTTS._lang_from_voice("if_sara") == "it"
+    assert KokoroTTS._lang_from_voice("im_nicola") == "it"
+    assert KokoroTTS._lang_from_voice("af_heart") == "en"
+    assert KokoroTTS._lang_from_voice("bf_emma") == "en-gb"
+    assert KokoroTTS._lang_from_voice("ef_dora") == "es"
+    assert KokoroTTS._lang_from_voice("ff_siwis") == "fr"
+    assert KokoroTTS._lang_from_voice("jf_alpha") == "ja"
+    assert KokoroTTS._lang_from_voice("zf_xiaobei") == "zh"
+    assert KokoroTTS._lang_from_voice("unknown") is None
+
+
+def test_kokoro_resolve_params_voice_sets_language():
+    """Voice prefix determines language, overriding default 'en'."""
+    from dictare.tts.kokoro import KokoroTTS
+
+    # Instance with empty voice — matches real worker startup (--voice "")
+    tts = KokoroTTS(language="en", voice="")
+
+    # Italian voice → Italian phonetics, even if language default is "en"
+    lang, voice = tts._resolve_params(voice="if_sara", language="en")
+    assert lang == "it"
+    assert voice == "if_sara"
+
+    # Same with language=None
+    lang, voice = tts._resolve_params(voice="if_sara", language=None)
+    assert lang == "it"
+
+    # English voice → English phonetics
+    lang, voice = tts._resolve_params(voice="af_heart", language=None)
+    assert lang == "en-us"
+
+    # No explicit voice → language determines phonetics and default voice
+    lang, voice = tts._resolve_params(voice=None, language="it")
+    assert lang == "it"
+    assert voice == "if_sara"  # language-appropriate default

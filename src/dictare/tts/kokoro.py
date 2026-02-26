@@ -32,6 +32,19 @@ _LANG_MAP: dict[str, str] = {
     "hi": "hi",
 }
 
+# Language inferred from voice name prefix (e.g. "if_sara" → "it")
+_VOICE_PREFIX_LANG: dict[str, str] = {
+    "a": "en",
+    "b": "en-gb",
+    "e": "es",
+    "f": "fr",
+    "h": "hi",
+    "i": "it",
+    "j": "ja",
+    "p": "pt",
+    "z": "zh",
+}
+
 # Default voice per language family
 _DEFAULT_VOICES: dict[str, str] = {
     "en": "af_heart",
@@ -141,6 +154,13 @@ class KokoroTTS(TTSEngine):
         return "en-us"
 
     @staticmethod
+    def _lang_from_voice(voice: str) -> str | None:
+        """Infer language from voice name prefix (e.g. 'if_sara' → 'it')."""
+        if len(voice) >= 2 and voice[1] in ("f", "m"):
+            return _VOICE_PREFIX_LANG.get(voice[0])
+        return None
+
+    @staticmethod
     def _resolve_voice(language: str, voice: str) -> str:
         """Pick voice: user-specified, or language-appropriate default."""
         if voice:
@@ -182,10 +202,24 @@ class KokoroTTS(TTSEngine):
     ) -> tuple[str, str]:
         """Resolve lang/voice with optional per-request overrides.
 
+        Voice prefix takes priority over the default language: if_sara → it,
+        af_heart → en, etc. Explicit language overrides only apply when no
+        voice is given (or when the voice carries no language info).
+
         Returns (kokoro_lang, resolved_voice). Pure — no instance mutation.
         """
-        lang = language or self.language
-        v = voice or self.voice
+        explicit_voice = voice if voice else None
+
+        if explicit_voice:
+            # User explicitly chose a voice → infer language from prefix
+            inferred = self._lang_from_voice(explicit_voice)
+            lang = inferred or language or self.language
+            v = explicit_voice
+        else:
+            # No explicit voice → language determines lang and default voice
+            lang = language or self.language
+            v = self.voice  # empty string → _resolve_voice picks language default
+
         return self._resolve_lang(lang), self._resolve_voice(lang, v)
 
     def speak(
