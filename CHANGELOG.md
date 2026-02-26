@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-02-26
+
+### Fixed
+- Kokoro TTS: Italian (and other non-English) voices now use correct phonetics.
+  Previously `dictare speak "ciao" -v if_sara` would pronounce with English
+  phonetics because `language="en"` from config overrode the voice's language.
+  Voice prefix now determines phonetics: `if_`/`im_` → Italian, `af_`/`am_` →
+  American English, `bf_`/`bm_` → British English, etc.
+
 ## [0.1.27] - 2026-02-26
 
 ### Fixed
