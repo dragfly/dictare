@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-02-26
+
+### Fixed
+- TTS worker crash on startup: `secrets.token_urlsafe()` can produce tokens
+  starting with `-`, which argparse interprets as a flag instead of a value.
+  Switched to `token_hex(32)` (hex-only, never starts with `-`).
+
 ## [0.1.29] - 2026-02-26
 
 ### Fixed

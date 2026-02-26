@@ -55,7 +55,7 @@ class TTSManager:
         self._play_lock = threading.Lock()
 
         # Scoped auth token for TTS worker registration
-        self._auth_token = secrets.token_urlsafe(32)
+        self._auth_token = secrets.token_hex(32)  # hex-only: never starts with '-' (argparse-safe)
 
         # Loading progress (read by engine for /status)
         self._loading_status: dict[str, Any] = {}
