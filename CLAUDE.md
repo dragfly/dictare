@@ -1,99 +1,58 @@
-# Dictare — Voice-first control for AI coding agents
+# Dictare — Developer Guide for AI Assistants
 
-## STRATEGIC DIRECTION (NON DEVIARE MAI)
+## What Is Dictare
 
-### Identità
-- **Dictare è la REFERENCE IMPLEMENTATION del protocollo OpenVIP**
-- Dictare è un VOICE LAYER — controlla AI coding agents (Claude Code, Cursor, Aider) via voce
-- USP: unico tool open source, locale, voice-to-AGENT (non voice-to-text)
-- Competitors (Wispr Flow, Serenade, Willow Voice) sono tutti voice-to-TEXT
+Voice layer for AI coding agents. Implements the OpenVIP protocol.
+Agents (Claude Code, Cursor, Aider) connect via SSE and receive voice transcriptions.
 
-### Eat Your Own Dogfood — REGOLA FONDAMENTALE
-- Dictare DEVE usare l'SDK `openvip` (`from openvip import Client`) per TUTTO il codice client-side
-- L'SDK vive in `/home/user/repos/nottoplay/openvip-sdks/python/`
-- Se dictare non usa il suo SDK, nessuno lo userà. L'SDK NON è opzionale, MAI.
-- Il codice client (agent/mux.py SSE, agent/sse.py, cli/speak.py, tray/app.py) DEVE usare l'SDK
+**What it is NOT**: a voice-to-text tool, a subscription proxy, an autonomous agent loop,
+or a multi-agent orchestrator. It is a voice input layer, nothing more.
 
-### Cross-platform UX
-- **UX must be identical on macOS and Linux** — no platform-specific UI code
-- Use browser-based UI (served from existing FastAPI) for any GUI needs
-- Tray menu via pystray (cross-platform), settings via web browser
+## Architecture
 
-### Cosa NON costruire
-- ❌ Subscription-to-API proxy (claude-max-api-proxy lo fa)
-- ❌ Autonomous loop engine (Ralph Wiggum è ufficiale Anthropic)
-- ❌ Multi-agent orchestrator (Gas Town, Claude Squad)
-- ❌ Web UI per chat (scope creep)
-- Dictare = voice layer + service. Il resto è ecosystem.
+- `src/dictare/core/` — engine, STT, pipeline, HTTP server (FastAPI + OpenVIP)
+- `src/dictare/pipeline/` — filters and executors (composable, DI via `PipelineLoader`)
+- `src/dictare/tts/` — TTS engines (Kokoro, Piper, espeak, macOS `say`)
+- `src/dictare/audio/` — capture, VAD, beep feedback, device monitoring
+- `src/dictare/agent/` — agent client (uses openvip SDK)
+- `src/dictare/daemon/` — launchd (macOS) / systemd (Linux) service management
+- `src/dictare/tray/` — system tray app (pystray, cross-platform)
+- `src/dictare/cli/` — typer CLI entry points
 
-### Language Policy
-- **Base language: English** — all code, comments, docstrings, docs, commit messages in English
-- **Multilingual data is OK** — trigger words, translations, i18n strings can include Italian and other languages, but ONLY if multiple languages are present (e.g., en + it + es + de + fr)
-- **Never Italian alone** — Italian-only text is an information leak that reveals the developer's nationality. Either English-only or multilingual (3+ languages).
+## Development Workflow
 
-### Pubblicazione
-- openvip SDK e dictare vanno su PyPI INSIEME — pubblicazione simultanea
-- Versioning: SemVer, partendo da 0.1.0 (storia interna 3.x non è pubblica)
-- openvip è dependency obbligatoria in pyproject.toml
+```bash
+# Run tests
+uv run --python 3.11 pytest tests/ -x --tb=short
 
----
+# Lint
+uv run --python 3.11 ruff check .
 
-## ARCHITETTURA
+# Type check
+uv run --python 3.11 mypy src/
+```
 
-### Pipeline
-- `pipeline/{base.py, filters/, executors/, loader.py}` — filters enrich, executors act
-- Extension fields: structured objects (`x_input`, `x_agent_switch`)
-- `PipelineLoader`: inspect.signature() DI — risolve params da services → config attrs → defaults
-- Public API: `from dictare.pipeline import Pipeline, PipelineLoader, register_step`
+**Python 3.11 only** — always use `uv run --python 3.11`.
 
-### Servizio
-- Engine gira come system service (launchd macOS / systemd Linux) — modello Ollama
-- `dictare service install` → engine parte al login → tray icon → ready
-- `dictare agent claude` → single command, auto-connect all'engine
+## Commit Conventions
 
----
+Prefixes: `feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`
 
-## COME LAVORARE
+Versioning: SemVer — MINOR for features, PATCH for bug fixes, MAJOR for breaking changes.
 
-### ⛔ Prima di implementare: CHIEDI
-1. **Investiga** — leggi il codice, trova la causa
-2. **Riassumi il problema** in 3-4 righe
-3. **Proponi opzioni** (1-2 righe max per opzione)
-4. **Aspetta** che l'utente scelga ("fixalo", "fallo", "vai")
-5. **MAI cambiare comportamento architetturale senza approvazione** — se qualcosa sembra "inutile" (es. mic muting durante play), chiedere PERCHÉ esiste prima di rimuoverlo. Spesso c'è una ragione non ovvia (es. utente può configurare TTS al posto del beep).
+After every change: run tests → lint → typecheck → bump version in
+`src/dictare/__init__.py` → update `CHANGELOG.md` → commit + tag + push.
 
-### Verify before asserting
-- **Never present commands, paths, or factual claims to the user without verifying them first** using available tools (ls, find, grep, read, etc.)
-- If you can check it in 2 seconds with a tool, check it before responding — not after the user reports an error
-- If you cannot verify something, say so explicitly ("I haven't verified this")
-- The user cannot review everything at the speed you produce it — you are the quality gate, not the user
+## Language Policy
 
-### Principi Python
-- **Senior Python Architect**: codice idiomatico, librerie standard, type hints
-- **No reinventare la ruota** — se esiste una soluzione standard, usala
-- **Analizza prima** — verifica come il codebase fa cose simili
+All code, comments, docstrings, commit messages, and documentation must be in **English**.
 
-### Test
-- Test per OGNI fix/feature — non opzionale
-- MAI `time.sleep()` — usa `_wait_until()` o chiama handler direttamente
-- Mock over real time. Test veloci < 1s
+## OpenVIP SDK
 
-### Dopo ogni cambiamento
-1. `uv run python -m pytest tests/ -x --tb=short`
-2. `uv run ruff check .`
-3. `uv run mypy src/`
-4. Aggiorna CHANGELOG.md + bump versione in `src/dictare/__init__.py`
-5. ⛔ **Commit + tag + push PRIMA di fare qualsiasi altra cosa**
+Client-side code uses `from openvip import Client` (PyPI package `openvip`).
+The SDK is a required dependency — never bypass it with raw HTTP calls.
 
-⚠️ NON iniziare nuovi task finché il commit non è pushato.
+## Cross-Platform
 
-### Commit
-- Prefissi: `feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`
-- SemVer: MINOR per feature, PATCH per bugfix, MAJOR per breaking changes
-- Python 3.11 only. Usa `uv run --python 3.11` per tutto.
-
-## Istruzioni per Compaction
-Quando compatti il contesto, PRESERVA SEMPRE:
-- Direzione strategica (voice layer, OpenVIP reference impl, dogfooding SDK)
-- Lista "cosa NON costruire"
-- Task corrente e il suo contesto architetturale
+UX must be identical on macOS and Linux. No platform-specific UI code.
+Settings and any GUI use the browser-based web UI served by the engine.

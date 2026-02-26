@@ -73,7 +73,7 @@ ui/.svelte-kit/
 
 # Claude Code
 .claude/
-CLAUDE.md
+CLAUDE.local.md
 WORKFLOW.md
 
 # Internal notes — not for public repo
