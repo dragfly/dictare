@@ -1072,6 +1072,10 @@ class DictareEngine:
         """Return available voices (delegates to TTSManager)."""
         return self._tts_mgr.list_voices()
 
+    def stop_speaking(self) -> bool:
+        """Interrupt the currently playing audio (delegates to TTSManager)."""
+        return self._tts_mgr.stop_speaking()
+
     def _start_exit_watchdog(self, exit_code: int, timeout: float = 6) -> None:
         """Start a watchdog that force-exits after *timeout* seconds.
 

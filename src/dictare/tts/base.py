@@ -6,10 +6,34 @@ import logging
 import shutil
 import subprocess
 import sys
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Module-level tracking of the current audio subprocess.
+# Used by stop_audio_native() to interrupt playback from any thread/signal handler.
+_audio_lock = threading.Lock()
+_current_audio_proc: subprocess.Popen | None = None
+
+
+def stop_audio_native() -> bool:
+    """Kill the currently playing audio subprocess, if any.
+
+    Returns:
+        True if a process was found and terminated, False if nothing was playing.
+    """
+    global _current_audio_proc
+    with _audio_lock:
+        proc = _current_audio_proc
+    if proc is None:
+        return False
+    try:
+        proc.terminate()
+    except (ProcessLookupError, OSError):
+        pass
+    return True
 
 
 def play_audio_native(path: str | Path, *, timeout: float = 120.0) -> None:
@@ -22,22 +46,31 @@ def play_audio_native(path: str | Path, *, timeout: float = 120.0) -> None:
         path: Path to audio file (WAV, AIFF, etc.).
         timeout: Maximum playback time in seconds.
     """
+    global _current_audio_proc
     path_str = str(path)
 
     if sys.platform == "darwin":
-        subprocess.run(["afplay", path_str], capture_output=True, timeout=timeout)
+        cmd = ["afplay", path_str]
+    elif shutil.which("paplay"):
+        cmd = ["paplay", path_str]
+    elif shutil.which("aplay"):
+        cmd = ["aplay", "-q", path_str]
     else:
-        # Linux: prefer paplay (PipeWire/PulseAudio), fall back to aplay (ALSA)
-        if shutil.which("paplay"):
-            subprocess.run(
-                ["paplay", path_str], capture_output=True, timeout=timeout,
-            )
-        elif shutil.which("aplay"):
-            subprocess.run(
-                ["aplay", "-q", path_str], capture_output=True, timeout=timeout,
-            )
-        else:
-            logger.warning("No native audio player found (paplay/aplay)")
+        logger.warning("No native audio player found (paplay/aplay)")
+        return
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    with _audio_lock:
+        _current_audio_proc = proc
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.terminate()
+        proc.wait()
+    finally:
+        with _audio_lock:
+            if _current_audio_proc is proc:
+                _current_audio_proc = None
 
 
 class TTSEngine(ABC):

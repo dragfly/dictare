@@ -110,6 +110,10 @@ def register(app: typer.Typer) -> None:
             Path | None,
             typer.Option("--config", "-c", help="Path to config file"),
         ] = None,
+        timeout: Annotated[
+            float,
+            typer.Option("--timeout", "-t", help="Request timeout in seconds (increase for long texts)"),
+        ] = 300.0,
         quiet: Annotated[
             bool,
             typer.Option("--quiet", "-q", help="Suppress status messages (for pipe mode)"),
@@ -158,6 +162,26 @@ def register(app: typer.Typer) -> None:
         # Load config
         config = load_config(config_file)
 
+        # Special command: "stop" interrupts current TTS playback
+        if text is not None and text.strip().lower() == "stop":
+            import json as _json
+            import urllib.error
+            import urllib.request
+
+            url = f"http://{config.server.host}:{config.server.port}/speech/stop"
+            req = urllib.request.Request(url, data=b"{}", method="POST",
+                                         headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    _json.loads(resp.read())
+                if not quiet:
+                    console.print("[dim]TTS stopped.[/]")
+            except (urllib.error.URLError, ConnectionRefusedError, OSError):
+                if not quiet:
+                    console.print("[red]Engine not running.[/]")
+                raise typer.Exit(1)
+            raise typer.Exit(0)
+
         # Read from stdin if no text provided or text is "-"
         if text is None or text == "-":
             if sys.stdin.isatty():
@@ -200,7 +224,7 @@ def register(app: typer.Typer) -> None:
         try:
             client = Client(
                 f"http://{config.server.host}:{config.server.port}",
-                timeout=30.0,
+                timeout=timeout,
             )
             kwargs: dict[str, Any] = {
                 "engine": tts_config.engine,

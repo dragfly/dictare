@@ -20,11 +20,28 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import signal
 import sys
 import urllib.error
 import urllib.request
 
 logger = logging.getLogger(__name__)
+
+# Set when a stop signal is received; cleared after each request completes.
+_stop_requested = False
+
+
+def _handle_stop_signal(signum: int, frame: object) -> None:
+    """SIGUSR2 handler: kill the current audio subprocess."""
+    global _stop_requested
+    _stop_requested = True
+    from dictare.tts.base import stop_audio_native
+    stop_audio_native()
+
+
+# Install handler (SIGUSR2 not available on Windows)
+if hasattr(signal, "SIGUSR2"):
+    signal.signal(signal.SIGUSR2, _handle_stop_signal)
 
 # Agent ID reserved for the TTS worker
 TTS_AGENT_ID = "__tts__"
@@ -186,6 +203,8 @@ def main(argv: list[str] | None = None) -> None:
             continue
 
         # Cache miss — blocking generate + play
+        global _stop_requested
+        _stop_requested = False
         start = time.time()
         try:
             ok = tts_engine.speak(text, voice=voice, language=language)
@@ -193,6 +212,11 @@ def main(argv: list[str] | None = None) -> None:
             logger.warning("TTS speak failed for %r", text, exc_info=True)
             ok = False
         duration_ms = int((time.time() - start) * 1000)
+
+        if _stop_requested:
+            logger.info("Speech interrupted by stop request")
+            ok = False
+        _stop_requested = False
 
         if request_id:
             _post_completion(args.url, args.token, request_id, ok, duration_ms)
