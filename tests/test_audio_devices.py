@@ -434,8 +434,9 @@ class TestCircuitBreaker:
         # Should NOT trip circuit breaker (all old)
         # Will fail on actual reconnect (no audio), but circuit breaker won't block
         manager._audio = MagicMock()
-        with patch.object(manager, "_reinit_portaudio"):
-            with patch("dictare.core.audio_manager.AudioCapture"):
+        with patch.object(manager, "_reinit_portaudio"), \
+             patch("dictare.core.audio_manager.AudioCapture"), \
+             patch("time.sleep"):
                 # Let it fail naturally (no real device)
                 manager.reconnect(MagicMock())
         # Old timestamps should be pruned
