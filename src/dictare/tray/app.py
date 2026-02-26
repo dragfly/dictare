@@ -554,18 +554,26 @@ class TrayApp:
             }
 
             status_count = 0
+            _connected_once = False  # True after first successful SSE connection
+
+            def _on_connect() -> None:
+                nonlocal _connected_once
+                _connected_once = True
 
             def _on_disconnect(exc: Exception | None) -> None:
                 if exc:
                     logger.info("tray SSE disconnected: %s", exc)
-                    # During restart, stay blue instead of going red
-                    if not self._restarting:
+                    # During restart, stay blue instead of going red.
+                    # On first startup (never connected yet), don't show disconnected —
+                    # silent retries until engine is ready.
+                    if not self._restarting and _connected_once:
                         self.set_state("disconnected")
 
             try:
                 for status in client.subscribe_status(
                     reconnect=True,
                     stop=lambda: not self._polling,
+                    on_connect=_on_connect,
                     on_disconnect=_on_disconnect,
                 ):
                     if not self._polling:
