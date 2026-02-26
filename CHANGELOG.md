@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-02-26
+
+### Fixed
+- TTS worker no longer crashes on `SpeechRequest` messages: removed use of
+  `additional_properties` (old SDK pattern) in favour of native model fields.
+  `proxy.py` now uses the OpenVIP message `id` as the completion tracking key
+  (instead of an out-of-band `request_id` extension field). `voice` is now a
+  first-class field in the OpenVIP spec and SDK (openvip>=1.0.0rc4).
+
 ## [0.1.25] - 2026-02-26
 
 ### Fixed

@@ -171,8 +171,7 @@ class TestStreamActiveAgentStatus:
         from openvip import Status
 
         return Status(
-            protocol_version="1.0",
-            state=state,
+            openvip="1.0",
             connected_agents=agents or [current_agent],
             platform={
                 "state": state,
@@ -290,8 +289,7 @@ class TestStreamActiveAgentStatus:
 
         def fake_subscribe(**kwargs):
             yield Status(
-                protocol_version="1.0",
-                state="idle",
+                openvip="1.0",
                 connected_agents=[],
                 platform={
                     "state": "idle",
