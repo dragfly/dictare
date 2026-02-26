@@ -63,7 +63,7 @@ if [[ "$OS" == "Darwin" ]]; then
     fi
 
     info "Adding dragfly tap..."
-    brew tap dragfly/dictare
+    brew tap dragfly/tap
 
     info "Installing dictare..."
     brew install dictare
