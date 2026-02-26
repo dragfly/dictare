@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
 # Rebuild dictare wheel and reinstall via Homebrew.
-# Works on both macOS and Linux (Linuxbrew).
-# Usage: ./scripts/brew-rebuild.sh
+# openvip is now on PyPI — no local tarball needed.
+# Usage: ./scripts/macos-install.sh
 set -euo pipefail
 
 BREW_PREFIX="$(brew --prefix)"
-# Homebrew tap path differs: macOS uses $PREFIX/Library, Linux uses $PREFIX/Homebrew/Library
 FORMULA="$(brew --repository)/Library/Taps/dragfly/homebrew-tap/Formula/dictare.rb"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="${PROJECT_DIR}/dist"
-
-# openvip tarball: auto-detect version from SDK's pyproject.toml
-OPENVIP_DIR="$(cd "${PROJECT_DIR}/../../openvip-dev/sdks/python" && pwd)"
-OPENVIP_VERSION=$(grep '^version' "${OPENVIP_DIR}/pyproject.toml" | head -1 | sed 's/.*= *"\(.*\)"/\1/')
-OPENVIP_TARBALL="${OPENVIP_DIR}/dist/openvip-${OPENVIP_VERSION}.tar.gz"
 
 # ---------- Helpers ----------
 
@@ -48,20 +42,7 @@ TARBALL="${DIST_DIR}/dictare-${VERSION}.tar.gz"
 echo "==> Version: ${VERSION}"
 echo "==> Brew prefix: ${BREW_PREFIX}"
 
-# ---------- 3. Build openvip tarball if missing ----------
-if [[ ! -f "$OPENVIP_TARBALL" ]]; then
-    echo "==> Building openvip tarball..."
-    cd "$OPENVIP_DIR"
-    uv build --sdist --quiet
-    cd "$PROJECT_DIR"
-fi
-if [[ ! -f "$OPENVIP_TARBALL" ]]; then
-    echo "ERROR: openvip tarball not found: $OPENVIP_TARBALL" >&2
-    exit 1
-fi
-echo "==> openvip: ${OPENVIP_TARBALL}"
-
-# ---------- 4. Build sdist ----------
+# ---------- 3. Build sdist ----------
 echo "==> Building sdist..."
 cd "$PROJECT_DIR"
 uv build --sdist --quiet
@@ -80,7 +61,6 @@ echo "==> SHA256: ${SHA}"
 
 # ---------- 5. Update Homebrew formula ----------
 echo "==> Updating formula..."
-# sed -i differs between macOS (BSD) and Linux (GNU)
 if [[ "$(uname -s)" == "Darwin" ]]; then
     SED_INPLACE=(sed -i '')
 else
@@ -90,7 +70,6 @@ fi
     -e "s|url \".*\"|url \"file://${TARBALL}\"|" \
     -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" \
     -e "s|dictare_tarball = \".*\"|dictare_tarball = \"${TARBALL}\"|" \
-    -e "s|openvip_tarball = \".*\"|openvip_tarball = \"${OPENVIP_TARBALL}\"|" \
     -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
     "$FORMULA"
 
@@ -103,9 +82,6 @@ echo "==> brew reinstall dictare..."
 brew reinstall dictare 2>&1 || true
 
 # ---------- 7b. Restore formula to clean public state ----------
-# The formula was temporarily modified with local file:// paths for the dev
-# build. Restore it immediately after reinstall so the tap repo never has
-# local paths committed (prevents accidental leaks if someone pushes the tap).
 TAP_DIR="$(brew --repository)/Library/Taps/dragfly/homebrew-tap"
 git -C "$TAP_DIR" checkout -- Formula/dictare.rb
 echo "==> Formula restored to clean state"

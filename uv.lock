@@ -293,7 +293,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.2.0" },
     { name = "onnx-asr", specifier = ">=0.1.0" },
-    { name = "openvip", editable = "../../openvip-dev/sdks/python" },
+    { name = "openvip", specifier = ">=1.0.0rc1" },
     { name = "pathvalidate", specifier = ">=3.0.0" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "piper-tts", specifier = ">=1.2.0" },
@@ -1042,21 +1042,17 @@ wheels = [
 
 [[package]]
 name = "openvip"
-version = "1.0.0"
-source = { editable = "../../openvip-dev/sdks/python" }
+version = "1.0.0rc1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.11" },
-    { name = "python-dateutil", specifier = ">=2.8.2" },
-    { name = "typing-extensions", specifier = ">=4.7.1" },
-    { name = "urllib3", specifier = ">=2.1.0,<3.0.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/57/31/c2ca6a0703879e26cc85187a6c03fe2832a85556b1db0cb540b08aae8acd/openvip-1.0.0rc1.tar.gz", hash = "sha256:7318363702de4c19d88d9bb405ad896d54b20de6a2addfec4ee6de234ab082ec", size = 36086, upload-time = "2026-02-26T16:20:24.645Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/34/99/9afebf3435b6dbb798cc8c3e6baed0abe9328a7412e54b84488f00b5fba9/openvip-1.0.0rc1-py3-none-any.whl", hash = "sha256:1f04161e433b1e6f61afb2c21aae8a04baadff141fe94f10057a63f39bf3ee18", size = 51227, upload-time = "2026-02-26T16:20:23.312Z" },
 ]
 
 [[package]]
