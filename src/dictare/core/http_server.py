@@ -230,6 +230,12 @@ class OpenVIPServer:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+        @app.post("/speech/stop")
+        async def speech_stop():
+            """Interrupt the currently playing TTS audio."""
+            stopped = await asyncio.to_thread(self._engine.stop_speaking)
+            return {"status": "ok", "stopped": stopped}
+
         @app.get("/speech/voices")
         async def speech_voices():
             """List available voices for the current TTS engine."""
