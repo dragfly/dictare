@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-02-26
+
+### Added
+- Agent type or command shown in status bar right side — `[opus] · dictare 0.1.17`
+  when launched with a type, or first 30 chars of the command when using `--`
+
 ## [0.1.16] - 2026-02-26
 
 ### Fixed

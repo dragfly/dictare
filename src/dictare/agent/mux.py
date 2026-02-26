@@ -501,6 +501,7 @@ def run_agent(
     status_bar: bool = True,
     clear_on_start: bool = True,
     claim_key: str = "ctrl+\\",
+    agent_label: str | None = None,
 ) -> int:
     """Run a command with multiplexed input from stdin and dictare SSE.
 
@@ -539,7 +540,7 @@ def run_agent(
         old_settings = termios.tcgetattr(sys.stdin.fileno())
 
     rows, cols = _get_winsize()
-    sbar = StatusBar(agent_id) if status_bar else None
+    sbar = StatusBar(agent_id, agent_label=agent_label) if status_bar else None
 
     def on_output(data: bytes) -> None:
         os.write(sys.stdout.fileno(), data)
