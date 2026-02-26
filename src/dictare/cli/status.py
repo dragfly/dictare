@@ -155,8 +155,9 @@ def _get_status_json(online: bool = True) -> dict:
         status = client.get_status()
         return {
             "online": True,
-            "protocol_version": status.protocol_version,
-            "state": status.state,
+            "openvip": status.openvip,
+            "stt": status.stt,
+            "tts": status.tts,
             "connected_agents": status.connected_agents,
             "platform": status.platform,
         }
@@ -223,8 +224,9 @@ def register(app: typer.Typer) -> None:
         elif online:
             # Build full dict from Status object
             full = {
-                "protocol_version": status_data.protocol_version,  # type: ignore[possibly-undefined]
-                "state": status_data.state,  # type: ignore[possibly-undefined]
+                "openvip": status_data.openvip,  # type: ignore[possibly-undefined]
+                "stt": status_data.stt,  # type: ignore[possibly-undefined]
+                "tts": status_data.tts,  # type: ignore[possibly-undefined]
                 "connected_agents": status_data.connected_agents,  # type: ignore[possibly-undefined]
                 "platform": status_data.platform,  # type: ignore[possibly-undefined]
             }
