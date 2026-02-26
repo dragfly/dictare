@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-02-26
+
+### Added
+- Test coverage for session helpers: `KeystrokeCounter`, session log path
+  format, `_write_session_start`/`_write_session_end`, `_log_event` error
+  handling, and `_write_all` short-write loop (29 new tests)
+- Test coverage for stats persistence: `load_stats`/`save_stats` round-trip,
+  `update_keystrokes`, `update_stats`, `get_model_load_time`,
+  `save_model_load_time` warm-load guard (17 new tests)
+
 ## [0.1.20] - 2026-02-26
 
 ### Added
