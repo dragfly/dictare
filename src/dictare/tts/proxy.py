@@ -58,16 +58,17 @@ class WorkerTTSEngine(TTSEngine):
         with self._lock:
             self._pending[request_id] = (done, result)
 
-        # Deliver to the __tts__ worker via SSE
+        # Deliver to the __tts__ worker via SSE.
+        # Use request_id as the OpenVIP message id so the worker can echo it
+        # back via /internal/tts/complete without needing extra fields.
         from dictare.core.engine import DictareEngine
 
         msg: dict[str, Any] = {
             "openvip": "1.0",
             "type": "speech",
-            "id": str(uuid4()),
+            "id": request_id,
             "timestamp": datetime.now(UTC).isoformat(),
             "text": text,
-            "request_id": request_id,
         }
         if voice:
             msg["voice"] = voice

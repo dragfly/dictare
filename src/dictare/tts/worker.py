@@ -167,9 +167,9 @@ def main(argv: list[str] | None = None) -> None:
             continue
 
         text = msg.text
-        request_id = msg.additional_properties.get("request_id", "")
-        voice = msg.additional_properties.get("voice")
-        language = msg.language  # SpeechRequest has language as a native field
+        request_id = str(msg.id)
+        voice = msg.voice
+        language = msg.language
         logger.info("Speaking: %r (request_id=%s, voice=%s, lang=%s)", text, request_id, voice, language)
 
         # Fast-path: cached audio → play on background thread (non-blocking)
