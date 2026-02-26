@@ -88,6 +88,14 @@ echo "==> brew reinstall dictare..."
 # Note: brew may exit 1 due to dylib linkage warnings (e.g. PyAV) — not fatal
 brew reinstall dictare 2>&1 || true
 
+# ---------- 6b. Restore formula to clean public state ----------
+# The formula was temporarily modified with local file:// paths for the dev
+# build. Restore it immediately after reinstall so the tap repo never has
+# local paths committed (prevents accidental leaks if someone pushes the tap).
+TAP_DIR="$(brew --repository)/Library/Taps/dragfly/homebrew-tap"
+git -C "$TAP_DIR" checkout -- Formula/dictare.rb
+echo "==> Formula restored to clean state"
+
 # ---------- 7. Verify ----------
 INSTALLED=$("${BREW_PREFIX}/bin/dictare" --version 2>&1)
 echo "==> Installed: ${INSTALLED}"
