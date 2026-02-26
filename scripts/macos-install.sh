@@ -26,10 +26,10 @@ stop_services() {
 
 start_services() {
     echo "==> Starting service..."
-    if "${BREW_PREFIX}/bin/dictare" service status 2>/dev/null | grep -q "installed"; then
-        "${BREW_PREFIX}/bin/dictare" service start 2>&1
-    else
+    if "${BREW_PREFIX}/bin/dictare" service status 2>/dev/null | grep -q "not installed"; then
         "${BREW_PREFIX}/bin/dictare" service install 2>&1
+    else
+        "${BREW_PREFIX}/bin/dictare" service start 2>&1
     fi
     echo "==> Done. Use 'dictare tray start' for the tray icon."
 }
