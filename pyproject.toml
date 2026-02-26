@@ -53,6 +53,8 @@ dependencies = [
     # OpenVIP client SDK
     "openvip>=1.0.0",
     "tomlkit>=0.14.0",
+    # OpenVIP message schema validation (compiled, ~5μs per call)
+    "fastjsonschema>=2.20",
 ]
 
 [project.optional-dependencies]
