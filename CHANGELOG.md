@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-02-26
+
+### Fixed
+- Hotkey capture in settings now works on macOS — clicking Capture and pressing
+  a key correctly updates the hotkey instead of reverting immediately
+
 ## [0.1.15] - 2026-02-26
 
 ### Fixed
