@@ -210,9 +210,10 @@ class KokoroTTS(TTSEngine):
         explicit_voice = voice if voice else None
 
         if explicit_voice:
-            # User explicitly chose a voice → infer language from prefix
+            # User explicitly chose a voice → infer language from prefix,
+            # but explicit -l override wins (e.g. -v if_sara -l fr)
             inferred = self._lang_from_voice(explicit_voice)
-            lang = inferred or language or self.language
+            lang = language or inferred or self.language
             v = explicit_voice
         else:
             # No explicit voice → language determines lang and default voice
