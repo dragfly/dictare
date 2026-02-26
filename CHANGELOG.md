@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-02-26
+
+### Changed
+- `openvip` dependency now resolved from PyPI (`>=1.0.0rc1`) — no more local tarball
+- Removed `[tool.uv.sources]` local path override for openvip
+- `macos-install.sh`: removed openvip build step and `--find-links` flag
+- Homebrew formula: removed `openvip_tarball` and `--find-links` (openvip on PyPI)
+
 ## [0.1.22] - 2026-02-26
 
 ### Fixed

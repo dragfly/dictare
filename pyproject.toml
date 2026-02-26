@@ -51,7 +51,7 @@ dependencies = [
     "uvicorn>=0.32.0",
     "sse-starlette>=2.0.0",
     # OpenVIP client SDK
-    "openvip>=1.0.0",
+    "openvip>=1.0.0rc1",
     "tomlkit>=0.14.0",
     # OpenVIP message schema validation (compiled, ~5μs per call)
     "fastjsonschema>=2.20",
@@ -90,9 +90,6 @@ dictare = "dictare.cli:main"
 Homepage = "https://github.com/dragfly/dictare"
 Repository = "https://github.com/dragfly/dictare"
 Issues = "https://github.com/dragfly/dictare/issues"
-
-[tool.uv.sources]
-openvip = { path = "../../openvip-dev/sdks/python", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dictare"]
