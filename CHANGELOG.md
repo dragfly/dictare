@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Alignment with OpenVIP v1.0 spec
 
+## [0.1.18] - 2026-02-26
+
+### Added
+- Current directory shown in status bar right side — `~/repos/proj · [opus] · dictare 0.1.18`;
+  home prefix replaced with `~`, long paths truncated from the left with `…`
+
 ## [0.1.17] - 2026-02-26
 
 ### Added
