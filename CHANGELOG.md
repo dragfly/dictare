@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-02-26
+
+### Fixed
+- App bundle icon: rename `Voxtype.icns` → `Dictare.icns` so TCC (Input Monitoring,
+  Privacy) shows the correct icon instead of a blank square
+- `service install` permission message: remove incorrect "Click + → select" instruction;
+  macOS shows the permission dialog automatically when the launcher runs
+- `macos-install.sh` service start: `grep "not installed"` instead of `"installed"` to
+  correctly detect uninstalled state (prevented auto-start after fresh install)
+
 ## [0.1.21] - 2026-02-26
 
 ### Added
