@@ -540,7 +540,7 @@ def run_agent(
         old_settings = termios.tcgetattr(sys.stdin.fileno())
 
     rows, cols = _get_winsize()
-    sbar = StatusBar(agent_id, agent_label=agent_label) if status_bar else None
+    sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd()) if status_bar else None
 
     def on_output(data: bytes) -> None:
         os.write(sys.stdout.fileno(), data)
