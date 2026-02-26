@@ -91,14 +91,18 @@ def test_kokoro_resolve_params_voice_sets_language():
     # Instance with empty voice — matches real worker startup (--voice "")
     tts = KokoroTTS(language="en", voice="")
 
-    # Italian voice → Italian phonetics, even if language default is "en"
-    lang, voice = tts._resolve_params(voice="if_sara", language="en")
+    # No explicit -l → voice prefix determines language
+    lang, voice = tts._resolve_params(voice="if_sara", language=None)
     assert lang == "it"
     assert voice == "if_sara"
 
-    # Same with language=None
-    lang, voice = tts._resolve_params(voice="if_sara", language=None)
-    assert lang == "it"
+    # Explicit -l overrides voice inference (-v if_sara -l fr → French phonetics)
+    lang, voice = tts._resolve_params(voice="if_sara", language="fr")
+    assert lang == "fr-fr"
+
+    # Explicit -l en → English phonetics (user knows what they want)
+    lang, voice = tts._resolve_params(voice="if_sara", language="en")
+    assert lang == "en-us"
 
     # English voice → English phonetics
     lang, voice = tts._resolve_params(voice="af_heart", language=None)
