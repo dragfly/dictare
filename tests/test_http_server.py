@@ -162,7 +162,12 @@ class TestSpeechEndpoint:
 
     def test_tts_request(self, client: TestClient, engine: MockEngine) -> None:
         """POST /speech calls engine TTS handler."""
-        body = {"openvip": "1.0", "type": "speech", "text": "Hello world"}
+        body = {
+            "openvip": "1.0", "type": "speech",
+            "id": "660e8400-e29b-41d4-a716-446655440001",
+            "timestamp": "2026-02-06T10:30:05Z",
+            "text": "Hello world",
+        }
         response = client.post("/speech", json=body)
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
@@ -175,7 +180,13 @@ class TestSpeechEndpoint:
     ) -> None:
         """POST /speech returns 500 on engine error."""
         engine.handle_speech = MagicMock(side_effect=RuntimeError("TTS failed"))
-        response = client.post("/speech", json={"text": "test"})
+        body = {
+            "openvip": "1.0", "type": "speech",
+            "id": "660e8400-e29b-41d4-a716-446655440001",
+            "timestamp": "2026-02-06T10:30:05Z",
+            "text": "test",
+        }
+        response = client.post("/speech", json=body)
         assert response.status_code == 500
 
 
@@ -202,9 +213,14 @@ class TestPostAgentMessage:
         with server._agent_queues_lock:
             server._agent_queues["test-agent"] = queue
 
+        body = {
+            "openvip": "1.0", "type": "transcription",
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "timestamp": "2026-02-06T10:30:00Z",
+            "text": "hello",
+        }
         response = client.post(
-            "/agents/test-agent/messages",
-            json={"type": "message", "text": "hello"},
+            "/agents/test-agent/messages", json=body,
         )
         assert response.status_code == 200
         assert response.json()["status"] == "ok"

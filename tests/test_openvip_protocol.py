@@ -629,13 +629,14 @@ class TestValidMessages:
 
 
 # =============================================================================
-# 9. Invalid Message Schemas (documentation)
+# 9. Invalid Message Validation — Server Must Reject with 422
 # =============================================================================
 #
-# The HTTP transport layer accepts any JSON body (no validation).
-# These test cases document what schema validators (SDK, engine) should reject.
+# The HTTP transport layer validates incoming messages against the OpenVIP
+# v1.0 JSON Schema and returns 422 for non-compliant payloads.
 
-INVALID_MESSAGES = [
+INVALID_MESSAGES_POST = [
+    # --- Missing required fields ---
     pytest.param(
         {"type": "transcription", "id": _uuid(), "timestamp": _timestamp(),
          "text": "hello"},
@@ -662,15 +663,111 @@ INVALID_MESSAGES = [
         id="missing_text",
     ),
     pytest.param(
+        {},
+        id="empty_object",
+    ),
+    pytest.param(
+        {"text": "just text"},
+        id="text_only_no_envelope",
+    ),
+
+    # --- Wrong protocol version ---
+    pytest.param(
         {"openvip": "2.0", "type": "transcription", "id": _uuid(),
          "timestamp": _timestamp(), "text": "hello"},
-        id="wrong_protocol_version",
+        id="wrong_version_2_0",
     ),
+    pytest.param(
+        {"openvip": "0.9", "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="wrong_version_0_9",
+    ),
+    pytest.param(
+        {"openvip": "", "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="empty_version_string",
+    ),
+    pytest.param(
+        {"openvip": "1.0.0", "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="semver_version_not_allowed",
+    ),
+
+    # --- Invalid type enum ---
     pytest.param(
         {"openvip": "1.0", "type": "message", "id": _uuid(),
          "timestamp": _timestamp(), "text": "hello"},
-        id="invalid_type_enum",
+        id="invalid_type_message",
     ),
+    pytest.param(
+        {"openvip": "1.0", "type": "command", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="invalid_type_command",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="empty_type_string",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "TRANSCRIPTION", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="type_wrong_case",
+    ),
+
+    # --- Wrong field types ---
+    pytest.param(
+        {"openvip": 1.0, "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="openvip_number_not_string",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": 42, "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="type_number_not_string",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "transcription", "id": 123,
+         "timestamp": _timestamp(), "text": "hello"},
+        id="id_number_not_string",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "transcription", "id": _uuid(),
+         "timestamp": 1234567890, "text": "hello"},
+        id="timestamp_number_not_string",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": 42},
+        id="text_number_not_string",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": True},
+        id="text_boolean_not_string",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": None},
+        id="text_null",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": ["hello", "world"]},
+        id="text_array_not_string",
+    ),
+    pytest.param(
+        {"openvip": None, "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="openvip_null",
+    ),
+    pytest.param(
+        {"openvip": True, "type": "transcription", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="openvip_boolean",
+    ),
+
+    # --- Tracing: dependentRequired violations ---
     pytest.param(
         {**_transcription(), "trace_id": _uuid()},
         id="trace_id_without_parent_id",
@@ -679,6 +776,8 @@ INVALID_MESSAGES = [
         {**_transcription(), "parent_id": _uuid()},
         id="parent_id_without_trace_id",
     ),
+
+    # --- Confidence out of range ---
     pytest.param(
         {**_transcription(), "confidence": 1.5},
         id="confidence_above_1",
@@ -688,6 +787,24 @@ INVALID_MESSAGES = [
         id="confidence_below_0",
     ),
     pytest.param(
+        {**_transcription(), "confidence": 100},
+        id="confidence_100",
+    ),
+    pytest.param(
+        {**_transcription(), "confidence": -1},
+        id="confidence_negative_1",
+    ),
+    pytest.param(
+        {**_transcription(), "confidence": "high"},
+        id="confidence_string_not_number",
+    ),
+    pytest.param(
+        {**_transcription(), "confidence": True},
+        id="confidence_boolean_not_number",
+    ),
+
+    # --- Extension fields must be objects ---
+    pytest.param(
         {**_transcription(), "x_bad": "not an object"},
         id="x_field_string_not_object",
     ),
@@ -696,29 +813,206 @@ INVALID_MESSAGES = [
         id="x_field_boolean_not_object",
     ),
     pytest.param(
+        {**_transcription(), "x_bad": 42},
+        id="x_field_number_not_object",
+    ),
+    pytest.param(
+        {**_transcription(), "x_bad": None},
+        id="x_field_null_not_object",
+    ),
+    pytest.param(
+        {**_transcription(), "x_bad": ["a", "b"]},
+        id="x_field_array_not_object",
+    ),
+    pytest.param(
+        {**_transcription(), "x_a": "string", "x_b": 42},
+        id="multiple_invalid_x_fields",
+    ),
+
+    # --- partial must be boolean ---
+    pytest.param(
         {**_transcription(), "partial": "true"},
         id="partial_string_not_boolean",
+    ),
+    pytest.param(
+        {**_transcription(), "partial": 1},
+        id="partial_int_not_boolean",
+    ),
+    pytest.param(
+        {**_transcription(), "partial": "yes"},
+        id="partial_string_yes",
+    ),
+
+    # --- origin must be string ---
+    pytest.param(
+        {**_transcription(), "origin": 42},
+        id="origin_number_not_string",
+    ),
+    pytest.param(
+        {**_transcription(), "origin": True},
+        id="origin_boolean_not_string",
+    ),
+
+    # --- language must be string ---
+    pytest.param(
+        {**_transcription(), "language": 42},
+        id="language_number_not_string",
+    ),
+    pytest.param(
+        {**_transcription(), "language": True},
+        id="language_boolean_not_string",
+    ),
+
+    # --- Multiple missing required fields at once ---
+    pytest.param(
+        {"openvip": "1.0"},
+        id="only_openvip_field",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "transcription"},
+        id="only_openvip_and_type",
+    ),
+    pytest.param(
+        {"text": "hello", "type": "transcription"},
+        id="missing_openvip_id_timestamp",
+    ),
+
+    # --- Not even an object ---
+    pytest.param(
+        "just a string",
+        id="string_not_object",
+    ),
+    pytest.param(
+        42,
+        id="number_not_object",
+    ),
+    pytest.param(
+        True,
+        id="boolean_not_object",
+    ),
+    pytest.param(
+        [_transcription()],
+        id="array_not_object",
     ),
 ]
 
 
-class TestInvalidMessageSchemas:
-    """OpenVIP: Invalid messages documented for schema validation.
+class TestInvalidMessageRejection:
+    """OpenVIP: Invalid messages must be rejected with 422.
 
-    The HTTP transport layer accepts any JSON body (no validation).
-    These test cases document what schema validators (SDK, engine)
-    should reject. They are kept here as protocol documentation
-    and can be used by schema validation test suites.
+    The server validates all incoming messages against the OpenVIP v1.0
+    JSON Schema. Non-compliant payloads are rejected before processing.
     """
 
-    @pytest.mark.parametrize("message", INVALID_MESSAGES)
-    def test_invalid_message_documented(self, message: dict) -> None:
-        """Each invalid message violates at least one schema constraint.
+    @pytest.mark.parametrize("message", INVALID_MESSAGES_POST)
+    def test_post_message_invalid_returns_422(
+        self, e2e_client, sse_connect, message,
+    ) -> None:
+        """Invalid message posted to /agents/{id}/messages returns 422."""
+        conn = sse_connect("validator")
+        r = e2e_client.post(
+            f"/agents/{conn.agent_id}/messages", json=message,
+        )
+        assert r.status_code == 422
+        assert "Not OpenVIP v1.0 compliant" in r.json()["detail"]
 
-        This test simply validates the test data is well-formed as dicts.
-        Actual schema validation is the SDK's responsibility.
-        """
-        assert isinstance(message, dict)
+
+INVALID_SPEECH_MESSAGES = [
+    pytest.param(
+        {"text": "hello"},
+        id="speech_missing_openvip",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "text": "hello"},
+        id="speech_missing_type_id_timestamp",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "speech", "id": _uuid(),
+         "timestamp": _timestamp()},
+        id="speech_missing_text",
+    ),
+    pytest.param(
+        {},
+        id="speech_empty_object",
+    ),
+    pytest.param(
+        {"openvip": "2.0", "type": "speech", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="speech_wrong_version",
+    ),
+    pytest.param(
+        {"openvip": "1.0", "type": "command", "id": _uuid(),
+         "timestamp": _timestamp(), "text": "hello"},
+        id="speech_invalid_type_enum",
+    ),
+    pytest.param(
+        "just text",
+        id="speech_string_not_object",
+    ),
+    pytest.param(
+        42,
+        id="speech_number_not_object",
+    ),
+    pytest.param(
+        {**_speech_request(), "x_bad": "string"},
+        id="speech_x_field_string_not_object",
+    ),
+    pytest.param(
+        {**_speech_request(), "confidence": 2.0},
+        id="speech_confidence_above_1",
+    ),
+    pytest.param(
+        {**_speech_request(), "partial": "true"},
+        id="speech_partial_string_not_boolean",
+    ),
+]
+
+
+class TestInvalidSpeechRejection:
+    """OpenVIP: Invalid speech requests must be rejected with 422."""
+
+    @pytest.mark.parametrize("message", INVALID_SPEECH_MESSAGES)
+    def test_post_speech_invalid_returns_422(
+        self, e2e_client, message,
+    ) -> None:
+        """Invalid speech message posted to /speech returns 422."""
+        r = e2e_client.post("/speech", json=message)
+        assert r.status_code == 422
+
+
+class TestValidationErrorMessages:
+    """OpenVIP: Validation error responses are informative."""
+
+    def test_missing_field_mentions_field_name(self, e2e_client, sse_connect) -> None:
+        """422 detail mentions which required field is missing."""
+        conn = sse_connect("validator")
+        msg = {"type": "transcription", "id": _uuid(),
+               "timestamp": _timestamp(), "text": "hello"}
+        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=msg)
+        assert r.status_code == 422
+        detail = r.json()["detail"]
+        assert "Not OpenVIP v1.0 compliant" in detail
+
+    def test_wrong_version_rejected(self, e2e_client, sse_connect) -> None:
+        """Wrong protocol version is rejected with clear error."""
+        conn = sse_connect("validator")
+        msg = _transcription(openvip="2.0")
+        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=msg)
+        assert r.status_code == 422
+
+    def test_valid_message_still_accepted(self, e2e_client, sse_connect) -> None:
+        """Valid messages pass validation and return 200."""
+        conn = sse_connect("validator")
+        r = e2e_client.post(
+            f"/agents/{conn.agent_id}/messages", json=_transcription(),
+        )
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+
+    def test_valid_speech_still_accepted(self, e2e_client) -> None:
+        """Valid speech messages pass validation and return 200."""
+        r = e2e_client.post("/speech", json=_speech_request())
+        assert r.status_code == 200
 
 
 # =============================================================================

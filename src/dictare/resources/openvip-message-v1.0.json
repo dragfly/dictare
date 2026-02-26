@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openvip.org/schema/v1.0.json",
+  "title": "OpenVIP Message",
+  "description": "Open Voice Interaction Protocol v1.0 message schema. Covers message payloads only (transcription, speech). Control, Response, Error, and Status payloads are defined in binding specifications (e.g., OpenAPI).",
+  "type": "object",
+
+  "required": ["openvip", "type", "id", "timestamp", "text"],
+
+  "properties": {
+    "openvip": {
+      "type": "string",
+      "description": "Protocol version",
+      "const": "1.0"
+    },
+    "type": {
+      "type": "string",
+      "description": "Message type",
+      "enum": ["transcription", "speech"]
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique message identifier (UUID v4)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp with timezone"
+    },
+    "text": {
+      "type": "string",
+      "description": "Transcribed or synthesized text content"
+    },
+
+    "origin": {
+      "type": "string",
+      "description": "Producer identifier (e.g., 'dictare/0.1.0')"
+    },
+    "language": {
+      "type": "string",
+      "description": "BCP 47 language tag",
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+      "examples": ["en", "en-US", "it"]
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Transcription confidence (0.0–1.0)",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "partial": {
+      "type": "boolean",
+      "description": "If true, this is an incomplete transcription in progress"
+    },
+    "trace_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the original message that started this chain. Present only on derived messages (2nd message onwards in a trace)."
+    },
+    "parent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the message this one was derived from. Present only on derived messages (2nd message onwards in a trace)."
+    }
+  },
+
+  "dependentRequired": {
+    "trace_id": ["parent_id"],
+    "parent_id": ["trace_id"]
+  },
+
+  "patternProperties": {
+    "^x_": {
+      "type": "object",
+      "description": "Extension field. Value must be a structured JSON object."
+    }
+  },
+
+  "additionalProperties": true
+}

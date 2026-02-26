@@ -232,6 +232,7 @@ dependencies = [
     { name = "evdev", marker = "sys_platform == 'linux'" },
     { name = "fastapi" },
     { name = "faster-whisper" },
+    { name = "fastjsonschema" },
     { name = "hidapi", marker = "sys_platform == 'darwin'" },
     { name = "numpy" },
     { name = "onnx-asr" },
@@ -283,6 +284,7 @@ requires-dist = [
     { name = "evdev", marker = "sys_platform == 'linux'", specifier = ">=1.7.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "faster-whisper", specifier = ">=1.0.0" },
+    { name = "fastjsonschema", specifier = ">=2.20" },
     { name = "hidapi", marker = "sys_platform == 'darwin'", specifier = ">=0.14.0" },
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
     { name = "mlx", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
@@ -365,6 +367,15 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/05/99/49ee85903dee060d9f08297b4a342e5e0bcfca2f027a07b4ee0a38ab13f9/faster_whisper-1.2.1-py3-none-any.whl", hash = "sha256:79a66ad50688c0b794dd501dc340a736992a6342f7f95e5811be60b5224a26a7", size = 1118909, upload-time = "2025-10-31T11:35:47.794Z" },
+]
+
+[[package]]
+name = "fastjsonschema"
+version = "2.21.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/b5/23b216d9d985a956623b6bd12d4086b60f0059b27799f23016af04a74ea1/fastjsonschema-2.21.2.tar.gz", hash = "sha256:b1eb43748041c880796cd077f1a07c3d94e93ae84bba5ed36800a33554ae05de", size = 374130, upload-time = "2025-08-14T18:49:36.666Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/a8/20d0723294217e47de6d9e2e40fd4a9d2f7c4b6ef974babd482a59743694/fastjsonschema-2.21.2-py3-none-any.whl", hash = "sha256:1c797122d0a86c5cace2e54bf4e819c36223b552017172f32c5c024a6b77e463", size = 24024, upload-time = "2025-08-14T18:49:34.776Z" },
 ]
 
 [[package]]
@@ -1044,7 +1055,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "pydantic", specifier = ">=2" },
+    { name = "pydantic", specifier = ">=2.11" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
     { name = "typing-extensions", specifier = ">=4.7.1" },
     { name = "urllib3", specifier = ">=2.1.0,<3.0.0" },

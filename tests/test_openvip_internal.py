@@ -124,7 +124,10 @@ class TestSpeechInternal:
     def test_speech_with_language(self, client, engine) -> None:
         """Speech request with language is accepted."""
         r = client.post("/speech", json={
-            "openvip": "1.0", "type": "speech", "text": "hello", "language": "en",
+            "openvip": "1.0", "type": "speech",
+            "id": "660e8400-e29b-41d4-a716-446655440001",
+            "timestamp": "2026-02-06T10:30:05Z",
+            "text": "hello", "language": "en",
         })
         assert r.status_code == 200
         assert engine._speech_calls[-1]["language"] == "en"
@@ -132,7 +135,10 @@ class TestSpeechInternal:
     def test_speech_text_forwarded(self, client, engine) -> None:
         """Speech text is forwarded to engine."""
         client.post("/speech", json={
-            "openvip": "1.0", "type": "speech", "text": "say this",
+            "openvip": "1.0", "type": "speech",
+            "id": "660e8400-e29b-41d4-a716-446655440001",
+            "timestamp": "2026-02-06T10:30:05Z",
+            "text": "say this",
         })
         assert engine._speech_calls[-1]["text"] == "say this"
 
@@ -140,7 +146,10 @@ class TestSpeechInternal:
         """Engine exception results in 500."""
         engine.handle_speech = MagicMock(side_effect=RuntimeError("TTS fail"))
         r = client.post("/speech", json={
-            "openvip": "1.0", "type": "speech", "text": "hello",
+            "openvip": "1.0", "type": "speech",
+            "id": "660e8400-e29b-41d4-a716-446655440001",
+            "timestamp": "2026-02-06T10:30:05Z",
+            "text": "hello",
         })
         assert r.status_code == 500
 
