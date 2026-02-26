@@ -68,6 +68,8 @@ def _speech_request(**overrides) -> dict:
     msg = {
         "openvip": "1.0",
         "type": "speech",
+        "id": "660e8400-e29b-41d4-a716-446655440001",
+        "timestamp": "2026-02-06T10:30:05Z",
         "text": "hello world",
     }
     msg.update(overrides)
@@ -203,17 +205,26 @@ class TestGetStatus:
         r = e2e_client.get("/status")
         assert "application/json" in r.headers["content-type"]
 
-    def test_has_protocol_version(self, e2e_client) -> None:
-        """Response includes protocol_version field."""
+    def test_has_openvip_version(self, e2e_client) -> None:
+        """Response includes openvip protocol version field."""
         data = e2e_client.get("/status").json()
-        assert "protocol_version" in data
-        assert data["protocol_version"] == "1.0"
+        assert "openvip" in data
+        assert data["openvip"] == "1.0"
 
-    def test_has_state(self, e2e_client) -> None:
-        """Response includes state field."""
+    def test_has_stt(self, e2e_client) -> None:
+        """Response includes stt object with enabled and active."""
         data = e2e_client.get("/status").json()
-        assert "state" in data
-        assert isinstance(data["state"], str)
+        assert "stt" in data
+        assert isinstance(data["stt"], dict)
+        assert isinstance(data["stt"]["enabled"], bool)
+        assert isinstance(data["stt"]["active"], bool)
+
+    def test_has_tts(self, e2e_client) -> None:
+        """Response includes tts object with enabled."""
+        data = e2e_client.get("/status").json()
+        assert "tts" in data
+        assert isinstance(data["tts"], dict)
+        assert isinstance(data["tts"]["enabled"], bool)
 
     def test_has_connected_agents(self, e2e_client) -> None:
         """Response includes connected_agents as a list."""
@@ -363,13 +374,17 @@ class TestSSEAgentRegistration:
 class TestStatusSchema:
     """OpenVIP: Status object schema compliance."""
 
-    def test_protocol_version_is_string(self, e2e_client) -> None:
+    def test_openvip_is_string(self, e2e_client) -> None:
         data = e2e_client.get("/status").json()
-        assert isinstance(data["protocol_version"], str)
+        assert isinstance(data["openvip"], str)
 
-    def test_state_is_string(self, e2e_client) -> None:
+    def test_stt_is_object(self, e2e_client) -> None:
         data = e2e_client.get("/status").json()
-        assert isinstance(data["state"], str)
+        assert isinstance(data["stt"], dict)
+
+    def test_tts_is_object(self, e2e_client) -> None:
+        data = e2e_client.get("/status").json()
+        assert isinstance(data["tts"], dict)
 
     def test_connected_agents_is_list_of_strings(self, e2e_client) -> None:
         data = e2e_client.get("/status").json()

@@ -66,11 +66,12 @@ class ComplianceMockEngine:
         return True
 
     def get_status(self) -> dict:
+        stt_active = self._state in ("listening", "recording", "transcribing")
         return {
-            "protocol_version": "1.0",
-            "state": self._state,
+            "openvip": "1.0",
+            "stt": {"enabled": True, "active": stt_active},
+            "tts": {"enabled": True},
             "connected_agents": [],
-            "uptime_seconds": 42,
             "platform": {
                 "name": "ComplianceTest",
                 "version": "0.0.0",
