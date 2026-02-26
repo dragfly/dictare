@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-02-26
+
+### Fixed
+- `dictare speak` (and `llm "..." | dictare speak`) now works correctly — the
+  openvip SDK `create_speech_request()` was not generating `id` and `timestamp`
+  fields, causing HTTP 422 "Not OpenVIP v1.0 compliant" errors. Fixed by
+  regenerating the SDK from the spec (`SpeechRequest` inherits from `Message`
+  which requires both fields) and updating `create_speech_request()` to
+  auto-fill them. Requires openvip>=1.0.0rc3.
+
 ## [0.1.24] - 2026-02-26
 
 ### Fixed
