@@ -74,14 +74,10 @@ else
     SED_INPLACE=(sed -i)
 fi
 "${SED_INPLACE[@]}" \
-    -e "s|url \"file:///.*\"|url \"file://${TARBALL}\"|" \
+    -e "s|url \".*\"|url \"file://${TARBALL}\"|" \
     -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" \
+    -e "s|openvip_tarball = \".*\"|openvip_tarball = \"${OPENVIP_TARBALL}\"|" \
     -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
-    "$FORMULA"
-
-# Also update openvip tarball path in formula (may differ per machine)
-"${SED_INPLACE[@]}" \
-    -e "s|\"/.*/openvip-.*\.tar\.gz\"|\"${OPENVIP_TARBALL}\"|" \
     "$FORMULA"
 
 # ---------- 6. Stop running services ----------
