@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-02-26
+
+### Fixed
+- `dictare speak -t N`: on timeout, audio is now stopped automatically and the
+  error message reads "Timed out after Ns — audio stopped." instead of the
+  misleading "Engine not running." A timeout means the engine is running but
+  playback exceeded the limit; a refused connection means the engine is down.
+
 ## [0.1.31] - 2026-02-26
 
 ### Added
