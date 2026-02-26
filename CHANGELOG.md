@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-02-26
+
+### Fixed
+- Tray icon stays red ("Status: Disconnected") on fresh install even after engine starts:
+  the SSE `on_disconnect` callback now only switches the tray to red if it has previously
+  had a successful connection (`_connected_once` flag). On first startup, connection
+  failures are silent retries — the tray only updates once the engine is reachable.
+
 ## [0.1.23] - 2026-02-26
 
 ### Changed
