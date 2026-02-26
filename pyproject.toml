@@ -55,6 +55,9 @@ dependencies = [
     "tomlkit>=0.14.0",
     # OpenVIP message schema validation (compiled, ~5μs per call)
     "fastjsonschema>=2.20",
+    # TTS: piper (cross-platform, ~24 MB)
+    "piper-tts>=1.2.0",
+    "pathvalidate>=3.0.0",  # Missing piper-tts dependency
 ]
 
 [project.optional-dependencies]
@@ -78,10 +81,6 @@ mlx = [
     "scipy>=1.10.0",
     "numba>=0.60",
     "soundfile>=0.12.0",  # Required for TTS audio output
-]
-tts = [
-    "piper-tts>=1.2.0",
-    "pathvalidate>=3.0.0",  # Missing piper-tts dependency
 ]
 
 [project.scripts]
