@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-02-26
+
+### Fixed
+- `POST /speech` response now includes `openvip: "1.0"` field, satisfying
+  the `SpeechResponse` model validation in the openvip SDK client.
+
 ## [0.1.26] - 2026-02-26
 
 ### Fixed
