@@ -48,7 +48,20 @@ TARBALL="${DIST_DIR}/dictare-${VERSION}.tar.gz"
 echo "==> Version: ${VERSION}"
 echo "==> Brew prefix: ${BREW_PREFIX}"
 
-# ---------- 3. Build sdist ----------
+# ---------- 3. Build openvip tarball if missing ----------
+if [[ ! -f "$OPENVIP_TARBALL" ]]; then
+    echo "==> Building openvip tarball..."
+    cd "$OPENVIP_DIR"
+    uv build --sdist --quiet
+    cd "$PROJECT_DIR"
+fi
+if [[ ! -f "$OPENVIP_TARBALL" ]]; then
+    echo "ERROR: openvip tarball not found: $OPENVIP_TARBALL" >&2
+    exit 1
+fi
+echo "==> openvip: ${OPENVIP_TARBALL}"
+
+# ---------- 4. Build sdist ----------
 echo "==> Building sdist..."
 cd "$PROJECT_DIR"
 uv build --sdist --quiet
