@@ -419,11 +419,12 @@ def _write_to_pty(
 
         try:
             if msg_type == "error":
-                # Fatal error from SSE thread — log and continue
+                # Fatal error from SSE thread — stop the session
                 # (status bar already updated by SSE thread)
                 if session_path:
                     _log_event(session_path, "agent_error", {"error": data})
-                continue
+                stop_event.set()
+                break
             elif msg_type == "raw":
                 # Raw bytes from stdin - write directly, handle short writes
                 _write_all(master_fd, data)
