@@ -218,9 +218,9 @@ fi
 # Sync dependencies — use --frozen to avoid modifying uv.lock on Linux
 if [[ "$INSTALL_GPU" == true ]]; then
     info "Installing with GPU (CUDA) support..."
-    uv sync --frozen --extra gpu --extra tts
+    uv sync --frozen --extra gpu
 else
-    uv sync --frozen --extra tts
+    uv sync --frozen
 fi
 
 # ─── 6. Install PyGObject for tray icon ────────────────────────────────
