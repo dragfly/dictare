@@ -381,7 +381,7 @@ class TTSManager:
         if not ok:
             return {"status": "error", "error": "TTS engine failed to speak"}
 
-        return {"status": "ok", "duration_ms": duration_ms}
+        return {"openvip": "1.0", "status": "ok", "duration_ms": duration_ms}
 
     def list_voices(self) -> list[str]:
         """Return available voices for the configured TTS engine."""
