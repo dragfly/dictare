@@ -215,12 +215,12 @@ if systemctl --user is-active dictare.service &>/dev/null; then
 fi
 "$VENV_DIR/bin/python" -m dictare tray stop 2>/dev/null || true
 
-# Sync dependencies
+# Sync dependencies — use --frozen to avoid modifying uv.lock on Linux
 if [[ "$INSTALL_GPU" == true ]]; then
     info "Installing with GPU (CUDA) support..."
-    uv sync --extra gpu --extra tts
+    uv sync --frozen --extra gpu --extra tts
 else
-    uv sync --extra tts
+    uv sync --frozen --extra tts
 fi
 
 # ─── 6. Install PyGObject for tray icon ────────────────────────────────
