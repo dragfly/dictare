@@ -11,9 +11,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="${PROJECT_DIR}/dist"
 
-# openvip tarball: relative to project dir (../../openvip-dev/sdks/python)
+# openvip tarball: auto-detect version from SDK's pyproject.toml
 OPENVIP_DIR="$(cd "${PROJECT_DIR}/../../openvip-dev/sdks/python" && pwd)"
-OPENVIP_TARBALL="${OPENVIP_DIR}/dist/openvip-1.1.0.tar.gz"
+OPENVIP_VERSION=$(grep '^version' "${OPENVIP_DIR}/pyproject.toml" | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+OPENVIP_TARBALL="${OPENVIP_DIR}/dist/openvip-${OPENVIP_VERSION}.tar.gz"
 
 # ---------- Helpers ----------
 
