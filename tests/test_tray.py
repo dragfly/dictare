@@ -170,6 +170,61 @@ class TestTrayStates:
         app.set_state("off")
         assert app._restarting is False
 
+    def test_startup_connection_failures_dont_go_red(self) -> None:
+        """On fresh start, SSE connection failures should NOT flip to disconnected.
+
+        The tray starts in 'disconnected' state. Before the first successful
+        SSE connection (_connected_once=False), on_disconnect must not call
+        set_state('disconnected') — it would be redundant and trigger menu
+        re-renders on every retry attempt.
+        """
+        from unittest.mock import MagicMock
+
+        app = TrayApp()
+        states_seen: list[str] = []
+
+        original_set_state = app.set_state
+
+        def recording_set_state(state: str, **kwargs: object) -> None:
+            states_seen.append(state)
+            original_set_state(state, **kwargs)
+
+        app.set_state = recording_set_state  # type: ignore[method-assign]
+
+        # Mock Client.subscribe_status: raise ConnectionRefusedError twice, then stop
+        call_count = 0
+
+        def fake_subscribe_status(**kwargs):  # type: ignore[return]
+            nonlocal call_count
+            on_disconnect = kwargs.get("on_disconnect")
+            stop = kwargs.get("stop")
+            for _ in range(2):
+                if stop and stop():
+                    return
+                if on_disconnect:
+                    on_disconnect(ConnectionRefusedError("refused"))
+                import time
+                time.sleep(0.01)
+            # Stop polling after 2 failures
+            app.stop_status_polling()
+            return iter([])
+
+        mock_client = MagicMock()
+        mock_client.subscribe_status.side_effect = fake_subscribe_status
+
+        with patch("openvip.Client", return_value=mock_client):
+            app.start_status_streaming(host="127.0.0.1", port=8770)
+            # Wait for stream thread to finish
+            if app._poll_thread:
+                app._poll_thread.join(timeout=2.0)
+
+        # Initial set_state calls (from TrayApp init setup) are ok,
+        # but NO 'disconnected' call should come from on_disconnect
+        # since _connected_once was never True.
+        assert "disconnected" not in states_seen, (
+            f"set_state('disconnected') was called during startup failures: {states_seen}"
+        )
+
 class TestSetTargets:
     """Tests for TrayApp.set_targets — agent list management."""
 
