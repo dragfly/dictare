@@ -138,11 +138,13 @@
 
 		if (format === "evdev") {
 			const evdev = codeToEvdev(e.code);
+			console.log("[hotkey-capture] browser captured:", e.code, "→", evdev);
 			onchange(evdev);
 			stopCapture();
 		} else {
 			const shortcut = eventToShortcut(e);
 			if (!shortcut) return; // pure modifier press, keep waiting
+			console.log("[hotkey-capture] browser captured shortcut:", shortcut);
 			onchange(shortcut);
 			stopCapture();
 		}
@@ -152,25 +154,37 @@
 		abortController?.abort();
 		abortController = null;
 		capturing = false;
+		console.log("[hotkey-capture] stopped");
 	}
 
 	async function startCapture() {
 		if (capturing) { stopCapture(); return; }
 		capturing = true;
+		console.log("[hotkey-capture] started, format:", format);
 
 		if (format === "evdev") {
-			// Try engine-side capture (works on Linux, macOS with bindings).
-			// Browser keydown is armed simultaneously as fallback — if the
-			// engine has no listener (macOS daemon mode), browser captures.
+			// Try engine-side capture first (works on Linux with evdev listener).
+			// Browser keydown is armed simultaneously — if the engine has no
+			// listener (macOS daemon mode), it returns null immediately and we
+			// stay in capturing mode so the browser keydown can complete it.
 			// Whichever fires first wins; stopCapture() aborts the other.
 			abortController = new AbortController();
 			try {
+				console.log("[hotkey-capture] asking engine...");
 				const key = await captureHotkey(abortController.signal);
-				if (key && key !== "KEY_ESC" && capturing) onchange(key);
+				console.log("[hotkey-capture] engine responded:", key);
+				if (key && key !== "KEY_ESC" && capturing) {
+					console.log("[hotkey-capture] engine captured:", key);
+					onchange(key);
+					stopCapture();
+				}
+				// key === null: engine has no listener (macOS) — stay in
+				// capturing mode so browser keydown can complete the capture
 			} catch {
-				// Aborted (browser keydown fired first) or fetch failed
+				// Aborted = browser keydown won the race (already called stopCapture)
+				console.log("[hotkey-capture] engine fetch aborted or failed");
 			} finally {
-				capturing = false;
+				// Do NOT set capturing=false here — handleKeyDown or Cancel does it
 				abortController = null;
 			}
 		}
