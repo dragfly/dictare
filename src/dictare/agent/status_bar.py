@@ -12,8 +12,25 @@ from __future__ import annotations
 import sys
 import threading
 import time
+from pathlib import Path
 
 from dictare import __version__
+
+def _format_cwd(path: Path, max_chars: int = 25) -> str:
+    """Format a directory path for the status bar.
+
+    Replaces the home directory prefix with ``~``.  If the result is still
+    longer than *max_chars*, truncates from the left with an ellipsis so
+    the trailing portion of the path (the most relevant part) is visible.
+    """
+    try:
+        rel = path.relative_to(Path.home())
+        s = "~/" + str(rel)
+    except ValueError:
+        s = str(path)
+    if len(s) <= max_chars:
+        return s
+    return "\u2026" + s[-(max_chars - 1):]
 
 _STATUS_STYLES = {
     "ok": "\x1b[48;5;236m\x1b[38;5;114m",        # soft green on dark gray
@@ -30,10 +47,16 @@ class StatusBar:
     owns stdout writes.
     """
 
-    def __init__(self, agent_id: str, agent_label: str | None = None) -> None:
+    def __init__(
+        self,
+        agent_id: str,
+        agent_label: str | None = None,
+        cwd: Path | None = None,
+    ) -> None:
         self._text = f"\u25cb {agent_id} \u00b7 connecting..."
         self._style = "warn"
         self._agent_label = agent_label
+        self._cwd_label = _format_cwd(cwd) if cwd is not None else None
         self._lock = threading.Lock()
         self._rows = 0             # cached terminal size
         self._cols = 0
@@ -159,11 +182,13 @@ class StatusBar:
 
     def _draw(self, rows: int, cols: int, text: str, style: str) -> None:
         """Render the status bar on the last row."""
-        right = (
-            f"[{self._agent_label}] \u00b7 dictare {__version__}"
-            if self._agent_label
-            else f"dictare {__version__}"
-        )
+        parts: list[str] = []
+        if self._cwd_label:
+            parts.append(self._cwd_label)
+        if self._agent_label:
+            parts.append(f"[{self._agent_label}]")
+        parts.append(f"dictare {__version__}")
+        right = " \u00b7 ".join(parts)
         gap = cols - len(text) - len(right)
         if gap >= 2:
             display = text + " " * gap + right
