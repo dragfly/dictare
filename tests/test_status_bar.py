@@ -10,7 +10,6 @@ from unittest.mock import patch
 from dictare import __version__
 from dictare.agent.status_bar import StatusBar, _format_cwd
 
-
 # ---------------------------------------------------------------------------
 # _format_cwd
 # ---------------------------------------------------------------------------
