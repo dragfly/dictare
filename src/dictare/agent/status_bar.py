@@ -30,9 +30,10 @@ class StatusBar:
     owns stdout writes.
     """
 
-    def __init__(self, agent_id: str) -> None:
+    def __init__(self, agent_id: str, agent_label: str | None = None) -> None:
         self._text = f"\u25cb {agent_id} \u00b7 connecting..."
         self._style = "warn"
+        self._agent_label = agent_label
         self._lock = threading.Lock()
         self._rows = 0             # cached terminal size
         self._cols = 0
@@ -156,10 +157,13 @@ class StatusBar:
         sys.stdout.buffer.write(f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode())
         sys.stdout.buffer.flush()
 
-    @staticmethod
-    def _draw(rows: int, cols: int, text: str, style: str) -> None:
+    def _draw(self, rows: int, cols: int, text: str, style: str) -> None:
         """Render the status bar on the last row."""
-        right = f"dictare {__version__}"
+        right = (
+            f"[{self._agent_label}] \u00b7 dictare {__version__}"
+            if self._agent_label
+            else f"dictare {__version__}"
+        )
         gap = cols - len(text) - len(right)
         if gap >= 2:
             display = text + " " * gap + right
