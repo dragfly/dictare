@@ -198,10 +198,19 @@ def register(app: typer.Typer) -> None:
         if show_status_bar is None:
             show_status_bar = config.client.status_bar
 
+        # Status bar right-side label: type name or first 30 chars of command
+        agent_label: str | None = None
+        if command_override:
+            cmd_str = " ".join(command_override)
+            agent_label = cmd_str[:30] + ("\u2026" if len(cmd_str) > 30 else "")
+        elif type_key:
+            agent_label = type_key
+
         exit_code = run_agent(
             agent_id, command, quiet=quiet, verbose=verbose,
             base_url=server, status_bar=show_status_bar,
             clear_on_start=config.client.clear_on_start,
             claim_key=config.client.claim_key,
+            agent_label=agent_label,
         )
         raise typer.Exit(exit_code)
