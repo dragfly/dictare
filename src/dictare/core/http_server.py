@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
 from dictare import __version__
+from dictare.core.openvip_validator import OpenVIPValidationError, validate_message
 
 if TYPE_CHECKING:
     from dictare.app.controller import AppController
@@ -187,14 +188,34 @@ class OpenVIPServer:
                     status_code=404,
                     detail=f"Agent '{agent_id}' not connected",
                 )
-            body = await request.json()
+            try:
+                body = await request.json()
+            except Exception:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Not OpenVIP v1.0 compliant: invalid JSON body",
+                )
+            try:
+                validate_message(body)
+            except OpenVIPValidationError as exc:
+                raise HTTPException(status_code=422, detail=str(exc))
             queue.put_nowait(body)
             return {"status": "ok"}
 
         @app.post("/speech")
         async def speech_request(request: Request):
             """Handle speech (TTS) request."""
-            body = await request.json()
+            try:
+                body = await request.json()
+            except Exception:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Not OpenVIP v1.0 compliant: invalid JSON body",
+                )
+            try:
+                validate_message(body)
+            except OpenVIPValidationError as exc:
+                raise HTTPException(status_code=422, detail=str(exc))
             try:
                 result = await asyncio.to_thread(
                     self._engine.handle_speech, body
