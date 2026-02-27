@@ -35,7 +35,7 @@ class WorkerTTSEngine(TTSEngine):
 
     def __init__(self, server: OpenVIPServer) -> None:
         self._server = server
-        # request_id -> (done_event, result_dict)
+        # message_id -> (done_event, result_dict)
         self._pending: dict[str, tuple[threading.Event, dict[str, Any]]] = {}
         self._lock = threading.Lock()
 
@@ -51,22 +51,22 @@ class WorkerTTSEngine(TTSEngine):
         language: str | None = None,
     ) -> bool:
         """Send *text* to the worker and wait for completion."""
-        request_id = str(uuid4())
+        message_id = str(uuid4())
         done = threading.Event()
         result: dict[str, Any] = {"ok": False}
 
         with self._lock:
-            self._pending[request_id] = (done, result)
+            self._pending[message_id] = (done, result)
 
         # Deliver to the __tts__ worker via SSE.
-        # Use request_id as the OpenVIP message id so the worker can echo it
-        # back via /internal/tts/complete without needing extra fields.
+        # The OpenVIP message id is used as the tracking key — the worker
+        # echoes it back via /internal/tts/complete.
         from dictare.core.engine import DictareEngine
 
         msg: dict[str, Any] = {
             "openvip": "1.0",
             "type": "speech",
-            "id": request_id,
+            "id": message_id,
             "timestamp": datetime.now(UTC).isoformat(),
             "text": text,
         }
@@ -82,13 +82,13 @@ class WorkerTTSEngine(TTSEngine):
         if not delivered:
             logger.warning("TTS worker not connected — speak(%r) dropped", text)
             with self._lock:
-                self._pending.pop(request_id, None)
+                self._pending.pop(message_id, None)
             return False
 
         done.wait(timeout=_SPEAK_TIMEOUT)
 
         with self._lock:
-            self._pending.pop(request_id, None)
+            self._pending.pop(message_id, None)
 
         if not done.is_set():
             logger.warning("TTS worker timed out for speak(%r)", text)
@@ -107,13 +107,13 @@ class WorkerTTSEngine(TTSEngine):
     # ------------------------------------------------------------------
 
     def complete(
-        self, request_id: str, *, ok: bool, duration_ms: int = 0
+        self, message_id: str, *, ok: bool, duration_ms: int = 0
     ) -> None:
-        """Signal that the worker finished processing *request_id*."""
+        """Signal that the worker finished processing a message."""
         with self._lock:
-            entry = self._pending.get(request_id)
+            entry = self._pending.get(message_id)
         if entry is None:
-            logger.debug("complete(%s): no pending request (timed out?)", request_id)
+            logger.debug("complete(%s): no pending message (timed out?)", message_id)
             return
         done, result = entry
         result["ok"] = ok

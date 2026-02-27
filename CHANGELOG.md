@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-02-27
+
+### Changed
+- `request_id` → `message_id` throughout TTS flow (proxy, worker, manager, server,
+  tests) to align with OpenVIP spec `id` field naming.
+- Removed auto-restart on model selection — `POST /capabilities/{cap_id}/select`
+  now returns `restart_required: true` and lets the user decide when to restart.
+- Replaced nested `getattr` chain for TTS completion with public `complete_tts()`
+  methods on Engine → TTSManager → WorkerTTSEngine.
+- Event queue in `StateController` is now unlimited (was `maxsize=100`) — events
+  are small and consumed fast; dropping them silently was a worse failure mode.
+
 ## [0.1.34] - 2026-02-27
 
 ### Added

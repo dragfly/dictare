@@ -45,11 +45,11 @@ if hasattr(signal, "SIGUSR2"):
 TTS_AGENT_ID = "__tts__"
 
 def _post_completion(
-    url: str, token: str, request_id: str, ok: bool, duration_ms: int = 0
+    url: str, token: str, message_id: str, ok: bool, duration_ms: int = 0
 ) -> None:
     """Notify the engine that a speak() call finished."""
     body = json.dumps({
-        "request_id": request_id,
+        "message_id": message_id,
         "ok": ok,
         "duration_ms": duration_ms,
     }).encode()
@@ -65,7 +65,7 @@ def _post_completion(
         with urllib.request.urlopen(req, timeout=10) as resp:
             resp.read()
     except Exception:
-        logger.warning("Failed to post TTS completion for %s", request_id, exc_info=True)
+        logger.warning("Failed to post TTS completion for %s", message_id, exc_info=True)
 
 def main(argv: list[str] | None = None) -> None:
     """Entry point for the TTS worker subprocess."""
@@ -157,7 +157,7 @@ def main(argv: list[str] | None = None) -> None:
     from dictare.tts.base import play_audio_native
 
     def _play_cached_thread(
-        path: str, request_id: str, url: str, token: str,
+        path: str, message_id: str, url: str, token: str,
     ) -> None:
         """Play cached WAV on a background thread and post completion."""
         start_t = time.time()
@@ -168,8 +168,8 @@ def main(argv: list[str] | None = None) -> None:
             logger.warning("Cached play failed: %s", path, exc_info=True)
             ok = False
         dur = int((time.time() - start_t) * 1000)
-        if request_id:
-            _post_completion(url, token, request_id, ok, dur)
+        if message_id:
+            _post_completion(url, token, message_id, ok, dur)
 
     for msg in client.subscribe(
         TTS_AGENT_ID,
@@ -182,10 +182,10 @@ def main(argv: list[str] | None = None) -> None:
             continue
 
         text = msg.text
-        request_id = str(msg.id)
+        message_id = str(msg.id)
         voice = msg.voice
         language = msg.language
-        logger.info("Speaking: %r (request_id=%s, voice=%s, lang=%s)", text, request_id, voice, language)
+        logger.info("Speaking: %r (id=%s, voice=%s, lang=%s)", text, message_id, voice, language)
 
         # Fast-path: cached audio → play on background thread (non-blocking)
         cached_path = tts_engine.check_cache(text, voice=voice, language=language)
@@ -193,7 +193,7 @@ def main(argv: list[str] | None = None) -> None:
             logger.info("Cache hit — parallel play: %s", cached_path.name[:12])
             threading.Thread(
                 target=_play_cached_thread,
-                args=(str(cached_path), request_id, args.url, args.token),
+                args=(str(cached_path), message_id, args.url, args.token),
                 daemon=True,
             ).start()
             continue
@@ -214,8 +214,8 @@ def main(argv: list[str] | None = None) -> None:
             ok = False
         _stop_requested = False
 
-        if request_id:
-            _post_completion(args.url, args.token, request_id, ok, duration_ms)
+        if message_id:
+            _post_completion(args.url, args.token, message_id, ok, duration_ms)
 
 if __name__ == "__main__":
     try:
