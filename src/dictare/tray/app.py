@@ -507,8 +507,8 @@ class TrayApp:
 
             icon_name = {
                 "disconnected": "dictare_muted",
-                "restarting": "dictare",
-                "loading": "dictare",
+                "restarting": "dictare_loading",
+                "loading": "dictare_loading",
                 "off": "dictare",
                 "listening": "dictare_active",
             }.get(self._state, "dictare_muted")
