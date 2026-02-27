@@ -19,11 +19,10 @@ from __future__ import annotations
 
 import json
 
-from openvip.models import Transcription, SpeechRequest
+from openvip.models import Transcription
 
 from dictare.pipeline.base import PipelineAction
 from dictare.pipeline.executors.input import InputExecutor
-
 
 # -- Helpers ------------------------------------------------------------------
 
