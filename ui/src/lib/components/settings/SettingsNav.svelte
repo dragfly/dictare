@@ -2,7 +2,8 @@
 	import { untrack } from "svelte";
 	import type { TabDef } from "$lib/types";
 	import { Separator } from "$lib/components/ui/separator";
-	import { ChevronRight } from "lucide-svelte";
+	import { ChevronRight, Sun, Moon, Monitor } from "lucide-svelte";
+	import { getTheme, setTheme, type Theme } from "$lib/stores/theme.svelte";
 
 	interface Props {
 		tabs: TabDef[];
@@ -66,7 +67,7 @@
 				<line x1="38" y1="82" x2="62" y2="82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
 			</g>
 		</svg>
-		<span class="text-sm font-semibold tracking-tight">Dictare</span>
+		<span class="text-sm font-semibold tracking-tight">DICTA<span style="color: #6d5ce6">re</span></span>
 		{#if version}
 			<span class="text-[11px] text-muted-foreground ml-1.5">{version}</span>
 		{/if}
@@ -122,5 +123,21 @@
 				</button>
 			{/if}
 		{/each}
+	</div>
+	<div class="mt-auto pt-3 border-t border-border/60">
+		<div class="flex items-center justify-center gap-1 p-1 rounded-lg bg-muted/50">
+			{#each [{ t: "light" as Theme, Icon: Sun }, { t: "system" as Theme, Icon: Monitor }, { t: "dark" as Theme, Icon: Moon }] as { t, Icon }}
+				<button
+					onclick={() => setTheme(t)}
+					class="flex-1 flex items-center justify-center py-1.5 rounded-md transition-colors
+						{getTheme() === t
+							? 'bg-background text-foreground shadow-sm'
+							: 'text-muted-foreground hover:text-foreground'}"
+					title={t.charAt(0).toUpperCase() + t.slice(1)}
+				>
+					<Icon class="size-3.5" />
+				</button>
+			{/each}
+		</div>
 	</div>
 </nav>
