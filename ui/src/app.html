@@ -1,9 +1,18 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Dictare Settings</title>
+		<script>
+			(function () {
+				const t = localStorage.getItem("dictare-theme") || "system";
+				const dark =
+					t === "dark" ||
+					(t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+				if (dark) document.documentElement.classList.add("dark");
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
