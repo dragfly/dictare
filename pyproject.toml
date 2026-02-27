@@ -51,7 +51,7 @@ dependencies = [
     "uvicorn>=0.32.0",
     "sse-starlette>=2.0.0",
     # OpenVIP client SDK
-    "openvip>=1.0.0rc4",
+    "openvip>=1.0.0rc7",
     "tomlkit>=0.14.0",
     # OpenVIP message schema validation (compiled, ~5μs per call)
     "fastjsonschema>=2.20",
@@ -124,3 +124,4 @@ markers = [
     "slow: integration tests (app bundle, http server, race conditions) — run with: pytest -m slow",
     "internal: tests that depend on mock internals — skipped with --openvip-url",
 ]
+
