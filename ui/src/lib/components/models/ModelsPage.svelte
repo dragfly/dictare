@@ -16,19 +16,15 @@
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 
-	// Live progress from SSE: cap_id -> snapshot
 	type ProgressSnapshot = {
 		status: string;
 		fraction: number;
 		message?: string;
 	};
 	let progress = $state<Record<string, ProgressSnapshot>>({});
-
-	// Per-capability install button state
 	let installing = $state<Record<string, boolean>>({});
 	let installErrors = $state<Record<string, string>>({});
 
-	// Selection state: pending selection (before save)
 	let pendingSelection = $state<{ type: "stt" | "tts"; id: string } | null>(null);
 	let saving = $state(false);
 
@@ -51,7 +47,6 @@
 		es.onmessage = (evt) => {
 			const ev = JSON.parse(evt.data) as { model_id: string } & ProgressSnapshot;
 			const { model_id, ...snap } = ev;
-
 			if (snap.status === "done" || snap.status === "error") {
 				const { [model_id]: _removed, ...rest } = progress;
 				progress = rest;
@@ -97,8 +92,9 @@
 		}
 	}
 
-	function handleRadioSelect(cap: CapabilityInfo) {
-		if (!cap.ready || cap.configured) return;
+	function handleRowClick(cap: CapabilityInfo) {
+		const isInstalling = !!progress[cap.id] || cap.downloading;
+		if (!cap.ready || isInstalling || saving || cap.configured) return;
 		pendingSelection = { type: cap.type, id: cap.id };
 	}
 
@@ -112,7 +108,6 @@
 		try {
 			await selectCapability(pendingSelection.id);
 			pendingSelection = null;
-			// Signal that engine needs restart (footer bar will show prompt)
 			settingsStore.setNeedsRestart();
 			await load();
 		} catch (e) {
@@ -122,7 +117,6 @@
 		}
 	}
 
-	/** Is this capability effectively selected (configured or pending)? */
 	function isSelected(cap: CapabilityInfo): boolean {
 		if (pendingSelection && pendingSelection.type === cap.type) {
 			return pendingSelection.id === cap.id;
@@ -141,138 +135,151 @@
 
 	const sttCaps = $derived(capabilities.filter((c) => c.type === "stt"));
 	const ttsCaps = $derived(capabilities.filter((c) => c.type === "tts"));
-	const maxRows = $derived(Math.max(sttCaps.length, ttsCaps.length));
 
 	function fmtGb(gb: number): string {
-		if (gb === 0) return "";
+		if (gb === 0) return "—";
 		return gb < 1 ? `~${(gb * 1024).toFixed(0)} MB` : `~${gb.toFixed(1)} GB`;
 	}
 
-	function platformLabel(cap: CapabilityInfo): string | null {
+	function platformBadge(cap: CapabilityInfo): string | null {
 		if (!cap.platform_ok) {
-			return "Unavailable on this platform";
+			if (cap.description.includes("Apple Silicon")) return "Apple Silicon only";
+			if (cap.description.includes("macOS")) return "macOS only";
+			return "Unavailable";
 		}
-		if (cap.description.includes("Apple Silicon")) return "Apple Silicon";
-		if (cap.description.includes("macOS")) return "macOS only";
 		return null;
 	}
 </script>
 
-{#snippet capCard(cap: CapabilityInfo)}
-	{@const snap = progress[cap.id]}
-	{@const isInstalling = !!snap || cap.downloading}
-	{@const pct = snap ? Math.round(snap.fraction * 100) : 0}
-	{@const platLabel = platformLabel(cap)}
-	{@const selected = isSelected(cap)}
-	{@const radioEnabled = cap.ready && !isInstalling && !saving}
-
-	<button
-		type="button"
-		class="w-full h-full text-left rounded-lg border-2 bg-card px-4 py-3 transition-colors
-			{selected ? 'border-green-500/70' : 'border-transparent'}
-			{!cap.platform_ok ? 'opacity-50' : ''}
-			{radioEnabled && !selected ? 'hover:border-muted-foreground/30 cursor-pointer' : ''}
-			{!radioEnabled ? 'cursor-default' : ''}"
-		onclick={() => radioEnabled && handleRadioSelect(cap)}
-		disabled={!cap.platform_ok}
-	>
-		<div class="flex items-start gap-3">
-			<!-- Radio button -->
-			<div class="pt-0.5 shrink-0">
-				<div
-					class="size-4 rounded-full border-2 flex items-center justify-center transition-colors
-						{selected ? 'border-green-500' : radioEnabled ? 'border-muted-foreground/40' : 'border-muted-foreground/20'}"
-				>
-					{#if selected}
-						<div class="size-2 rounded-full bg-green-500"></div>
-					{/if}
-				</div>
-			</div>
-
-			<!-- Content -->
-			<div class="flex-1 min-w-0">
-				<div class="flex items-center gap-2 flex-wrap">
-					<span class="font-medium text-sm">{cap.id}</span>
-					{#if cap.ready && !isInstalling}
-						<span class="flex items-center gap-1 text-xs text-green-500">
-							<CheckCircle class="size-3" /> Ready
-						</span>
-					{/if}
-				</div>
-				<p class="mt-0.5 text-xs text-muted-foreground">{cap.description}</p>
-				<div class="mt-0.5 flex items-center gap-2">
-					{#if fmtGb(cap.size_gb)}
-						<span class="text-[11px] text-muted-foreground/60">{fmtGb(cap.size_gb)}</span>
-					{/if}
-					{#if platLabel}
-						<span class="text-[11px] text-muted-foreground/60">{platLabel}</span>
-					{/if}
-				</div>
-			</div>
-
-			<!-- Action buttons -->
-			<div class="flex items-center gap-1 shrink-0 pt-0.5">
-				{#if isInstalling}
-					<span class="flex items-center gap-1.5 text-xs text-blue-400">
-						<Loader class="size-3 animate-spin" />
-						{pct}%
-					</span>
-				{:else if !cap.ready && !cap.builtin && cap.platform_ok}
-					<Button
-						variant="ghost"
-						size="sm"
-						class="text-muted-foreground hover:text-foreground px-2"
-						disabled={installing[cap.id]}
-						onclick={(e: MouseEvent) => { e.stopPropagation(); handleInstall(cap.id); }}
-						title="Download"
-					>
-						<Download class="size-3.5" />
-					</Button>
-				{/if}
-				{#if cap.ready && !cap.builtin && cap.venv_installed && !cap.configured && !isInstalling}
-					<Button
-						variant="ghost"
-						size="sm"
-						class="text-muted-foreground hover:text-destructive px-2"
-						onclick={(e: MouseEvent) => { e.stopPropagation(); handleUninstall(cap.id); }}
-						title="Remove isolated environment"
-					>
-						<Trash2 class="size-3" />
-					</Button>
-				{/if}
-			</div>
+{#snippet capTable(caps: CapabilityInfo[], title: string)}
+	<div class="rounded-lg border bg-card overflow-hidden">
+		<div class="px-4 py-2.5 border-b bg-muted/30">
+			<h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
 		</div>
+		<table class="w-full text-sm">
+			<thead>
+				<tr class="border-b text-xs text-muted-foreground">
+					<th class="text-left font-medium px-4 py-2 w-6"></th>
+					<th class="text-left font-medium px-3 py-2">Name</th>
+					<th class="text-left font-medium px-3 py-2 hidden md:table-cell">Description</th>
+					<th class="text-left font-medium px-3 py-2 w-24">Size</th>
+					<th class="text-left font-medium px-3 py-2 w-36">Status</th>
+					<th class="text-right font-medium px-4 py-2 w-20">Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each caps as cap (cap.id)}
+					{@const snap = progress[cap.id]}
+					{@const isInstalling = !!snap || cap.downloading}
+					{@const pct = snap ? Math.round(snap.fraction * 100) : 0}
+					{@const selected = isSelected(cap)}
+					{@const badge = platformBadge(cap)}
+					{@const clickable = cap.ready && !isInstalling && !saving && !cap.configured}
+					<tr
+						class="border-b last:border-0 transition-colors
+							{!cap.platform_ok ? 'opacity-40' : ''}
+							{clickable ? 'cursor-pointer hover:bg-muted/40' : ''}
+							{selected ? 'bg-green-950/20' : ''}"
+						onclick={() => handleRowClick(cap)}
+					>
+						<!-- Radio -->
+						<td class="px-4 py-3">
+							<div
+								class="size-3.5 rounded-full border-2 flex items-center justify-center shrink-0
+									{selected ? 'border-green-500' : cap.ready ? 'border-muted-foreground/40' : 'border-muted-foreground/20'}"
+							>
+								{#if selected}
+									<div class="size-1.5 rounded-full bg-green-500"></div>
+								{/if}
+							</div>
+						</td>
 
-		<!-- Progress bar -->
-		{#if isInstalling}
-			<div class="mt-3 ml-7 space-y-1">
-				<div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-					<div
-						class="h-full rounded-full bg-blue-500 transition-all duration-500"
-						style="width: {pct}%"
-					></div>
-				</div>
-				{#if snap?.message}
-					<p class="text-[10px] text-muted-foreground/70">{snap.message}</p>
-				{/if}
-			</div>
-		{/if}
+						<!-- Name -->
+						<td class="px-3 py-3 font-medium">{cap.id}</td>
 
-		<!-- Error with hover tooltip -->
-		{#if installErrors[cap.id]}
-			<div class="mt-2 ml-7 group relative">
-				<p class="text-xs text-destructive flex items-center gap-1">
-					<AlertCircle class="size-3 shrink-0" />
-					<span>Download failed</span>
-				</p>
-				<div class="absolute left-0 bottom-full mb-1 hidden group-hover:block
-					bg-popover text-popover-foreground border rounded-md px-3 py-2
-					text-xs max-w-[300px] shadow-md z-10 whitespace-pre-wrap">
-					{installErrors[cap.id]}
-				</div>
-			</div>
-		{/if}
-	</button>
+						<!-- Description -->
+						<td class="px-3 py-3 text-xs text-muted-foreground hidden md:table-cell">
+							{cap.description}
+						</td>
+
+						<!-- Size -->
+						<td class="px-3 py-3 text-xs text-muted-foreground">{fmtGb(cap.size_gb)}</td>
+
+						<!-- Status -->
+						<td class="px-3 py-3">
+							{#if isInstalling}
+								<div class="space-y-1">
+									<div class="flex items-center gap-1.5 text-xs text-blue-400">
+										<Loader class="size-3 animate-spin shrink-0" />
+										<span>{pct}%</span>
+									</div>
+									<div class="h-1 w-24 overflow-hidden rounded-full bg-muted">
+										<div
+											class="h-full rounded-full bg-blue-500 transition-all duration-500"
+											style="width: {pct}%"
+										></div>
+									</div>
+									{#if snap?.message}
+										<p class="text-[10px] text-muted-foreground/60 truncate max-w-[120px]">{snap.message}</p>
+									{/if}
+								</div>
+							{:else if cap.ready}
+								<span class="flex items-center gap-1 text-xs text-green-500">
+									<CheckCircle class="size-3 shrink-0" /> Ready
+								</span>
+							{:else if badge}
+								<span class="text-xs text-muted-foreground/60">{badge}</span>
+							{:else if cap.platform_ok}
+								<span class="text-xs text-muted-foreground/50">Not installed</span>
+							{/if}
+							{#if installErrors[cap.id]}
+								<div class="group relative mt-1">
+									<p class="text-xs text-destructive flex items-center gap-1">
+										<AlertCircle class="size-3 shrink-0" />
+										<span>Failed</span>
+									</p>
+									<div class="absolute left-0 bottom-full mb-1 hidden group-hover:block
+										bg-popover text-popover-foreground border rounded-md px-3 py-2
+										text-xs max-w-[280px] shadow-md z-10 whitespace-pre-wrap">
+										{installErrors[cap.id]}
+									</div>
+								</div>
+							{/if}
+						</td>
+
+						<!-- Actions -->
+						<td class="px-4 py-3 text-right">
+							<div class="flex items-center justify-end gap-1">
+								{#if !isInstalling && !cap.ready && !cap.builtin && cap.platform_ok}
+									<Button
+										variant="ghost"
+										size="sm"
+										class="text-muted-foreground hover:text-foreground px-2 h-7"
+										disabled={installing[cap.id]}
+										onclick={(e: MouseEvent) => { e.stopPropagation(); handleInstall(cap.id); }}
+										title="Download"
+									>
+										<Download class="size-3.5" />
+									</Button>
+								{/if}
+								{#if cap.ready && !cap.builtin && cap.venv_installed && !cap.configured && !isInstalling}
+									<Button
+										variant="ghost"
+										size="sm"
+										class="text-muted-foreground hover:text-destructive px-2 h-7"
+										onclick={(e: MouseEvent) => { e.stopPropagation(); handleUninstall(cap.id); }}
+										title="Remove isolated environment"
+									>
+										<Trash2 class="size-3" />
+									</Button>
+								{/if}
+							</div>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
 {/snippet}
 
 {#if loading && capabilities.length === 0}
@@ -284,32 +291,9 @@
 		<Button variant="outline" size="sm" onclick={load}>Retry</Button>
 	</div>
 {:else}
-	<div class="px-4">
-		<!-- Column headers -->
-		<div class="grid grid-cols-2 gap-x-6 mb-3">
-			<h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-				STT — Speech to Text
-			</h3>
-			<h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-				TTS — Text to Speech
-			</h3>
-		</div>
-
-		<!-- Aligned grid: each row has one STT + one TTS card at matching height -->
-		<div class="grid grid-cols-2 gap-x-6 gap-y-2">
-			{#each Array(maxRows) as _, i}
-				{#if sttCaps[i]}
-					{@render capCard(sttCaps[i])}
-				{:else}
-					<div></div>
-				{/if}
-				{#if ttsCaps[i]}
-					{@render capCard(ttsCaps[i])}
-				{:else}
-					<div></div>
-				{/if}
-			{/each}
-		</div>
+	<div class="px-4 space-y-4">
+		{@render capTable(sttCaps, "STT — Speech to Text")}
+		{@render capTable(ttsCaps, "TTS — Text to Speech")}
 	</div>
 
 	<!-- Save bar -->

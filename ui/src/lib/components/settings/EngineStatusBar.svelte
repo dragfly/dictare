@@ -37,7 +37,7 @@
 
 	async function checkEngine(): Promise<boolean> {
 		try {
-			const r = await fetch("/health", { signal: AbortSignal.timeout(2000) });
+			const r = await fetch("/health", { signal: AbortSignal.timeout(1000) });
 			return r.ok;
 		} catch {
 			return false;
@@ -66,7 +66,7 @@
 	}
 
 	onMount(() => {
-		timer = setInterval(poll, 2000);
+		timer = setInterval(poll, 1000);
 	});
 
 	onDestroy(() => {
