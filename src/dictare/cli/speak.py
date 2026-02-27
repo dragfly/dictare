@@ -78,16 +78,10 @@ def _list_voices(engine_override: str | None, config_file: Path | None) -> None:
 
 def _send_stop(config: Any) -> None:
     """Send a fire-and-forget stop request to the engine (best-effort)."""
-    import urllib.request
+    from openvip import Client
 
-    url = f"http://{config.server.host}:{config.server.port}/speech/stop"
-    req = urllib.request.Request(
-        url, data=b"{}", method="POST",
-        headers={"Content-Type": "application/json"},
-    )
     try:
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            resp.read()
+        Client(f"http://{config.server.host}:{config.server.port}", timeout=3).stop_speech()
     except Exception:
         pass  # Best-effort
 
@@ -175,16 +169,14 @@ def register(app: typer.Typer) -> None:
 
         # Special command: "stop" interrupts current TTS playback
         if text is not None and text.strip().lower() == "stop":
-            import json as _json
             import urllib.error
-            import urllib.request
 
-            url = f"http://{config.server.host}:{config.server.port}/speech/stop"
-            req = urllib.request.Request(url, data=b"{}", method="POST",
-                                         headers={"Content-Type": "application/json"})
+            from openvip import Client
+
             try:
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    _json.loads(resp.read())
+                Client(
+                    f"http://{config.server.host}:{config.server.port}", timeout=5
+                ).stop_speech()
                 if not quiet:
                     console.print("[dim]TTS stopped.[/]")
             except (urllib.error.URLError, ConnectionRefusedError, OSError):

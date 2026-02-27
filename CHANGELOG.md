@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.33] - 2026-02-27
+
+### Fixed
+- Newline regression: transcriptions no longer went to new lines between
+  sentences. Root cause: SDK regeneration produced Pydantic v2 models that
+  silently dropped `x_input` extension fields. Fixed via openvip SDK rc7
+  (`extra="allow"` + `from_dict` pass-through).
+- `dictare speak stop` / `--timeout` now uses openvip SDK (`Client.stop_speech()`)
+  instead of raw urllib calls.
+
+### Added
+- `scripts/full-install.sh`: dev install script that regenerates SDK from local
+  spec, builds SDK sdist, and installs dictare with the local SDK.
+- `scripts/install.sh`: app-only install, auto-detects platform.
+- `scripts/macos-install.sh`: when `OPENVIP_SDK_DIST` is set (by full-install.sh),
+  injects `--find-links` into the Homebrew formula so `uv tool install` uses the
+  local SDK instead of PyPI.
+- 11 regression tests (`test_sdk_extension_fields.py`) verifying extension fields
+  survive the full SDK deserialization path (JSON → `from_dict()` → `to_dict()` →
+  `InputExecutor`).
+
 ## [0.1.32] - 2026-02-26
 
 ### Fixed
