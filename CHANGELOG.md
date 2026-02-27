@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.55] - 2026-02-27
+
+### Added
+- Models page: unified trash button to remove downloaded files (HuggingFace
+  model cache and/or isolated venv). Shown for any non-builtin, non-selected
+  capability that has something installed (`venv_installed || model_cached`).
+  `DELETE /capabilities/{id}/install` now cleans up both venv and HF cache.
+
 ## [0.1.54] - 2026-02-27
 
 ### Added
