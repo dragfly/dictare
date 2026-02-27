@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.38] - 2026-02-27
+
+### Changed
+- Replaced all tray icons with new official Dictare brand icons (purple mic).
+- State→icon mapping: idle=gray, active=purple, loading=yellow, disconnected=red.
+- Updated `Dictare.icns` with new purple squircle app icon.
+- `restarting` state now shows yellow (loading) icon instead of gray.
+- Added `assets/` to `.gitignore`.
+
 ## [0.1.37] - 2026-02-27
 
 ### Changed
