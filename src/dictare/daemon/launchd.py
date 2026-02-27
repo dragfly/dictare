@@ -216,13 +216,16 @@ def _request_input_monitoring() -> None:
         logger.debug("Input Monitoring setup already done for this binary")
         return
 
-    # Attempt 1: Launch the .app with --request-input-monitoring via `open`.
+    # Launch the .app with --request-input-monitoring via `open`.
     # Using `open` makes macOS treat it as a real app (own TCC identity),
     # not a child of Terminal (which would inherit Terminal's permissions).
-    # --wait-apps blocks until the process exits, --args passes our flag.
+    # NOTE: do NOT use --wait-apps — CGRequestListenEventAccess() may show a
+    # blocking dialog; if it's hidden behind other windows the process hangs
+    # for 30+ seconds.  Launch fire-and-forget; the dialog appears in the
+    # background and the user can grant it whenever it surfaces.
     subprocess.run(
-        ["open", "--wait-apps", str(app_path), "--args", "--request-input-monitoring"],
-        capture_output=True, text=True, timeout=30,
+        ["open", str(app_path), "--args", "--request-input-monitoring"],
+        capture_output=True, text=True,
     )
 
     # If the app reported success AND we trust it was actually prompted,

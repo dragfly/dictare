@@ -176,23 +176,36 @@ def _check_input_monitoring() -> bool:
     status_file = Path.home() / ".dictare" / "hotkey_status"
     try:
         content = status_file.read_text().strip()
-        return content == "active"
+        return content in ("active", "confirmed")
     except FileNotFoundError:
         return True  # No status file = running from terminal, assume OK
 
 
 def _check_via_launcher() -> dict[str, bool]:
-    """Assemble the permissions dict.
+    """Assemble the permissions dict via the Dictare.app launcher subprocess.
 
-    Accessibility is always True — not checkable from launchd (see module
-    docstring). Microphone is checked via the Dictare.app launcher subprocess.
+    Calls `Dictare --check-permissions` once to get accessibility + microphone
+    (AXIsProcessTrusted + AVCaptureDevice — reliable when called as the app's
+    own subprocess, unlike CGPreflightListenEventAccess).
     Input Monitoring is checked via the hotkey_status file written by Swift.
     """
-    return {
-        "accessibility": True,
-        "microphone": _check_mic_via_launcher(),
-        "input_monitoring": _check_input_monitoring(),
-    }
+    launcher = _find_launcher()
+    if launcher:
+        try:
+            result = subprocess.run(
+                [launcher, "--check-permissions"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                data = json.loads(result.stdout.strip())
+                return {
+                    "accessibility": data.get("accessibility", True),
+                    "microphone": data.get("microphone", True),
+                    "input_monitoring": _check_input_monitoring(),
+                }
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as e:
+            logger.warning("Launcher permissions check failed: %s", e)
+    return _check_fallback()
 
 
 def _check_fallback() -> dict[str, bool]:
