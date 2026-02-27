@@ -72,6 +72,15 @@ fi
     -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
     "$FORMULA"
 
+# ---------- 5b. Inject local SDK if available (set by full-install.sh) ----------
+if [[ -n "${OPENVIP_SDK_DIST:-}" ]]; then
+    echo "==> Injecting local SDK from ${OPENVIP_SDK_DIST}"
+    "${SED_INPLACE[@]}" \
+        "/\"--prerelease=allow\"/a\\
+           \"--find-links\", \"${OPENVIP_SDK_DIST}\"," \
+        "$FORMULA"
+fi
+
 # ---------- 6. Stop running services ----------
 stop_services
 
