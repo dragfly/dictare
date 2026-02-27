@@ -156,10 +156,9 @@ class TrayApp:
 
     def __init__(self) -> None:
         self._icon: pystray.Icon | None = None
-        self._state = "disconnected"  # disconnected, restarting, loading, off, listening
+        self._state = "disconnected"  # disconnected, loading, off, listening
         self._progress: int = 0  # 0-100, for loading state
         self._loading_stage: str = ""  # "STT" | "VAD" | ""
-        self._restarting = False  # True while engine restart in progress
         self._targets: list[str] = []
         self._current_target: str = ""
 
@@ -200,9 +199,7 @@ class TrayApp:
         import pystray
 
         # Status line
-        if self._state == "restarting":
-            status_text = "Restarting..."
-        elif self._state == "loading":
+        if self._state == "loading":
             stage_text = f" {self._loading_stage}..." if self._loading_stage else ""
             status_text = f"Loading{stage_text}"
         elif self._state == "disconnected":
@@ -357,10 +354,6 @@ class TrayApp:
         import sys
         import threading
 
-        # Show blue "Restarting..." immediately
-        self._restarting = True
-        self.set_state("restarting")
-
         def do_restart() -> None:
             try:
                 if sys.platform == "darwin":
@@ -372,10 +365,7 @@ class TrayApp:
                 backend.stop()
                 backend.start()
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).error("Restart failed: %s", e)
-                self._restarting = False
-                self.set_state("disconnected")
+                logger.error("Restart failed: %s", e)
 
         threading.Thread(target=do_restart, daemon=True).start()
 
@@ -513,22 +503,20 @@ class TrayApp:
                 return
 
             icon_name = {
-                "disconnected": "dictare_muted",
-                "restarting": "dictare_loading",
+                "disconnected": "dictare_disconnected",
                 "loading": "dictare_loading",
                 "off": "dictare",
                 "listening": "dictare_active",
-            }.get(self._state, "dictare_muted")
+            }.get(self._state, "dictare_disconnected")
 
             perms_ok = self._microphone_granted and self._input_monitoring_granted
-            if not perms_ok and self._state not in ("disconnected", "restarting", "loading"):
-                icon_name = "dictare_muted"
+            if not perms_ok and self._state not in ("disconnected", "loading"):
+                icon_name = "dictare_disconnected"
 
             self._icon.icon = _load_icon(icon_name)
 
             title_map = {
                 "disconnected": "Dictare — Disconnected",
-                "restarting": "Dictare — Restarting…",
                 "loading": "Dictare — Loading"
                 + (f" {self._loading_stage}…" if self._loading_stage else "…"),
                 "off": "Dictare — Idle",
@@ -559,13 +547,10 @@ class TrayApp:
             progress: Loading progress 0-100 (only for loading state)
             loading_stage: What's loading ("STT", "VAD", "")
         """
-        if state in ("disconnected", "restarting", "loading", "off", "listening"):
+        if state in ("disconnected", "loading", "off", "listening"):
             self._state = state
             self._progress = progress
             self._loading_stage = loading_stage
-            # Clear restarting flag once engine reports a real state
-            if state not in ("disconnected", "restarting"):
-                self._restarting = False
             self._update_icon()
             self._update_menu()
 
@@ -604,95 +589,52 @@ class TrayApp:
         return self._output_mode
 
     def start_status_streaming(self, host: str = "127.0.0.1", port: int = 8770) -> None:
-        """Start listening to engine status changes via SSE.
-
-        Uses subscribe_status() from the OpenVIP SDK with automatic
-        reconnection. Push-based: updates arrive instantly on state
-        transitions and agent changes. No polling.
-        """
+        """Start polling engine status every 2 seconds via GET /status."""
         if self._polling:
             return
 
-        def stream() -> None:
+        def poll() -> None:
+            import time as _time
+
             from openvip import Client
 
             from dictare.status import resolve_display_state
 
-            client = Client(f"http://{host}:{port}", timeout=2.0)
-
-            # Map shared state names to tray state names
             _tray_state_map = {
                 "loading": "loading",
                 "listening": "listening",
                 "idle": "off",
             }
 
-            status_count = 0
-            _connected_once = False  # True after first successful SSE connection
+            client = Client(f"http://{host}:{port}", timeout=2.0)
 
-            def _on_connect() -> None:
-                nonlocal _connected_once
-                _connected_once = True
-
-            def _on_disconnect(exc: Exception | None) -> None:
-                if exc:
-                    logger.info("tray SSE disconnected: %s", exc)
-                    # During restart, stay blue instead of going red.
-                    # On first startup (never connected yet), don't show disconnected —
-                    # silent retries until engine is ready.
-                    if not self._restarting and _connected_once:
-                        self.set_state("disconnected")
-
-            try:
-                for status in client.subscribe_status(
-                    reconnect=True,
-                    stop=lambda: not self._polling,
-                    on_connect=_on_connect,
-                    on_disconnect=_on_disconnect,
-                ):
-                    if not self._polling:
-                        break
-
-                    status_count += 1
+            while self._polling:
+                try:
+                    status = client.get_status()
                     platform = status.platform or {}
                     state, _ = resolve_display_state(platform)
                     self.set_state(state=_tray_state_map.get(state, "off"))
 
                     output = platform.get("output", {})
-                    agents = output.get("available_agents", [])
-                    current_agent = output.get("current_agent", "")
-                    engine_mode = output.get("mode", self._output_mode)
-                    self.set_targets(agents, current_agent)
-                    self.set_output_mode(engine_mode)
+                    self.set_targets(output.get("available_agents", []), output.get("current_agent", ""))
+                    self.set_output_mode(output.get("mode", self._output_mode))
 
-                    # Log first status and any mode changes
-                    if status_count == 1:
-                        logger.info(
-                            "tray SSE first status: state=%r, mode=%r, "
-                            "current_agent=%r, agents=%r",
-                            state, engine_mode, current_agent, agents,
-                        )
-
-                    # Update permissions state
                     perms = platform.get("permissions", {})
                     mic_granted = perms.get("microphone", True)
                     im_granted = perms.get("input_monitoring", True)
-                    perms_changed = (
-                        mic_granted != self._microphone_granted
-                        or im_granted != self._input_monitoring_granted
-                    )
-                    if perms_changed:
+                    if mic_granted != self._microphone_granted or im_granted != self._input_monitoring_granted:
                         self._microphone_granted = mic_granted
                         self._input_monitoring_granted = im_granted
                         self._update_menu()
                         self._update_icon()
-            except Exception as exc:
-                logger.error("tray SSE stream error: %s", exc, exc_info=True)
-                if not self._restarting:
+
+                except Exception:
                     self.set_state("disconnected")
 
+                _time.sleep(1)
+
         self._polling = True
-        self._poll_thread = threading.Thread(target=stream, daemon=True)
+        self._poll_thread = threading.Thread(target=poll, daemon=True)
         self._poll_thread.start()
 
     def stop_status_polling(self) -> None:
@@ -709,7 +651,7 @@ class TrayApp:
 
         self._icon = pystray.Icon(
             name="dictare",
-            icon=_load_icon("dictare_muted"),
+            icon=_load_icon("dictare_disconnected"),
             title="Dictare",
             menu=self._create_menu(),
         )
