@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.39] - 2026-02-27
+
+### Changed
+- Settings UI nav: added purple squircle icon next to "Dictare" label (top-left).
+
 ## [0.1.38] - 2026-02-27
 
 ### Changed
