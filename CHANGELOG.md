@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-02-27
+
+### Added
+- Tray menu: Start/Stop Service under Advanced, using `is_loaded()` from the
+  native service backend (launchd/systemd) to show the correct action. Menu
+  updates automatically after each start/stop.
+
+### Changed
+- Tray menu: `isinstance` type narrowing for SSE message dispatch instead of
+  `getattr` hack.
+
 ## [0.1.33] - 2026-02-27
 
 ### Fixed
