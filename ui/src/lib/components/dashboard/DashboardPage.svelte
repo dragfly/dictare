@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
-	import { fetchStatus, setOutputMode, type StatusResponse } from "$lib/api";
+	import { fetchStatus, setOutputMode, setCurrentAgent, type StatusResponse } from "$lib/api";
 	import { Badge } from "$lib/components/ui/badge";
 	import { Button } from "$lib/components/ui/button";
 	import { CheckCircle, XCircle, AlertCircle } from "lucide-svelte";
@@ -83,13 +83,10 @@
 {:else if p}
 	<div class="space-y-4 px-4">
 		<!-- Engine (left) + Permissions (right) -->
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-[3fr_2fr] gap-4">
 			<!-- Engine -->
 			<div class="rounded-lg border bg-card p-4 space-y-2">
-				<div class="flex items-center justify-between">
-					<h3 class="text-sm font-semibold">Engine</h3>
-					<Badge variant="outline" class="text-[10px]">{p.mode} mode</Badge>
-				</div>
+				<h3 class="text-sm font-semibold">Engine</h3>
 				<div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
 					<div class="text-muted-foreground">State</div>
 					<div>{p.state}</div>
@@ -100,23 +97,19 @@
 					<div class="text-muted-foreground">TTS</div>
 					<div>
 						{p.tts.engine}
-						{#if p.tts.available}
-							<span class="text-green-500 text-xs ml-1">active</span>
-						{:else}
-							<span class="text-destructive text-xs ml-1">unavailable</span>
+						{#if !p.tts.available}
+							<span class="text-destructive text-xs ml-1">error</span>
 						{/if}
 					</div>
 					<div class="text-muted-foreground">Hotkey</div>
 					<div>
 						{p.hotkey.key}
-						{#if p.hotkey.status === "confirmed" || p.hotkey.status === "bound"}
-							<span class="text-green-500 text-xs ml-1">active</span>
-						{:else if p.hotkey.status === "active"}
+						{#if p.hotkey.status === "active"}
 							<span class="text-yellow-500 text-xs ml-1" title="Tap created — press any key to confirm">confirming…</span>
 						{:else if p.hotkey.status === "failed"}
-							<span class="text-destructive text-xs ml-1">no permission</span>
-						{:else}
-							<span class="text-muted-foreground text-xs ml-1">{p.hotkey.status ?? "—"}</span>
+							<span class="text-destructive text-xs ml-1">error</span>
+						{:else if p.hotkey.status && p.hotkey.status !== "confirmed" && p.hotkey.status !== "bound"}
+							<span class="text-muted-foreground text-xs ml-1">{p.hotkey.status}</span>
 						{/if}
 					</div>
 				</div>
@@ -147,13 +140,13 @@
 			{#if p.permissions}
 				<div class="rounded-lg border bg-card p-4 space-y-2">
 					<h3 class="text-sm font-semibold">Permissions</h3>
-					<div class="flex flex-wrap gap-3">
+					<div class="flex flex-col gap-2">
 						{#each Object.entries(p.permissions).filter(([k]) => !k.endsWith("_url")) as [key, ok]}
 							<div class="flex items-center gap-1.5 text-sm">
 								{#if ok}
-									<CheckCircle class="size-3.5 text-green-500" />
+									<CheckCircle class="size-3.5 text-green-500 shrink-0" />
 								{:else}
-									<XCircle class="size-3.5 text-destructive" />
+									<XCircle class="size-3.5 text-destructive shrink-0" />
 								{/if}
 								<span class="capitalize">{key.replace("_", " ")}</span>
 							</div>
@@ -169,15 +162,15 @@
 			{#if p.output.available_agents.length > 0}
 				<div class="flex flex-wrap gap-2">
 					{#each p.output.available_agents as agent}
-						<Badge
-							variant={agent === p.output.current_agent ? "default" : "secondary"}
-							class="text-xs"
+						<button
+							onclick={() => setCurrentAgent(agent)}
+							class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors
+								{agent === p.output.current_agent
+									? 'bg-primary text-primary-foreground border-transparent'
+									: 'bg-secondary text-secondary-foreground border-transparent hover:bg-secondary/80'}"
 						>
 							{agent}
-							{#if agent === p.output.current_agent}
-								<span class="ml-1 opacity-70">active</span>
-							{/if}
-						</Badge>
+						</button>
 					{/each}
 				</div>
 			{:else}

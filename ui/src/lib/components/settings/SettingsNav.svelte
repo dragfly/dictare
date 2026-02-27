@@ -131,7 +131,7 @@
 					onclick={() => setTheme(t)}
 					class="flex-1 flex items-center justify-center py-1.5 rounded-md transition-colors
 						{getTheme() === t
-							? 'bg-background text-foreground shadow-sm'
+							? 'bg-background text-foreground shadow-sm ring-1 ring-border'
 							: 'text-muted-foreground hover:text-foreground'}"
 					title={t.charAt(0).toUpperCase() + t.slice(1)}
 				>
