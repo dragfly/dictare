@@ -346,8 +346,8 @@ def _read_from_sse(
             if stop_event.is_set():
                 break
 
-            # Skip partial transcriptions
-            if msg.partial:
+            # Skip partial transcriptions (SpeechRequest has no .partial)
+            if getattr(msg, "partial", False):
                 continue
 
             msg_id = str(msg.id) if msg.id else None
