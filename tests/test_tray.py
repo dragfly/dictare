@@ -78,9 +78,8 @@ class TestTrayStates:
         app._icon = mock_icon
 
         expected = {
-            "disconnected": "dictare_muted",
-            "restarting": "dictare",
-            "loading": "dictare",
+            "disconnected": "dictare_disconnected",
+            "loading": "dictare_loading",
             "off": "dictare",
             "listening": "dictare_active",
         }
@@ -100,7 +99,6 @@ class TestTrayStates:
 
         expected_titles = {
             "disconnected": "Dictare — Disconnected",
-            "restarting": "Dictare — Restarting…",
             "off": "Dictare — Idle",
             "listening": "Dictare — Listening",
         }
@@ -133,42 +131,29 @@ class TestTrayStates:
         assert "IDLE" in first_label
 
     def test_menu_status_restarting(self) -> None:
+        """Unknown/restarting state falls through to upper-case display."""
         app = TrayApp()
         app._state = "restarting"
         with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
             menu = app._create_menu()
         first_label = menu._items[0].text
-        assert "Restarting" in first_label
+        assert "RESTARTING" in first_label
 
-    def test_restarting_flag_suppresses_disconnected(self) -> None:
-        """During restart, SSE disconnect should not switch to red."""
+    def test_unknown_state_is_ignored(self) -> None:
+        """set_state ignores unknown states (e.g. 'restarting')."""
         app = TrayApp()
-        app._restarting = True
+        initial_state = app._state
         app.set_state("restarting")
-        assert app._state == "restarting"
+        assert app._state == initial_state
 
-        # Simulate SSE disconnect — would normally go to 'disconnected'
-        # but _restarting flag keeps it in 'restarting'
-        # (the on_disconnect callback checks _restarting)
-        assert app._restarting is True
-        assert app._state == "restarting"
-
-    def test_restarting_flag_clears_on_real_state(self) -> None:
-        """Once engine reports loading/idle/listening, clear restarting."""
+    def test_valid_state_replaces_unknown(self) -> None:
+        """After an unknown state is set directly, a valid set_state call updates it."""
         app = TrayApp()
-        app._restarting = True
-        app.set_state("restarting")
-        assert app._restarting is True
-
-        # Engine comes back with loading
-        app.set_state("loading")
+        app._state = "restarting"
+        with patch("dictare.tray.app._load_icon", return_value="img"):
+            with patch.object(app, "_update_menu"):
+                app.set_state("loading")
         assert app._state == "loading"
-        assert app._restarting is False
-
-        # Same for idle
-        app._restarting = True
-        app.set_state("off")
-        assert app._restarting is False
 
     def test_startup_connection_failures_dont_go_red(self) -> None:
         """On fresh start, SSE connection failures should NOT flip to disconnected.
