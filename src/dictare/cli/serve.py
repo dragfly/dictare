@@ -136,6 +136,23 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
     from dictare.utils.paths import get_pid_path
 
     try:
+        # Install signal handlers BEFORE controller.start() — model loading
+        # takes ~20s and an unhandled SIGUSR1 during that window kills the process.
+        def signal_handler(signum: int, frame: Any) -> None:
+            _logger.info("Shutting down dictare %s (signal %s)", __version__, signum)
+            controller.request_shutdown()
+
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+
+        if hasattr(signal, "SIGUSR1"):
+
+            def _tap_handler(signum: int, frame: Any) -> None:
+                _logger.info("SIGUSR1 received — hotkey tap")
+                controller.on_hotkey_tap()
+
+            signal.signal(signal.SIGUSR1, _tap_handler)
+
         try:
             controller.start(
                 start_listening=start_listening,
@@ -148,25 +165,6 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
             raise typer.Exit(1) from e
 
         _logger.info("Engine ready")
-
-        # Signal handlers
-        def signal_handler(signum: int, frame: Any) -> None:
-            _logger.info("Shutting down dictare %s (signal %s)", __version__, signum)
-            controller.request_shutdown()
-
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGINT, signal_handler)
-
-        # SIGUSR1 = hotkey tap (sent by Swift launcher on macOS).
-        # Route through TapDetector so double-tap detection works:
-        # single tap → toggle listening, double tap → switch output mode.
-        if hasattr(signal, "SIGUSR1"):
-
-            def _tap_handler(signum: int, frame: Any) -> None:
-                _logger.info("SIGUSR1 received — hotkey tap")
-                controller.on_hotkey_tap()
-
-            signal.signal(signal.SIGUSR1, _tap_handler)
 
         # Run main loop (blocks until shutdown)
         try:
