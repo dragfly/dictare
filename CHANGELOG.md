@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.51] - 2026-02-27
+
+### Fixed
+- Dashboard: `accessibility_url` and `microphone_url` keys no longer appear
+  as fake permission toggles — filtered client-side.
+- Dashboard: Hotkey row shows "confirmed" (green), "confirming…" (yellow), or
+  "no permission" (red) based on `hotkey.status` from the engine.
+- Engine: `hotkey.bound` now reads `~/.dictare/hotkey_status` written by the
+  Swift launcher instead of always returning `False` in daemon mode.
+  New `hotkey.status` field in `/status` for fine-grained diagnostics.
+
+## [0.1.50] - 2026-02-27
+
+### Fixed
+- MLX Whisper: corrected HuggingFace repo IDs for tiny/base/small/medium —
+  use `-mlx` suffix repos (`whisper-tiny-mlx` etc.) which are the native MLX
+  format. The bare names were removed or are transformers-only.
+
+## [0.1.49] - 2026-02-27
+
+### Fixed
+- MLX Whisper: fallback repo pattern also uses `-mlx` suffix.
+
 ## [0.1.48] - 2026-02-27
 
 ### Fixed

@@ -13,11 +13,13 @@ if TYPE_CHECKING:
 
 
 # Model mapping for mlx-community hub
+# NOTE: tiny/base/small/medium use the -mlx suffix repos (native MLX format).
+#       The bare names (e.g. whisper-base) were removed or are transformers-only.
 MLX_MODELS = {
-    "tiny": "mlx-community/whisper-tiny",
-    "base": "mlx-community/whisper-base",
-    "small": "mlx-community/whisper-small",
-    "medium": "mlx-community/whisper-medium",
+    "tiny": "mlx-community/whisper-tiny-mlx",
+    "base": "mlx-community/whisper-base-mlx",
+    "small": "mlx-community/whisper-small-mlx",
+    "medium": "mlx-community/whisper-medium-mlx",
     "large": "mlx-community/whisper-large-v3-mlx",
     "large-v3": "mlx-community/whisper-large-v3-mlx",
     "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
@@ -46,7 +48,7 @@ class MLXWhisperEngine(STTEngine):
             headless: If True, skip all console output (for Engine/daemon mode).
             **kwargs: Additional options (ignored for MLX).
         """
-        self._model_path = MLX_MODELS.get(model_size, f"mlx-community/whisper-{model_size}")
+        self._model_path = MLX_MODELS.get(model_size, f"mlx-community/whisper-{model_size}-mlx")
         self._model_size = model_size
 
         # Define load function that includes imports (they can be slow)
