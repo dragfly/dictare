@@ -211,7 +211,8 @@ info "Installing dictare from source..."
 # Stop existing service first
 if systemctl --user is-active dictare.service &>/dev/null; then
     info "Stopping existing service..."
-    systemctl --user stop dictare.service
+    systemctl --user stop dictare.service --timeout=15 2>/dev/null || \
+        systemctl --user kill dictare.service 2>/dev/null || true
 fi
 "$VENV_DIR/bin/python" -m dictare tray stop 2>/dev/null || true
 
