@@ -6,6 +6,8 @@ let dirty = $state<Record<string, unknown>>({});
 let saveStatus = $state<"idle" | "saving" | "saved" | "error">("idle");
 let saveErrors = $state<Record<string, string>>({});
 let needsRestart = $state(false);
+let engineBarVisible = $state(false);
+let modelsSaveBarVisible = $state(false);
 
 export function getSchema(): SchemaResponse | null {
 	return schema;
@@ -27,6 +29,22 @@ export function setNeedsRestart(): void {
 }
 export function clearNeedsRestart(): void {
 	needsRestart = false;
+}
+export function getEngineBarVisible(): boolean {
+	return engineBarVisible;
+}
+export function setEngineBarVisible(v: boolean): void {
+	engineBarVisible = v;
+}
+export function getModelsSaveBarVisible(): boolean {
+	return modelsSaveBarVisible;
+}
+export function setModelsSaveBarVisible(v: boolean): void {
+	modelsSaveBarVisible = v;
+}
+/** Total px that fixed bottom bars occupy — use as padding-bottom on the scroll container. */
+export function getFixedBottomPx(): number {
+	return (engineBarVisible ? 44 : 0) + (modelsSaveBarVisible ? 52 : 0);
 }
 export function hasDirtyFields(): boolean {
 	return Object.keys(dirty).length > 0;

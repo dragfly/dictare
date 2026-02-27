@@ -9,6 +9,7 @@
 	import { RotateCcw } from "lucide-svelte";
 	import type { TabDef, NavChild } from "$lib/types";
 	import * as settingsStore from "$lib/stores/settings.svelte";
+	import { getFixedBottomPx } from "$lib/stores/settings.svelte";
 	import { restartEngine, pingEngine } from "$lib/api";
 	import { onMount } from "svelte";
 
@@ -53,6 +54,8 @@
 	const activeLabel   = $derived(activeView()?.child?.label   ?? activeView()?.tab.label   ?? "");
 	const activeDesc    = $derived(activeView()?.child?.desc    ?? activeView()?.tab.desc    ?? "");
 
+	const fixedBottomPx = $derived(getFixedBottomPx());
+
 	let restarting = $state(false);
 
 	async function handleRestart() {
@@ -70,7 +73,7 @@
 
 <div class="flex h-screen">
 	<SettingsNav {tabs} bind:activeNavId version={schema?.version ?? ""} />
-	<main class="flex-1 overflow-y-auto">
+	<main class="flex-1 overflow-y-auto" style="padding-bottom: {fixedBottomPx}px">
 		<div class="max-w-2xl mx-auto pt-14 pb-8">
 			{#if activeNavId === "dashboard"}
 				<div class="px-4 mb-8">
@@ -91,7 +94,7 @@
 				</div>
 				{#if activeNavId === "advanced-daemon"}
 					<div class="px-4 mb-4">
-						<Button variant="outline" onclick={handleRestart} disabled={restarting}>
+						<Button variant="destructive" onclick={handleRestart} disabled={restarting}>
 							<RotateCcw class="size-3.5 mr-1.5 {restarting ? 'animate-spin' : ''}" />
 							{restarting ? "Restarting…" : "Restart Engine"}
 						</Button>
