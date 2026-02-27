@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.43] - 2026-02-27
+
+### Fixed
+- CSS 404 on Linux: `.gitignore` had `assets/` (unanchored) which matched
+  `src/dictare/ui/dist/_app/immutable/assets/`, causing CSS chunks to be
+  untracked and missing after `git pull`. Changed to `/assets/` (root-only).
+  Added the previously-excluded `0.ZEYxg2Jv.css` to the repository.
+
 ## [0.1.42] - 2026-02-27
 
 ### Fixed
