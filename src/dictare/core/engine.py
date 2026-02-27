@@ -1000,7 +1000,8 @@ class DictareEngine:
                 },
                 "hotkey": {
                     "key": self.config.hotkey.key,
-                    "bound": self._hotkey is not None,
+                    "bound": self._is_hotkey_active(),
+                    "status": self._hotkey_status_raw(),
                 },
                 "tts": {
                     "engine": self.config.tts.engine,
@@ -1039,6 +1040,45 @@ class DictareEngine:
                 "stt": check_all_stt_engines(self.config.stt.model),
             }
         return self._engines_cache
+
+    def _is_hotkey_active(self) -> bool:
+        """Return True if the hotkey is actually functional.
+
+        On Linux / terminal mode: Python directly binds the hotkey listener.
+        On macOS daemon mode: Swift handles it via CGEventTap → SIGUSR1.
+        We read ~/.dictare/hotkey_status written by the Swift launcher:
+          "confirmed" — tap created AND at least one real event received (reliable)
+          "active"    — tap created but no events yet (Sequoia may lie: not reliable)
+          "failed"    — tap creation failed (no permission)
+          missing     — running from terminal, assume OK
+        """
+        import sys
+
+        if self._hotkey is not None:
+            return True
+        if sys.platform == "darwin":
+            from pathlib import Path
+            status_file = Path.home() / ".dictare" / "hotkey_status"
+            try:
+                return status_file.read_text().strip() in ("active", "confirmed")
+            except FileNotFoundError:
+                pass
+        return False
+
+    def _hotkey_status_raw(self) -> str:
+        """Return the raw hotkey_status string for diagnostics."""
+        import sys
+
+        if self._hotkey is not None:
+            return "bound"
+        if sys.platform == "darwin":
+            from pathlib import Path
+            status_file = Path.home() / ".dictare" / "hotkey_status"
+            try:
+                return status_file.read_text().strip()
+            except FileNotFoundError:
+                return "unknown"
+        return "unknown"
 
     @staticmethod
     def _get_permissions() -> dict:

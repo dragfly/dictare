@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from "svelte";
 	import { Loader, CheckCircle, RotateCcw } from "lucide-svelte";
 	import * as settingsStore from "$lib/stores/settings.svelte";
+	import { setEngineBarVisible } from "$lib/stores/settings.svelte";
 	import { restartEngine, pingEngine } from "$lib/api";
 
 	type BarState = "hidden" | "restart-needed" | "restarting" | "disconnected" | "ready";
@@ -11,6 +12,10 @@
 	let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const needsRestart = $derived(settingsStore.getNeedsRestart());
+
+	$effect(() => {
+		setEngineBarVisible(barState !== "hidden");
+	});
 
 	// When needsRestart becomes true, show the restart-needed bar
 	$effect(() => {

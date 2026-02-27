@@ -106,6 +106,19 @@
 							<span class="text-destructive text-xs ml-1">unavailable</span>
 						{/if}
 					</div>
+					<div class="text-muted-foreground">Hotkey</div>
+					<div>
+						{p.hotkey.key}
+						{#if p.hotkey.status === "confirmed" || p.hotkey.status === "bound"}
+							<span class="text-green-500 text-xs ml-1">active</span>
+						{:else if p.hotkey.status === "active"}
+							<span class="text-yellow-500 text-xs ml-1" title="Tap created — press any key to confirm">confirming…</span>
+						{:else if p.hotkey.status === "failed"}
+							<span class="text-destructive text-xs ml-1">no permission</span>
+						{:else}
+							<span class="text-muted-foreground text-xs ml-1">{p.hotkey.status ?? "—"}</span>
+						{/if}
+					</div>
 				</div>
 				<!-- Output mode toggle -->
 				<div class="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
@@ -135,7 +148,7 @@
 				<div class="rounded-lg border bg-card p-4 space-y-2">
 					<h3 class="text-sm font-semibold">Permissions</h3>
 					<div class="flex flex-wrap gap-3">
-						{#each Object.entries(p.permissions) as [key, ok]}
+						{#each Object.entries(p.permissions).filter(([k]) => !k.endsWith("_url")) as [key, ok]}
 							<div class="flex items-center gap-1.5 text-sm">
 								{#if ok}
 									<CheckCircle class="size-3.5 text-green-500" />
