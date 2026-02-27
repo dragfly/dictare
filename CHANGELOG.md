@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.54] - 2026-02-27
+
+### Added
+- UI: light/dark/system theme toggle in the sidebar, persisted to
+  `localStorage`. Default is "system" (follows OS preference). No flash on
+  load (inline script in `<head>` applies the class before first paint).
+- UI: wordmark updated to match dictare.io — "DICTA" bold + "re" in purple
+  (#6d5ce6).
+
 ## [0.1.53] - 2026-02-27
 
 ### Fixed
