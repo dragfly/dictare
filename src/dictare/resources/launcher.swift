@@ -141,6 +141,9 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
 
         // When child exits unexpectedly, terminate the launcher too
         process.terminationHandler = { proc in
+            let status = proc.terminationStatus
+            let reason = proc.terminationReason
+            fputs("Engine exited: status=\(status) reason=\(reason.rawValue)\n", stderr)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 NSApplication.shared.terminate(nil)
             }
