@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 # Protocol commands handled by the engine directly
 PROTOCOL_COMMANDS = {"stt.start", "stt.stop", "stt.toggle", "engine.shutdown", "engine.restart", "ping", "hotkey.capture"}
 
+# Seconds to wait for HTTP server thread to exit on stop()
+_SERVER_JOIN_TIMEOUT: float = 0.5
+
+# Seconds to keep completed download jobs before cleanup
+_JOB_CLEANUP_DELAY: float = 10.0
+
 class OpenVIPServer:
     """FastAPI server implementing OpenVIP protocol endpoints.
 
@@ -190,7 +196,7 @@ class OpenVIPServer:
                 )
             try:
                 body = await request.json()
-            except Exception:
+            except (ValueError, UnicodeDecodeError):
                 raise HTTPException(
                     status_code=422,
                     detail="Not OpenVIP v1.0 compliant: invalid JSON body",
@@ -207,7 +213,7 @@ class OpenVIPServer:
             """Handle speech (TTS) request."""
             try:
                 body = await request.json()
-            except Exception:
+            except (ValueError, UnicodeDecodeError):
                 raise HTTPException(
                     status_code=422,
                     detail="Not OpenVIP v1.0 compliant: invalid JSON body",
@@ -895,7 +901,7 @@ class OpenVIPServer:
         _push({"model_id": model_id, **job})
 
         # Clean up after 10 s so clients can read the final state
-        time.sleep(10)
+        time.sleep(_JOB_CLEANUP_DELAY)
         self._download_jobs.pop(model_id, None)
 
     def _run_tts_install(
@@ -938,7 +944,7 @@ class OpenVIPServer:
         self._download_jobs[job_id] = job
         _push({"model_id": job_id, **job})
 
-        time.sleep(10)
+        time.sleep(_JOB_CLEANUP_DELAY)
         self._download_jobs.pop(job_id, None)
 
     def _run_capability_install(
@@ -988,7 +994,7 @@ class OpenVIPServer:
                 job = {"status": "error", "fraction": 0.0, "message": f"Venv install failed for {venv_name}"}
                 self._download_jobs[cap_id] = job
                 _push({"model_id": cap_id, **job})
-                time.sleep(10)
+                time.sleep(_JOB_CLEANUP_DELAY)
                 self._download_jobs.pop(cap_id, None)
                 return
 
@@ -1042,7 +1048,7 @@ class OpenVIPServer:
                 job = {"status": "error", "fraction": 0.0, "message": str(errors[0])}
                 self._download_jobs[cap_id] = job
                 _push({"model_id": cap_id, **job})
-                time.sleep(10)
+                time.sleep(_JOB_CLEANUP_DELAY)
                 self._download_jobs.pop(cap_id, None)
                 return
 
@@ -1051,7 +1057,7 @@ class OpenVIPServer:
         self._download_jobs[cap_id] = job
         _push({"model_id": cap_id, **job})
 
-        time.sleep(10)
+        time.sleep(_JOB_CLEANUP_DELAY)
         self._download_jobs.pop(cap_id, None)
 
     def start(self) -> None:
@@ -1129,7 +1135,7 @@ class OpenVIPServer:
             self._server.should_exit = True
 
         if self._thread:
-            self._thread.join(timeout=0.5)
+            self._thread.join(timeout=_SERVER_JOIN_TIMEOUT)
             self._thread = None
 
         self._server = None
