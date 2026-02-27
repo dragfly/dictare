@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.46] - 2026-02-27
+
+### Added
+- Swift launcher: log `Right Cmd DOWN/UP`, tap accepted/rejected, and
+  `SIGUSR1 sent to PID` to stderr for hotkey diagnostics.
+  (`tail -f ~/Library/Logs/dictare/stderr.log`)
+- Swift launcher: CGEventTap now writes `hotkey_status = "confirmed"` only
+  after the first real event is received. On Sequoia, `CGEvent.tapCreate()`
+  can succeed while the tap silently delivers nothing; "confirmed" is the only
+  reliable signal.
+
 ## [0.1.45] - 2026-02-27
 
 ### Changed

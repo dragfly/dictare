@@ -58,6 +58,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     var sigTermSource: DispatchSourceSignal?
     var sigIntSource: DispatchSourceSignal?
     var eventTap: CFMachPort?  // Stored for re-enable after system disable
+    var tapEventReceived = false  // True once first real event arrives from CGEventTap
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestMicrophonePermission()
@@ -192,6 +193,15 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
                 }
                 let delegate = Unmanaged<LauncherDelegate>.fromOpaque(refcon)
                     .takeUnretainedValue()
+                // First real event confirms the tap is actually delivering events.
+                // On Sequoia, CGEvent.tapCreate() can succeed (non-nil) while the
+                // tap silently receives nothing — write "confirmed" only when we
+                // actually see an event arrive.
+                if !delegate.tapEventReceived {
+                    delegate.tapEventReceived = true
+                    delegate.writeHotkeyStatus("confirmed")
+                    fputs("CGEventTap confirmed: first event received\n", stderr)
+                }
                 delegate.handleFlagsChanged(event: event)
                 return Unmanaged.passRetained(event)
             },
@@ -231,20 +241,29 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         if rightCmdDown {
             // Key pressed — record timestamp
             keyDownTime = Date()
+            fputs("Hotkey: Right Cmd DOWN\n", stderr)
         } else if let downTime = keyDownTime {
             // Key released — check if it was a tap (short press)
             let duration = Date().timeIntervalSince(downTime)
             keyDownTime = nil
+            fputs(String(format: "Hotkey: Right Cmd UP (duration=%.3fs)\n", duration), stderr)
 
             if duration < tapThreshold {
+                fputs("Hotkey: tap accepted — sending SIGUSR1\n", stderr)
                 sendToggleSignal()
+            } else {
+                fputs(String(format: "Hotkey: tap rejected (too long, threshold=%.1fs)\n", tapThreshold), stderr)
             }
         }
     }
 
     func sendToggleSignal() {
-        guard let process = childProcess, process.isRunning else { return }
+        guard let process = childProcess, process.isRunning else {
+            fputs("Hotkey: sendToggleSignal — no child process running\n", stderr)
+            return
+        }
         kill(process.processIdentifier, SIGUSR1)
+        fputs("Hotkey: SIGUSR1 sent to PID \(process.processIdentifier)\n", stderr)
     }
 }
 
