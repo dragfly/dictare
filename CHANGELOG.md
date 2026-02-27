@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.48] - 2026-02-27
+
+### Fixed
+- Permissions: `input_monitoring` was reported as `false` (tray icon red) even
+  when the hotkey was fully working. `_check_input_monitoring()` now accepts
+  both `"active"` and `"confirmed"` hotkey_status values.
+- Permissions: `accessibility` was hardcoded to `true` — keyboard mode showed
+  green even without the Accessibility grant. Now read from the launcher's
+  `--check-permissions` output.
+
+## [0.1.47] - 2026-02-27
+
+### Fixed
+- Install: `service install` no longer blocks for 30 s when the Input
+  Monitoring permission dialog doesn't appear. Removed `--wait-apps` from
+  the `open` call — the dialog appears in the background without holding up
+  the install sequence.
+
 ## [0.1.46] - 2026-02-27
 
 ### Added
