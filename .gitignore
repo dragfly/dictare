@@ -80,3 +80,6 @@ WORKFLOW.md
 docs/notes/
 *.private.md
 private/
+
+# Brand assets (logos, icons — kept private)
+assets/
