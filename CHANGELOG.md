@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-02-27
+
+### Changed
+- Swift launcher: log engine exit code and termination reason when the Python
+  child exits unexpectedly (`Engine exited: status=X reason=Y` in stderr).
+  Helps diagnose silent restarts during install (status=9/reason=2 = SIGKILL,
+  status=0/reason=1 = clean exit).
+
 ## [0.1.44] - 2026-02-27
 
 ### Changed
