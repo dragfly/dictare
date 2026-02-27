@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.56] - 2026-02-27
+
+### Changed
+- Dashboard: removed "agents mode" badge from Engine card header (redundant
+  with Keyboard/Agents toggle buttons already in the card).
+- Dashboard: TTS and Hotkey rows no longer show "active" label when healthy;
+  only display an error indicator when unavailable or misconfigured.
+- Dashboard: Permissions items stacked vertically; grid adjusted to
+  `3fr 2fr` giving Engine card more horizontal space.
+- Dashboard: agent pills are now clickable — click switches the active agent
+  via `output.set_agent`.
+- Dashboard: "active" label removed from agent pills (fill colour is
+  sufficient to indicate the selected agent).
+- Settings nav: selected theme icon now has a visible ring border to
+  distinguish it from the other two.
+
 ## [0.1.55] - 2026-02-27
 
 ### Added
