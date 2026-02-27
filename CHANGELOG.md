@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.53] - 2026-02-27
+
+### Fixed
+- Engine crash on hotkey press during startup: SIGUSR1 signal handler was
+  installed *after* `controller.start()` (model loading ~20 s). An unhandled
+  SIGUSR1 during that window terminated the process (default UNIX behaviour).
+  All signal handlers (SIGTERM, SIGINT, SIGUSR1) are now installed before
+  `controller.start()`.
+
 ## [0.1.52] - 2026-02-27
 
 ### Changed
