@@ -154,7 +154,7 @@ class StateController:
             except Empty:
                 continue
             except Exception as e:
-                logger.exception(f"Error processing event: {e}")
+                logger.exception("Error processing event: %s", e)
 
     def _handle_event(self, event: StateMessage) -> None:
         """Handle a single event. Called sequentially, never concurrently."""
