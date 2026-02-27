@@ -36,6 +36,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Queue poll interval — how often the worker wakes to check _running flag
+_QUEUE_POLL_S: float = 0.1
+
+# How long to wait for the worker thread to finish on stop()
+_WORKER_JOIN_TIMEOUT: float = 1.0
+
 
 class StateController:
     """Processes events and manages state transitions.
@@ -124,7 +130,7 @@ class StateController:
         # Wake the worker thread immediately (it may be blocked on queue.get)
         self._queue.put_nowait(None)  # type: ignore[arg-type]
         if self._worker:
-            self._worker.join(timeout=1.0)
+            self._worker.join(timeout=_WORKER_JOIN_TIMEOUT)
             self._worker = None
 
     @property
@@ -141,7 +147,7 @@ class StateController:
         """Main event processing loop."""
         while self._running:
             try:
-                event = self._queue.get(timeout=0.1)
+                event = self._queue.get(timeout=_QUEUE_POLL_S)
                 if event is None:
                     break  # Sentinel from stop()
                 self._handle_event(event)

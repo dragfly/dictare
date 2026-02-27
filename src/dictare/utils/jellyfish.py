@@ -37,6 +37,12 @@ def metaphone(word: str) -> str:
     (1990).  Converts an English word into a rough phonetic representation
     so that words that sound alike produce the same code.
 
+    Note: cyclomatic complexity is intentionally high (CC=62) — this is a
+    faithful port of a phonetic algorithm consisting of sequential character
+    pattern rules.  It is stable, well-tested, and not meant to be refactored
+    into smaller functions.  The high CC eliminates a PyPI dependency whose
+    Rust extension breaks Homebrew builds.
+
     Examples::
 
         >>> metaphone("koder")

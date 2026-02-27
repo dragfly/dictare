@@ -185,6 +185,7 @@ class AudioCapture:
                 "sample_rate": device["default_samplerate"],  # type: ignore
             }
         except Exception:
+            logger.debug("Failed to query output device", exc_info=True)
             return None
 
     def start_streaming(self, callback: Callable[[NDArray[np.float32]], None]) -> None:
@@ -266,6 +267,7 @@ class AudioCapture:
                 "sample_rate": device["default_samplerate"],  # type: ignore
             }
         except Exception:
+            logger.debug("Failed to query default input device", exc_info=True)
             return None
 
     def emergency_abort(self) -> None:

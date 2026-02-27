@@ -144,16 +144,19 @@ def _audio_worker() -> None:
                 # Poll with timeout to prevent FSM getting stuck in PLAYING.
                 import time as _time
 
-                deadline = _time.monotonic() + 10.0
+                deadline = _time.monotonic() + _PLAYBACK_DEADLINE_S
                 while sd.get_stream() and sd.get_stream().active:
                     if _time.monotonic() > deadline:
-                        logger.warning("sd.wait() timed out after 10s — forcing completion")
+                        logger.warning(
+                            "sd.wait() timed out after %.0fs — forcing completion",
+                            _PLAYBACK_DEADLINE_S,
+                        )
                         try:
                             sd.stop()
                         except Exception:
                             pass
                         break
-                    _time.sleep(0.05)
+                    _time.sleep(_PLAYBACK_POLL_S)
         except Exception:
             logger.debug("Audio playback failed for %s", path_str, exc_info=True)
             _play_sound_file_fallback(path_str)
@@ -253,7 +256,10 @@ def play_sound_file(
 # within at most 1 second (no need for sd.stop() to interrupt a long play).
 # ---------------------------------------------------------------------------
 
-_LOOP_CHUNK_DURATION: float = 1.0  # seconds per chunk
+_LOOP_CHUNK_DURATION: float = 1.0     # seconds per chunk
+_PLAYBACK_DEADLINE_S: float = 10.0    # max seconds to wait for sd.wait()
+_PLAYBACK_POLL_S: float = 0.05        # poll interval while waiting for sd.wait()
+_FALLBACK_CMD_TIMEOUT: int = 5        # seconds for afplay/paplay subprocess
 
 _loop_active: threading.Event = threading.Event()
 _loop_chunk_keys: list[str] = []   # cache keys for each 1s slice
@@ -348,11 +354,11 @@ def _play_sound_file_fallback(path_str: str) -> None:
     """Fallback: play via system commands when sounddevice is unavailable."""
     try:
         if sys.platform == "darwin":
-            subprocess.run(["afplay", path_str], capture_output=True, timeout=5)
+            subprocess.run(["afplay", path_str], capture_output=True, timeout=_FALLBACK_CMD_TIMEOUT)
         else:
             for cmd in [["paplay", path_str], ["aplay", "-q", path_str]]:
                 try:
-                    subprocess.run(cmd, capture_output=True, timeout=5)
+                    subprocess.run(cmd, capture_output=True, timeout=_FALLBACK_CMD_TIMEOUT)
                     break
                 except FileNotFoundError:
                     continue

@@ -6,8 +6,10 @@ The engine delegates all TTS-related state and operations here.
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -18,6 +20,12 @@ if TYPE_CHECKING:
     from dictare.core.controller import StateController
 
 logger = logging.getLogger(__name__)
+
+# Seconds to wait for the TTS worker subprocess to connect via SSE
+_TTS_WORKER_CONNECT_TIMEOUT: float = 120.0
+
+# Seconds to wait for the TTS worker to exit gracefully before killing
+_TTS_WORKER_STOP_TIMEOUT: float = 5.0
 
 
 class TTSManager:
@@ -178,7 +186,6 @@ class TTSManager:
         """Kill any orphaned TTS worker processes from a previous engine run."""
         import os
         import signal
-        import subprocess
 
         try:
             result = subprocess.run(
@@ -197,13 +204,12 @@ class TTSManager:
                     os.kill(pid, signal.SIGTERM)
                 except ProcessLookupError:
                     pass
-        except Exception:
+        except OSError:
             pass  # Best-effort cleanup
 
     def _spawn_worker(self, http_server: Any) -> None:
         """Spawn a persistent TTS worker subprocess and create the proxy engine."""
         import os
-        import subprocess
 
         from dictare.tts.proxy import WorkerTTSEngine
         from dictare.tts.venv import get_venv_python, get_worker_pythonpath
@@ -250,7 +256,7 @@ class TTSManager:
         self._tts_engine = proxy
 
         # Wait for worker to connect, polling for early crash every 0.5s
-        deadline = time.monotonic() + 120.0
+        deadline = time.monotonic() + _TTS_WORKER_CONNECT_TIMEOUT
         while not http_server.is_tts_connected():
             # Check if process died (fail fast instead of waiting 120s)
             if self._tts_worker_process.poll() is not None:
@@ -403,8 +409,6 @@ class TTSManager:
     @staticmethod
     def _list_voices_via_venv(engine_name: str) -> list[str]:
         """List voices by running a script in the engine's venv."""
-        import subprocess as sp
-
         from dictare.tts.venv import get_venv_python
 
         venv_python = get_venv_python(engine_name)
@@ -422,14 +426,14 @@ class TTSManager:
             return []
 
         try:
-            result = sp.run(
+            result = subprocess.run(
                 [venv_python, "-c", script],
                 capture_output=True, text=True, timeout=30,
             )
             if result.returncode != 0:
                 return []
             return [v for v in result.stdout.strip().splitlines() if v]
-        except Exception:
+        except (OSError, subprocess.TimeoutExpired):
             return []
 
     # ------------------------------------------------------------------
@@ -472,7 +476,6 @@ class TTSManager:
     @staticmethod
     def _load_tts_phrases() -> dict:
         """Load TTS phrases from config file or use defaults."""
-        import json
         from pathlib import Path
 
         default_phrases = {
@@ -485,7 +488,7 @@ class TTSManager:
                 with open(phrases_path) as f:
                     custom = json.load(f)
                 return {**default_phrases, **custom}
-            except Exception:
+            except (OSError, json.JSONDecodeError, ValueError):
                 pass
 
         return default_phrases
@@ -541,7 +544,7 @@ class TTSManager:
             logger.info("Stopping TTS worker (PID %d)", self._tts_worker_process.pid)
             self._tts_worker_process.terminate()
             try:
-                self._tts_worker_process.wait(timeout=5)
-            except Exception:
+                self._tts_worker_process.wait(timeout=_TTS_WORKER_STOP_TIMEOUT)
+            except subprocess.TimeoutExpired:
                 self._tts_worker_process.kill()
             self._tts_worker_process = None
