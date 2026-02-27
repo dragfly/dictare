@@ -23,6 +23,10 @@ class _MockTTSMgr:
     def __init__(self) -> None:
         self._tts_proxy: WorkerTTSEngine | None = None
 
+    def complete_tts(self, message_id: str, *, ok: bool, duration_ms: int = 0) -> None:
+        if self._tts_proxy is not None:
+            self._tts_proxy.complete(message_id, ok=ok, duration_ms=duration_ms)
+
 
 class MockEngine:
     """Minimal mock engine for TTS worker tests."""
@@ -45,6 +49,9 @@ class MockEngine:
 
     def get_status(self) -> dict:
         return {"protocol_version": "1.0", "state": "idle", "connected_agents": []}
+
+    def complete_tts(self, message_id: str, *, ok: bool, duration_ms: int = 0) -> None:
+        self._tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
 
 
 @pytest.fixture
@@ -120,7 +127,7 @@ class TestTTSCompleteEndpoint:
         """POST /internal/tts/complete without token → 403."""
         response = client.post(
             "/internal/tts/complete",
-            json={"request_id": "abc", "ok": True},
+            json={"message_id": "abc", "ok": True},
         )
         assert response.status_code == 403
 
@@ -130,7 +137,7 @@ class TestTTSCompleteEndpoint:
         """POST /internal/tts/complete with valid token → 200."""
         response = client.post(
             "/internal/tts/complete",
-            json={"request_id": "abc", "ok": True, "duration_ms": 100},
+            json={"message_id": "abc", "ok": True, "duration_ms": 100},
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 200
@@ -145,7 +152,7 @@ class TestTTSCompleteEndpoint:
 
         client.post(
             "/internal/tts/complete",
-            json={"request_id": "req-1", "ok": True, "duration_ms": 250},
+            json={"message_id": "req-1", "ok": True, "duration_ms": 250},
             headers={"Authorization": f"Bearer {token}"},
         )
 
@@ -213,7 +220,7 @@ class TestWorkerTTSEngine:
     def test_complete_unknown_request_is_noop(
         self, server: OpenVIPServer,
     ) -> None:
-        """complete() for unknown request_id does not raise."""
+        """complete() for unknown message_id does not raise."""
         proxy = WorkerTTSEngine(server)
         proxy.complete("nonexistent", ok=True)  # Should not raise
 

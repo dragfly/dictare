@@ -530,6 +530,11 @@ class TTSManager:
                 logger.info("Stopped in-process audio playback")
             return stopped
 
+    def complete_tts(self, message_id: str, *, ok: bool, duration_ms: int = 0) -> None:
+        """Signal that the worker finished processing a TTS message."""
+        if self._tts_proxy is not None:
+            self._tts_proxy.complete(message_id, ok=ok, duration_ms=duration_ms)
+
     def stop(self) -> None:
         """Stop the TTS worker subprocess if running."""
         if self._tts_worker_process is not None:

@@ -252,12 +252,10 @@ class OpenVIPServer:
             if not self._has_permission(request, "register_tts"):
                 raise HTTPException(status_code=403, detail="Forbidden")
             body = await request.json()
-            request_id = body.get("request_id", "")
+            message_id = body.get("message_id", "")
             ok = body.get("ok", False)
             duration_ms = body.get("duration_ms", 0)
-            proxy = getattr(getattr(self._engine, "_tts_mgr", None), "_tts_proxy", None)
-            if proxy is not None:
-                proxy.complete(request_id, ok=ok, duration_ms=duration_ms)
+            self._engine.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
             return {"status": "ok"}
 
         @app.get("/status")
@@ -818,15 +816,7 @@ class OpenVIPServer:
             else:
                 raise HTTPException(status_code=400, detail=f"Unknown type: {cap_type}")
 
-            # Trigger engine restart
-            try:
-                await asyncio.to_thread(
-                    self._engine.handle_protocol_command, {"command": "engine.restart"}
-                )
-            except Exception:
-                pass  # Engine shuts down during restart, expected
-
-            return {"status": "ok"}
+            return {"status": "ok", "restart_required": True}
 
         return app
 

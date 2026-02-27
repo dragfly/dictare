@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
-from queue import Empty, Full, Queue
+from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
 from dictare.core.fsm import (
@@ -67,7 +67,7 @@ class StateController:
         self._state_manager = state_manager
         # Bounded queue to prevent memory exhaustion under heavy load
         # 100 events should be plenty - events should process fast
-        self._queue: Queue[StateMessage] = Queue(maxsize=100)
+        self._queue: Queue[StateMessage] = Queue()
         self._running = False
         self._worker: threading.Thread | None = None
 
@@ -101,16 +101,8 @@ class StateController:
         self._engine = engine
 
     def send(self, event: StateMessage) -> None:
-        """Send event to queue. Thread-safe, non-blocking.
-
-        Note:
-            If queue is full (>100 events), logs warning and drops event.
-            This prevents blocking senders under heavy load.
-        """
-        try:
-            self._queue.put_nowait(event)
-        except Full:
-            logger.warning(f"Event queue full, dropping event: {type(event).__name__}")
+        """Send event to queue. Thread-safe, non-blocking."""
+        self._queue.put_nowait(event)
 
     def start(self) -> None:
         """Start the event processing loop."""
@@ -130,10 +122,7 @@ class StateController:
         self._cancel_transcription_watchdog()
         self._running = False
         # Wake the worker thread immediately (it may be blocked on queue.get)
-        try:
-            self._queue.put_nowait(None)  # type: ignore[arg-type]
-        except Full:
-            pass
+        self._queue.put_nowait(None)  # type: ignore[arg-type]
         if self._worker:
             self._worker.join(timeout=1.0)
             self._worker = None

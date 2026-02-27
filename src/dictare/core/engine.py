@@ -1076,6 +1076,10 @@ class DictareEngine:
         """Interrupt the currently playing audio (delegates to TTSManager)."""
         return self._tts_mgr.stop_speaking()
 
+    def complete_tts(self, message_id: str, *, ok: bool, duration_ms: int = 0) -> None:
+        """Signal that a TTS worker finished processing a message."""
+        self._tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
+
     def _start_exit_watchdog(self, exit_code: int, timeout: float = 6) -> None:
         """Start a watchdog that force-exits after *timeout* seconds.
 
