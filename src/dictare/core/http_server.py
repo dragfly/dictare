@@ -152,7 +152,7 @@ class OpenVIPServer:
             is_tts = agent_id == DictareEngine.TTS_AGENT_ID
             if is_tts:
                 self._tts_connected_event.set()
-            logger.info(f"SSE agent connected: {agent_id}")
+            logger.info("SSE agent connected: %s", agent_id)
 
             async def event_generator():
                 try:
@@ -180,7 +180,7 @@ class OpenVIPServer:
                     self._engine.unregister_agent(agent_id)
                     if is_tts:
                         self._tts_connected_event.clear()
-                    logger.info(f"SSE agent disconnected: {agent_id}")
+                    logger.info("SSE agent disconnected: %s", agent_id)
 
             return EventSourceResponse(event_generator())
 
@@ -1072,7 +1072,7 @@ class OpenVIPServer:
             name="openvip-http-server",
         )
         self._thread.start()
-        logger.info(f"OpenVIP server starting on http://{self._host}:{self._port}")
+        logger.info("OpenVIP server starting on http://%s:%s", self._host, self._port)
 
     def _run_server(self) -> None:
         """Run uvicorn in the background thread."""

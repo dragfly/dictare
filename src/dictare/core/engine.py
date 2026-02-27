@@ -224,7 +224,7 @@ class DictareEngine:
                 try:
                     handler(*args, **kwargs)
                 except Exception:
-                    logger.exception(f"Error in event handler {event}")
+                    logger.exception("Error in event handler %s", event)
 
     def _notify_status(self) -> None:
         """Notify status change via registered callback."""

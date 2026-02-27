@@ -281,6 +281,9 @@ class TTSManager:
         Args:
             text: Text to speak.
         """
+        if self._tts_error:
+            logger.warning("speak_text(%r): TTS failed to load: %s", text, self._tts_error)
+            return
         if self._tts_engine is None:
             logger.warning("speak_text(%r): TTS engine not loaded", text)
             return

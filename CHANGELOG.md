@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.37] - 2026-02-27
+
+### Changed
+- `speak_text()` checks `_tts_error` before `_tts_engine is None` for clearer
+  error messages when TTS failed to load.
+- Replaced f-string logging with `%s` placeholders in `http_server.py`,
+  `engine.py`, `controller.py` (5 call sites).
+
 ## [0.1.36] - 2026-02-27
 
 ### Changed
