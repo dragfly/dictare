@@ -169,6 +169,9 @@ class TrayApp:
         self._microphone_granted = True
         self._input_monitoring_granted = True
 
+        # Service state (from daemon backend)
+        self._service_loaded: bool = self._check_service_loaded()
+
         # Status polling
         self._polling = False
         self._poll_thread: threading.Thread | None = None
@@ -275,7 +278,16 @@ class TrayApp:
         # Advanced submenu
         advanced_items = [
             pystray.MenuItem("Restart Engine", self._on_restart_engine),
+            pystray.Menu.SEPARATOR,
         ]
+        if self._service_loaded:
+            advanced_items.append(
+                pystray.MenuItem("Stop Service", self._on_stop_service),
+            )
+        else:
+            advanced_items.append(
+                pystray.MenuItem("Start Service", self._on_start_service),
+            )
         items.append(pystray.MenuItem("Advanced", pystray.Menu(*advanced_items)))
 
         # Settings — opens config file in editor
@@ -359,6 +371,61 @@ class TrayApp:
                 self.set_state("disconnected")
 
         threading.Thread(target=do_restart, daemon=True).start()
+
+    def _check_service_loaded(self) -> bool:
+        """Check if the service is currently loaded (launchd/systemd)."""
+        try:
+            if sys.platform == "darwin":
+                from dictare.daemon import launchd as backend
+            elif sys.platform == "linux":
+                from dictare.daemon import systemd as backend
+            else:
+                return False
+            return backend.is_loaded()
+        except Exception:
+            return False
+
+    def _on_stop_service(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """Stop the dictare service."""
+        import threading
+
+        def do_stop() -> None:
+            try:
+                if sys.platform == "darwin":
+                    from dictare.daemon import launchd as backend
+                elif sys.platform == "linux":
+                    from dictare.daemon import systemd as backend
+                else:
+                    return
+                backend.stop()
+            except Exception as e:
+                logger.error("Stop service failed: %s", e)
+            finally:
+                self._service_loaded = self._check_service_loaded()
+                self._update_menu()
+
+        threading.Thread(target=do_stop, daemon=True).start()
+
+    def _on_start_service(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """Start the dictare service."""
+        import threading
+
+        def do_start() -> None:
+            try:
+                if sys.platform == "darwin":
+                    from dictare.daemon import launchd as backend
+                elif sys.platform == "linux":
+                    from dictare.daemon import systemd as backend
+                else:
+                    return
+                backend.start()
+            except Exception as e:
+                logger.error("Start service failed: %s", e)
+            finally:
+                self._service_loaded = self._check_service_loaded()
+                self._update_menu()
+
+        threading.Thread(target=do_start, daemon=True).start()
 
     def _on_open_accessibility_settings(
         self, icon: pystray.Icon, item: pystray.MenuItem
