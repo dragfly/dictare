@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-02-27
+
+### Changed
+- Tightened bare `except Exception` to specific types: `ValueError` for JSON
+  parse, `subprocess.TimeoutExpired` for worker stop, `OSError` for file I/O,
+  `json.JSONDecodeError` for config parsing.
+- Extracted magic numbers to named constants: `_PLAYBACK_DEADLINE_S`,
+  `_TTS_WORKER_CONNECT_TIMEOUT`, `_QUEUE_POLL_S`, `_JOB_CLEANUP_DELAY`, etc.
+- Audio device query failures now log `debug` instead of silently returning None.
+- `metaphone()` docstring documents CC=62 as intentional (avoids jellyfish dep).
+
+### Added
+- 13 regression tests covering exception type tightening, magic number constants,
+  audio capture logging, and metaphone documentation.
+
 ## [0.1.35] - 2026-02-27
 
 ### Changed

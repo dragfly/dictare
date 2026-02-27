@@ -177,6 +177,7 @@ def test_spawn_worker_uses_venv_python():
         patch("dictare.tts.venv.get_venv_python", return_value=fake_venv_python),
         patch("dictare.tts.venv.get_worker_pythonpath", return_value=fake_src_path),
         patch("subprocess.Popen") as mock_popen,
+        patch("dictare.core.tts_manager.TTSManager.kill_orphaned_workers"),
     ):
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
@@ -213,7 +214,10 @@ def test_spawn_worker_uses_sys_executable_without_venv():
     mock_http._tts_connected_event = MagicMock()
     mock_http._tts_connected_event.is_set.return_value = True
 
-    with patch("subprocess.Popen") as mock_popen:
+    with (
+        patch("subprocess.Popen") as mock_popen,
+        patch("dictare.core.tts_manager.TTSManager.kill_orphaned_workers"),
+    ):
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
         mock_popen.return_value = mock_proc
