@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.44] - 2026-02-27
+
+### Changed
+- Models page: replaced vertical cards with two compact tables (STT / TTS),
+  columns: Name · Description · Size · Status · Actions.
+- Engine status bar: health poll interval 2s → 1s, timeout 2s → 1s
+  (health endpoint is synchronous, responds in <1 ms).
+
 ## [0.1.43] - 2026-02-27
 
 ### Fixed
