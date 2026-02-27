@@ -1,14 +1,23 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Dictare Settings</title>
-		<link href="/ui/_app/immutable/entry/start.CYrcGBm6.js" rel="modulepreload">
-		<link href="/ui/_app/immutable/chunks/QuqrBqyd.js" rel="modulepreload">
+		<script>
+			(function () {
+				const t = localStorage.getItem("dictare-theme") || "system";
+				const dark =
+					t === "dark" ||
+					(t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+				if (dark) document.documentElement.classList.add("dark");
+			})();
+		</script>
+		<link href="/ui/_app/immutable/entry/start.Dm4SYtTi.js" rel="modulepreload">
+		<link href="/ui/_app/immutable/chunks/DT10ZKnW.js" rel="modulepreload">
 		<link href="/ui/_app/immutable/chunks/DRUaiJVN.js" rel="modulepreload">
 		<link href="/ui/_app/immutable/chunks/DDjXGOqX.js" rel="modulepreload">
-		<link href="/ui/_app/immutable/entry/app.D9MczjTt.js" rel="modulepreload">
+		<link href="/ui/_app/immutable/entry/app.jZfgvSIv.js" rel="modulepreload">
 		<link href="/ui/_app/immutable/chunks/CazOwiyN.js" rel="modulepreload">
 		<link href="/ui/_app/immutable/chunks/BZX8sP3U.js" rel="modulepreload">
 		<link href="/ui/_app/immutable/chunks/tqPN8DRv.js" rel="modulepreload">
@@ -19,7 +28,7 @@
 		
 			<script>
 				{
-					__sveltekit_1nzxi35 = {
+					__sveltekit_xlgoou = {
 						base: "/ui",
 						assets: "/ui"
 					};
@@ -27,8 +36,8 @@
 					const element = document.currentScript.parentElement;
 
 					Promise.all([
-						import("/ui/_app/immutable/entry/start.CYrcGBm6.js"),
-						import("/ui/_app/immutable/entry/app.D9MczjTt.js")
+						import("/ui/_app/immutable/entry/start.Dm4SYtTi.js"),
+						import("/ui/_app/immutable/entry/app.jZfgvSIv.js")
 					]).then(([kit, app]) => {
 						kit.start(app, element);
 					});

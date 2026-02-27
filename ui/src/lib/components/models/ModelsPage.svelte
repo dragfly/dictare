@@ -9,6 +9,7 @@
 		type CapabilityInfo,
 	} from "$lib/api";
 	import * as settingsStore from "$lib/stores/settings.svelte";
+	import { getEngineBarVisible, setModelsSaveBarVisible } from "$lib/stores/settings.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { Download, CheckCircle, AlertCircle, Loader, Trash2 } from "lucide-svelte";
 
@@ -83,7 +84,7 @@
 	}
 
 	async function handleUninstall(capId: string) {
-		if (!confirm(`Uninstall ${capId}? The isolated environment will be removed.`)) return;
+		if (!confirm(`Remove ${capId}? Downloaded files will be deleted.`)) return;
 		try {
 			await uninstallCapability(capId);
 			await load();
@@ -135,6 +136,12 @@
 
 	const sttCaps = $derived(capabilities.filter((c) => c.type === "stt"));
 	const ttsCaps = $derived(capabilities.filter((c) => c.type === "tts"));
+	const engineBarVisible = $derived(getEngineBarVisible());
+
+	$effect(() => {
+		setModelsSaveBarVisible(!!pendingSelection);
+		return () => setModelsSaveBarVisible(false);
+	});
 
 	function fmtGb(gb: number): string {
 		if (gb === 0) return "—";
@@ -262,13 +269,13 @@
 										<Download class="size-3.5" />
 									</Button>
 								{/if}
-								{#if cap.ready && !cap.builtin && cap.venv_installed && !cap.configured && !isInstalling}
+								{#if !cap.builtin && (cap.venv_installed || cap.model_cached) && !cap.configured && !isInstalling}
 									<Button
 										variant="ghost"
 										size="sm"
 										class="text-muted-foreground hover:text-destructive px-2 h-7"
 										onclick={(e: MouseEvent) => { e.stopPropagation(); handleUninstall(cap.id); }}
-										title="Remove isolated environment"
+										title="Remove downloaded files"
 									>
 										<Trash2 class="size-3" />
 									</Button>
@@ -298,7 +305,7 @@
 
 	<!-- Save bar -->
 	{#if pendingSelection}
-		<div class="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur px-6 py-3 z-50">
+		<div class="fixed left-0 right-0 border-t bg-background/95 backdrop-blur px-6 py-3 z-50 transition-[bottom] duration-200 {engineBarVisible ? 'bottom-11' : 'bottom-0'}">
 			<div class="max-w-2xl mx-auto flex items-center justify-between">
 				<p class="text-sm text-muted-foreground">
 					Switch {pendingSelection.type === "stt" ? "STT model" : "TTS engine"} to

@@ -763,20 +763,35 @@ class OpenVIPServer:
 
         @app.delete("/capabilities/{cap_id}/install")
         async def capability_uninstall(cap_id: str):
-            """Uninstall a capability's venv (model cache stays)."""
+            """Uninstall a capability: removes venv and/or cached model files."""
+            import shutil
+
             from dictare.cli.models import _get_model_registry
             from dictare.tts.venv import VENV_ENGINES, uninstall_venv
+            from dictare.utils.hf_download import get_hf_cache_dir
 
             registry = _get_model_registry()
             if cap_id not in registry:
                 raise HTTPException(status_code=404, detail=f"Unknown capability: {cap_id}")
 
             info = registry[cap_id]
-            venv_name = info.get("venv")
-            if not venv_name or venv_name not in VENV_ENGINES:
-                raise HTTPException(status_code=400, detail="This capability has no venv to uninstall")
+            if info.get("builtin"):
+                raise HTTPException(status_code=400, detail="Cannot remove a builtin capability")
 
-            await asyncio.to_thread(uninstall_venv, venv_name)
+            venv_name = info.get("venv")
+            repo = info.get("repo")
+
+            if not venv_name and not repo:
+                raise HTTPException(status_code=400, detail="Nothing to remove for this capability")
+
+            if venv_name and venv_name in VENV_ENGINES:
+                await asyncio.to_thread(uninstall_venv, venv_name)
+
+            if repo:
+                cache_dir = get_hf_cache_dir(repo)
+                if cache_dir.exists():
+                    await asyncio.to_thread(shutil.rmtree, cache_dir, True)
+
             return {"status": "ok"}
 
         @app.post("/capabilities/{cap_id}/select")
