@@ -81,9 +81,10 @@
 		<Button variant="outline" size="sm" onclick={load}>Retry</Button>
 	</div>
 {:else if p}
-	<div class="space-y-6 px-4">
-		<!-- Engine + Agents + Permissions -->
+	<div class="space-y-4 px-4">
+		<!-- Engine (left) + Permissions (right) -->
 		<div class="grid grid-cols-2 gap-4">
+			<!-- Engine -->
 			<div class="rounded-lg border bg-card p-4 space-y-2">
 				<div class="flex items-center justify-between">
 					<h3 class="text-sm font-semibold">Engine</h3>
@@ -129,48 +130,46 @@
 				</div>
 			</div>
 
-			<div class="space-y-4">
-				<!-- Agents -->
+			<!-- Permissions -->
+			{#if p.permissions}
 				<div class="rounded-lg border bg-card p-4 space-y-2">
-					<h3 class="text-sm font-semibold">Agents</h3>
-					{#if p.output.available_agents.length > 0}
-						<div class="flex flex-wrap gap-2">
-							{#each p.output.available_agents as agent}
-								<Badge
-									variant={agent === p.output.current_agent ? "default" : "secondary"}
-									class="text-xs"
-								>
-									{agent}
-									{#if agent === p.output.current_agent}
-										<span class="ml-1 opacity-70">active</span>
-									{/if}
-								</Badge>
-							{/each}
-						</div>
-					{:else}
-						<p class="text-sm text-muted-foreground">No agents connected</p>
-					{/if}
-				</div>
-
-				<!-- Permissions -->
-				{#if p.permissions}
-					<div class="rounded-lg border bg-card p-4 space-y-2">
-						<h3 class="text-sm font-semibold">Permissions</h3>
-						<div class="flex flex-wrap gap-3">
-							{#each Object.entries(p.permissions) as [key, ok]}
-								<div class="flex items-center gap-1.5 text-sm">
-									{#if ok}
-										<CheckCircle class="size-3.5 text-green-500" />
-									{:else}
-										<XCircle class="size-3.5 text-destructive" />
-									{/if}
-									<span class="capitalize">{key.replace("_", " ")}</span>
-								</div>
-							{/each}
-						</div>
+					<h3 class="text-sm font-semibold">Permissions</h3>
+					<div class="flex flex-wrap gap-3">
+						{#each Object.entries(p.permissions) as [key, ok]}
+							<div class="flex items-center gap-1.5 text-sm">
+								{#if ok}
+									<CheckCircle class="size-3.5 text-green-500" />
+								{:else}
+									<XCircle class="size-3.5 text-destructive" />
+								{/if}
+								<span class="capitalize">{key.replace("_", " ")}</span>
+							</div>
+						{/each}
 					</div>
-				{/if}
-			</div>
+				</div>
+			{/if}
+		</div>
+
+		<!-- Agents (full width below) -->
+		<div class="rounded-lg border bg-card p-4 space-y-2">
+			<h3 class="text-sm font-semibold">Agents</h3>
+			{#if p.output.available_agents.length > 0}
+				<div class="flex flex-wrap gap-2">
+					{#each p.output.available_agents as agent}
+						<Badge
+							variant={agent === p.output.current_agent ? "default" : "secondary"}
+							class="text-xs"
+						>
+							{agent}
+							{#if agent === p.output.current_agent}
+								<span class="ml-1 opacity-70">active</span>
+							{/if}
+						</Badge>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-sm text-muted-foreground">No agents connected</p>
+			{/if}
 		</div>
 	</div>
 {/if}
