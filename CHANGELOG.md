@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.52] - 2026-02-27
+
+### Changed
+- Tray: replaced SSE-based status streaming with simple HTTP polling every 1 s
+  (`client.get_status()`). Eliminates all stuck-state bugs (e.g. stuck
+  "Restarting…" after engine restart) caused by SSE reconnection edge cases.
+- Tray: removed `_restarting` state/flag entirely. Valid states are now:
+  `disconnected`, `loading`, `off`, `listening`.
+- Tray: disconnected icon renamed from `dictare_muted` to `dictare_disconnected`
+  for clarity; new icon asset added.
+
 ## [0.1.51] - 2026-02-27
 
 ### Fixed
