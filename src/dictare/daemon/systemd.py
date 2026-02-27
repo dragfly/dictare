@@ -44,6 +44,8 @@ def generate_unit(python_path: str) -> str:
         ExecStart={python_path} -m dictare serve
         Restart=always
         RestartSec=5
+        TimeoutStopSec=10
+        KillMode=control-group
         Environment=PYTHONUNBUFFERED=1
         Environment=GI_TYPELIB_PATH={gi_path}
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.42] - 2026-02-27
+
+### Fixed
+- Linux: `systemctl stop` hung for 90s (systemd default) when the process
+  didn't respond to SIGTERM. Added `TimeoutStopSec=10` and `KillMode=control-group`
+  to the unit file so the engine is force-killed after 10s.
+- Linux install script: `stop` step now falls back to `systemctl kill` if the
+  stop command times out, preventing the install from blocking.
+
 ## [0.1.41] - 2026-02-27
 
 ### Changed
