@@ -16,6 +16,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from openvip.models import Transcription
+
 from dictare import __version__
 from dictare.agent.pty_session import (
     PTYSession,
@@ -359,8 +361,10 @@ def _read_from_sse(
             if stop_event.is_set():
                 break
 
-            # Skip partial transcriptions (SpeechRequest has no .partial)
-            if getattr(msg, "partial", False):
+            if not isinstance(msg, Transcription):
+                continue
+
+            if msg.partial:
                 continue
 
             msg_id = str(msg.id) if msg.id else None
