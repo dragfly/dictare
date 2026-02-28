@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.64] - 2026-02-28
+
+### Fixed
+- macOS hotkey delivery is now IPC-first: the Swift launcher sends tap events
+  to the engine over a local Unix socket with per-event ACK, and falls back to
+  `SIGUSR1` if IPC delivery fails.
+- Swift launcher `CGEventTap` callback no longer retains events (`passUnretained`
+  instead of `passRetained`), preventing ownership leaks in the hotkey path.
+- Hotkey health semantics are stricter: only `hotkey_status = "confirmed"` is
+  considered healthy (`active` no longer counts as bound/healthy).
+
+### Added
+- New hotkey IPC server module (`src/dictare/hotkey/ipc.py`) and integration in
+  `dictare serve` (`DICTARE_HOTKEY_TRANSPORT=auto|ipc|signal`).
+- Tests for the IPC hotkey transport and ACK behavior.
+- Technical postmortem/design document: `codex-hotkey-fix.md`.
+
 ## [0.1.63] - 2026-02-28
 
 ### Fixed

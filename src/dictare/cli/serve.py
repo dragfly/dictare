@@ -137,6 +137,8 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
 
     from dictare.utils.paths import get_pid_path
 
+    hotkey_ipc = None
+
     try:
         # Install signal handlers BEFORE controller.start() — model loading
         # takes ~20s and an unhandled SIGUSR1 during that window kills the process.
@@ -154,6 +156,19 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
                 controller.on_hotkey_tap()
 
             signal.signal(signal.SIGUSR1, _tap_handler)
+
+        hotkey_transport = os.environ.get("DICTARE_HOTKEY_TRANSPORT", "auto").strip().lower()
+        if hotkey_transport in ("auto", "ipc"):
+            try:
+                from dictare.hotkey.ipc import HotkeyIPCServer
+
+                hotkey_ipc = HotkeyIPCServer(on_tap=controller.on_hotkey_tap)
+                hotkey_ipc.start()
+                _logger.info("Hotkey transport active: ipc+signal-fallback")
+            except Exception:
+                _logger.warning("Failed to start hotkey IPC server, using signal-only", exc_info=True)
+        else:
+            _logger.info("Hotkey transport active: signal-only")
 
         try:
             controller.start(
@@ -174,6 +189,8 @@ def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> 
         except KeyboardInterrupt:
             pass
     finally:
+        if hotkey_ipc is not None:
+            hotkey_ipc.stop()
         get_pid_path().unlink(missing_ok=True)
         controller.stop()
         _logger.info("Engine stopped")
