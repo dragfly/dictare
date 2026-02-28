@@ -171,14 +171,16 @@ class DictareEngine:
         self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
 
         # Tap detection (isolated state machine)
-        # Single tap: toggle listening on/off
+        # Single tap: toggle mute on/off
         # Double tap: toggle output mode (agents <-> keyboard)
+        # Long press (≥0.8s): submit (inject Enter into active window)
         self._tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
             on_single_tap=lambda: self._controller.send(HotkeyPressed(source="hotkey")),
             on_double_tap=lambda: self.set_output_mode(
                 "keyboard" if self.agent_mode else "agents"
             ),
+            on_long_press=self._submit_action,
         )
 
         # Initialize components
@@ -847,6 +849,28 @@ class DictareEngine:
                 submit_confidence=submit_confidence,
                 inject_ms=inject_elapsed * 1000,
             )
+
+    # -------------------------------------------------------------------------
+    # Hotkey Actions
+    # -------------------------------------------------------------------------
+
+    def _submit_action(self) -> None:
+        """Inject a Return keypress into the active window (long-press action).
+
+        On macOS uses Quartz CGEvent. On other platforms this is a no-op
+        until a platform-specific injector is available.
+        """
+        import sys
+
+        if sys.platform == "darwin":
+            try:
+                from dictare.agent.injection.quartz import QuartzInjector
+                QuartzInjector().send_submit()
+                logger.debug("submit_action: Return key injected")
+            except Exception:
+                logger.debug("submit_action: QuartzInjector unavailable", exc_info=True)
+        else:
+            logger.debug("submit_action: not implemented on %s", sys.platform)
 
     # -------------------------------------------------------------------------
     # State Control

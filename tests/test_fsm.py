@@ -24,8 +24,8 @@ class TestAppState:
         assert AppState.PLAYING
 
     def test_str_returns_capitalized_name(self) -> None:
-        """Test __str__ returns capitalized state name."""
-        assert str(AppState.OFF) == "Off"
+        """Test __str__ returns human-readable state name."""
+        assert str(AppState.OFF) == "muted"
         assert str(AppState.LISTENING) == "Listening"
         assert str(AppState.RECORDING) == "Recording"
         assert str(AppState.TRANSCRIBING) == "Transcribing"
@@ -38,8 +38,7 @@ class TestInvalidTransitionError:
         error = InvalidTransitionError(AppState.OFF, AppState.INJECTING)
         assert error.from_state == AppState.OFF
         assert error.to_state == AppState.INJECTING
-        # State names are capitalized in str()
-        assert "Off" in str(error)
+        assert "muted" in str(error)
         assert "Injecting" in str(error)
 
 class TestStateManagerBasics:
@@ -92,7 +91,7 @@ class TestStateManagerBasics:
     def test_str_returns_state_name(self) -> None:
         """Test __str__ returns current state."""
         sm = StateManager()
-        assert str(sm) == "Off"
+        assert str(sm) == "muted"
 
 class TestValidTransitions:
     """Test valid state transitions."""

@@ -5,7 +5,12 @@
 /// 1. Microphone permission (shows "Dictare" in dialog, not "Python")
 /// 2. Global hotkey via CGEventTap (requires Accessibility + Input Monitoring)
 /// 3. Spawns the Python engine as a child process
-/// 4. Sends hotkey taps to Python via local IPC (with SIGUSR1 fallback)
+/// 4. Sends key.down / key.up events to Python via IPC (with SIGUSR1 fallback)
+///
+/// The launcher is a pure forwarder: it reads the configured hotkey keycode,
+/// intercepts the matching modifier key events, and forwards raw key.down /
+/// key.up to Python.  Python's TapDetector handles all gesture logic
+/// (single tap, double tap, long press).
 ///
 /// Usage:
 ///   Dictare                    — Normal mode: permissions, hotkey, engine
@@ -50,12 +55,86 @@ if CommandLine.arguments.contains("--check-permissions") {
 }
 
 // ---------------------------------------------------------------------------
+// Config reader — read hotkey.key from ~/.config/dictare/config.toml
+// ---------------------------------------------------------------------------
+
+/// Read a string value from a TOML file given section and key.
+/// Only handles simple `key = "value"` lines (no inline tables, arrays, etc.).
+func readTomlString(path: String, section: String, key: String) -> String? {
+    guard let content = try? String(contentsOfFile: path, encoding: .utf8) else {
+        return nil
+    }
+    var inSection = false
+    for line in content.components(separatedBy: "\n") {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("[") {
+            // Section header — check if this is the one we want
+            inSection = trimmed == "[\(section)]"
+            continue
+        }
+        guard inSection else { continue }
+        // Parse: key = "value"
+        let parts = trimmed.components(separatedBy: "=")
+        guard parts.count >= 2 else { continue }
+        let lineKey = parts[0].trimmingCharacters(in: .whitespaces)
+        guard lineKey == key else { continue }
+        var value = parts[1...].joined(separator: "=").trimmingCharacters(in: .whitespaces)
+        // Strip surrounding quotes
+        if value.hasPrefix("\"") && value.hasSuffix("\"") && value.count >= 2 {
+            value = String(value.dropFirst().dropLast())
+        }
+        return value
+    }
+    return nil
+}
+
+/// Map an evdev key name to a macOS CGKeyCode.
+/// Returns nil for unknown names.
+func evdevToKeyCode(_ name: String) -> Int64? {
+    switch name {
+    case "KEY_RIGHTMETA":  return 54  // Right Command
+    case "KEY_LEFTMETA":   return 55  // Left Command
+    case "KEY_LEFTSHIFT":  return 56  // Left Shift
+    case "KEY_LEFTALT":    return 58  // Left Option
+    case "KEY_LEFTCTRL":   return 59  // Left Control
+    case "KEY_RIGHTSHIFT": return 60  // Right Shift
+    case "KEY_RIGHTALT":   return 61  // Right Option
+    case "KEY_RIGHTCTRL":  return 62  // Right Control
+    case "KEY_FN":         return 63  // Fn
+    default:               return nil
+    }
+}
+
+/// Return the CGEventFlags mask bit that corresponds to a modifier keycode.
+func flagMaskForKeyCode(_ keyCode: Int64) -> CGEventFlags {
+    switch keyCode {
+    case 54, 55: return .maskCommand      // Right Cmd, Left Cmd
+    case 56, 60: return .maskShift        // Left Shift, Right Shift
+    case 58, 61: return .maskAlternate    // Left Option, Right Option
+    case 59, 62: return .maskControl      // Left Control, Right Control
+    case 63:     return .maskSecondaryFn  // Fn
+    default:     return .maskCommand      // Fallback
+    }
+}
+
+/// Resolve the configured hotkey keycode from config.toml.
+/// Falls back to 54 (Right Cmd) if the file is missing or the key is unknown.
+func resolveHotkeyKeyCode() -> Int64 {
+    let configPath = NSHomeDirectory() + "/.config/dictare/config.toml"
+    if let keyName = readTomlString(path: configPath, section: "hotkey", key: "key"),
+       let code = evdevToKeyCode(keyName) {
+        fputs("Hotkey: configured key=\(keyName) keyCode=\(code)\n", stderr)
+        return code
+    }
+    fputs("Hotkey: using default Right Cmd (keyCode=54)\n", stderr)
+    return 54
+}
+
+// ---------------------------------------------------------------------------
 // App Delegate — manages CGEventTap and child process
 // ---------------------------------------------------------------------------
 class LauncherDelegate: NSObject, NSApplicationDelegate {
     var childProcess: Process?
-    var keyDownTime: Date?
-    let tapThreshold: TimeInterval = 0.5  // Max press duration for a "tap"
     var sigTermSource: DispatchSourceSignal?
     var sigIntSource: DispatchSourceSignal?
     var eventTap: CFMachPort?  // Stored for recreation after system disable
@@ -63,7 +142,16 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     var tapRecreating = false     // Guard against concurrent recreation
     var hotkeySeq: UInt64 = 0
 
+    // Configured hotkey keycode (read from config.toml at startup)
+    var hotkeyKeyCode: Int64 = 54
+    var hotkeyFlagMask: CGEventFlags = .maskCommand
+
+    // Track whether key.down was sent via IPC so we send key.up the same way
+    var keyDownSentViaIPC = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        hotkeyKeyCode = resolveHotkeyKeyCode()
+        hotkeyFlagMask = flagMaskForKeyCode(hotkeyKeyCode)
         requestMicrophonePermission()
         writeAccessibilityStatus()
         spawnPythonEngine()
@@ -273,7 +361,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
-        fputs("Hotkey listener active (Right Cmd)\n", stderr)
+        fputs("Hotkey listener active (keyCode=\(hotkeyKeyCode))\n", stderr)
         writeHotkeyStatus("active")
     }
 
@@ -294,31 +382,24 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         try? status.write(to: file, atomically: true, encoding: .utf8)
     }
 
+    /// Handle a flagsChanged CGEvent — forward raw key.down / key.up to Python.
+    ///
+    /// The launcher is a pure forwarder: it does NOT filter by duration or decide
+    /// what a "tap" is.  Python's TapDetector receives raw key.down / key.up events
+    /// and handles all gesture logic (single tap, double tap, long press).
     func handleFlagsChanged(event: CGEvent) {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-
-        // Right Cmd = keycode 54
-        guard keyCode == 54 else { return }
+        guard keyCode == hotkeyKeyCode else { return }
 
         let flags = event.flags
-        let rightCmdDown = flags.contains(.maskCommand)
+        let keyIsDown = flags.contains(hotkeyFlagMask)
 
-        if rightCmdDown {
-            // Key pressed — record timestamp
-            keyDownTime = Date()
-            fputs("Hotkey: Right Cmd DOWN\n", stderr)
-        } else if let downTime = keyDownTime {
-            // Key released — check if it was a tap (short press)
-            let duration = Date().timeIntervalSince(downTime)
-            keyDownTime = nil
-            fputs(String(format: "Hotkey: Right Cmd UP (duration=%.3fs)\n", duration), stderr)
-
-            if duration < tapThreshold {
-                fputs("Hotkey: tap accepted\n", stderr)
-                sendToggleEvent()
-            } else {
-                fputs(String(format: "Hotkey: tap rejected (too long, threshold=%.1fs)\n", tapThreshold), stderr)
-            }
+        if keyIsDown {
+            fputs("Hotkey: key DOWN (keyCode=\(keyCode))\n", stderr)
+            sendKeyDown()
+        } else {
+            fputs("Hotkey: key UP (keyCode=\(keyCode))\n", stderr)
+            sendKeyUp()
         }
     }
 
@@ -327,22 +408,49 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         return env.lowercased()
     }
 
-    func sendToggleEvent() {
+    /// Send key.down to Python via IPC.  Falls back to SIGUSR1 (hotkey.tap) if IPC fails.
+    func sendKeyDown() {
         hotkeySeq += 1
         let seq = hotkeySeq
         let mode = hotkeyTransportMode()
 
         if mode != "signal" {
-            if sendTapViaIPC(seq: seq) {
-                fputs("Hotkey: IPC tap delivered (seq \(seq))\n", stderr)
+            if sendIPCMessage(type: "key.down", seq: seq) {
+                fputs("Hotkey: IPC key.down delivered (seq \(seq))\n", stderr)
+                keyDownSentViaIPC = true
                 return
             }
-            fputs("Hotkey: IPC tap failed (seq \(seq)) — falling back to SIGUSR1\n", stderr)
+            fputs("Hotkey: IPC key.down failed (seq \(seq)) — falling back to SIGUSR1\n", stderr)
         }
+        // SIGUSR1 fallback: simulate a complete tap (Python on_hotkey_tap does down+up)
+        keyDownSentViaIPC = false
         sendToggleSignal()
     }
 
-    func sendTapViaIPC(seq: UInt64) -> Bool {
+    /// Send key.up to Python via IPC (only if key.down was sent via IPC).
+    func sendKeyUp() {
+        guard keyDownSentViaIPC else {
+            // key.down was sent as SIGUSR1; key.up is a no-op (tap already simulated)
+            return
+        }
+        keyDownSentViaIPC = false
+        hotkeySeq += 1
+        let seq = hotkeySeq
+        let mode = hotkeyTransportMode()
+
+        if mode != "signal" {
+            if sendIPCMessage(type: "key.up", seq: seq) {
+                fputs("Hotkey: IPC key.up delivered (seq \(seq))\n", stderr)
+                return
+            }
+            fputs("Hotkey: IPC key.up failed (seq \(seq))\n", stderr)
+            // key.up lost — TapDetector long-press timer will fire at 0.8s and reset.
+            // Not ideal but acceptable: the worst case is an unintended submit action.
+        }
+    }
+
+    /// Send a single IPC message to the Python engine and wait for ACK.
+    func sendIPCMessage(type msgType: String, seq: UInt64) -> Bool {
         let socketPath = NSHomeDirectory() + "/.dictare/hotkey.sock"
         let maxPathLen = MemoryLayout.size(ofValue: sockaddr_un().sun_path)
         if socketPath.utf8.count >= maxPathLen {
@@ -381,7 +489,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             return false
         }
 
-        let payload = "{\"type\":\"hotkey.tap\",\"seq\":\(seq),\"ts\":\(Date().timeIntervalSince1970)}\n"
+        let payload = "{\"type\":\"\(msgType)\",\"seq\":\(seq),\"ts\":\(Date().timeIntervalSince1970)}\n"
         let sendResult = payload.withCString { cs in
             send(fd, cs, strlen(cs), 0)
         }
