@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.72] - 2026-02-28
+
+### Changed
+- Dashboard Engine card: STT, TTS, Hotkey rows now appear first, State and
+  Uptime below — aligns the three status indicators with the Permissions column.
+
 ## [0.1.71] - 2026-02-28
 
 ### Fixed
