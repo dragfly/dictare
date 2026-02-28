@@ -332,3 +332,25 @@ def uninstall_tray() -> None:
 def is_tray_installed() -> bool:
     """Check whether the tray plist exists."""
     return get_tray_plist_path().exists()
+
+
+# --------------------------------------------------------------------------
+# Launch at login (controls both engine and tray)
+# --------------------------------------------------------------------------
+
+def launch_at_login_enabled() -> bool:
+    """Return True if both engine and tray are configured to launch at login."""
+    return is_installed() and is_tray_installed()
+
+
+def enable_launch_at_login() -> None:
+    """Enable launch at login for both engine and tray (idempotent)."""
+    if not is_installed():
+        install()
+    install_tray()
+
+
+def disable_launch_at_login() -> None:
+    """Disable launch at login by unloading and removing both LaunchAgents."""
+    uninstall_tray()
+    uninstall()

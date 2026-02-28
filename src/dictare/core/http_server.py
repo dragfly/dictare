@@ -337,6 +337,33 @@ class OpenVIPServer:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+        @app.get("/system")
+        async def get_system_info():
+            """Return system-level info (platform, launch at login state)."""
+            import sys as _sys
+            info: dict[str, object] = {"platform": _sys.platform}
+            if _sys.platform == "darwin":
+                from dictare.daemon.launchd import launch_at_login_enabled
+                info["launch_at_login"] = launch_at_login_enabled()
+            else:
+                info["launch_at_login"] = None
+            return info
+
+        @app.post("/system")
+        async def update_system(request: Request):
+            """Update system-level settings (e.g. launch at login)."""
+            import sys as _sys
+            body = await request.json()
+            if _sys.platform == "darwin" and "launch_at_login" in body:
+                from dictare.daemon.launchd import (
+                    disable_launch_at_login,
+                    enable_launch_at_login,
+                )
+                await asyncio.to_thread(
+                    enable_launch_at_login if body["launch_at_login"] else disable_launch_at_login
+                )
+            return {"ok": True}
+
         @app.get("/audio/devices")
         async def list_audio_devices():
             """List available audio input and output devices."""

@@ -10,7 +10,7 @@
 	import type { TabDef, NavChild } from "$lib/types";
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import { getFixedBottomPx } from "$lib/stores/settings.svelte";
-	import { restartEngine, pingEngine } from "$lib/api";
+	import { restartEngine, pingEngine, getSystemInfo, setLaunchAtLogin } from "$lib/api";
 	import { onMount } from "svelte";
 
 	interface Props {
@@ -57,6 +57,23 @@
 	const fixedBottomPx = $derived(getFixedBottomPx());
 
 	let restarting = $state(false);
+	let launchAtLogin = $state<boolean | null>(null);
+
+	onMount(async () => {
+		try {
+			const info = await getSystemInfo();
+			launchAtLogin = info.launch_at_login;
+		} catch {
+			// non-macOS or engine not ready
+		}
+	});
+
+	async function toggleLaunchAtLogin() {
+		if (launchAtLogin === null) return;
+		const next = !launchAtLogin;
+		launchAtLogin = next;
+		await setLaunchAtLogin(next);
+	}
 
 	async function handleRestart() {
 		restarting = true;
@@ -93,11 +110,29 @@
 					<p class="text-sm text-muted-foreground">{activeDesc}</p>
 				</div>
 				{#if activeNavId === "advanced-daemon"}
-					<div class="px-4 mb-4">
-						<Button variant="destructive" onclick={handleRestart} disabled={restarting}>
-							<RotateCcw class="size-3.5 mr-1.5 {restarting ? 'animate-spin' : ''}" />
-							{restarting ? "Restarting…" : "Restart Engine"}
-						</Button>
+					<div class="px-4 mb-6 space-y-3">
+						{#if launchAtLogin !== null}
+							<div class="flex items-center justify-between rounded-lg border px-4 py-3">
+								<div>
+									<div class="text-sm font-medium">Launch at login</div>
+									<div class="text-xs text-muted-foreground">Start engine and tray automatically at login</div>
+								</div>
+								<button
+									role="switch"
+									aria-checked={launchAtLogin}
+									onclick={toggleLaunchAtLogin}
+									class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {launchAtLogin ? 'bg-primary' : 'bg-input'}"
+								>
+									<span class="pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform {launchAtLogin ? 'translate-x-4' : 'translate-x-0'}"></span>
+								</button>
+							</div>
+						{/if}
+						<div>
+							<Button variant="destructive" onclick={handleRestart} disabled={restarting}>
+								<RotateCcw class="size-3.5 mr-1.5 {restarting ? 'animate-spin' : ''}" />
+								{restarting ? "Restarting…" : "Restart Engine"}
+							</Button>
+						</div>
 					</div>
 				{/if}
 				<SettingsSection sections={activeSections} isGeneral={activeNavId === "advanced-general"} {schema} />

@@ -25,6 +25,12 @@ class Dictare < Formula
     bin.install_symlink uv_tool_bin => "dictare" if uv_tool_bin.exist?
   end
 
+  def post_install
+    system "#{bin}/dictare", "service", "install"
+  rescue => e
+    opoo "Could not auto-start dictare service: #{e}"
+  end
+
   def caveats
     <<~EOS
       dictare requires Accessibility permission for keyboard simulation.
