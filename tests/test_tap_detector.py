@@ -125,6 +125,94 @@ class TestDoubleTap:
         assert fired_at[0] - start < 0.1
 
 
+class TestLongPress:
+    """Test long press detection."""
+
+    def test_long_press_fires_callback_while_key_held(self):
+        result = []
+        detector = TapDetector(
+            threshold=0.4,
+            long_press_threshold=0.02,
+            on_single_tap=lambda: result.append("single"),
+            on_long_press=lambda: result.append("long"),
+        )
+
+        detector.on_key_down()
+        _wait_until(lambda: len(result) > 0)
+
+        assert result == ["long"]
+        assert detector.state == TapState.LONG_PRESSED
+
+    def test_long_press_key_up_resets_to_idle(self):
+        result = []
+        detector = TapDetector(
+            long_press_threshold=0.02,
+            on_long_press=lambda: result.append("long"),
+        )
+
+        detector.on_key_down()
+        _wait_until(lambda: detector.state == TapState.LONG_PRESSED)
+        detector.on_key_up()
+
+        assert detector.state == TapState.IDLE
+        assert result == ["long"]
+
+    def test_short_press_does_not_fire_long_press(self):
+        result = []
+        detector = TapDetector(
+            threshold=0.01,
+            long_press_threshold=0.5,
+            on_single_tap=lambda: result.append("single"),
+            on_long_press=lambda: result.append("long"),
+        )
+
+        detector.on_key_down()
+        detector.on_key_up()  # Released before long_press_threshold
+
+        _wait_until(lambda: len(result) > 0)
+
+        assert "long" not in result
+        assert result == ["single"]
+
+    def test_long_press_not_fired_on_combo(self):
+        result = []
+        detector = TapDetector(
+            long_press_threshold=0.02,
+            on_long_press=lambda: result.append("long"),
+        )
+
+        detector.on_key_down()
+        detector.on_other_key()  # Combo: should abort
+        _wait_until(lambda: detector.state == TapState.IDLE, timeout=0.1)
+
+        time.sleep(0.05)  # Wait past long_press_threshold
+        assert result == []
+
+    def test_single_tap_not_fired_after_long_press(self):
+        result = []
+        detector = TapDetector(
+            threshold=0.01,
+            long_press_threshold=0.02,
+            on_single_tap=lambda: result.append("single"),
+            on_long_press=lambda: result.append("long"),
+        )
+
+        detector.on_key_down()
+        _wait_until(lambda: detector.state == TapState.LONG_PRESSED)
+        detector.on_key_up()
+
+        time.sleep(0.05)  # Wait past double-tap threshold — no single tap should fire
+        assert result == ["long"]
+
+    def test_long_pressed_state_in_valid_transitions(self):
+        assert TapState.LONG_PRESSED in TapDetector.VALID_TRANSITIONS
+        assert TapDetector.VALID_TRANSITIONS[TapState.LONG_PRESSED] == [TapState.IDLE]
+
+    def test_pressed_1_can_transition_to_long_pressed(self):
+        transitions = TapDetector.VALID_TRANSITIONS[TapState.PRESSED_1]
+        assert TapState.LONG_PRESSED in transitions
+
+
 class TestComboAbort:
     """Test that combos (Command+Plus) abort tap detection."""
 
