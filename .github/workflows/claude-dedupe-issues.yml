@@ -1,0 +1,45 @@
+name: Claude Issue Dedupe
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number to check for duplicates
+        required: true
+
+jobs:
+  dedupe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Claude Code for Deduplication
+        timeout-minutes: 8
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--model claude-sonnet-4-6"
+          prompt: |
+            Check if this issue is a duplicate for the dictare project.
+
+            REPO: ${{ github.repository }}
+            ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
+
+            Instructions:
+            1. Read the new issue
+            2. Search existing issues for similar ones (use gh issue list --state all --limit 200)
+            3. If a duplicate is found:
+               - Comment on the new issue linking to the original: "Duplicate of #NNN"
+               - Add the label "duplicate"
+               - Do NOT close it (the maintainer will decide)
+            4. If no duplicate, do nothing (no comment needed)
