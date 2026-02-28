@@ -153,6 +153,10 @@ class HotkeyIPCServer:
                 try:
                     if self._on_key_up is not None:
                         self._on_key_up()
+                    with self._lock:
+                        self._delivered_count += 1
+                        self._last_delivered_ts = time.time()
+                        self._write_runtime_status_locked()
                 except Exception:
                     logger.exception("Hotkey IPC callback failed (key.up)")
             else:
