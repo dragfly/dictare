@@ -10,7 +10,7 @@
 	import type { TabDef, NavChild } from "$lib/types";
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import { getFixedBottomPx } from "$lib/stores/settings.svelte";
-	import { restartEngine, pingEngine, getSystemInfo, setLaunchAtLogin } from "$lib/api";
+	import { restartEngine, pingEngine, getSystemInfo, setLaunchAtLogin, getHotkeyStatus, fixHotkey } from "$lib/api";
 	import { onMount } from "svelte";
 
 	interface Props {
@@ -58,6 +58,7 @@
 
 	let restarting = $state(false);
 	let launchAtLogin = $state<boolean | null>(null);
+	let hotkeyStatus = $state<string | null>(null);  // null = linux/unsupported
 
 	onMount(async () => {
 		try {
@@ -66,6 +67,12 @@
 		} catch {
 			// non-macOS or engine not ready
 		}
+		try {
+			const hs = await getHotkeyStatus();
+			if (hs.status !== "unsupported") hotkeyStatus = hs.status;
+		} catch {
+			// engine not ready
+		}
 	});
 
 	async function toggleLaunchAtLogin() {
@@ -73,6 +80,17 @@
 		const next = !launchAtLogin;
 		launchAtLogin = next;
 		await setLaunchAtLogin(next);
+	}
+
+	async function handleFixHotkey() {
+		await fixHotkey();
+		// Refresh status after a short delay (user may toggle in System Settings)
+		setTimeout(async () => {
+			try {
+				const hs = await getHotkeyStatus();
+				if (hs.status !== "unsupported") hotkeyStatus = hs.status;
+			} catch { /* ignore */ }
+		}, 3000);
 	}
 
 	async function handleRestart() {
@@ -109,7 +127,35 @@
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
 					<p class="text-sm text-muted-foreground">{activeDesc}</p>
 				</div>
-				{#if activeNavId === "advanced-daemon"}
+				{#if activeNavId === "keyboard" && hotkeyStatus !== null}
+				<div class="px-4 mb-6">
+					<div class="flex items-center justify-between rounded-lg border px-4 py-3">
+						<div>
+							<div class="text-sm font-medium">Global Hotkey (Right ⌘)</div>
+							<div class="text-xs text-muted-foreground">
+								{#if hotkeyStatus === "confirmed"}
+									Working — tap confirmed
+								{:else if hotkeyStatus === "active"}
+									Registered, waiting for first use
+								{:else if hotkeyStatus === "failed"}
+									Failed — Input Monitoring not granted
+								{:else}
+									Unknown
+								{/if}
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							<span class="inline-block size-2 rounded-full {hotkeyStatus === 'confirmed' ? 'bg-green-500' : hotkeyStatus === 'failed' ? 'bg-red-500' : 'bg-yellow-500'}"></span>
+							{#if hotkeyStatus !== "confirmed"}
+								<Button variant="destructive" onclick={handleFixHotkey}>
+									Fix Input Monitoring
+								</Button>
+							{/if}
+						</div>
+					</div>
+				</div>
+			{/if}
+			{#if activeNavId === "advanced-daemon"}
 					<div class="px-4 mb-6 space-y-3">
 						{#if launchAtLogin !== null}
 							<div class="flex items-center justify-between rounded-lg border px-4 py-3">
