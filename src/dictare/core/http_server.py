@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import threading
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -369,6 +370,15 @@ class OpenVIPServer:
             import sys as _sys
             if _sys.platform != "darwin":
                 return {"status": "unsupported"}
+            from dictare.hotkey.runtime_status import read_runtime_status
+
+            runtime = read_runtime_status()
+            if runtime is not None:
+                return {
+                    "status": runtime.get("status", "unknown"),
+                    "active_provider": runtime.get("active_provider", "none"),
+                    "capture_healthy": runtime.get("capture_healthy", False),
+                }
             status_file = Path.home() / ".dictare" / "hotkey_status"
             status = status_file.read_text().strip() if status_file.exists() else "unknown"
             return {"status": status}
@@ -384,6 +394,52 @@ class OpenVIPServer:
                     "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
                 ])
             return {"ok": True}
+
+        @app.get("/permissions/doctor")
+        async def permission_doctor_status():
+            """Return consolidated permission + runtime capture status."""
+            import sys as _sys
+
+            if _sys.platform != "darwin":
+                return {"platform": _sys.platform, "status": "unsupported"}
+
+            from dictare.platform.permission_doctor import PermissionDoctor, status_to_dict
+
+            doctor = PermissionDoctor()
+            return {"platform": _sys.platform, "status": "ok", **status_to_dict(doctor.get_status())}
+
+        @app.post("/permissions/doctor/open")
+        async def permission_doctor_open(request: Request):
+            """Open the requested System Settings pane."""
+            import sys as _sys
+
+            if _sys.platform != "darwin":
+                return {"ok": False, "error": "unsupported"}
+
+            body = await request.json()
+            target = str(body.get("target", "input_monitoring"))
+            if target not in ("input_monitoring", "accessibility", "microphone"):
+                raise HTTPException(status_code=422, detail="Invalid target")
+
+            from dictare.platform.permission_doctor import PermissionDoctor
+
+            PermissionDoctor().open_settings(target)  # type: ignore[arg-type]
+            return {"ok": True}
+
+        @app.post("/permissions/doctor/probe")
+        async def permission_doctor_probe(request: Request):
+            """Run runtime hotkey probe; user must press the hotkey during timeout."""
+            import sys as _sys
+
+            if _sys.platform != "darwin":
+                return {"ok": False, "error": "unsupported"}
+
+            body = await request.json()
+            timeout = float(body.get("timeout", 8.0))
+
+            from dictare.platform.permission_doctor import PermissionDoctor
+
+            return PermissionDoctor().run_probe(timeout_s=timeout)
 
         @app.get("/audio/devices")
         async def list_audio_devices():

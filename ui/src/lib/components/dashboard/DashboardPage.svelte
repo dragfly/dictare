@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
 	import { fetchStatus, setOutputMode, setCurrentAgent, type StatusResponse } from "$lib/api";
-	import { Badge } from "$lib/components/ui/badge";
 	import { Button } from "$lib/components/ui/button";
 	import { CheckCircle, XCircle, AlertCircle } from "lucide-svelte";
+
+	interface Props {
+		onOpenPermissionsDoctor?: () => void;
+	}
+
+	let { onOpenPermissionsDoctor }: Props = $props();
 
 	let status = $state<StatusResponse | null>(null);
 	let loading = $state(true);
@@ -70,6 +75,16 @@
 		if (mode === outputMode) return;
 		await setOutputMode(mode);
 	}
+
+	function goPermissionsDoctor() {
+		onOpenPermissionsDoctor?.();
+	}
+
+	const sttHealthy = $derived(Boolean(p?.stt.model_name));
+	const ttsHealthy = $derived(Boolean(p?.tts.available));
+	const hotkeyState = $derived(p?.hotkey.status ?? "unknown");
+	const hotkeyHealthy = $derived(hotkeyState === "confirmed" || hotkeyState === "bound");
+	const hotkeyPending = $derived(hotkeyState === "active");
 </script>
 
 {#if loading && !status}
@@ -87,13 +102,22 @@
 			<!-- Engine -->
 			<div class="rounded-lg border bg-card p-4 space-y-2">
 				<h3 class="text-sm font-semibold">Engine</h3>
-				<div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+				<div class="grid grid-cols-[auto_1fr_auto] gap-x-4 gap-y-1 text-sm">
 					<div class="text-muted-foreground">State</div>
 					<div>{p.state}</div>
+					<div></div>
 					<div class="text-muted-foreground">Uptime</div>
 					<div>{fmtUptime(p.uptime_seconds)}</div>
+					<div></div>
 					<div class="text-muted-foreground">STT</div>
 					<div>{p.stt.model_name} <span class="text-muted-foreground">on {p.stt.device}</span></div>
+					<div class="flex items-center justify-end">
+						{#if sttHealthy}
+							<CheckCircle class="size-4 text-green-500 shrink-0" />
+						{:else}
+							<AlertCircle class="size-4 text-yellow-500 shrink-0" />
+						{/if}
+					</div>
 					<div class="text-muted-foreground">TTS</div>
 					<div>
 						{p.tts.engine}
@@ -101,15 +125,38 @@
 							<span class="text-destructive text-xs ml-1">error</span>
 						{/if}
 					</div>
+					<div class="flex items-center justify-end">
+						{#if ttsHealthy}
+							<CheckCircle class="size-4 text-green-500 shrink-0" />
+						{:else}
+							<AlertCircle class="size-4 text-yellow-500 shrink-0" />
+						{/if}
+					</div>
 					<div class="text-muted-foreground">Hotkey</div>
 					<div>
 						{p.hotkey.key}
-						{#if p.hotkey.status === "active"}
+						{#if hotkeyPending}
 							<span class="text-yellow-500 text-xs ml-1" title="Tap created — press any key to confirm">confirming…</span>
-						{:else if p.hotkey.status === "failed"}
+						{:else if hotkeyState === "failed"}
 							<span class="text-destructive text-xs ml-1">error</span>
-						{:else if p.hotkey.status && p.hotkey.status !== "confirmed" && p.hotkey.status !== "bound"}
-							<span class="text-muted-foreground text-xs ml-1">{p.hotkey.status}</span>
+						{:else if hotkeyState !== "confirmed" && hotkeyState !== "bound"}
+							<span class="text-muted-foreground text-xs ml-1">{hotkeyState}</span>
+						{/if}
+					</div>
+					<div class="flex items-center justify-end">
+						{#if hotkeyHealthy}
+							<CheckCircle class="size-4 text-green-500 shrink-0" />
+						{:else if hotkeyPending}
+							<AlertCircle class="size-4 text-yellow-500 shrink-0" />
+						{:else}
+							<button
+								type="button"
+								class="inline-flex items-center"
+								title="Open Permissions Doctor"
+								onclick={goPermissionsDoctor}
+							>
+								<XCircle class="size-4 text-destructive shrink-0 cursor-pointer" />
+							</button>
 						{/if}
 					</div>
 				</div>
@@ -145,10 +192,18 @@
 							<div class="flex items-center gap-1.5 text-sm">
 								{#if ok}
 									<CheckCircle class="size-3.5 text-green-500 shrink-0" />
+									<span class="capitalize">{key.replace("_", " ")}</span>
 								{:else}
-									<XCircle class="size-3.5 text-destructive shrink-0" />
+									<button
+										type="button"
+										class="inline-flex items-center gap-1.5 hover:opacity-90"
+										title="Open Permissions Doctor"
+										onclick={goPermissionsDoctor}
+									>
+										<XCircle class="size-3.5 text-destructive shrink-0 cursor-pointer" />
+										<span class="capitalize underline decoration-dotted underline-offset-2">{key.replace("_", " ")}</span>
+									</button>
 								{/if}
-								<span class="capitalize">{key.replace("_", " ")}</span>
 							</div>
 						{/each}
 					</div>

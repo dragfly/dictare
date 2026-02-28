@@ -11,8 +11,11 @@ import logging
 import os
 import socket
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
+
+from dictare.hotkey.runtime_status import clear_runtime_status, write_runtime_status
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,9 @@ class HotkeyIPCServer:
         self._server_sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._running = threading.Event()
+        self._lock = threading.Lock()
+        self._delivered_count = 0
+        self._last_delivered_ts = 0.0
 
     @property
     def socket_path(self) -> Path:
@@ -56,6 +62,7 @@ class HotkeyIPCServer:
         self._running.set()
         self._thread = threading.Thread(target=self._serve_loop, name="hotkey-ipc", daemon=True)
         self._thread.start()
+        self._write_runtime_status()
         logger.info("Hotkey IPC server listening on %s", self._socket_path)
 
     def stop(self) -> None:
@@ -76,6 +83,7 @@ class HotkeyIPCServer:
             self._socket_path.unlink(missing_ok=True)
         except OSError:
             pass
+        clear_runtime_status()
 
     def _serve_loop(self) -> None:
         assert self._server_sock is not None
@@ -110,6 +118,10 @@ class HotkeyIPCServer:
 
             try:
                 self._on_tap()
+                with self._lock:
+                    self._delivered_count += 1
+                    self._last_delivered_ts = time.time()
+                    self._write_runtime_status_locked()
             except Exception:
                 logger.exception("Hotkey IPC callback failed")
 
@@ -122,3 +134,54 @@ class HotkeyIPCServer:
                 conn.close()
             except OSError:
                 pass
+
+    def _write_runtime_status(self) -> None:
+        with self._lock:
+            self._write_runtime_status_locked()
+
+    def _write_runtime_status_locked(self) -> None:
+        permission_status = self._read_launcher_status()
+        status = "unknown"
+        if self._delivered_count > 0:
+            status = "confirmed"
+        elif permission_status == "failed":
+            status = "failed"
+        elif permission_status in ("active", "confirmed"):
+            status = "active"
+
+        payload = {
+            "status": status,
+            "permission_status": permission_status,
+            "capture_healthy": self._delivered_count > 0,
+            "active_provider": "ipc" if self._delivered_count > 0 else "none",
+            "delivered_count": self._delivered_count,
+            "deduped_count": 0,
+            "last_delivered_ts": self._last_delivered_ts,
+            "providers": {
+                "ipc": {
+                    "enabled": True,
+                    "running": self._running.is_set(),
+                    "healthy": True,
+                    "event_count": self._delivered_count,
+                    "last_event_ts": self._last_delivered_ts or None,
+                    "last_error": "",
+                },
+                "signal": {
+                    "enabled": True,
+                    "running": False,
+                    "healthy": False,
+                    "event_count": 0,
+                    "last_event_ts": None,
+                    "last_error": "",
+                },
+            },
+        }
+        write_runtime_status(payload)
+
+    @staticmethod
+    def _read_launcher_status() -> str:
+        status_file = Path.home() / ".dictare" / "hotkey_status"
+        try:
+            return status_file.read_text().strip()
+        except FileNotFoundError:
+            return "unknown"

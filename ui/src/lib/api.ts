@@ -176,7 +176,7 @@ export type StatusResponse = {
 		stt: { model_name: string; device: string; last_text: string };
 		tts: { engine: string; language: string; available: boolean; error: string | null };
 		output: { mode: string; current_agent: string; available_agents: string[] };
-		hotkey: { key: string; bound: boolean };
+		hotkey: { key: string; bound: boolean; status?: string };
 		permissions: Record<string, boolean>;
 		engines: {
 			tts: EngineInfo[];
@@ -309,4 +309,49 @@ export async function getHotkeyStatus(): Promise<{ status: string }> {
 
 export async function fixHotkey(): Promise<void> {
 	await fetch("/hotkey/fix", { method: "POST" });
+}
+
+export type PermissionDoctorStatus = {
+	platform: string;
+	status: string;
+	accessibility?: boolean;
+	microphone?: boolean;
+	input_monitoring?: boolean;
+	hotkey_status?: string;
+	capture_healthy?: boolean;
+	active_provider?: string;
+};
+
+export async function getPermissionDoctorStatus(): Promise<PermissionDoctorStatus> {
+	const r = await fetch("/permissions/doctor");
+	if (!r.ok) throw new Error(`Failed to get doctor status: ${r.status}`);
+	return r.json();
+}
+
+export async function openPermissionSetting(target: "input_monitoring" | "accessibility" | "microphone"): Promise<void> {
+	const r = await fetch("/permissions/doctor/open", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ target }),
+	});
+	if (!r.ok) throw new Error(`Failed to open settings: ${r.status}`);
+}
+
+export type PermissionProbeResult = {
+	ok: boolean;
+	message: string;
+	delivered_count: number;
+	active_provider: string;
+	capture_healthy: boolean;
+	hotkey_status: string;
+};
+
+export async function probePermissionDoctor(timeout = 8): Promise<PermissionProbeResult> {
+	const r = await fetch("/permissions/doctor/probe", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ timeout }),
+	});
+	if (!r.ok) throw new Error(`Probe failed: ${r.status}`);
+	return r.json();
 }

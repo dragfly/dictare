@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.65] - 2026-02-28
+
+### Changed
+- macOS daemon hotkey path is now IPC-first end-to-end (launcher -> engine),
+  with runtime health persisted in `~/.dictare/hotkey_runtime_status`.
+- Input Monitoring permission and runtime capture health are now treated as
+  separate signals: permission comes from launcher status, runtime health comes
+  from delivered tap events.
+
+### Added
+- `src/dictare/hotkey/runtime_status.py` for runtime hotkey status persistence
+  (`~/.dictare/hotkey_runtime_status`).
+- `src/dictare/platform/permission_doctor.py` as single source of truth for
+  permission diagnosis and guided runtime probing.
+- New HTTP endpoints:
+  - `GET /permissions/doctor`
+  - `POST /permissions/doctor/open`
+  - `POST /permissions/doctor/probe`
+- `/hotkey/status` now returns runtime-derived fields when available
+  (`active_provider`, `capture_healthy`).
+- Settings UI now exposes a single Permission Doctor entrypoint in
+  `Advanced -> Permissions`.
+- Dashboard now links failed permission/hotkey states directly to the
+  Permission Doctor.
+
+### Fixed
+- Input Monitoring permission UI no longer reports false negatives when the
+  launcher reports `active` but runtime confirmation has not happened yet.
+
 ## [0.1.64] - 2026-02-28
 
 ### Fixed
