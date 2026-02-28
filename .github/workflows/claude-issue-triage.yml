@@ -1,0 +1,49 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  triage-issue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event_name == 'issues' ||
+      (github.event_name == 'issue_comment' && !github.event.issue.pull_request && github.event.comment.user.type != 'Bot')
+    concurrency:
+      group: issue-triage-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Claude Code for Issue Triage
+        timeout-minutes: 5
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--model claude-sonnet-4-6"
+          prompt: |
+            Triage this GitHub issue for the dictare project (voice-first control for AI coding agents).
+
+            REPO: ${{ github.repository }}
+            ISSUE_NUMBER: ${{ github.event.issue.number }}
+            EVENT: ${{ github.event_name }}
+
+            Instructions:
+            1. Read the issue carefully using the GitHub CLI
+            2. Add the appropriate label(s): bug, enhancement, question, documentation, good first issue
+            3. If it's a bug, ask for: OS (macOS/Linux), dictare version, steps to reproduce
+            4. If it's a feature request, acknowledge it and explain where it fits in the roadmap
+            5. If it's a question, answer it directly if possible or point to the README/docs
+            6. Be concise and friendly. Sign off as "dictare bot"
