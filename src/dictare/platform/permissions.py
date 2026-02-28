@@ -179,6 +179,26 @@ def _check_input_monitoring() -> bool:
         return True
 
 
+def _check_accessibility_runtime() -> bool | None:
+    """Read accessibility status persisted by the running launcher.
+
+    Returns:
+        True/False when runtime file is present and parseable, otherwise None.
+    """
+    from pathlib import Path
+
+    status_file = Path.home() / ".dictare" / "accessibility_status"
+    try:
+        content = status_file.read_text().strip().lower()
+    except FileNotFoundError:
+        return None
+    if content == "granted":
+        return True
+    if content == "missing":
+        return False
+    return None
+
+
 def _check_via_launcher() -> dict[str, bool]:
     """Assemble the permissions dict via the Dictare.app launcher subprocess.
 
@@ -196,8 +216,9 @@ def _check_via_launcher() -> dict[str, bool]:
             )
             if result.returncode == 0:
                 data = json.loads(result.stdout.strip())
+                runtime_ax = _check_accessibility_runtime()
                 return {
-                    "accessibility": data.get("accessibility", True),
+                    "accessibility": runtime_ax if runtime_ax is not None else data.get("accessibility", True),
                     "microphone": data.get("microphone", True),
                     "input_monitoring": _check_input_monitoring(),
                 }

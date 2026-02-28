@@ -65,6 +65,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestMicrophonePermission()
+        writeAccessibilityStatus()
         spawnPythonEngine()
         ensureTrayRunning()
         setupSignalHandling()
@@ -281,6 +282,15 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             .appendingPathComponent(".dictare")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appendingPathComponent("hotkey_status")
+        try? status.write(to: file, atomically: true, encoding: .utf8)
+    }
+
+    func writeAccessibilityStatus() {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".dictare")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("accessibility_status")
+        let status = AXIsProcessTrusted() ? "granted" : "missing"
         try? status.write(to: file, atomically: true, encoding: .utf8)
     }
 
