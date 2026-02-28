@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.76] - 2026-02-28
+
+### Fixed
+- **Long press now works from any app in agents mode**: instead of injecting
+  Return into the focused window (which only worked if the terminal was in
+  front), `_submit_action` now sends `x_input={"submit": True, "trigger":
+  "<long_press>"}` to the connected agent — identical to what the submit
+  filter does when a trigger word is spoken. Keyboard mode is unaffected
+  (long press is agents-mode only).
+
 ## [0.1.75] - 2026-02-28
 
 ### Fixed
