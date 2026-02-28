@@ -132,6 +132,12 @@ class DictareEngine:
         # Session stats (single mutable container)
         self._stats = _MutableStats()
 
+        # Today's persisted baseline (loaded once at startup).
+        # Allows _get_session_stats() to return today's full total
+        # even across engine restarts within the same day.
+        from dictare.utils.stats import get_today_baseline
+        self._today_baseline: dict = get_today_baseline()
+
         # Lock for STT engine (MLX is not thread-safe)
         self._stt_lock = threading.Lock()
 
@@ -1070,14 +1076,23 @@ class DictareEngine:
     ]
 
     def _get_session_stats(self) -> dict:
-        """Return session stats dict included in status response."""
-        count = self._stats.count
+        """Return today's cumulative stats for the status response.
+
+        Combines the in-memory session counters (since this engine start)
+        with the persisted today_baseline (previous engine runs today),
+        so the dashboard always shows the full daily total.
+        """
+        b = self._today_baseline
+        count = self._stats.count + b.get("transcriptions", 0)
+        words = self._stats.words + b.get("words", 0)
+        chars = self._stats.chars + b.get("chars", 0)
+        audio = self._stats.audio_seconds + b.get("audio_seconds", 0.0)
         phrase = self._EXIT_PHRASES[count % len(self._EXIT_PHRASES)] if count > 0 else ""
         return {
             "transcriptions": count,
-            "words": self._stats.words,
-            "chars": self._stats.chars,
-            "audio_seconds": round(self._stats.audio_seconds, 1),
+            "words": words,
+            "chars": chars,
+            "audio_seconds": round(audio, 1),
             "phrase": phrase,
         }
 
