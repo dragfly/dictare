@@ -9,6 +9,8 @@ on:
 jobs:
   test-linux:
     runs-on: [self-hosted, Linux, X64]
+    env:
+      UV_NO_SOURCES: "1"  # use PyPI for openvip, not the local dev path
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +38,8 @@ jobs:
 
   test-macos:
     runs-on: [self-hosted, macOS, ARM64]
+    env:
+      UV_NO_SOURCES: "1"  # use PyPI for openvip, not the local dev path
     steps:
       - uses: actions/checkout@v4
 
@@ -59,6 +63,8 @@ jobs:
 
   typecheck:
     runs-on: [self-hosted, Linux, X64]
+    env:
+      UV_NO_SOURCES: "1"  # use PyPI for openvip, not the local dev path
     steps:
       - uses: actions/checkout@v4
 
