@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.61] - 2026-02-28
+
+### Fixed
+- Swift launcher: when macOS disables the CGEventTap (`tapDisabledByTimeout` /
+  `tapDisabledByUserInput`), recreate the tap from scratch instead of calling
+  `CGEvent.tapEnable`. On Sequoia, re-enabling an existing tap after a system
+  disable leaves it silently delivering no events; destroying and recreating it
+  reliably restores hotkey functionality.
+
 ## [0.1.60] - 2026-02-28
 
 ### Fixed

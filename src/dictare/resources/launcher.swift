@@ -57,8 +57,9 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     let tapThreshold: TimeInterval = 0.5  // Max press duration for a "tap"
     var sigTermSource: DispatchSourceSignal?
     var sigIntSource: DispatchSourceSignal?
-    var eventTap: CFMachPort?  // Stored for re-enable after system disable
+    var eventTap: CFMachPort?  // Stored for recreation after system disable
     var tapEventReceived = false  // True once first real event arrives from CGEventTap
+    var tapRecreating = false     // Guard against concurrent recreation
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestMicrophonePermission()
@@ -172,6 +173,23 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     }
 
     // --- CGEventTap (global hotkey) ---
+    func teardownEventTap() {
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+            eventTap = nil
+        }
+        tapEventReceived = false
+    }
+
+    func recreateEventTap() {
+        guard !tapRecreating else { return }
+        tapRecreating = true
+        teardownEventTap()
+        setupEventTap()
+        tapRecreating = false
+    }
+
     func setupEventTap() {
         // NOTE: Do NOT use CGPreflightListenEventAccess() here — it returns false
         // from launchd on Sequoia even when Input Monitoring IS granted (same bug
@@ -191,9 +209,13 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
                     if let refcon = refcon {
                         let delegate = Unmanaged<LauncherDelegate>.fromOpaque(refcon)
                             .takeUnretainedValue()
-                        if let tap = delegate.eventTap {
-                            CGEvent.tapEnable(tap: tap, enable: true)
-                            fputs("CGEventTap re-enabled after system disable\n", stderr)
+                        let reason = type == .tapDisabledByTimeout ? "timeout" : "user input"
+                        fputs("CGEventTap disabled by \(reason) — recreating tap\n", stderr)
+                        // Re-enabling the existing tap is unreliable on Sequoia:
+                        // the tap appears active but silently delivers no events.
+                        // Destroy and recreate the tap from scratch instead.
+                        DispatchQueue.main.async {
+                            delegate.recreateEventTap()
                         }
                     }
                     return Unmanaged.passRetained(event)
