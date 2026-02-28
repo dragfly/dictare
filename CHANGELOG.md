@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.63] - 2026-02-28
+
+### Fixed
+- App bundle Info.plist was missing `NSInputMonitoringUsageDescription` — on
+  Sequoia, without this key macOS can register the TCC permission but silently
+  refuse to deliver CGEventTap events, causing `hotkey_status` to stay stuck at
+  "active" (never "confirmed") even with Input Monitoring granted.
+- Swift launcher: call `CGRequestListenEventAccess()` before every
+  `CGEvent.tapCreate()` call to prime TCC authorization in the current process
+  context (no-op if permission already granted).
+
 ## [0.1.62] - 2026-02-28
 
 ### Added

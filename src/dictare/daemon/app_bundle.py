@@ -115,6 +115,7 @@ def create_app_bundle(
         "CFBundleIconFile": APP_NAME,
         "LSUIElement": True,  # No Dock icon
         "NSMicrophoneUsageDescription": "Dictare needs microphone access for voice-to-text.",
+        "NSInputMonitoringUsageDescription": "Dictare uses Input Monitoring to detect the global Right ⌘ hotkey.",
     }
     plist_path = contents / "Info.plist"
     with open(plist_path, "wb") as f:
