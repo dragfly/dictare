@@ -1,0 +1,25 @@
+name: CI macOS
+
+on:
+  schedule:
+    - cron: "0 4 * * *"  # daily at 04:00 UTC
+  workflow_dispatch:       # allow manual trigger from GitHub UI
+
+jobs:
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python and install deps
+        run: |
+          uv venv --python 3.11 .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+          pip install -e ".[dev]"
+
+      - name: Run CoreAudio tests
+        run: pytest tests/ -v -m macos
