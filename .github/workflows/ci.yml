@@ -20,11 +20,22 @@ jobs:
           sudo apt-get install -y libportaudio2 xvfb
 
       - name: Set up Python and install deps
+        uses: actions/cache@v4
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.11-${{ hashFiles('pyproject.toml') }}
+
+      - name: Create venv and install deps
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
           uv venv --python 3.11 --seed .venv
+          .venv/bin/pip install -e ".[dev]"
+
+      - name: Add venv to PATH
+        run: |
           echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          .venv/bin/pip install -e ".[dev]"
 
       - name: Run linter
         run: ruff check src/ tests/
@@ -41,11 +52,22 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Set up Python and install deps
+        uses: actions/cache@v4
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.11-${{ hashFiles('pyproject.toml') }}
+
+      - name: Create venv and install deps
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
           uv venv --python 3.11 --seed .venv
+          .venv/bin/pip install -e ".[dev]"
+
+      - name: Add venv to PATH
+        run: |
           echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          .venv/bin/pip install -e ".[dev]"
 
       - name: Run mypy
         run: mypy src/
