@@ -129,6 +129,16 @@ class StatusPanel:
             return "[cyan]agents[/] [dim](waiting for agents...)[/]"
         return f"[cyan]{mode}[/]"
 
+    def _format_stats(self, stats: dict) -> str:
+        """Format today's session stats."""
+        count = stats.get("transcriptions", 0)
+        if count == 0:
+            return "[dim]--[/]"
+        words = stats.get("words", 0)
+        audio = stats.get("audio_seconds", 0.0)
+        audio_str = f"{audio:.0f}s" if audio < 60 else f"{audio / 60:.1f}m"
+        return f"[cyan]{count}[/] tx · [cyan]{words}[/] words · [cyan]{audio_str}[/] audio"
+
     def _format_last_text(self) -> str:
         """Format the last transcribed text."""
         # Get last_text from status (synced from engine)
@@ -360,7 +370,8 @@ class StatusPanel:
         lines.append(f"Server: [dim]{self._base_url}[/]")
         lines.append("")  # Blank line separator
         lines.append(f"Status: {self._format_state(stt_state)}")
-        lines.append(f"Last: {self._format_last_text()}")
+        lines.append(f"Last:   {self._format_last_text()}")
+        lines.append(f"Stats:  {self._format_stats(platform.get('stats', {}))}")
 
         content = "\n".join(lines)
         version = platform.get("version", __version__)

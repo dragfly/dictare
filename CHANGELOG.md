@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.81] - 2026-02-28
+
+### Added
+- **Stats in foreground panel**: `StatusPanel` now shows a `Stats:` row with
+  today's transcription count, word count, and audio duration. Data comes from
+  `platform.stats` already returned by `/status` — no new endpoint needed.
+
 ## [0.1.80] - 2026-02-28
 
 ### Fixed
