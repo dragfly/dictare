@@ -28,6 +28,7 @@
 
 	let pendingSelection = $state<{ type: "stt" | "tts"; id: string } | null>(null);
 	let saving = $state(false);
+	let confirmUninstallId = $state<string | null>(null);
 
 	let es: EventSource | null = null;
 
@@ -83,8 +84,14 @@
 		}
 	}
 
-	async function handleUninstall(capId: string) {
-		if (!confirm(`Remove ${capId}? Downloaded files will be deleted.`)) return;
+	function handleUninstall(capId: string) {
+		confirmUninstallId = capId;
+	}
+
+	async function confirmUninstall() {
+		const capId = confirmUninstallId;
+		confirmUninstallId = null;
+		if (!capId) return;
 		try {
 			await uninstallCapability(capId);
 			await load();
@@ -302,6 +309,30 @@
 		{@render capTable(sttCaps, "STT — Speech to Text")}
 		{@render capTable(ttsCaps, "TTS — Text to Speech")}
 	</div>
+
+	<!-- Uninstall confirm dialog -->
+	{#if confirmUninstallId}
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+			onclick={() => confirmUninstallId = null}
+			role="presentation"
+		>
+			<div
+				class="bg-card border rounded-xl shadow-xl p-6 w-80 space-y-4"
+				onclick={(e) => e.stopPropagation()}
+				role="presentation"
+			>
+				<div class="space-y-1">
+					<p class="text-sm font-semibold">Remove {confirmUninstallId}?</p>
+					<p class="text-xs text-muted-foreground">Downloaded files will be deleted. You can reinstall at any time.</p>
+				</div>
+				<div class="flex gap-2 justify-end">
+					<Button variant="outline" size="sm" onclick={() => confirmUninstallId = null}>Cancel</Button>
+					<Button variant="destructive" size="sm" onclick={confirmUninstall}>Remove</Button>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Save bar -->
 	{#if pendingSelection}
