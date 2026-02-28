@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.74] - 2026-02-28
+
+### Fixed
+- **Input Monitoring permissions regression** (v0.1.71): removed `tccutil reset
+  ListenEvent` from the install flow. On macOS Sequoia with ad-hoc-signed
+  binaries, resetting the TCC entry caused Dictare to disappear from the Input
+  Monitoring list permanently — `CGRequestListenEventAccess()` returns `true`
+  without actually adding a new entry, so the reset was net-harmful for
+  production users. Accumulated stale TCC entries (the original motivation for
+  the reset) are harmless in practice since production users don't reinstall
+  frequently.
+
 ## [0.1.73] - 2026-02-28
 
 ### Changed
