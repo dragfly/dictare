@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.62] - 2026-02-28
+
+### Added
+- Settings → Keyboard: hotkey status indicator (confirmed/active/failed) with
+  "Fix Input Monitoring" button that opens System Settings → Input Monitoring.
+  Useful when CGEventTap is silently broken on Sequoia.
+- `GET /hotkey/status` and `POST /hotkey/fix` HTTP endpoints.
+
 ## [0.1.61] - 2026-02-28
 
 ### Fixed

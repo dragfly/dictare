@@ -300,3 +300,13 @@ export async function setLaunchAtLogin(enabled: boolean): Promise<void> {
 	});
 	if (!r.ok) throw new Error(`Failed to set launch at login: ${r.status}`);
 }
+
+export async function getHotkeyStatus(): Promise<{ status: string }> {
+	const r = await fetch("/hotkey/status");
+	if (!r.ok) throw new Error(`Failed to get hotkey status: ${r.status}`);
+	return r.json();
+}
+
+export async function fixHotkey(): Promise<void> {
+	await fetch("/hotkey/fix", { method: "POST" });
+}
