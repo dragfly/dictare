@@ -171,6 +171,7 @@ class TestPollingDeviceMonitor:
 class TestCoreAudioDeviceMonitor:
     """Test CoreAudio device monitor."""
 
+    @pytest.mark.macos
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
     def test_install_and_remove_listener(self) -> None:
         monitor = CoreAudioDeviceMonitor(on_device_change=lambda: None)
@@ -181,6 +182,7 @@ class TestCoreAudioDeviceMonitor:
         assert not monitor._listener_installed
         assert not monitor.running
 
+    @pytest.mark.macos
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
     def test_start_idempotent(self) -> None:
         monitor = CoreAudioDeviceMonitor(on_device_change=lambda: None)
@@ -189,11 +191,13 @@ class TestCoreAudioDeviceMonitor:
         assert monitor._listener_installed
         monitor.stop()
 
+    @pytest.mark.macos
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
     def test_stop_idempotent(self) -> None:
         monitor = CoreAudioDeviceMonitor(on_device_change=lambda: None)
         monitor.stop()  # Not started, should not raise
 
+    @pytest.mark.macos
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
     def test_callback_ref_kept(self) -> None:
         """Ctypes callback reference must not be garbage collected."""
