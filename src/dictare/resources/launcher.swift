@@ -5,7 +5,7 @@
 /// 1. Microphone permission (shows "Dictare" in dialog, not "Python")
 /// 2. Global hotkey via CGEventTap (requires Accessibility + Input Monitoring)
 /// 3. Spawns the Python engine as a child process
-/// 4. Sends SIGUSR1 to Python on hotkey tap to toggle listening
+/// 4. Sends hotkey taps to Python via local IPC (with SIGUSR1 fallback)
 ///
 /// Usage:
 ///   Dictare                    — Normal mode: permissions, hotkey, engine
@@ -16,6 +16,7 @@
 import ApplicationServices
 import AVFoundation
 import Cocoa
+import Darwin
 import Foundation
 
 // ---------------------------------------------------------------------------
@@ -60,6 +61,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     var eventTap: CFMachPort?  // Stored for recreation after system disable
     var tapEventReceived = false  // True once first real event arrives from CGEventTap
     var tapRecreating = false     // Guard against concurrent recreation
+    var hotkeySeq: UInt64 = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestMicrophonePermission()
@@ -238,11 +240,11 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
                             delegate.recreateEventTap()
                         }
                     }
-                    return Unmanaged.passRetained(event)
+                    return Unmanaged.passUnretained(event)
                 }
 
                 guard let refcon = refcon else {
-                    return Unmanaged.passRetained(event)
+                    return Unmanaged.passUnretained(event)
                 }
                 let delegate = Unmanaged<LauncherDelegate>.fromOpaque(refcon)
                     .takeUnretainedValue()
@@ -256,7 +258,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
                     fputs("CGEventTap confirmed: first event received\n", stderr)
                 }
                 delegate.handleFlagsChanged(event: event)
-                return Unmanaged.passRetained(event)
+                return Unmanaged.passUnretained(event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
@@ -302,12 +304,98 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             fputs(String(format: "Hotkey: Right Cmd UP (duration=%.3fs)\n", duration), stderr)
 
             if duration < tapThreshold {
-                fputs("Hotkey: tap accepted — sending SIGUSR1\n", stderr)
-                sendToggleSignal()
+                fputs("Hotkey: tap accepted\n", stderr)
+                sendToggleEvent()
             } else {
                 fputs(String(format: "Hotkey: tap rejected (too long, threshold=%.1fs)\n", tapThreshold), stderr)
             }
         }
+    }
+
+    func hotkeyTransportMode() -> String {
+        let env = ProcessInfo.processInfo.environment["DICTARE_HOTKEY_TRANSPORT"] ?? "auto"
+        return env.lowercased()
+    }
+
+    func sendToggleEvent() {
+        hotkeySeq += 1
+        let seq = hotkeySeq
+        let mode = hotkeyTransportMode()
+
+        if mode != "signal" {
+            if sendTapViaIPC(seq: seq) {
+                fputs("Hotkey: IPC tap delivered (seq \(seq))\n", stderr)
+                return
+            }
+            fputs("Hotkey: IPC tap failed (seq \(seq)) — falling back to SIGUSR1\n", stderr)
+        }
+        sendToggleSignal()
+    }
+
+    func sendTapViaIPC(seq: UInt64) -> Bool {
+        let socketPath = NSHomeDirectory() + "/.dictare/hotkey.sock"
+        let maxPathLen = MemoryLayout.size(ofValue: sockaddr_un().sun_path)
+        if socketPath.utf8.count >= maxPathLen {
+            return false
+        }
+
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        if fd < 0 {
+            return false
+        }
+        defer { _ = close(fd) }
+
+        var timeout = timeval(tv_sec: 0, tv_usec: 250_000)
+        withUnsafePointer(to: &timeout) { ptr in
+            _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, ptr, socklen_t(MemoryLayout<timeval>.size))
+            _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, ptr, socklen_t(MemoryLayout<timeval>.size))
+        }
+
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        socketPath.withCString { cs in
+            withUnsafeMutablePointer(to: &addr.sun_path) { sp in
+                sp.withMemoryRebound(to: CChar.self, capacity: maxPathLen) { cp in
+                    strncpy(cp, cs, maxPathLen - 1)
+                    cp[maxPathLen - 1] = 0
+                }
+            }
+        }
+
+        let connected = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sap in
+                connect(fd, sap, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        if connected != 0 {
+            return false
+        }
+
+        let payload = "{\"type\":\"hotkey.tap\",\"seq\":\(seq),\"ts\":\(Date().timeIntervalSince1970)}\n"
+        let sendResult = payload.withCString { cs in
+            send(fd, cs, strlen(cs), 0)
+        }
+        if sendResult <= 0 {
+            return false
+        }
+
+        var buf = [UInt8](repeating: 0, count: 512)
+        let n = recv(fd, &buf, buf.count, 0)
+        if n <= 0 {
+            return false
+        }
+
+        let raw = String(decoding: buf[0..<n], as: UTF8.self)
+        guard let line = raw.split(separator: "\n").first else { return false }
+        guard let data = line.data(using: .utf8) else { return false }
+        guard
+            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let ackType = obj["type"] as? String,
+            let ackSeq = obj["seq"] as? NSNumber
+        else {
+            return false
+        }
+        return ackType == "ack" && ackSeq.uint64Value == seq
     }
 
     func sendToggleSignal() {
