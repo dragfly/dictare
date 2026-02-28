@@ -173,6 +173,22 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     }
 
     // --- CGEventTap (global hotkey) ---
+
+    /// Prime TCC authorization before creating a tap.
+    ///
+    /// CGEvent.tapCreate() can return non-nil while silently dropping events
+    /// when the process hasn't yet "activated" its Input Monitoring grant in
+    /// the current run-loop context.  CGRequestListenEventAccess() forces TCC
+    /// to evaluate the permission synchronously; if already granted it is a
+    /// no-op (no dialog shown).  Calling it before every tapCreate() closes
+    /// the race between binary-hash registration and tap creation.
+    func primeTCCAuthorization() {
+        let granted = CGRequestListenEventAccess()
+        if !granted {
+            fputs("Warning: CGRequestListenEventAccess returned false\n", stderr)
+        }
+    }
+
     func teardownEventTap() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
@@ -191,6 +207,10 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupEventTap() {
+        // Prime TCC before creating the tap — ensures the permission grant
+        // is active in this process context (no-op if already granted).
+        primeTCCAuthorization()
+
         // NOTE: Do NOT use CGPreflightListenEventAccess() here — it returns false
         // from launchd on Sequoia even when Input Monitoring IS granted (same bug
         // as AXIsProcessTrusted()).  CGEvent.tapCreate() itself is reliable: returns
