@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -110,11 +111,13 @@ class TestUpdateKeystrokes:
 
 class TestUpdateStats:
     def test_accumulates_transcriptions(self, tmp_path: Path) -> None:
+        """Same-day calls accumulate in current_day, not total_* (historical)."""
         p = tmp_path / "stats.json"
         with patch("dictare.utils.stats.get_stats_path", return_value=p):
             update_stats(5, 50, 300, 10.0, 2.0, 0.5, 8.0)
             result = update_stats(3, 20, 100, 5.0, 1.0, 0.2, 4.0)
-        assert result["total_transcriptions"] == 8
+        assert result["current_day"]["transcriptions"] == 8
+        assert result["total_transcriptions"] == 0  # historical unchanged (no day rollover)
         assert result["sessions"] == 2
 
     def test_increments_sessions(self, tmp_path: Path) -> None:
@@ -124,6 +127,35 @@ class TestUpdateStats:
                 update_stats(1, 1, 1, 1.0, 1.0, 1.0, 1.0)
             result = load_stats()
         assert result["sessions"] == 3
+
+    def test_day_rollover(self, tmp_path: Path) -> None:
+        """When saving on a new day, previous current_day moves into total_*."""
+        import json
+        from datetime import timedelta
+        p = tmp_path / "stats.json"
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        # Write a stats file with yesterday's current_day
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({
+            "first_use": "",
+            "total_transcriptions": 0, "total_words": 0, "total_chars": 0,
+            "total_keystrokes": 0, "total_audio_seconds": 0.0,
+            "total_transcription_seconds": 0.0, "total_injection_seconds": 0.0,
+            "total_time_saved_seconds": 0.0, "sessions": 0,
+            "current_day": {"date": yesterday, "transcriptions": 5, "words": 40,
+                            "chars": 200, "audio_seconds": 8.0,
+                            "transcription_seconds": 2.0, "injection_seconds": 0.5,
+                            "time_saved_seconds": 6.0},
+        }))
+        with patch("dictare.utils.stats.get_stats_path", return_value=p):
+            result = update_stats(3, 20, 100, 5.0, 1.0, 0.2, 4.0)
+        # Yesterday's current_day rolled into historical
+        assert result["total_transcriptions"] == 5
+        assert result["total_words"] == 40
+        # Today's session is in current_day
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert result["current_day"]["date"] == today
+        assert result["current_day"]["transcriptions"] == 3
 
 # ---------------------------------------------------------------------------
 # get_model_load_time / save_model_load_time
