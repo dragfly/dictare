@@ -183,6 +183,7 @@ export type StatusResponse = {
 			stt: EngineInfo[];
 		};
 		loading: { active: boolean; models: { name: string; status: string }[] };
+		stats: { transcriptions: number; words: number; chars: number; audio_seconds: number; phrase: string };
 	};
 };
 

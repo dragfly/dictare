@@ -481,6 +481,43 @@ def _write_to_pty(
                 _log_event(session_path, "writer_error", {"error": str(e), "msg_count": msg_count})
             break
 
+def _print_session_summary(base_url: str) -> None:
+    """Fetch session stats from the engine and print a summary to stderr."""
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{base_url}/status", timeout=2) as resp:
+            data = json.loads(resp.read())
+            stats = data.get("platform", {}).get("stats", {})
+    except Exception:
+        return
+
+    count = stats.get("transcriptions", 0)
+    if count == 0:
+        return
+
+    words = stats.get("words", 0)
+    audio = stats.get("audio_seconds", 0.0)
+    phrase = stats.get("phrase", "")
+
+    # Format audio duration
+    if audio < 60:
+        audio_str = f"{audio:.0f}s"
+    else:
+        audio_str = f"{audio / 60:.1f}m"
+
+    line = f"{count} transcriptions · {words} words · {audio_str} of audio"
+    width = max(len(line), len(phrase)) + 4
+    bar = "─" * width
+
+    print(file=sys.stderr)
+    print(bar, file=sys.stderr)
+    print(f"  {line}", file=sys.stderr)
+    if phrase:
+        print(f"  {phrase}", file=sys.stderr)
+    print(bar, file=sys.stderr)
+
 def run_agent(
     agent_id: str,
     command: list[str],
@@ -631,3 +668,6 @@ def run_agent(
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
 
         session.cleanup()
+
+        if not quiet:
+            _print_session_summary(base_url)
