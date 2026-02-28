@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.58] - 2026-02-28
+
+### Added
+- `service install` now also installs and starts the tray LaunchAgent on macOS
+  (idempotent — safe to run multiple times).
+- Homebrew formula: `post_install` hook runs `dictare service install`
+  automatically after `brew install`, so new users get engine + tray running
+  without any terminal interaction.
+- Settings → Advanced → Daemon: "Launch at login" toggle — enables or disables
+  auto-start of engine and tray at login (macOS only, hidden on Linux).
+- `GET /system` and `POST /system` HTTP endpoints for reading and writing
+  system-level settings (currently: `launch_at_login`).
+- `launchd.py`: `launch_at_login_enabled()`, `enable_launch_at_login()`,
+  `disable_launch_at_login()` helpers controlling both engine and tray plists.
+
+### Changed
+- `macos-install.sh`: removed the "Use 'dictare tray start'" hint since the
+  tray is now started automatically by `service install`.
+
 ## [0.1.57] - 2026-02-28
 
 ### Changed

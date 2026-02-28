@@ -24,7 +24,7 @@ start_services() {
     # inside Dictare.app (the Swift launcher reads it to find the new Cellar Python).
     # service start alone leaves the old path pointing to the deleted Cellar dir.
     "${BREW_PREFIX}/bin/dictare" service install 2>&1
-    echo "==> Done. Use 'dictare tray start' for the tray icon."
+    echo "==> Done."
 }
 
 # ---------- 1. Ensure uv is available ----------
