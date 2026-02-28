@@ -284,7 +284,11 @@ def install_tray() -> None:
     """Create and load a LaunchAgent for the tray app (auto-start at login)."""
     import sys
 
-    python_path = sys.executable
+    # On Homebrew, prefer the stable opt/ symlink over the versioned Cellar path.
+    # The symlink survives upgrades; sys.executable points to the versioned path
+    # which breaks after `brew upgrade dictare`.
+    stable = Path("/opt/homebrew/opt/dictare/libexec/uv-tools/dictare/bin/python")
+    python_path = str(stable) if stable.exists() else sys.executable
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     plist: dict = {
