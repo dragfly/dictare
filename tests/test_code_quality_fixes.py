@@ -6,9 +6,7 @@ expected errors and that extracted constants are used correctly.
 
 from __future__ import annotations
 
-import json
 import subprocess
-import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

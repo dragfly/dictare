@@ -82,3 +82,6 @@ private/
 
 # Brand assets (logos, icons — kept private)
 /assets/
+
+# Local scratch scripts
+bench_validator.py
