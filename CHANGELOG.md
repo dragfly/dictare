@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.60] - 2026-02-28
+
+### Fixed
+- Tray always showed "Disconnected" when launched via launchd: `lifecycle.py`
+  `start_tray(foreground=True)` was creating a bare `TrayApp().run()` with no
+  poll thread — it now delegates to `app.main()` which does the full setup
+  (status polling, callbacks, logging).
+
+### Added
+- `dictare logs --tray`: shows tray stdout/stderr logs instead of engine logs.
+
 ## [0.1.59] - 2026-02-28
 
 ### Fixed
