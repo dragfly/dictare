@@ -1052,7 +1052,33 @@ class DictareEngine:
                     ],
                 },
                 "engines": self._get_engines_cache(),
+                "stats": self._get_session_stats(),
             },
+        }
+
+    _EXIT_PHRASES: list[str] = [
+        "Your fingers are getting jealous.",
+        "The keyboard is overrated.",
+        "Voice: 1, Keyboard: 0.",
+        "Dictation: because typing is so last century.",
+        "Your hands thank you.",
+        "Talk is cheap — unless it's voice-to-code.",
+        "Words spoken, keystrokes avoided.",
+        "Efficiency is just another word for talking to your computer.",
+        "Your vocal cords are your best developer tool.",
+        "Less typing, more thinking.",
+    ]
+
+    def _get_session_stats(self) -> dict:
+        """Return session stats dict included in status response."""
+        count = self._stats.count
+        phrase = self._EXIT_PHRASES[count % len(self._EXIT_PHRASES)] if count > 0 else ""
+        return {
+            "transcriptions": count,
+            "words": self._stats.words,
+            "chars": self._stats.chars,
+            "audio_seconds": round(self._stats.audio_seconds, 1),
+            "phrase": phrase,
         }
 
     def _get_engines_cache(self) -> dict:

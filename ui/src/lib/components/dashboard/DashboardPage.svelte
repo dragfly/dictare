@@ -48,6 +48,11 @@
 		};
 	}
 
+	function fmtAudio(seconds: number): string {
+		if (seconds < 60) return `${seconds.toFixed(0)}s`;
+		return `${(seconds / 60).toFixed(1)}m`;
+	}
+
 	function fmtUptime(seconds: number): string {
 		seconds = Math.floor(seconds);
 		if (seconds < 60) return `${seconds}s`;
@@ -159,6 +164,16 @@
 					<div class="text-muted-foreground">Uptime</div>
 					<div>{fmtUptime(p.uptime_seconds)}</div>
 					<div></div>
+					{#if p.stats && p.stats.transcriptions > 0}
+					<div class="text-muted-foreground">Session</div>
+					<div>{p.stats.transcriptions} tx · {p.stats.words} words · {fmtAudio(p.stats.audio_seconds)}</div>
+					<div></div>
+					{#if p.stats.phrase}
+					<div></div>
+					<div class="text-muted-foreground italic text-xs">{p.stats.phrase}</div>
+					<div></div>
+					{/if}
+					{/if}
 				</div>
 				<!-- Output mode toggle -->
 				<div class="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
