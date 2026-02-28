@@ -19,7 +19,7 @@ jobs:
           uv venv --python 3.11 .venv
           echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          pip install -e ".[dev]"
+          .venv/bin/pip install -e ".[dev]"
 
       - name: Run CoreAudio tests
         run: pytest tests/ -v -m macos
