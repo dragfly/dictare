@@ -87,6 +87,7 @@ export const tabs: TabDef[] = [
       { id: "advanced-client", label: "Client", sections: ["client"], desc: "Agent client settings" },
       { id: "advanced-logging", label: "Logging", sections: ["logging"], desc: "Log file and level" },
       { id: "advanced-stats", label: "Statistics", sections: ["stats"], desc: "Typing statistics" },
+      { id: "advanced-permissions", label: "Permissions", sections: [], desc: "Guided permission doctor" },
       { id: "advanced-daemon", label: "Daemon", sections: ["daemon"], desc: "Background service" },
       { id: "advanced-pipeline", label: "Pipeline", sections: ["pipeline"], desc: "Message pipeline filters" },
     ],

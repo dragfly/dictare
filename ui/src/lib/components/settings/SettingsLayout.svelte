@@ -10,7 +10,17 @@
 	import type { TabDef, NavChild } from "$lib/types";
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import { getFixedBottomPx } from "$lib/stores/settings.svelte";
-	import { restartEngine, pingEngine, getSystemInfo, setLaunchAtLogin, getHotkeyStatus, fixHotkey } from "$lib/api";
+	import {
+		restartEngine,
+		pingEngine,
+		getSystemInfo,
+		setLaunchAtLogin,
+		getPermissionDoctorStatus,
+		openPermissionSetting,
+		probePermissionDoctor,
+		type PermissionDoctorStatus,
+		type PermissionProbeResult
+	} from "$lib/api";
 	import { onMount } from "svelte";
 
 	interface Props {
@@ -58,7 +68,9 @@
 
 	let restarting = $state(false);
 	let launchAtLogin = $state<boolean | null>(null);
-	let hotkeyStatus = $state<string | null>(null);  // null = linux/unsupported
+	let doctor = $state<PermissionDoctorStatus | null>(null);
+	let probing = $state(false);
+	let probeResult = $state<PermissionProbeResult | null>(null);
 
 	onMount(async () => {
 		try {
@@ -66,12 +78,6 @@
 			launchAtLogin = info.launch_at_login;
 		} catch {
 			// non-macOS or engine not ready
-		}
-		try {
-			const hs = await getHotkeyStatus();
-			if (hs.status !== "unsupported") hotkeyStatus = hs.status;
-		} catch {
-			// engine not ready
 		}
 	});
 
@@ -82,15 +88,27 @@
 		await setLaunchAtLogin(next);
 	}
 
-	async function handleFixHotkey() {
-		await fixHotkey();
-		// Refresh status after a short delay (user may toggle in System Settings)
-		setTimeout(async () => {
-			try {
-				const hs = await getHotkeyStatus();
-				if (hs.status !== "unsupported") hotkeyStatus = hs.status;
-			} catch { /* ignore */ }
-		}, 3000);
+	async function refreshDoctor() {
+		try {
+			doctor = await getPermissionDoctorStatus();
+		} catch {
+			doctor = null;
+		}
+	}
+
+	async function openDoctorSetting(target: "input_monitoring" | "accessibility" | "microphone") {
+		await openPermissionSetting(target);
+	}
+
+	async function runDoctorProbe() {
+		probing = true;
+		probeResult = null;
+		try {
+			probeResult = await probePermissionDoctor(8);
+		} finally {
+			probing = false;
+			await refreshDoctor();
+		}
 	}
 
 	async function handleRestart() {
@@ -104,6 +122,16 @@
 		}
 		restarting = false;
 	}
+
+	function openPermissionsDoctor() {
+		activeNavId = "advanced-permissions";
+	}
+
+	$effect(() => {
+		if (activeNavId === "advanced-permissions") {
+			void refreshDoctor();
+		}
+	});
 </script>
 
 <div class="flex h-screen">
@@ -115,7 +143,7 @@
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
 					<p class="text-sm text-muted-foreground">{activeDesc}</p>
 				</div>
-				<DashboardPage />
+				<DashboardPage onOpenPermissionsDoctor={openPermissionsDoctor} />
 			{:else if activeNavId === "models"}
 				<div class="px-4 mb-8">
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
@@ -127,34 +155,6 @@
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
 					<p class="text-sm text-muted-foreground">{activeDesc}</p>
 				</div>
-				{#if activeNavId === "keyboard" && hotkeyStatus !== null}
-				<div class="px-4 mb-6">
-					<div class="flex items-center justify-between rounded-lg border px-4 py-3">
-						<div>
-							<div class="text-sm font-medium">Global Hotkey (Right ⌘)</div>
-							<div class="text-xs text-muted-foreground">
-								{#if hotkeyStatus === "confirmed"}
-									Working — tap confirmed
-								{:else if hotkeyStatus === "active"}
-									Registered, waiting for first use
-								{:else if hotkeyStatus === "failed"}
-									Failed — Input Monitoring not granted
-								{:else}
-									Unknown
-								{/if}
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
-							<span class="inline-block size-2 rounded-full {hotkeyStatus === 'confirmed' ? 'bg-green-500' : hotkeyStatus === 'failed' ? 'bg-red-500' : 'bg-yellow-500'}"></span>
-							{#if hotkeyStatus !== "confirmed"}
-								<Button variant="destructive" onclick={handleFixHotkey}>
-									Fix Input Monitoring
-								</Button>
-							{/if}
-						</div>
-					</div>
-				</div>
-			{/if}
 			{#if activeNavId === "advanced-daemon"}
 					<div class="px-4 mb-6 space-y-3">
 						{#if launchAtLogin !== null}
@@ -166,6 +166,7 @@
 								<button
 									role="switch"
 									aria-checked={launchAtLogin}
+									aria-label="Toggle launch at login"
 									onclick={toggleLaunchAtLogin}
 									class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {launchAtLogin ? 'bg-primary' : 'bg-input'}"
 								>
@@ -178,6 +179,42 @@
 								<RotateCcw class="size-3.5 mr-1.5 {restarting ? 'animate-spin' : ''}" />
 								{restarting ? "Restarting…" : "Restart Engine"}
 							</Button>
+						</div>
+					</div>
+				{/if}
+				{#if activeNavId === "advanced-permissions"}
+					<div class="px-4 mb-6">
+						<div class="rounded-lg border px-4 py-3 space-y-3">
+							<div class="flex items-center justify-between">
+								<div class="text-sm font-medium">Permission Doctor</div>
+								<Button variant="outline" onclick={refreshDoctor}>Refresh</Button>
+							</div>
+							{#if doctor && doctor.status === "ok"}
+								<div class="text-xs text-muted-foreground">
+									Accessibility: {doctor.accessibility ? "granted" : "missing"} ·
+									Microphone: {doctor.microphone ? "granted" : "missing"} ·
+									Input Monitoring: {doctor.input_monitoring ? "granted" : "missing"} ·
+									Hotkey capture: {doctor.capture_healthy ? "healthy" : "not confirmed"} ·
+									Provider: {doctor.active_provider ?? "none"}
+								</div>
+								<div class="flex flex-wrap gap-2">
+									<Button variant="outline" onclick={() => openDoctorSetting("input_monitoring")}>Open Input Monitoring</Button>
+									<Button variant="outline" onclick={() => openDoctorSetting("accessibility")}>Open Accessibility</Button>
+									<Button variant="outline" onclick={() => openDoctorSetting("microphone")}>Open Microphone</Button>
+								</div>
+								<div class="flex items-center gap-2">
+									<Button onclick={runDoctorProbe} disabled={probing}>
+										{probing ? "Waiting for Right ⌘…" : "Probe Hotkey (press Right ⌘)"}
+									</Button>
+									{#if probeResult}
+										<span class="text-xs {probeResult.ok ? 'text-green-500' : 'text-red-500'}">
+											{probeResult.message}
+										</span>
+									{/if}
+								</div>
+							{:else}
+								<div class="text-xs text-muted-foreground">Doctor status unavailable.</div>
+							{/if}
 						</div>
 					</div>
 				{/if}

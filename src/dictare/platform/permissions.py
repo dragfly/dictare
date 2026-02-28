@@ -3,8 +3,8 @@
 Accessibility is always reported as True — not needed for the current
 architecture (the Swift launcher handles CGEventTap, not Python).
 
-Input Monitoring is checked via a status file written by the Swift launcher.
-Only hotkey_status="confirmed" is considered healthy.
+Input Monitoring permission is checked via the status file written by the Swift
+launcher. Runtime hotkey health is tracked separately by the serve process.
 
 Microphone is checked via the native Dictare.app launcher binary, which IS
 the process registered with AVFoundation in the TCC database.
@@ -166,17 +166,17 @@ def _check_input_monitoring() -> bool:
     """Check Input Monitoring by reading the launcher's hotkey_status file.
 
     The Swift launcher writes ~/.dictare/hotkey_status after attempting to
-    create the CGEventTap.  "confirmed" means events are actually delivered.
-    "active" and missing are treated as not yet healthy.
+    create the CGEventTap.  "active"/"confirmed" mean permission is granted.
+    Missing file means unknown, treated as granted for permission UI purposes.
     """
     from pathlib import Path
 
     status_file = Path.home() / ".dictare" / "hotkey_status"
     try:
         content = status_file.read_text().strip()
-        return content == "confirmed"
+        return content in ("active", "confirmed")
     except FileNotFoundError:
-        return False
+        return True
 
 
 def _check_via_launcher() -> dict[str, bool]:
