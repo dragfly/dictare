@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.80] - 2026-02-28
+
+### Fixed
+- **Hotkey key capture**: settings UI now only accepts modifier keys (⌘ ⇧ ⌥ ⌃
+  and Caps Lock) when capturing a hotkey. Previously any key could be selected,
+  but only modifier keys are addressable by CGEventTap `flagsChanged` events.
+  Non-modifier presses are silently ignored during capture. Human-friendly labels
+  added for Left/Right Shift, Ctrl, and Alt.
+
 ## [0.1.79] - 2026-02-28
 
 ### Changed
