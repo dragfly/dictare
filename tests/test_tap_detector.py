@@ -123,7 +123,7 @@ class TestDoubleTap:
 class TestLongPress:
     """Test long press detection."""
 
-    def test_long_press_fires_callback_while_key_held(self):
+    def test_long_press_fires_callback_on_key_up(self):
         result = []
         detector = TapDetector(
             threshold=0.4,
@@ -133,10 +133,12 @@ class TestLongPress:
         )
 
         detector.on_key_down()
-        _wait_until(lambda: len(result) > 0)
+        _wait_until(lambda: detector.state == TapState.LONG_PRESSED)
+        assert result == []  # Armed but not fired yet — modifier still held
 
+        detector.on_key_up()
         assert result == ["long"]
-        assert detector.state == TapState.LONG_PRESSED
+        assert detector.state == TapState.IDLE
 
     def test_long_press_key_up_resets_to_idle(self):
         result = []

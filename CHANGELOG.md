@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.75] - 2026-02-28
+
+### Fixed
+- **Long press fires on key_up, not on timeout**: the submit action (Return injection)
+  now fires when the modifier key is released, not 0.8 s after it was pressed.
+  Previously the Return was injected while Right Cmd was still physically held,
+  which could cause macOS to treat it as Cmd+Return instead of plain Return.
+
 ## [0.1.74] - 2026-02-28
 
 ### Fixed
