@@ -16,7 +16,7 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          uv venv --python 3.11 .venv
+          uv venv --python 3.11 --seed .venv
           echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
           .venv/bin/pip install -e ".[dev]"
