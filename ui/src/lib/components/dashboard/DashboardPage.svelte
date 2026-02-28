@@ -103,12 +103,6 @@
 			<div class="rounded-lg border bg-card p-4 space-y-2">
 				<h3 class="text-sm font-semibold">Engine</h3>
 				<div class="grid grid-cols-[auto_1fr_auto] gap-x-4 gap-y-1 text-sm">
-					<div class="text-muted-foreground">State</div>
-					<div>{p.state}</div>
-					<div></div>
-					<div class="text-muted-foreground">Uptime</div>
-					<div>{fmtUptime(p.uptime_seconds)}</div>
-					<div></div>
 					<div class="text-muted-foreground">STT</div>
 					<div>{p.stt.model_name} <span class="text-muted-foreground">on {p.stt.device}</span></div>
 					<div class="flex items-center justify-end">
@@ -159,6 +153,12 @@
 							</button>
 						{/if}
 					</div>
+					<div class="text-muted-foreground">State</div>
+					<div>{p.state}</div>
+					<div></div>
+					<div class="text-muted-foreground">Uptime</div>
+					<div>{fmtUptime(p.uptime_seconds)}</div>
+					<div></div>
 				</div>
 				<!-- Output mode toggle -->
 				<div class="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
