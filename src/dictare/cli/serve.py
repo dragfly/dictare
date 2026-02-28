@@ -165,7 +165,11 @@ def _run_serve(
             try:
                 from dictare.hotkey.ipc import HotkeyIPCServer
 
-                hotkey_ipc = HotkeyIPCServer(on_tap=controller.on_hotkey_tap)
+                hotkey_ipc = HotkeyIPCServer(
+                    on_tap=controller.on_hotkey_tap,
+                    on_key_down=controller.on_hotkey_key_down,
+                    on_key_up=controller.on_hotkey_key_up,
+                )
                 hotkey_ipc.start()
                 _logger.info("Hotkey transport active: ipc+signal-fallback")
             except Exception:

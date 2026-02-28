@@ -402,14 +402,30 @@ class AppController:
     def on_hotkey_tap(self) -> None:
         """Simulate a complete hotkey tap through the TapDetector.
 
-        Used by SIGUSR1 handler (macOS Swift launcher) to feed taps into
-        the same state machine that the pynput/evdev listener uses.
-        This gives double-tap detection for free: two SIGUSR1 within 0.4s
-        triggers mode switch (agents <-> keyboard).
+        Used by SIGUSR1 handler as fallback when IPC is unavailable.
+        Feeds both key_down and key_up with no delay, so the TapDetector
+        sees a very short press and fires on_single_tap (or on_double_tap
+        if called twice within the double-tap window).
         """
         if not self._engine:
             return
         self._engine._tap_detector.on_key_down()
+        self._engine._tap_detector.on_key_up()
+
+    def on_hotkey_key_down(self) -> None:
+        """Called when the hotkey key is pressed down (IPC key.down event).
+
+        Feeds the raw key_down event into TapDetector, enabling long-press
+        detection that is not possible with the legacy hotkey.tap protocol.
+        """
+        if not self._engine:
+            return
+        self._engine._tap_detector.on_key_down()
+
+    def on_hotkey_key_up(self) -> None:
+        """Called when the hotkey key is released (IPC key.up event)."""
+        if not self._engine:
+            return
         self._engine._tap_detector.on_key_up()
 
     def next_agent(self) -> None:
