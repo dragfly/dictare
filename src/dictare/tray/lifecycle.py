@@ -84,18 +84,11 @@ def start_tray(foreground: bool = False) -> int:
         return 1  # Already running
 
     if foreground:
-        # Run directly in foreground
-        from dictare.tray.app import TrayApp
+        # Delegate to the canonical main() entry point which sets up polling,
+        # callbacks, logging, and PID management correctly.
+        from dictare.tray.app import main as _tray_main
 
-        # Write our own PID
-        write_pid(os.getpid())
-
-        try:
-            app = TrayApp()
-            app.run()
-        finally:
-            remove_pid()
-
+        _tray_main()
         return 0
 
     else:
