@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.59] - 2026-02-28
+
+### Fixed
+- `install_tray()`: unload plist before recreating to prevent `launchctl load`
+  failing with Error 5 when the service is already registered.
+- `install()`: always reinstall tray plist (not only when missing) so the
+  python_path stays in sync after `brew upgrade dictare`.
+
 ## [0.1.58] - 2026-02-28
 
 ### Added
