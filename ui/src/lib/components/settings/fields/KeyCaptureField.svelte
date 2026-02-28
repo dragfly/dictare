@@ -82,6 +82,9 @@
 
 	const EVDEV_HUMAN: Record<string, string> = {
 		KEY_RIGHTMETA: "Right ⌘",   KEY_LEFTMETA: "Left ⌘",
+		KEY_RIGHTSHIFT: "Right ⇧",  KEY_LEFTSHIFT: "Left ⇧",
+		KEY_RIGHTCTRL: "Right ⌃",   KEY_LEFTCTRL: "Left ⌃",
+		KEY_RIGHTALT: "Right ⌥",    KEY_LEFTALT: "Left ⌥",
 		KEY_SCROLLLOCK: "Scroll Lock", KEY_CAPSLOCK: "Caps Lock",
 		KEY_NUMLOCK: "Num Lock",    KEY_PAUSE: "Pause",
 		KEY_SYSRQ: "Print Screen",  KEY_ESC: "Esc",
@@ -123,12 +126,19 @@
 	// Key capture logic
 	// ---------------------------------------------------------------------------
 
-	const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
+	// Only modifier keys are addressable by CGEventTap flagsChanged events.
+	const EVDEV_MODIFIER_KEYS = new Set([
+		"KEY_RIGHTMETA", "KEY_LEFTMETA",
+		"KEY_RIGHTSHIFT", "KEY_LEFTSHIFT",
+		"KEY_RIGHTCTRL", "KEY_LEFTCTRL",
+		"KEY_RIGHTALT", "KEY_LEFTALT",
+		"KEY_CAPSLOCK",
+	]);
 
 	// Browser keydown handler — active for both formats while capturing.
 	// For evdev: runs in parallel with engine capture (fallback if engine
-	// has no listener, e.g. macOS daemon mode). Captures any key including
-	// pure modifiers (Right ⌘, Left Shift, etc.).
+	// has no listener, e.g. macOS daemon mode). Only accepts modifier keys
+	// (those addressable via flagsChanged CGEventTap).
 	// For shortcut: captures key combos (skips pure modifier presses).
 	function handleKeyDown(e: KeyboardEvent) {
 		if (!capturing) return;
@@ -138,6 +148,7 @@
 
 		if (format === "evdev") {
 			const evdev = codeToEvdev(e.code);
+			if (!EVDEV_MODIFIER_KEYS.has(evdev)) return; // not a modifier — keep waiting
 			console.log("[hotkey-capture] browser captured:", e.code, "→", evdev);
 			onchange(evdev);
 			stopCapture();
@@ -173,7 +184,7 @@
 				console.log("[hotkey-capture] asking engine...");
 				const key = await captureHotkey(abortController.signal);
 				console.log("[hotkey-capture] engine responded:", key);
-				if (key && key !== "KEY_ESC" && capturing) {
+				if (key && key !== "KEY_ESC" && EVDEV_MODIFIER_KEYS.has(key) && capturing) {
 					console.log("[hotkey-capture] engine captured:", key);
 					onchange(key);
 					stopCapture();
@@ -199,7 +210,7 @@
 	<div class="min-w-[6rem] flex items-center">
 		{#if capturing}
 			<span class="text-xs text-muted-foreground italic animate-pulse">
-				{format === "evdev" ? "Press a key…" : "Press combination…"}
+				{format === "evdev" ? "Press modifier key…" : "Press combination…"}
 			</span>
 		{:else if display}
 			<kbd class="inline-flex items-center rounded border border-border bg-muted px-2 py-0.5
