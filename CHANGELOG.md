@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.73] - 2026-02-28
+
+### Changed
+- **Hotkey architecture**: launcher is now a pure key-event forwarder.
+  It reads `hotkey.key` from `~/.config/dictare/config.toml` at startup and
+  maps all supported modifier keys (Right/Left Cmd, Shift, Option, Control, Fn)
+  to their macOS keycodes — hotkey changes now take effect after a service
+  restart without rebuilding the launcher binary.
+- **IPC protocol**: launcher sends `key.down` / `key.up` events instead of a
+  single `hotkey.tap`; Python's `TapDetector` handles all gesture logic.
+  Legacy `hotkey.tap` (SIGUSR1 fallback) remains fully supported.
+- **Long press (≥ 0.8 s)**: injects a Return keypress into the active window
+  (submit action). Useful for submitting to Claude Code / terminal prompts
+  without lifting hands from the keyboard.
+- **Double tap**: unchanged — still toggles output mode (agents ↔ keyboard).
+- **Single tap**: unchanged — toggles mute on/off.
+- `AppState.OFF` now displays as **"muted"** instead of "Off".
+
 ## [0.1.72] - 2026-02-28
 
 ### Changed

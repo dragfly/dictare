@@ -12,8 +12,9 @@ import os
 import socket
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from dictare.hotkey.runtime_status import clear_runtime_status, write_runtime_status
 
@@ -23,10 +24,27 @@ DEFAULT_SOCKET_PATH = Path.home() / ".dictare" / "hotkey.sock"
 
 
 class HotkeyIPCServer:
-    """Receive hotkey tap events over a Unix socket and reply with ACK."""
+    """Receive hotkey events over a Unix socket and reply with ACK.
 
-    def __init__(self, on_tap: Callable[[], None], socket_path: Path | None = None) -> None:
+    Supports two protocols:
+    - Legacy: ``{"type":"hotkey.tap"}`` — single atomic event (SIGUSR1 replacement)
+    - New:    ``{"type":"key.down"}`` / ``{"type":"key.up"}`` — raw press/release pair
+              that feeds directly into TapDetector for long-press support.
+
+    The new protocol is preferred; ``hotkey.tap`` is kept for SIGUSR1 fallback
+    and for launchers that haven't been updated yet.
+    """
+
+    def __init__(
+        self,
+        on_tap: Callable[[], None],
+        on_key_down: Callable[[], None] | None = None,
+        on_key_up: Callable[[], None] | None = None,
+        socket_path: Path | None = None,
+    ) -> None:
         self._on_tap = on_tap
+        self._on_key_down = on_key_down
+        self._on_key_up = on_key_up
         self._socket_path = socket_path or DEFAULT_SOCKET_PATH
         self._server_sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
@@ -91,7 +109,7 @@ class HotkeyIPCServer:
         while self._running.is_set():
             try:
                 conn, _ = self._server_sock.accept()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
@@ -113,18 +131,34 @@ class HotkeyIPCServer:
             msg_type = str(msg.get("type", ""))
             seq = int(msg.get("seq", -1))
 
-            if msg_type != "hotkey.tap":
+            if msg_type == "hotkey.tap":
+                try:
+                    self._on_tap()
+                    with self._lock:
+                        self._delivered_count += 1
+                        self._last_delivered_ts = time.time()
+                        self._write_runtime_status_locked()
+                except Exception:
+                    logger.exception("Hotkey IPC callback failed (hotkey.tap)")
+            elif msg_type == "key.down":
+                try:
+                    if self._on_key_down is not None:
+                        self._on_key_down()
+                    with self._lock:
+                        self._delivered_count += 1
+                        self._last_delivered_ts = time.time()
+                        self._write_runtime_status_locked()
+                except Exception:
+                    logger.exception("Hotkey IPC callback failed (key.down)")
+            elif msg_type == "key.up":
+                try:
+                    if self._on_key_up is not None:
+                        self._on_key_up()
+                except Exception:
+                    logger.exception("Hotkey IPC callback failed (key.up)")
+            else:
                 logger.warning("Unknown hotkey IPC message type: %s", msg_type)
                 return
-
-            try:
-                self._on_tap()
-                with self._lock:
-                    self._delivered_count += 1
-                    self._last_delivered_ts = time.time()
-                    self._write_runtime_status_locked()
-            except Exception:
-                logger.exception("Hotkey IPC callback failed")
 
             ack = json.dumps({"type": "ack", "seq": seq}) + "\n"
             conn.sendall(ack.encode("utf-8"))
