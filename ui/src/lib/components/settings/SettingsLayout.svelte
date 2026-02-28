@@ -111,6 +111,13 @@
 		}
 	}
 
+	function runRecommendedFix() {
+		const target = doctor?.diagnosis?.recommended_target ?? probeResult?.diagnosis?.recommended_target;
+		if (target) {
+			void openDoctorSetting(target);
+		}
+	}
+
 	async function handleRestart() {
 		restarting = true;
 		await restartEngine();
@@ -190,6 +197,18 @@
 								<Button variant="outline" onclick={refreshDoctor}>Refresh</Button>
 							</div>
 							{#if doctor && doctor.status === "ok"}
+								<div class="rounded-md border px-3 py-2 {doctor.diagnosis?.code === 'ok' ? 'border-green-500/40 bg-green-500/5' : 'border-amber-500/40 bg-amber-500/5'}">
+									<div class="text-xs font-medium {doctor.diagnosis?.code === 'ok' ? 'text-green-500' : 'text-amber-500'}">
+										{doctor.diagnosis?.summary ?? "Diagnosis unavailable"}
+									</div>
+									{#if doctor.diagnosis?.steps && doctor.diagnosis.steps.length > 0}
+										<ul class="mt-2 list-disc pl-5 text-xs text-muted-foreground space-y-1">
+											{#each doctor.diagnosis.steps as step}
+												<li>{step}</li>
+											{/each}
+										</ul>
+									{/if}
+								</div>
 								<div class="text-xs text-muted-foreground">
 									Accessibility: {doctor.accessibility ? "granted" : "missing"} ·
 									Microphone: {doctor.microphone ? "granted" : "missing"} ·
@@ -201,17 +220,29 @@
 									<Button variant="outline" onclick={() => openDoctorSetting("input_monitoring")}>Open Input Monitoring</Button>
 									<Button variant="outline" onclick={() => openDoctorSetting("accessibility")}>Open Accessibility</Button>
 									<Button variant="outline" onclick={() => openDoctorSetting("microphone")}>Open Microphone</Button>
+									{#if doctor.diagnosis?.recommended_target}
+										<Button variant="destructive" onclick={runRecommendedFix}>Open Recommended Fix</Button>
+									{/if}
 								</div>
 								<div class="flex items-center gap-2">
 									<Button onclick={runDoctorProbe} disabled={probing}>
 										{probing ? "Waiting for Right ⌘…" : "Probe Hotkey (press Right ⌘)"}
 									</Button>
-									{#if probeResult}
-										<span class="text-xs {probeResult.ok ? 'text-green-500' : 'text-red-500'}">
-											{probeResult.message}
-										</span>
-									{/if}
 								</div>
+								{#if probeResult}
+									<div class="rounded-md border px-3 py-2 {probeResult.ok ? 'border-green-500/40 bg-green-500/5' : 'border-red-500/40 bg-red-500/5'}">
+										<div class="text-xs font-medium {probeResult.ok ? 'text-green-500' : 'text-red-500'}">
+											{probeResult.message}
+										</div>
+										{#if probeResult.diagnosis?.steps && probeResult.diagnosis.steps.length > 0}
+											<ul class="mt-2 list-disc pl-5 text-xs text-muted-foreground space-y-1">
+												{#each probeResult.diagnosis.steps as step}
+													<li>{step}</li>
+												{/each}
+											</ul>
+										{/if}
+									</div>
+								{/if}
 							{:else}
 								<div class="text-xs text-muted-foreground">Doctor status unavailable.</div>
 							{/if}

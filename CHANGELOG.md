@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.66] - 2026-02-28
+
+### Added
+- Permission Doctor now returns a deterministic diagnosis payload:
+  - `code`
+  - `summary`
+  - `steps`
+  - `recommended_target`
+- New tests for diagnosis behavior:
+  - `tests/test_permission_doctor.py`
+
+### Changed
+- Permission Doctor UI is now guided, not just status-only:
+  - diagnosis banner with actionable explanation
+  - recommended one-click settings action
+  - probe result card with follow-up steps on failure
+
+### Fixed
+- Clarified the critical macOS edge case where permissions are granted but
+  hotkey events are still not delivered: the doctor now explicitly surfaces
+  this state (`granted_but_no_delivery`) and provides a deterministic recovery
+  sequence for the user.
+
 ## [0.1.65] - 2026-02-28
 
 ### Changed
