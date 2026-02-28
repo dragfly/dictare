@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.79] - 2026-02-28
+
+### Changed
+- **Daily stats bucketing**: `stats.json` now tracks `current_day` separately
+  from `total_*` (historical up to yesterday midnight). On day rollover,
+  `current_day` is merged into historical and reset. The dashboard and exit
+  summary show today's full total (previous engine runs today + current session).
+
 ## [0.1.78] - 2026-02-28
 
 ### Added
