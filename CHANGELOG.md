@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.77] - 2026-02-28
+
+### Fixed
+- **IPC delivery metrics consistency**: `key.up` events now update
+  `_delivered_count`, `_last_delivered_ts`, and runtime status just like
+  `key.down` events do. Previously only `key.down` was tracked.
+
 ## [0.1.76] - 2026-02-28
 
 ### Fixed
