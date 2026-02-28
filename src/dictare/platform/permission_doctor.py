@@ -25,6 +25,14 @@ class DoctorStatus:
     active_provider: str
 
 
+@dataclass
+class DoctorDiagnosis:
+    code: str
+    summary: str
+    steps: list[str]
+    recommended_target: Literal["input_monitoring", "accessibility", "microphone"] | None = None
+
+
 class PermissionDoctor:
     """Guided permission flow with runtime hotkey probing."""
 
@@ -46,6 +54,89 @@ class PermissionDoctor:
             active_provider=active_provider,
         )
 
+    def diagnose(self, status: DoctorStatus | None = None) -> DoctorDiagnosis:
+        """Return deterministic diagnosis + guided manual steps."""
+        status = status or self.get_status()
+
+        if not status.accessibility:
+            return DoctorDiagnosis(
+                code="missing_accessibility",
+                summary="Accessibility permission is not granted.",
+                recommended_target="accessibility",
+                steps=[
+                    "Open Accessibility settings and enable Dictare.",
+                    "If Dictare is already enabled, toggle it off then on again.",
+                    "Restart Dictare and run Probe Hotkey again.",
+                ],
+            )
+
+        if not status.microphone:
+            return DoctorDiagnosis(
+                code="missing_microphone",
+                summary="Microphone permission is not granted.",
+                recommended_target="microphone",
+                steps=[
+                    "Open Microphone settings and enable Dictare.",
+                    "Restart Dictare and test speech input.",
+                ],
+            )
+
+        if not status.input_monitoring:
+            return DoctorDiagnosis(
+                code="missing_input_monitoring",
+                summary="Input Monitoring permission is not granted.",
+                recommended_target="input_monitoring",
+                steps=[
+                    "Open Input Monitoring settings and enable Dictare.",
+                    "Quit and relaunch Dictare after granting permission.",
+                    "Run Probe Hotkey and press Right Command.",
+                ],
+            )
+
+        if status.hotkey_status == "failed":
+            return DoctorDiagnosis(
+                code="tap_creation_failed",
+                summary="macOS denied event-tap creation in the launcher process.",
+                recommended_target="input_monitoring",
+                steps=[
+                    "Open Input Monitoring settings and re-toggle Dictare.",
+                    "Quit and relaunch Dictare to recreate the event tap.",
+                    "Run Probe Hotkey and press Right Command.",
+                ],
+            )
+
+        if status.capture_healthy:
+            return DoctorDiagnosis(
+                code="ok",
+                summary="Permissions and runtime hotkey capture look healthy.",
+                steps=[
+                    "No permission action required.",
+                ],
+            )
+
+        if status.hotkey_status in ("active", "confirmed"):
+            return DoctorDiagnosis(
+                code="granted_but_no_delivery",
+                summary="Permissions appear granted, but no hotkey event reached the engine.",
+                recommended_target="input_monitoring",
+                steps=[
+                    "Run Probe Hotkey and press Right Command multiple times.",
+                    "If probe still fails, toggle Dictare off/on in Input Monitoring.",
+                    "Quit and relaunch Dictare, then probe again.",
+                    "If still failing, remove Dictare from Input Monitoring and add it again via relaunch.",
+                ],
+            )
+
+        return DoctorDiagnosis(
+            code="unknown_state",
+            summary="Hotkey runtime state is unknown.",
+            recommended_target="input_monitoring",
+            steps=[
+                "Open Input Monitoring settings and verify Dictare is enabled.",
+                "Quit and relaunch Dictare, then run Probe Hotkey.",
+            ],
+        )
+
     def run_probe(self, timeout_s: float = 8.0) -> dict:
         """Wait for a new hotkey event to arrive via runtime status counters."""
         start = time.time()
@@ -56,6 +147,7 @@ class PermissionDoctor:
             now_count = self._delivered_count()
             if now_count > baseline:
                 status = self.get_status()
+                diagnosis = self.diagnose(status)
                 return {
                     "ok": True,
                     "message": "Hotkey event received",
@@ -63,10 +155,12 @@ class PermissionDoctor:
                     "active_provider": status.active_provider,
                     "capture_healthy": status.capture_healthy,
                     "hotkey_status": status.hotkey_status,
+                    "diagnosis": diagnosis_to_dict(diagnosis),
                 }
             time.sleep(0.1)
 
         status = self.get_status()
+        diagnosis = self.diagnose(status)
         return {
             "ok": False,
             "message": "No hotkey event received within timeout",
@@ -74,6 +168,7 @@ class PermissionDoctor:
             "active_provider": status.active_provider,
             "capture_healthy": status.capture_healthy,
             "hotkey_status": status.hotkey_status,
+            "diagnosis": diagnosis_to_dict(diagnosis),
         }
 
     def open_settings(self, target: Literal["input_monitoring", "accessibility", "microphone"]) -> None:
@@ -103,6 +198,7 @@ class PermissionDoctor:
 
 
 def status_to_dict(status: DoctorStatus) -> dict:
+    diagnosis = PermissionDoctor().diagnose(status)
     return {
         "accessibility": status.accessibility,
         "microphone": status.microphone,
@@ -110,4 +206,14 @@ def status_to_dict(status: DoctorStatus) -> dict:
         "hotkey_status": status.hotkey_status,
         "capture_healthy": status.capture_healthy,
         "active_provider": status.active_provider,
+        "diagnosis": diagnosis_to_dict(diagnosis),
+    }
+
+
+def diagnosis_to_dict(diagnosis: DoctorDiagnosis) -> dict:
+    return {
+        "code": diagnosis.code,
+        "summary": diagnosis.summary,
+        "steps": diagnosis.steps,
+        "recommended_target": diagnosis.recommended_target,
     }

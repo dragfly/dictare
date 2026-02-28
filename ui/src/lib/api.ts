@@ -320,6 +320,12 @@ export type PermissionDoctorStatus = {
 	hotkey_status?: string;
 	capture_healthy?: boolean;
 	active_provider?: string;
+	diagnosis?: {
+		code: string;
+		summary: string;
+		steps: string[];
+		recommended_target?: "input_monitoring" | "accessibility" | "microphone" | null;
+	};
 };
 
 export async function getPermissionDoctorStatus(): Promise<PermissionDoctorStatus> {
@@ -344,6 +350,12 @@ export type PermissionProbeResult = {
 	active_provider: string;
 	capture_healthy: boolean;
 	hotkey_status: string;
+	diagnosis?: {
+		code: string;
+		summary: string;
+		steps: string[];
+		recommended_target?: "input_monitoring" | "accessibility" | "microphone" | null;
+	};
 };
 
 export async function probePermissionDoctor(timeout = 8): Promise<PermissionProbeResult> {
