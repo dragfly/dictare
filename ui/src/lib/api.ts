@@ -285,3 +285,18 @@ export async function selectCapability(id: string): Promise<void> {
 		throw new Error(data.detail || `Select failed: ${r.status}`);
 	}
 }
+
+export async function getSystemInfo(): Promise<{ platform: string; launch_at_login: boolean | null }> {
+	const r = await fetch("/system");
+	if (!r.ok) throw new Error(`Failed to get system info: ${r.status}`);
+	return r.json();
+}
+
+export async function setLaunchAtLogin(enabled: boolean): Promise<void> {
+	const r = await fetch("/system", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ launch_at_login: enabled }),
+	});
+	if (!r.ok) throw new Error(`Failed to set launch at login: ${r.status}`);
+}
