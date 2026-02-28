@@ -6,7 +6,7 @@
 	import DashboardPage from "$lib/components/dashboard/DashboardPage.svelte";
 	import ModelsPage from "$lib/components/models/ModelsPage.svelte";
 	import { Button } from "$lib/components/ui/button";
-	import { RotateCcw } from "lucide-svelte";
+	import { RotateCcw, CheckCircle, XCircle } from "lucide-svelte";
 	import type { TabDef, NavChild } from "$lib/types";
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import { getFixedBottomPx } from "$lib/stores/settings.svelte";
@@ -139,6 +139,14 @@
 			void refreshDoctor();
 		}
 	});
+
+	$effect(() => {
+		if (activeNavId !== "advanced-permissions") return;
+		const timer = setInterval(() => {
+			void refreshDoctor();
+		}, 1000);
+		return () => clearInterval(timer);
+	});
 </script>
 
 <div class="flex h-screen">
@@ -196,6 +204,10 @@
 								<div class="text-sm font-medium">Permission Doctor</div>
 								<Button variant="outline" onclick={refreshDoctor}>Refresh</Button>
 							</div>
+							<p class="text-xs text-muted-foreground leading-relaxed">
+								Speaking with AI should feel simple, but operating systems sometimes make keyboard and microphone permissions a bit capricious.
+								This page is your guided checkpoint: it updates live, shows what is missing, and gives you the next concrete step to fix it.
+							</p>
 							{#if doctor && doctor.status === "ok"}
 								<div class="rounded-md border px-3 py-2 {doctor.diagnosis?.code === 'ok' ? 'border-green-500/40 bg-green-500/5' : 'border-amber-500/40 bg-amber-500/5'}">
 									<div class="text-xs font-medium {doctor.diagnosis?.code === 'ok' ? 'text-green-500' : 'text-amber-500'}">
@@ -209,12 +221,59 @@
 										</ul>
 									{/if}
 								</div>
-								<div class="text-xs text-muted-foreground">
-									Accessibility: {doctor.accessibility ? "granted" : "missing"} ·
-									Microphone: {doctor.microphone ? "granted" : "missing"} ·
-									Input Monitoring: {doctor.input_monitoring ? "granted" : "missing"} ·
-									Hotkey capture: {doctor.capture_healthy ? "healthy" : "not confirmed"} ·
-									Provider: {doctor.active_provider ?? "none"}
+								<div class="rounded-md border px-3 py-2 text-xs space-y-1.5">
+									<div class="flex items-center justify-between">
+										<span class="text-muted-foreground">Accessibility</span>
+										<span class="inline-flex items-center gap-1">
+											{#if doctor.accessibility}
+												<CheckCircle class="size-3.5 text-green-500" />
+												<span>granted</span>
+											{:else}
+												<XCircle class="size-3.5 text-destructive" />
+												<span>missing</span>
+											{/if}
+										</span>
+									</div>
+									<div class="flex items-center justify-between">
+										<span class="text-muted-foreground">Microphone</span>
+										<span class="inline-flex items-center gap-1">
+											{#if doctor.microphone}
+												<CheckCircle class="size-3.5 text-green-500" />
+												<span>granted</span>
+											{:else}
+												<XCircle class="size-3.5 text-destructive" />
+												<span>missing</span>
+											{/if}
+										</span>
+									</div>
+									<div class="flex items-center justify-between">
+										<span class="text-muted-foreground">Input Monitoring</span>
+										<span class="inline-flex items-center gap-1">
+											{#if doctor.input_monitoring}
+												<CheckCircle class="size-3.5 text-green-500" />
+												<span>granted</span>
+											{:else}
+												<XCircle class="size-3.5 text-destructive" />
+												<span>missing</span>
+											{/if}
+										</span>
+									</div>
+									<div class="flex items-center justify-between">
+										<span class="text-muted-foreground">Hotkey capture</span>
+										<span class="inline-flex items-center gap-1">
+											{#if doctor.capture_healthy}
+												<CheckCircle class="size-3.5 text-green-500" />
+												<span>healthy</span>
+											{:else}
+												<XCircle class="size-3.5 text-destructive" />
+												<span>not confirmed</span>
+											{/if}
+										</span>
+									</div>
+									<div class="flex items-center justify-between">
+										<span class="text-muted-foreground">Provider</span>
+										<span>{doctor.active_provider ?? "none"}</span>
+									</div>
 								</div>
 								<div class="flex flex-wrap gap-2">
 									<Button variant="outline" onclick={() => openDoctorSetting("input_monitoring")}>Open Input Monitoring</Button>
@@ -225,6 +284,10 @@
 									{/if}
 								</div>
 								<div class="flex items-center gap-2">
+									<Button variant="destructive" onclick={handleRestart} disabled={restarting}>
+										<RotateCcw class="size-3.5 mr-1.5 {restarting ? 'animate-spin' : ''}" />
+										{restarting ? "Restarting…" : "Restart Dictare"}
+									</Button>
 									<Button onclick={runDoctorProbe} disabled={probing}>
 										{probing ? "Waiting for Right ⌘…" : "Probe Hotkey (press Right ⌘)"}
 									</Button>
