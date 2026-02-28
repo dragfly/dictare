@@ -858,22 +858,23 @@ class DictareEngine:
     # -------------------------------------------------------------------------
 
     def _submit_action(self) -> None:
-        """Inject a Return keypress into the active window (long-press action).
+        """Send a submit action to the connected agent (long-press hotkey).
 
-        On macOS uses Quartz CGEvent. On other platforms this is a no-op
-        until a platform-specific injector is available.
+        Sends x_input={"submit": True, "trigger": "<long_press>"} to the
+        current agent — identical to what the submit filter does when a
+        trigger word is spoken, but fired from the hotkey instead.
+
+        Long press is agents-mode only: in keyboard mode the user can just
+        press Return directly since they already have a window in focus.
         """
-        import sys
-
-        if sys.platform == "darwin":
-            try:
-                from dictare.agent.injection.quartz import QuartzInjector
-                QuartzInjector().send_submit()
-                logger.debug("submit_action: Return key injected")
-            except Exception:
-                logger.debug("submit_action: QuartzInjector unavailable", exc_info=True)
-        else:
-            logger.debug("submit_action: not implemented on %s", sys.platform)
+        agent = self._get_current_agent()
+        if agent is None:
+            logger.debug("submit_action: no agent connected, ignoring")
+            return
+        message = create_message("")
+        message["x_input"] = {"submit": True, "trigger": "<long_press>"}
+        agent.send(message)
+        logger.debug("submit_action: submit sent to agent %s", agent.id)
 
     # -------------------------------------------------------------------------
     # State Control
