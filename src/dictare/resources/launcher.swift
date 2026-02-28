@@ -63,6 +63,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestMicrophonePermission()
         spawnPythonEngine()
+        ensureTrayRunning()
         setupSignalHandling()
         setupEventTap()
     }
@@ -121,6 +122,16 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             semaphore.signal()
         }
         semaphore.wait()
+    }
+
+    // --- Tray app ---
+    // Uses launchctl start which is idempotent: no-op if the service is already running.
+    func ensureTrayRunning() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        task.arguments = ["start", "com.dragfly.dictare.tray"]
+        try? task.run()
+        fputs("Tray: launchctl start com.dragfly.dictare.tray\n", stderr)
     }
 
     // --- Python engine ---

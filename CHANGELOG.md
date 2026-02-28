@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.57] - 2026-02-28
+
+### Changed
+- Launcher: `Dictare.app` now calls `launchctl start com.dragfly.dictare.tray`
+  on startup — ensures the tray is running even if launchd did not auto-start
+  it (idempotent: no-op if already running).
+- Daemon: `install_tray()` uses the stable Homebrew symlink
+  (`/opt/homebrew/opt/dictare/…`) instead of the versioned `sys.executable`
+  path, so the tray LaunchAgent survives `brew upgrade dictare` without
+  needing to re-run `dictare service install`.
+
 ## [0.1.56] - 2026-02-27
 
 ### Changed
