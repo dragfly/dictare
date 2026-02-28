@@ -1048,9 +1048,9 @@ class DictareEngine:
         On macOS daemon mode: Swift handles it via CGEventTap → SIGUSR1.
         We read ~/.dictare/hotkey_status written by the Swift launcher:
           "confirmed" — tap created AND at least one real event received (reliable)
-          "active"    — tap created but no events yet (Sequoia may lie: not reliable)
+          "active"    — tap created but not yet trusted for health checks
           "failed"    — tap creation failed (no permission)
-          missing     — running from terminal, assume OK
+          missing     — no launcher health signal yet (not healthy)
         """
         import sys
 
@@ -1060,7 +1060,7 @@ class DictareEngine:
             from pathlib import Path
             status_file = Path.home() / ".dictare" / "hotkey_status"
             try:
-                return status_file.read_text().strip() in ("active", "confirmed")
+                return status_file.read_text().strip() == "confirmed"
             except FileNotFoundError:
                 pass
         return False
