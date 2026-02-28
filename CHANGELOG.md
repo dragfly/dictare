@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.70] - 2026-02-28
+
+### Fixed
+- Keyboard-mode injection success reporting is now real, not queue-level:
+  `KeyboardAgent.send()` waits for worker completion and returns the actual
+  injector result (`type_text` / `send_submit` / `send_newline`), eliminating
+  false-positive `"success": true` injection logs when typing did not occur.
+
 ## [0.1.69] - 2026-02-28
 
 ### Fixed
