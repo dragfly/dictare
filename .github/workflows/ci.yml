@@ -8,9 +8,7 @@ on:
 
 jobs:
   test-linux:
-    runs-on: [self-hosted, Linux, X64]
-    env:
-      UV_NO_SOURCES: "1"  # use PyPI for openvip, not the local dev path
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -23,12 +21,10 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          VENV=$HOME/.venvs/dictare-ci
-          test -d $VENV || uv venv --python 3.11 $VENV
-          echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
-          echo "$VENV/bin" >> $GITHUB_PATH
-          export VIRTUAL_ENV=$VENV PATH="$VENV/bin:$PATH"
-          uv pip install -e ".[dev]"
+          uv venv --python 3.11 .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+          pip install -e ".[dev]"
 
       - name: Run linter
         run: ruff check src/ tests/
@@ -37,9 +33,7 @@ jobs:
         run: xvfb-run pytest tests/ -v -m '' --cov=dictare --cov-report=term-missing
 
   test-macos:
-    runs-on: [self-hosted, macOS, ARM64]
-    env:
-      UV_NO_SOURCES: "1"  # use PyPI for openvip, not the local dev path
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -48,12 +42,10 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          VENV=$HOME/.venvs/dictare-ci
-          test -d $VENV || uv venv --python 3.11 $VENV
-          echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
-          echo "$VENV/bin" >> $GITHUB_PATH
-          export VIRTUAL_ENV=$VENV PATH="$VENV/bin:$PATH"
-          uv pip install -e ".[dev]"
+          uv venv --python 3.11 .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+          pip install -e ".[dev]"
 
       - name: Run linter
         run: ruff check src/ tests/
@@ -62,9 +54,7 @@ jobs:
         run: pytest tests/ -v -m ''
 
   typecheck:
-    runs-on: [self-hosted, Linux, X64]
-    env:
-      UV_NO_SOURCES: "1"  # use PyPI for openvip, not the local dev path
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -73,12 +63,10 @@ jobs:
 
       - name: Set up Python and install deps
         run: |
-          VENV=$HOME/.venvs/dictare-ci
-          test -d $VENV || uv venv --python 3.11 $VENV
-          echo "VIRTUAL_ENV=$VENV" >> $GITHUB_ENV
-          echo "$VENV/bin" >> $GITHUB_PATH
-          export VIRTUAL_ENV=$VENV PATH="$VENV/bin:$PATH"
-          uv pip install -e ".[dev]"
+          uv venv --python 3.11 .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+          pip install -e ".[dev]"
 
       - name: Run mypy
         run: mypy src/
