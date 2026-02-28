@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.68] - 2026-02-28
+
+### Added
+- New hard-reset script for macOS permissions/runtime state:
+  - `scripts/macos-reset-permissions.sh`
+  - stops service/tray, clears local runtime markers, resets TCC grants, and
+    reinstalls/restarts Dictare service.
+
+### Fixed
+- Accessibility permission status now prefers a runtime signal from the active
+  launcher process (`~/.dictare/accessibility_status`) to reduce false
+  negatives caused by subprocess identity mismatches.
+
 ## [0.1.67] - 2026-02-28
 
 ### Fixed
