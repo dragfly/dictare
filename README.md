@@ -16,15 +16,17 @@ Speak to control Claude Code, Cursor, Aider, or any CLI tool — privately, on y
 
 ## Install
 
-```bash
-pip install dictare
-```
-
-Or from source:
+**macOS** (recommended):
 
 ```bash
 git clone https://github.com/dragfly/dictare && cd dictare
-uv sync --python 3.11
+./scripts/macos-install.sh
+```
+
+**Linux / pip**:
+
+```bash
+pip install dictare
 ```
 
 ## Quick Start
@@ -59,7 +61,7 @@ Speak and Claude Code executes. That's it.
  └──────────┬───────────┘
             v
  ┌─────────────────────┐
- │  Agent (PTY)         │  Claude Code, Cursor, Aider, ...
+ │  Agent               │  Claude Code, Cursor, Aider, ...
  └─────────────────────┘
 ```
 
@@ -107,37 +109,34 @@ dictare service uninstall   # Remove the service
 dictare service logs        # View recent logs
 ```
 
-## Engine
-
-For manual control without the system service:
-
-```bash
-dictare engine start -d --agents   # Start engine as daemon
-dictare engine status              # Check engine status
-dictare engine stop                # Stop engine
-```
-
 ## Keyboard Mode
 
-Don't need an agent? Use dictare as a pure dictation tool — voice to keystrokes:
+Don't need an agent? Use dictare as a pure dictation tool — voice to keystrokes.
+Set output mode to `keyboard` in config:
 
 ```bash
-dictare listen --keyboard
+dictare config set output.mode keyboard
 ```
 
-**Hotkey** to toggle listening:
-- macOS: **Command**
-- Linux: **ScrollLock**
+**Hotkey** to toggle listening (configurable):
+- macOS: **Right ⌥** (Right Option) by default
+- Linux: **Scroll Lock** by default
+
+Change it in Settings → Keyboard, or:
+
+```bash
+dictare config set hotkey.key KEY_RIGHTMETA   # Right ⌘
+```
 
 ## Text-to-Speech
 
 ```bash
 dictare speak "Hello world"
-dictare speak --engine qwen3 "Hello"
+dictare speak --engine piper "Hello"
 echo "Hello" | dictare speak
 ```
 
-Engines: `espeak`, `say` (macOS), `piper`, `coqui`, `qwen3`, `outetts`
+Engines: `espeak`, `say` (macOS), `piper`, `kokoro`, `outetts`, `coqui`
 
 ## Configuration
 
@@ -153,8 +152,8 @@ dictare config set stt.language it
 - **Python 3.11**
 - **macOS** or **Linux**
 
-**macOS**: Grant Accessibility permission for your terminal:
-System Settings > Privacy & Security > Accessibility > add your terminal app.
+**macOS**: Grant **Input Monitoring** permission when prompted during `dictare service install`.
+System Settings > Privacy & Security > Input Monitoring > enable Dictare.
 
 **Linux**: Join input group: `sudo usermod -aG input $USER` (log out/in).
 
@@ -169,14 +168,14 @@ uv sync --python 3.11 --extra mlx
 # macOS Intel / Linux
 uv sync --python 3.11
 
-# Run
-uv run --python 3.11 dictare listen --keyboard
+# Run engine in foreground
+uv run --python 3.11 dictare serve
 
 # Tests
-uv run --python 3.11 python -m pytest tests/ -x
+uv run --python 3.11 pytest tests/ -x
 
-# Tests (parallel — useful when suite grows beyond 10s)
-uv run --python 3.11 python -m pytest tests/ -x -n auto
+# Tests (parallel)
+uv run --python 3.11 pytest tests/ -x -n auto
 ```
 
 > Ghostty users: add `keybind = shift+enter=text:\n` to config. See [TERMINAL_COMPATIBILITY.md](TERMINAL_COMPATIBILITY.md).
