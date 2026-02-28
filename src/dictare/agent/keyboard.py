@@ -10,6 +10,7 @@ import logging
 import queue
 import sys
 import threading
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from dictare.agent.base import BaseAgent, OpenVIPMessage
@@ -18,6 +19,14 @@ if TYPE_CHECKING:
     from dictare.config import Config
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class _QueuedInjection:
+    """Queued keyboard injection with completion signaling."""
+
+    message: OpenVIPMessage
+    done: threading.Event
+    result: list[bool]
 
 class KeyboardAgent(BaseAgent):
     """Agent that injects text via keyboard simulation.
@@ -41,7 +50,7 @@ class KeyboardAgent(BaseAgent):
         """
         super().__init__(self.KEYBOARD_ID)
         self.config = config
-        self._queue: queue.Queue[OpenVIPMessage | None] = queue.Queue()
+        self._queue: queue.Queue[_QueuedInjection | None] = queue.Queue()
         self._worker: threading.Thread | None = None
         self._running = False
         self._injector: Any = None
@@ -116,24 +125,32 @@ class KeyboardAgent(BaseAgent):
             logger.warning("KeyboardAgent not running, message dropped")
             return False
 
-        self._queue.put(message)
-        return True
+        done = threading.Event()
+        result: list[bool] = [False]
+        self._queue.put(_QueuedInjection(message=message, done=done, result=result))
+        timeout_s = self._estimate_timeout_seconds(message)
+        if not done.wait(timeout=timeout_s):
+            logger.warning("Keyboard injection timed out after %.1fs", timeout_s)
+            return False
+        return result[0]
 
     def _worker_loop(self) -> None:
         """Background worker that processes queued messages."""
         while self._running:
             try:
-                message = self._queue.get(timeout=0.5)
-                if message is None:
+                item = self._queue.get(timeout=0.5)
+                if item is None:
                     # Sentinel - stop requested
                     break
-                self._process_message(message)
+                ok = self._process_message(item.message)
+                item.result[0] = ok
+                item.done.set()
             except queue.Empty:
                 continue
             except Exception as e:
                 logger.exception(f"KeyboardAgent worker error: {e}")
 
-    def _process_message(self, message: OpenVIPMessage) -> None:
+    def _process_message(self, message: OpenVIPMessage) -> bool:
         """Process a single OpenVIP message.
 
         Args:
@@ -153,23 +170,28 @@ class KeyboardAgent(BaseAgent):
         with self._injector_lock:
             if not self._injector:
                 logger.warning("Keyboard injector not available")
-                return
+                return False
 
             # Handle visual newline (no submit)
             if visual_newline and not text:
-                self._injector.send_newline()
-                return
+                return bool(self._injector.send_newline())
 
             # Handle submit-only (no text)
             if submit and not text:
-                self._injector.send_submit()
-                return
+                return bool(self._injector.send_submit())
 
             # Normal text injection
-            self._injector.type_text(
+            return bool(self._injector.type_text(
                 text,
                 delay_ms=delay_ms,
                 auto_enter=auto_enter,
                 submit_keys=submit_keys,
                 newline_keys=newline_keys,
-            )
+            ))
+
+    def _estimate_timeout_seconds(self, message: OpenVIPMessage) -> float:
+        """Estimate a reasonable timeout for synchronous send()."""
+        text = str(message.get("text", ""))
+        delay_ms = max(0, int(self.config.output.typing_delay_ms))
+        # Base timeout + per-character delay budget + small safety margin.
+        return max(2.0, 1.0 + (len(text) * delay_ms / 1000.0) + 1.0)
