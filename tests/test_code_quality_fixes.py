@@ -6,9 +6,7 @@ expected errors and that extracted constants are used correctly.
 
 from __future__ import annotations
 
-import json
 import subprocess
-import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -16,7 +14,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dictare.core.http_server import OpenVIPServer
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures (same pattern as test_tts_worker.py)
