@@ -144,12 +144,19 @@ def service_status() -> None:
 
 
 @app.command("logs")
-def service_logs() -> None:
+def service_logs(
+    tray: bool = typer.Option(False, "--tray", help="Show tray logs instead of engine logs."),
+) -> None:
     """Show recent service logs."""
     if sys.platform == "darwin":
         from dictare.daemon.launchd import LOG_DIR
 
-        for name in ("stderr.log", "stdout.log"):
+        if tray:
+            names = ("tray-stderr.log", "tray-stdout.log")
+        else:
+            names = ("stderr.log", "stdout.log")
+
+        for name in names:
             log_file = LOG_DIR / name
             if log_file.exists():
                 console.print(f"[bold]--- {name} ---[/]")

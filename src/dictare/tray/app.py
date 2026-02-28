@@ -628,7 +628,8 @@ class TrayApp:
                         self._update_menu()
                         self._update_icon()
 
-                except Exception:
+                except Exception as _exc:
+                    logger.debug("poll: engine unreachable: %s", _exc)
                     self.set_state("disconnected")
 
                 _time.sleep(1)
