@@ -51,13 +51,8 @@ def service_install() -> None:
         raise typer.Exit(1)
     console.print("[green]Service installed and started[/]")
 
-    if sys.platform == "darwin":
-        from dictare.daemon.launchd import install_tray
-        try:
-            install_tray()
-            console.print("[green]Tray installed and started[/]")
-        except Exception as e:
-            console.print(f"[yellow]Tray install failed (non-fatal): {e}[/]")
+    # Tray is handled by install() → install_tray() already (macOS only).
+    # No duplicate call needed here.
 
 @app.command("uninstall")
 def service_uninstall() -> None:

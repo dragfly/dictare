@@ -78,9 +78,8 @@ def install() -> None:
     _kill_orphan_processes()
     subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
-    # Also install tray auto-start
-    if not is_tray_installed():
-        install_tray()
+    # Always reinstall tray to keep python_path in sync with the engine.
+    install_tray()
 
 def uninstall() -> None:
     """Unload and remove all LaunchAgents, then remove .app bundle."""
@@ -302,6 +301,8 @@ def install_tray() -> None:
 
     plist_path = get_tray_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
+    # Unload first (no-op if not loaded) so we can safely reload after recreating.
+    subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
     plist_path.write_text(plistlib.dumps(plist).decode())
     subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
