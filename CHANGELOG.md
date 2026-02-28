@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.78] - 2026-02-28
+
+### Added
+- **Session stats at agent exit**: when the agent session ends, a summary is
+  printed to stderr with transcription count, word count, audio duration, and
+  a fun rotating phrase (e.g. "Your fingers are getting jealous.").
+- **Session stats in dashboard**: the Engine card now shows a "Session" row
+  with the same stats (tx · words · audio) and the fun phrase whenever at
+  least one transcription has been made.
+
 ## [0.1.77] - 2026-02-28
 
 ### Fixed
