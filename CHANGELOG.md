@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.67] - 2026-02-28
+
+### Fixed
+- Permission Doctor probe endpoint no longer blocks the HTTP event loop.
+  `POST /permissions/doctor/probe` now runs in a worker thread, preventing
+  transient "engine disconnected/restarting" UI errors while probing.
+- Permission Doctor diagnosis now prioritizes the hotkey path signal
+  (`input_monitoring` + runtime delivery) over Accessibility as a primary
+  hotkey failure cause.
+
+### Changed
+- Permissions Doctor UI copy now includes a short guided intro and
+  auto-refreshes every second while the page is open.
+- Added explicit `Restart Dictare` action inside the doctor flow and
+  improved per-permission status layout for readability.
+
 ## [0.1.66] - 2026-02-28
 
 ### Added

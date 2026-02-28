@@ -55,18 +55,6 @@ class PermissionDoctor:
         """Return deterministic diagnosis + guided manual steps."""
         status = status or self.get_status()
 
-        if not status.accessibility:
-            return DoctorDiagnosis(
-                code="missing_accessibility",
-                summary="Accessibility permission is not granted.",
-                recommended_target="accessibility",
-                steps=[
-                    "Open Accessibility settings and enable Dictare.",
-                    "If Dictare is already enabled, toggle it off then on again.",
-                    "Restart Dictare and run Probe Hotkey again.",
-                ],
-            )
-
         if not status.microphone:
             return DoctorDiagnosis(
                 code="missing_microphone",
@@ -74,7 +62,7 @@ class PermissionDoctor:
                 recommended_target="microphone",
                 steps=[
                     "Open Microphone settings and enable Dictare.",
-                    "Restart Dictare and test speech input.",
+                    "Click Restart Dictare below and test speech input.",
                 ],
             )
 
@@ -85,7 +73,7 @@ class PermissionDoctor:
                 recommended_target="input_monitoring",
                 steps=[
                     "Open Input Monitoring settings and enable Dictare.",
-                    "Quit and relaunch Dictare after granting permission.",
+                    "Click Restart Dictare below after granting permission.",
                     "Run Probe Hotkey and press Right Command.",
                 ],
             )
@@ -97,7 +85,7 @@ class PermissionDoctor:
                 recommended_target="input_monitoring",
                 steps=[
                     "Open Input Monitoring settings and re-toggle Dictare.",
-                    "Quit and relaunch Dictare to recreate the event tap.",
+                    "Click Restart Dictare below to recreate the event tap.",
                     "Run Probe Hotkey and press Right Command.",
                 ],
             )
@@ -119,8 +107,19 @@ class PermissionDoctor:
                 steps=[
                     "Run Probe Hotkey and press Right Command multiple times.",
                     "If probe still fails, toggle Dictare off/on in Input Monitoring.",
-                    "Quit and relaunch Dictare, then probe again.",
+                    "Click Restart Dictare below, then probe again.",
                     "If still failing, remove Dictare from Input Monitoring and add it again via relaunch.",
+                ],
+            )
+
+        if not status.accessibility:
+            return DoctorDiagnosis(
+                code="accessibility_unconfirmed",
+                summary="Accessibility appears not granted, but this does not explain the hotkey capture failure.",
+                recommended_target="accessibility",
+                steps=[
+                    "If you use keyboard output, open Accessibility and enable Dictare.",
+                    "For hotkey issues, continue focusing on Input Monitoring + Probe Hotkey.",
                 ],
             )
 
@@ -130,7 +129,7 @@ class PermissionDoctor:
             recommended_target="input_monitoring",
             steps=[
                 "Open Input Monitoring settings and verify Dictare is enabled.",
-                "Quit and relaunch Dictare, then run Probe Hotkey.",
+                "Click Restart Dictare below, then run Probe Hotkey.",
             ],
         )
 
