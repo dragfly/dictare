@@ -203,6 +203,18 @@ def _request_input_monitoring() -> None:
         logger.debug("Input Monitoring setup already done for this binary")
         return
 
+    # Binary hash changed (or first install): reset TCC ListenEvent entries to
+    # prevent accumulated stale entries from conflicting with the new binary.
+    # tccutil reset clears ALL entries for this bundle ID; the next permission
+    # request (below) creates a single clean entry for the current binary hash.
+    result = subprocess.run(
+        ["tccutil", "reset", "ListenEvent", LABEL],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.warning("tccutil reset ListenEvent failed: %s", result.stderr.strip())
+
     # Launch the .app with --request-input-monitoring via `open`.
     # Using `open` makes macOS treat it as a real app (own TCC identity),
     # not a child of Terminal (which would inherit Terminal's permissions).

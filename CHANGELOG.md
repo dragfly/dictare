@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.71] - 2026-02-28
+
+### Fixed
+- Auto-reset TCC `ListenEvent` entries on launcher binary change during
+  `dictare service install`: prevents accumulated stale TCC entries from
+  blocking the CGEventTap after reinstalls or Homebrew upgrades.
+
 ## [0.1.70] - 2026-02-28
 
 ### Fixed
