@@ -440,7 +440,10 @@ class OpenVIPServer:
 
             from dictare.platform.permission_doctor import PermissionDoctor
 
-            return PermissionDoctor().run_probe(timeout_s=timeout)
+            return await asyncio.to_thread(
+                PermissionDoctor().run_probe,
+                timeout_s=timeout,
+            )
 
         @app.get("/audio/devices")
         async def list_audio_devices():
