@@ -1,0 +1,29 @@
+name: Issue Sweep
+
+on:
+  schedule:
+    - cron: "0 10,22 * * *"  # twice daily at 10:00 and 22:00 UTC
+  workflow_dispatch:
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-message: >
+            This issue has been automatically marked as stale because it has not had
+            activity in the last 30 days. It will be closed in 14 days if no further
+            activity occurs. If this is still relevant, please comment to keep it open.
+          close-issue-message: >
+            Closing due to inactivity. If this is still relevant, please
+            open a new issue and reference this one.
+          days-before-stale: 30
+          days-before-close: 14
+          stale-issue-label: stale
+          exempt-issue-labels: "pinned,security,bug"
+          # Never mark PRs as stale — maintainer handles those
+          days-before-pr-stale: -1
+          days-before-pr-close: -1

@@ -1,0 +1,53 @@
+name: Lock Closed Issues
+
+on:
+  schedule:
+    - cron: "0 14 * * *"  # daily at 14:00 UTC
+  workflow_dispatch:
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              sort: 'updated',
+              direction: 'asc',
+              per_page: 100,
+            });
+
+            let locked = 0;
+            for (const issue of issues) {
+              if (issue.pull_request) continue;
+              if (issue.locked) continue;
+              if (new Date(issue.updated_at) > sevenDaysAgo) continue;
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: 'This issue has been automatically locked since it has been closed ' +
+                      'and had no activity for 7 days. If you are experiencing a similar ' +
+                      'issue, please open a new one.',
+              });
+
+              await github.rest.issues.lock({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                lock_reason: 'resolved',
+              });
+
+              locked++;
+            }
+            console.log(`Locked ${locked} issues.`);
