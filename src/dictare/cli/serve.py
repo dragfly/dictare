@@ -81,7 +81,12 @@ def register(app: typer.Typer) -> None:
         controller = AppController(config)
         _run_serve(controller, config, os, verbose=verbose)
 
-def _run_serve(controller: Any, config: Any, os: Any, verbose: bool = False) -> None:
+def _run_serve(
+    controller: Any,
+    config: Any,
+    os: Any,
+    verbose: bool = False,
+) -> None:
     """Run the engine in serve mode (foreground, logs to file + stdout).
 
     Called by `dictare serve` and used internally by the service manager

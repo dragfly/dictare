@@ -1045,22 +1045,25 @@ class DictareEngine:
         """Return True if the hotkey is actually functional.
 
         On Linux / terminal mode: Python directly binds the hotkey listener.
-        On macOS daemon mode: Swift handles it via CGEventTap → SIGUSR1.
-        We read ~/.dictare/hotkey_status written by the Swift launcher:
-          "confirmed" — tap created AND at least one real event received (reliable)
-          "active"    — tap created but not yet trusted for health checks
-          "failed"    — tap creation failed (no permission)
-          missing     — no launcher health signal yet (not healthy)
+        On macOS daemon mode: serve writes ~/.dictare/hotkey_runtime_status
+        with capture health derived from active providers (ipc/pynput/signal).
+        If runtime status is unavailable, we fall back to launcher hotkey_status.
         """
         import sys
 
         if self._hotkey is not None:
             return True
         if sys.platform == "darwin":
+            from dictare.hotkey.runtime_status import read_runtime_status
+
+            runtime = read_runtime_status()
+            if runtime is not None:
+                return bool(runtime.get("capture_healthy", False))
+
             from pathlib import Path
             status_file = Path.home() / ".dictare" / "hotkey_status"
             try:
-                return status_file.read_text().strip() == "confirmed"
+                return status_file.read_text().strip() in ("active", "confirmed")
             except FileNotFoundError:
                 pass
         return False
@@ -1072,6 +1075,12 @@ class DictareEngine:
         if self._hotkey is not None:
             return "bound"
         if sys.platform == "darwin":
+            from dictare.hotkey.runtime_status import read_runtime_status
+
+            runtime = read_runtime_status()
+            if runtime is not None:
+                return str(runtime.get("status", "unknown"))
+
             from pathlib import Path
             status_file = Path.home() / ".dictare" / "hotkey_status"
             try:
