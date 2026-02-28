@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.69] - 2026-02-28
+
+### Fixed
+- Accessibility permission false negatives in macOS doctor/status flow:
+  launcher `--check-permissions` now remains authoritative and is no longer
+  downgraded by stale runtime `~/.dictare/accessibility_status` values.
+
 ## [0.1.68] - 2026-02-28
 
 ### Added

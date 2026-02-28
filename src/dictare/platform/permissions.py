@@ -204,8 +204,12 @@ def _check_via_launcher() -> dict[str, bool]:
             if result.returncode == 0:
                 data = json.loads(result.stdout.strip())
                 runtime_ax = _check_accessibility_runtime()
+                launcher_ax = bool(data.get("accessibility", True))
                 return {
-                    "accessibility": runtime_ax if runtime_ax is not None else data.get("accessibility", True),
+                    # Launcher subprocess is authoritative for TCC identity.
+                    # Runtime file can be stale ("missing" after grant), so never
+                    # downgrade a launcher-confirmed True to False.
+                    "accessibility": launcher_ax or bool(runtime_ax),
                     "microphone": data.get("microphone", True),
                     "input_monitoring": _check_input_monitoring(),
                 }
