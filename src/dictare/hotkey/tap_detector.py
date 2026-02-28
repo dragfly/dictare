@@ -20,7 +20,7 @@ State machine:
     RELEASED_1 ──[double_tap_timeout]──> SINGLE_TAP → IDLE
 
     PRESSED_1 ──[long_press_timeout]──> LONG_PRESSED ──[key_up]──> IDLE
-                                             (fires on_long_press immediately)
+                                             (arms; fires on_long_press on key_up)
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ class TapDetector:
             long_press_threshold: Seconds to hold before long-press fires.
             on_single_tap: Callback when single tap detected.
             on_double_tap: Callback when double tap detected.
-            on_long_press: Callback when long press detected (fires while key held).
+            on_long_press: Callback when long press detected (fires on key_up, after the modifier is released).
         """
         self.threshold = threshold
         self.long_press_threshold = long_press_threshold
@@ -145,7 +145,8 @@ class TapDetector:
                     self._reset()
 
             elif self._state == TapState.LONG_PRESSED:
-                # Long press already fired; just reset on key_up
+                # Long press was armed; fire callback now that modifier is released.
+                callback = self._on_long_press
                 self._reset()
 
         if callback:
@@ -178,18 +179,13 @@ class TapDetector:
             self._timer = None
 
     def _on_long_press_timeout(self) -> None:
-        """Long-press timer fired — key still held."""
-        callback = None
-
+        """Long-press timer fired — key still held. Arms the long-press; callback fires on key_up."""
         with self._lock:
             if self._state == TapState.PRESSED_1 and not self._combo_detected:
-                callback = self._on_long_press
-                # Don't reset — stay in LONG_PRESSED until key_up
+                # Arm: transition to LONG_PRESSED and wait for key_up to fire callback.
+                # This ensures the modifier key is fully released before we inject Return.
                 self._state = TapState.LONG_PRESSED
                 self._timer = None
-
-        if callback:
-            callback()
 
     def _on_double_tap_timeout(self) -> None:
         """Double-tap window expired — fire single tap."""
