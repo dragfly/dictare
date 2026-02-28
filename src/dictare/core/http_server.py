@@ -364,6 +364,28 @@ class OpenVIPServer:
                 )
             return {"ok": True}
 
+        @app.get("/hotkey/status")
+        async def get_hotkey_status():
+            """Return CGEventTap status (macOS only)."""
+            import sys as _sys
+            if _sys.platform != "darwin":
+                return {"status": "unsupported"}
+            status_file = Path.home() / ".dictare" / "hotkey_status"
+            status = status_file.read_text().strip() if status_file.exists() else "unknown"
+            return {"status": status}
+
+        @app.post("/hotkey/fix")
+        async def fix_hotkey():
+            """Open System Settings → Input Monitoring (macOS only)."""
+            import subprocess
+            import sys as _sys
+            if _sys.platform == "darwin":
+                subprocess.Popen([
+                    "open",
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
+                ])
+            return {"ok": True}
+
         @app.get("/audio/devices")
         async def list_audio_devices():
             """List available audio input and output devices."""
