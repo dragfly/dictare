@@ -1,38 +1,56 @@
-# dictare
+<div align="center">
 
-Voice-first control for AI coding agents.
+<svg width="64" height="64" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="100" height="100" rx="22" fill="#6d5ce6"/>
+  <g transform="translate(0, 4)">
+    <rect x="35" y="12" width="30" height="48" rx="15" fill="none" stroke="#FFFFFF" stroke-width="6"/>
+    <path d="M 30 46 A 20 26 0 0 0 70 46" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <line x1="50" y1="72" x2="50" y2="82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+    <line x1="38" y1="82" x2="62" y2="82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>
 
-Speak to control Claude Code, Cursor, Aider, or any CLI tool — privately, on your hardware.
+# DICTA**re**
 
+**Voice layer for AI coding agents.**
+
+Speak to your agent. No window focus required. 100% local.
+
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://python.org)
+[![CI](https://github.com/dragfly/dictare/actions/workflows/ci.yml/badge.svg)](https://github.com/dragfly/dictare/actions)
+
+</div>
+
+---
 
 ## Why dictare
 
 Most voice tools (Wispr Flow, Superwhisper, etc.) simulate keystrokes — they type into
-whatever window is in focus. Switch to your browser and your code gets your voice.
+whatever window has focus. Switch to your browser and your code gets your voice.
 
-Dictare uses a protocol. Your agent listens via SSE and receives voice commands **regardless
-of window focus**. Claude Code can be behind 3 other windows — it still gets your words.
+Dictare uses a protocol. Your agent listens via SSE and receives transcriptions **regardless
+of window focus**. Your coding agent can be behind 3 other windows — it still gets your words.
 
 ## Features
 
 - **No focus required** — agent receives voice even when its window is in the background
-- **Voice-to-Agent** — commands go to the agent protocol, not a text field
-- **Single command** — `dictare agent claude` and you're talking to Claude Code
-- **100% local** — Whisper STT runs on-device, zero data leaves your machine
-- **Multi-agent** — switch agents with your voice: *"agent cursor"*
-- **Open protocol** — [OpenVIP](spec/) lets any tool connect via SSE
+- **Agent-native** — transcriptions go to the agent protocol, not a text field
+- **100% local** — STT runs on-device, zero data leaves your machine
+- **Multi-agent** — switch agents by voice: *"agent coding"*, *"agent review"*
+- **Open protocol** — [OpenVIP](spec/) — any tool can implement the SSE endpoint
 - **Bidirectional** — STT (voice in) + TTS (voice out)
 
 ## Install
 
-**macOS** (recommended):
+**macOS:**
 
 ```bash
 git clone https://github.com/dragfly/dictare && cd dictare
 ./scripts/macos-install.sh
 ```
 
-**Linux / pip**:
+**Linux:**
 
 ```bash
 pip install dictare
@@ -41,100 +59,96 @@ pip install dictare
 ## Quick Start
 
 ```bash
-# 1. Install as system service (starts at login, like Ollama)
+# 1. Install as system service (auto-starts at login)
 dictare service install
 
-# 2. Launch your agent
-dictare agent claude
+# 2. Connect your agent
+dictare agent coding
 ```
 
-Speak and Claude Code executes. That's it.
+The service starts automatically. Speak — your agent receives the transcription.
 
 ## How It Works
 
 ```
   Microphone
-      |
-      v
- ┌─────────────────────┐
- │  Whisper STT         │  (local, on-device)
- └──────────┬───────────┘
-            v
- ┌─────────────────────┐
- │  Pipeline            │  filters: submit detection,
- │  (filters + executor)│  agent switching, enrichment
- └──────────┬───────────┘
-            v
- ┌─────────────────────┐
- │  OpenVIP HTTP/SSE    │  open protocol
- └──────────┬───────────┘
-            v
- ┌─────────────────────┐
- │  Agent               │  Claude Code, Cursor, Aider, ...
- └─────────────────────┘
+      │
+      ▼
+  STT Module       Whisper (MLX / CTranslate2) or Parakeet (ONNX)
+      │             all local, zero cold-start
+      ▼
+  Pipeline         submit detection, agent switching, language filter
+      │
+      ▼
+  OpenVIP          HTTP / SSE — open protocol
+      │
+      ▼
+  Agent            receives transcription, no window focus needed
 ```
 
-The **engine** runs as a system service (launchd on macOS, systemd on Linux).
-It preloads STT models so there's zero cold-start when you speak.
-Agents connect via SSE — each in its own terminal.
+The engine runs as a background service (launchd on macOS, systemd on Linux).
+STT models are preloaded at startup. Each agent connects in its own terminal.
 
 ## Agent Templates
 
 Define agents in `~/.config/dictare/config.toml`:
 
 ```toml
-[agent_types.claude]
+[agent_types.coding]
 command = ["claude"]
-description = "Claude Code"
+description = "AI coding assistant"
 
-[agent_types.aider]
-command = ["aider", "--model", "claude-3-opus"]
-description = "Aider with Opus"
+[agent_types.review]
+command = ["aider", "--model", "claude-sonnet-4-6"]
+description = "Code review"
+
+[agent_types.writing]
+command = ["claude", "--model", "claude-opus-4-6"]
+description = "Writing and documentation"
 ```
 
-Then launch with a single command:
+Then connect:
 
 ```bash
-dictare agent claude                          # uses template
-dictare agent claude -- claude --model opus   # override command
+dictare agent coding                              # uses template
+dictare agent coding -- claude --model opus       # override command
 ```
 
 ## Voice Commands
 
-| Voice command | Action |
+| Say | Action |
 |---|---|
-| *"invia"* / *"send"* / *"submit"* | Submit text to the agent (Enter) |
-| *"agent claude"* / *"agent cursor"* | Switch to a different agent |
+| *"submit"* / *"send"* / *"invia"* / *"senden"* | Submit to agent (Enter) |
+| *"agent coding"* / *"agent review"* | Switch active agent |
 
-Submit triggers are multilingual (en, it, es, de, fr) and configurable in config.
+Submit triggers are multilingual (en, it, es, de, fr) and fully configurable.
 
 ## Service Management
 
 ```bash
-dictare service install     # Install + enable + start (auto-start at login)
-dictare service status      # Check service and engine status
+dictare service install     # Install + enable (auto-starts at login)
+dictare service start       # Start the service
 dictare service stop        # Stop the service
-dictare service uninstall   # Remove the service
+dictare service restart     # Restart the service
+dictare service status      # Show service and engine status
 dictare service logs        # View recent logs
+dictare service uninstall   # Remove the service
 ```
 
 ## Keyboard Mode
 
-Don't need an agent? Use dictare as a pure dictation tool — voice to keystrokes.
-Set output mode to `keyboard` in config:
+No agent? Use dictare as a dictation tool — voice to keystrokes in any app.
 
 ```bash
 dictare config set output.mode keyboard
 ```
 
 **Hotkey** to toggle listening (configurable):
-- macOS: **Right ⌥** (Right Option) by default
+- macOS: **Right ⌘** by default
 - Linux: **Scroll Lock** by default
 
-Change it in Settings → Keyboard, or:
-
 ```bash
-dictare config set hotkey.key KEY_RIGHTMETA   # Right ⌘
+dictare config set hotkey.key KEY_RIGHTALT   # change hotkey
 ```
 
 ## Text-to-Speech
@@ -145,7 +159,7 @@ dictare speak --engine piper "Hello"
 echo "Hello" | dictare speak
 ```
 
-Engines: `espeak`, `say` (macOS), `piper`, `kokoro`, `outetts`, `coqui`
+Engines: `espeak`, `say` (macOS), `piper`, `kokoro`
 
 ## Configuration
 
@@ -162,7 +176,7 @@ dictare config set stt.language it
 - **macOS** or **Linux**
 
 **macOS**: Grant **Input Monitoring** permission when prompted during `dictare service install`.
-System Settings > Privacy & Security > Input Monitoring > enable Dictare.
+System Settings → Privacy & Security → Input Monitoring → enable Dictare.
 
 **Linux**: Join input group: `sudo usermod -aG input $USER` (log out/in).
 
@@ -191,8 +205,15 @@ uv run --python 3.11 pytest tests/ -x -n auto
 
 ## Roadmap
 
-- **Plugin architecture** (post v0.1.0): pipeline filters will be loadable as plugins, each declaring the models they need (STT, TTS, LLM, Translation). See [docs/notes/plugin-filter-llm-vision.md](docs/notes/plugin-filter-llm-vision.md).
-- **Realtime partial transcription**: stream partial results while speaking using a fast small model. See [docs/notes/realtime-partial-transcription.md](docs/notes/realtime-partial-transcription.md).
+- **Plugin architecture**: pipeline filters loadable as plugins, each declaring its model dependencies (STT, TTS, LLM, Vision).
+- **Realtime partial transcription**: stream partial results while speaking using a fast small model.
+- **Cloud relay** (Phase 2): E2E encrypted relay connecting web clients to local engines.
+
+## Protocol
+
+dictare is the reference implementation of [OpenVIP](spec/) — an open protocol for
+voice input to AI agents. Any tool can implement the SSE endpoint and receive
+voice transcriptions from dictare.
 
 ## License
 
