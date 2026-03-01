@@ -164,8 +164,10 @@ class InputFilter:
                 "text": cleaned_text,
                 "x_input": {
                     "submit": True,
+                    "newline": False,
                     "trigger": " ".join(matched_tokens),
                     "confidence": round(match.confidence, 3),
+                    "source": "dictare/input-filter",
                 },
             })
 

@@ -1,6 +1,6 @@
 # OpenVIP Protocol Specification
 
-Dictare implements the **OpenVIP (Open Voice Input Protocol) v1.0**.
+Dictare implements the **OpenVIP (Open Voice Interaction Protocol) v1.0**.
 
 ## Official Specification
 
@@ -21,13 +21,26 @@ Dictare's OpenVIP implementation is in:
 - `src/dictare/core/openvip_validator.py` — Schema validation
 - `src/dictare/agent/` — Agent client (openvip SDK)
 
-### Dictare Extensions
+### Standard Extensions Used
 
-Dictare uses these extension fields (allowed by `additionalProperties: true`):
+Dictare uses both standard extensions defined in the protocol spec:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `x_submit` | boolean | Agent should submit (send Enter) after the transcription |
-| `x_visual_newline` | boolean | Agent should insert a visual newline (Shift+Enter) instead of submitting |
+#### `x_input` — Text input behavior
 
-These are dictare-specific and may not be supported by other implementations.
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `submit` | boolean | **yes** | Agent should submit (send Enter) after the transcription |
+| `newline` | boolean | **yes** | Agent should insert a visual newline (Shift+Enter) |
+| `trigger` | string | no | The voice phrase that triggered this action (e.g. `"ok, send"`) |
+| `confidence` | float | no | STT confidence score for the trigger phrase |
+| `source` | string | no | Generator identifier (e.g. `"dictare/input-filter"`) |
+
+#### `x_agent_switch` — Agent routing
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `target` | string | **yes** | Identifier of the agent to switch to |
+| `confidence` | float | no | Confidence score (0.0–1.0) |
+| `source` | string | no | Generator identifier (e.g. `"dictare/agent-filter"`) |
+
+These are standard protocol fields — any OpenVIP implementation can use them.
