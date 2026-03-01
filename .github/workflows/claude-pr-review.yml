@@ -1,0 +1,57 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip PRs from the maintainer (manual review) and bots
+    if: |
+      github.event.pull_request.user.login != 'dragfly' &&
+      github.event.pull_request.user.type != 'Bot'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code for PR Review
+        timeout-minutes: 10
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--model claude-sonnet-4-6"
+          prompt: |
+            Review this pull request for the dictare project.
+
+            REPO: ${{ github.repository }}
+            PR_NUMBER: ${{ github.event.pull_request.number }}
+            PR_TITLE: ${{ github.event.pull_request.title }}
+            AUTHOR: ${{ github.event.pull_request.user.login }}
+            BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+
+            Dictare is a voice-first control layer for AI coding agents (Claude Code, Cursor, etc.).
+            It implements the OpenVIP protocol. Python 3.11, FastAPI, Typer, uv.
+
+            Review instructions:
+            1. Read the PR diff using gh CLI
+            2. Check: code correctness, test coverage, docs updates, breaking changes
+            3. Verify CHANGELOG.md is updated if the change is user-visible
+            4. Check for security concerns (no credentials hardcoded, no unsafe operations)
+            5. Verify Python 3.11 compatibility and uv/ruff style compliance
+            6. Post a concise review comment with: summary of changes, specific feedback (if any),
+               and LGTM or requested changes
+            7. Add labels: "needs-review" if changes needed, "ready-to-merge" if LGTM
+            8. Be constructive and friendly. First-time contributors deserve extra encouragement.
+            9. Sign off as "dictare bot"
+
+            Keep the review focused — max 200 words unless there are real issues to flag.
