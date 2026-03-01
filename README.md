@@ -1,14 +1,6 @@
 <div align="center">
 
-<svg width="64" height="64" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <rect x="0" y="0" width="100" height="100" rx="22" fill="#6d5ce6"/>
-  <g transform="translate(0, 4)">
-    <rect x="35" y="12" width="30" height="48" rx="15" fill="none" stroke="#FFFFFF" stroke-width="6"/>
-    <path d="M 30 46 A 20 26 0 0 0 70 46" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="round"/>
-    <line x1="50" y1="72" x2="50" y2="82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
-    <line x1="38" y1="82" x2="62" y2="82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
-  </g>
-</svg>
+<img src="assets/icon.svg" width="80" height="80" alt="dictare icon">
 
 # DICTA**re**
 
@@ -19,6 +11,8 @@ Speak to your agent. No window focus required. 100% local.
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://python.org)
 [![CI](https://github.com/dragfly/dictare/actions/workflows/ci.yml/badge.svg)](https://github.com/dragfly/dictare/actions)
+
+[dictare.io](https://dictare.io) · [OpenVIP Protocol](https://github.com/openvip-dev/protocol)
 
 </div>
 
@@ -38,7 +32,7 @@ of window focus**. Your coding agent can be behind 3 other windows — it still 
 - **Agent-native** — transcriptions go to the agent protocol, not a text field
 - **100% local** — STT runs on-device, zero data leaves your machine
 - **Multi-agent** — switch agents by voice: *"agent coding"*, *"agent review"*
-- **Open protocol** — [OpenVIP](spec/) — any tool can implement the SSE endpoint
+- **Open protocol** — [OpenVIP](https://github.com/openvip-dev/protocol) — any tool can implement the SSE endpoint
 - **Bidirectional** — STT (voice in) + TTS (voice out)
 
 ## Install
@@ -63,7 +57,7 @@ pip install dictare
 dictare service install
 
 # 2. Connect your agent
-dictare agent coding
+dictare agent myproject --type coding
 ```
 
 The service starts automatically. Speak — your agent receives the transcription.
@@ -91,7 +85,7 @@ STT models are preloaded at startup. Each agent connects in its own terminal.
 
 ## Agent Templates
 
-Define agents in `~/.config/dictare/config.toml`:
+Define agent types in `~/.config/dictare/config.toml`:
 
 ```toml
 [agent_types.coding]
@@ -107,19 +101,20 @@ command = ["claude", "--model", "claude-opus-4-6"]
 description = "Writing and documentation"
 ```
 
-Then connect:
+Then connect using `--type`:
 
 ```bash
-dictare agent coding                              # uses template
-dictare agent coding -- claude --model opus       # override command
+dictare agent myproject --type coding     # session "myproject", type "coding"
+dictare agent frontend --type review      # session "frontend", type "review"
+dictare agent -- claude --model opus      # explicit command override
 ```
 
 ## Voice Commands
 
 | Say | Action |
 |---|---|
-| *"submit"* / *"send"* / *"invia"* / *"senden"* | Submit to agent (Enter) |
-| *"agent coding"* / *"agent review"* | Switch active agent |
+| *"ok, submit"* / *"ok, send"* / *"ok, invia"* / *"ja, senden"* | Submit to agent (Enter) |
+| *"agent coding"* / *"agent review"* | Switch active agent type |
 
 Submit triggers are multilingual (en, it, es, de, fr) and fully configurable.
 
@@ -211,7 +206,7 @@ uv run --python 3.11 pytest tests/ -x -n auto
 
 ## Protocol
 
-dictare is the reference implementation of [OpenVIP](spec/) — an open protocol for
+dictare is the reference implementation of [OpenVIP](https://github.com/openvip-dev/protocol) — an open protocol for
 voice input to AI agents. Any tool can implement the SSE endpoint and receive
 voice transcriptions from dictare.
 
