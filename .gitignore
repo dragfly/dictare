@@ -76,8 +76,12 @@ ui/.svelte-kit/
 CLAUDE.local.md
 WORKFLOW.md
 
-# Internal notes — not for public repo
+# Internal docs — not for public repo
 docs/notes/
+docs/design/
+docs/specs/
+docs/templates/
+docs/tdd-schools.md
 *.private.md
 private/
 
