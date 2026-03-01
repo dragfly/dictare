@@ -769,7 +769,7 @@ class DictareEngine:
 
         Message processing:
         1. Build initial message with auto_enter setting
-        2. Apply pipeline filters (may set x_submit, modify text, etc.)
+        2. Apply pipeline filters (may set x_input.submit, modify text, etc.)
         3. Send processed message(s) to agent
 
         Args:
@@ -795,9 +795,9 @@ class DictareEngine:
         # Build OpenVIP transcription message
         message = create_message(text, language=message_language)
         if auto_enter:
-            message["x_input"] = {"submit": True}
+            message["x_input"] = {"submit": True, "newline": False, "source": "dictare/engine"}
         else:
-            message["x_input"] = {"newline": True}
+            message["x_input"] = {"submit": False, "newline": True, "source": "dictare/engine"}
 
         # Apply pipeline: filters (enrich) then executors (act)
         messages_to_send = [message]
@@ -878,7 +878,7 @@ class DictareEngine:
             logger.debug("submit_action: no agent connected, ignoring")
             return
         message = create_message("")
-        message["x_input"] = {"submit": True, "trigger": "<long_press>"}
+        message["x_input"] = {"submit": True, "newline": False, "trigger": "<long_press>", "source": "dictare/long-press"}
         agent.send(message)
         logger.debug("submit_action: submit sent to agent %s", agent.id)
 

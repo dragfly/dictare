@@ -226,6 +226,7 @@ class AgentFilter:
                 "x_agent_switch": {
                     "target": match.agent_id,
                     "confidence": round(match.score, 3),
+                    "source": "dictare/agent-filter",
                 },
             })
             # Remove x_input - switch-only message doesn't need input behavior
