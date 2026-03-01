@@ -5,9 +5,18 @@ Voice-first control for AI coding agents.
 Speak to control Claude Code, Cursor, Aider, or any CLI tool — privately, on your hardware.
 
 
+## Why dictare
+
+Most voice tools (Wispr Flow, Superwhisper, etc.) simulate keystrokes — they type into
+whatever window is in focus. Switch to your browser and your code gets your voice.
+
+Dictare uses a protocol. Your agent listens via SSE and receives voice commands **regardless
+of window focus**. Claude Code can be behind 3 other windows — it still gets your words.
+
 ## Features
 
-- **Voice-to-Agent** — voice commands drive your AI coding agent, not just text
+- **No focus required** — agent receives voice even when its window is in the background
+- **Voice-to-Agent** — commands go to the agent protocol, not a text field
 - **Single command** — `dictare agent claude` and you're talking to Claude Code
 - **100% local** — Whisper STT runs on-device, zero data leaves your machine
 - **Multi-agent** — switch agents with your voice: *"agent cursor"*
