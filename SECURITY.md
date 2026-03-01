@@ -49,7 +49,7 @@ All processing happens locally on your machine. No audio or text is sent to exte
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 2.x.x   | :white_check_mark: |
-| < 2.0   | :x:                |
+| 0.1.x   | :white_check_mark: |
+| < 0.1   | :x:                |
 
 We recommend always using the latest version.
