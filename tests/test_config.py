@@ -46,8 +46,8 @@ class TestConfigDefaults:
     def test_output_config_defaults(self) -> None:
         """Test OutputConfig has correct defaults."""
         config = OutputConfig()
-        assert config.mode == "keyboard"
-        assert config.typing_delay_ms == 5
+        assert config.mode == "agents"
+        assert config.typing_delay_ms == 2
         assert config.auto_enter is False
 
     def test_full_config_defaults(self) -> None:

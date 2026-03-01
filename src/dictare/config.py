@@ -185,25 +185,25 @@ def _default_newline_keys() -> str:
 class OutputConfig(BaseModel):
     """Text output configuration."""
 
-    mode: Literal["keyboard", "agents"] = Field(
-        default="keyboard",
-        description="Output mode: keyboard (type to focus) or agents (OpenVIP)",
+    mode: Literal["agents", "keyboard"] = Field(
+        default="agents",
+        description="Output mode: agents (OpenVIP SSE, default) or keyboard (type into focused window)",
     )
     typing_delay_ms: int = Field(
-        default=5,
-        description="Delay between characters in milliseconds",
+        default=2,
+        description="Keyboard mode only: delay between characters in milliseconds",
     )
     auto_enter: bool = Field(
         default=False,
-        description="Press Enter to submit after typing (False = visual newline only)",
+        description="Keyboard mode only: press Enter to submit after typing",
     )
     submit_keys: str = Field(
         default="enter",
-        description="Key combination for submit (when auto_enter=true)",
+        description="Keyboard mode only: key combination to submit (when auto_enter=true)",
     )
     newline_keys: str = Field(
         default_factory=_default_newline_keys,
-        description="Key combination for visual newline (when auto_enter=false). Default: alt+enter (Linux), shift+enter (macOS)",
+        description="Keyboard mode only: key for visual newline (when auto_enter=false). Default: alt+enter (Linux), shift+enter (macOS)",
     )
 
 
@@ -809,11 +809,11 @@ def create_default_config() -> Path:
 # device = ""                     # Keyboard device (empty = auto-detect)
 
 [output]
-# mode = "keyboard"               # keyboard or agents
-# typing_delay_ms = 5
-# auto_enter = false              # Press Enter after typing
-# submit_keys = "enter"
-# newline_keys = "{newline_keys}"
+# mode = "agents"                 # agents (default, OpenVIP SSE) or keyboard (type into focused window)
+# typing_delay_ms = 2             # keyboard mode only: delay between characters (ms)
+# auto_enter = false              # keyboard mode only: press Enter after typing
+# submit_keys = "enter"           # keyboard mode only
+# newline_keys = "{newline_keys}" # keyboard mode only
 
 # [keyboard]
 # shortcuts = []                  # Configure via: dictare config shortcuts
