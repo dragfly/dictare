@@ -2,110 +2,70 @@
 
 ## Overview
 
-`dictare` is a voice-to-text tool for terminals. It uses VAD (Voice Activity Detection) for hands-free speech detection.
+dictare is a **voice layer for AI coding agents**. It implements the [OpenVIP protocol](spec/) —
+an open HTTP/SSE protocol for delivering voice input to any AI agent.
+
+Unlike tools that simulate keystrokes (requiring window focus), dictare delivers transcriptions
+directly to the agent's SSE endpoint. The agent receives voice input regardless of window focus.
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Hotkey    │───>│   Audio     │───>│    STT      │───>│  Injector   │
-│  Listener   │    │  Capture    │    │  (Whisper)  │    │  (Typing)   │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-      │                  │                                      │
-      │            ┌─────────────┐                              │
-      │            │  Silero VAD │                              │
-      │            └─────────────┘                              │
-      └──────────────────── State Machine ──────────────────────┘
+  Hotkey (Right ⌘)
+        │
+        ▼
+  Audio Capture + VAD
+  (Silero, local)
+        │
+        ▼
+  STT Engine
+  (Whisper via MLX/CTranslate2, or Parakeet via ONNX — all local)
+        │
+        ▼
+  Pipeline
+  (filters: language detection, submit trigger, agent switching)
+        │
+        ▼
+  HTTP Server (FastAPI)
+  ├── OpenVIP SSE endpoint  →  agent receives transcription (no focus needed)
+  └── Web UI                →  settings, status, TTS
 ```
 
-**Flow:**
-1. **Tap hotkey** → Toggle listening on/off
-2. **Speak** → Silero VAD detects speech, audio captured
-3. **Pause** → VAD detects silence, audio sent to Whisper
-4. **Transcribe** → Text typed into active window
-
-**Double-tap hotkey** → Switch between transcription and command modes.
-
-## Key Design Decisions
-
-### 1. Offline-First
-
-All transcription happens locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (CPU/CUDA) or [mlx-whisper](https://github.com/ml-explore/mlx-examples) (Apple Silicon). No internet required.
-
-### 2. Platform-Specific Backends
-
-Each platform uses native, reliable backends:
+## Components
 
 ```
 src/dictare/
-├── hotkey/
-│   ├── evdev_listener.py    # Linux (uinput)
-│   └── pynput_listener.py   # macOS (Accessibility API)
-├── audio/
-│   ├── capture.py           # sounddevice
-│   └── vad.py               # Silero VAD
-├── stt/
-│   ├── faster_whisper.py    # CPU/CUDA
-│   └── mlx_whisper.py       # Apple Silicon
-├── injection/
-│   ├── ydotool.py           # Linux (uinput)
-│   ├── quartz.py            # macOS (Quartz, Unicode)
-│   └── file.py              # Agent mode (inputmux)
-└── core/
-    └── app.py               # Orchestrator
+├── core/        Engine, HTTP server (FastAPI), OpenVIP SSE
+├── stt/         STT engines: MLXWhisper, FasterWhisper, Parakeet (ONNX)
+├── audio/       Capture (sounddevice), VAD (Silero), device monitoring
+├── hotkey/      IPC transport (Unix socket), runtime status
+├── pipeline/    Composable filters + executors (DI via PipelineLoader)
+├── agent/       Agent client (openvip SDK)
+├── tts/         TTS engines: Kokoro, Piper, espeak, macOS say
+├── daemon/      launchd (macOS) / systemd (Linux) service management
+├── tray/        System tray (pystray)
+└── cli/         Typer CLI entry points
 ```
 
-### 3. No Fallbacks
+On macOS, a Swift launcher (`Dictare.app`) handles `CGEventTap` for the hotkey,
+communicating with the Python engine via Unix socket IPC.
 
-Each platform has one canonical backend. If it's not available, dictare fails with a clear error message explaining how to fix it:
+## STT Engines
 
-- **Linux**: Requires `ydotoold` running
-- **macOS**: Requires Accessibility permission
+| Config | Engine | Runtime | Hardware |
+|--------|--------|---------|----------|
+| `tiny`…`large-v3-turbo` | FasterWhisperEngine | CTranslate2 | Linux / Intel Mac |
+| `tiny`…`large-v3-turbo` | MLXWhisperEngine | MLX | macOS Apple Silicon |
+| `parakeet-v3` | ParakeetEngine | ONNX Runtime | any |
 
-## Speech-to-Text Models
+## Service Architecture
 
-| Model | Size | Speed | Quality |
-|-------|------|-------|---------|
-| `tiny` | 75 MB | Fastest | Basic |
-| `base` | 150 MB | Fast | Good |
-| `small` | 500 MB | Medium | Better |
-| `medium` | 1.5 GB | Slower | Great |
-| `large-v3-turbo` | 1.6 GB | Medium | **Default** |
-| `large-v3` | 3 GB | Slowest | Best |
+dictare runs as a persistent background service (launchd on macOS, systemd on Linux).
+The STT model is preloaded at startup — zero cold-start when you speak.
 
-GPU auto-detection:
-- macOS (Apple Silicon): MLX
-- Linux (NVIDIA): CUDA
+Agents connect via `dictare agent <name>` which opens an SSE connection and forwards
+transcriptions to the agent process (Claude Code, Cursor, Aider, etc.).
 
-## Platform Details
+## Protocol
 
-### Linux
-
-**Hotkey** (evdev): Reads `/dev/input/event*` directly. Requires `input` group membership.
-
-**Injection** (ydotool): Uses `/dev/uinput` to simulate keyboard. Requires `ydotoold` daemon.
-
-Both work on X11, Wayland, and TTY.
-
-### macOS
-
-**Hotkey** (pynput): Uses Accessibility APIs. Requires terminal in Accessibility list.
-
-**Injection** (Quartz): Uses CGEventCreateKeyboardEvent. Full Unicode support.
-
-## Configuration
-
-Config file: `~/.config/dictare/config.toml`
-
-```toml
-[stt]
-model = "large-v3-turbo"
-language = "auto"
-
-[hotkey]
-key = "KEY_SCROLLLOCK"   # Linux
-# key = "KEY_RIGHTMETA"  # macOS (Right Command)
-
-[audio]
-audio_feedback = true
-```
-
-See `dictare run --help` for all options.
+dictare is the reference implementation of [OpenVIP](spec/) — an open spec for
+voice input to AI agents. Any tool can implement the SSE endpoint and receive
+voice commands from dictare.
