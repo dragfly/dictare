@@ -106,6 +106,29 @@ def service_stop() -> None:
     console.print("[green]Service stopped[/]")
 
 
+@app.command("restart")
+def service_restart() -> None:
+    """Restart the dictare service (stop + start)."""
+    backend = _get_backend()
+    if not backend.is_installed():
+        console.print("[red]Service is not installed. Run 'dictare service install' first.[/]")
+        raise typer.Exit(1)
+
+    try:
+        backend.stop()
+    except Exception as e:
+        console.print(f"[red]Failed to stop service: {e}[/]")
+        raise typer.Exit(1)
+    console.print("[yellow]Service stopped[/]")
+
+    try:
+        backend.start()
+    except Exception as e:
+        console.print(f"[red]Failed to start service: {e}[/]")
+        raise typer.Exit(1)
+    console.print("[green]Service restarted[/]")
+
+
 @app.command("status")
 def service_status() -> None:
     """Show service status."""
