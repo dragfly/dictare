@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.82] - 2026-03-01
+
+### Changed
+- **Default output mode is now `agents`** (was `keyboard`). Agents mode (OpenVIP SSE)
+  is the primary use case; keyboard mode is a fallback for non-agent use.
+- **`typing_delay_ms` default lowered from 5 ms to 2 ms** for faster keyboard output.
+- **Settings UI**: keyboard-mode-only output fields (`typing_delay_ms`, `auto_enter`,
+  `submit_keys`, `newline_keys`) moved from the Output tab to the Keyboard tab.
+  Output tab now shows only the `mode` selector.
+
+### Fixed
+- `pyproject.toml`: fixed `openvip` local source path after repo reorganization
+  (`../../openvip-dev` → `../openvip-dev`).
+
 ## [0.1.81] - 2026-02-28
 
 ### Added

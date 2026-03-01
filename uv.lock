@@ -293,7 +293,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.2.0" },
     { name = "onnx-asr", specifier = ">=0.1.0" },
-    { name = "openvip", directory = "../../openvip-dev/sdks/python" },
+    { name = "openvip", directory = "../openvip-dev/sdks/python" },
     { name = "pathvalidate", specifier = ">=3.0.0" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "piper-tts", specifier = ">=1.2.0" },
@@ -1043,7 +1043,7 @@ wheels = [
 [[package]]
 name = "openvip"
 version = "1.0.0rc7"
-source = { directory = "../../openvip-dev/sdks/python" }
+source = { directory = "../openvip-dev/sdks/python" }
 dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },

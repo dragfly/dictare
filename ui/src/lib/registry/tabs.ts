@@ -53,14 +53,14 @@ export const tabs: TabDef[] = [
     label: "Keyboard",
     icon: Keyboard,
     sections: ["hotkey", "keyboard"],
-    desc: "Hotkey and shortcuts",
+    desc: "Hotkey, shortcuts, and keyboard-mode typing settings",
   },
   {
     id: "output",
     label: "Output",
     icon: MonitorSpeaker,
     sections: ["output"],
-    desc: "Text output mode and typing",
+    desc: "Output mode: agents (OpenVIP SSE) or keyboard (type into focused window)",
   },
   {
     id: "agents",

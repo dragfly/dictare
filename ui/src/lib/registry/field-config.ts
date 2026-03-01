@@ -1,7 +1,16 @@
 export type PresetOption = string | { value: string; label: string };
 
 /** Fields hidden from the UI form (still configurable via config file) */
-export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device", "stt.model", "tts.engine"]);
+export const HIDDEN_FORM_FIELDS = new Set([
+  "hotkey.device",
+  "stt.model",
+  "tts.engine",
+  // Keyboard-mode-only output fields — shown in Keyboard tab instead
+  "output.typing_delay_ms",
+  "output.auto_enter",
+  "output.submit_keys",
+  "output.newline_keys",
+]);
 
 /** Fields whose text input should be right-aligned */
 export const RIGHT_ALIGN_FIELDS = new Set(["server.host"]);
@@ -71,5 +80,7 @@ export const FIELD_ORDER: Record<string, string[]> = {
 /** Extra fields to show alongside a section (cross-section visibility) */
 export const SECTION_EXTRA_FIELDS: Record<string, string[]> = {
   "agent_types": ["client.claim_key"],
+  // Keyboard-mode output settings live here (hidden from Output tab)
+  "hotkey": ["output.typing_delay_ms", "output.auto_enter", "output.submit_keys", "output.newline_keys"],
 };
 

@@ -127,4 +127,4 @@ markers = [
 ]
 
 [tool.uv.sources]
-openvip = { path = "../../openvip-dev/sdks/python" }
+openvip = { path = "../openvip-dev/sdks/python" }
