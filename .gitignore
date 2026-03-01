@@ -85,8 +85,9 @@ docs/tdd-schools.md
 *.private.md
 private/
 
-# Brand assets (logos, icons — kept private)
-/assets/
+# Brand assets (logos, icons — kept private, except public icon)
+/assets/*
+!/assets/icon.svg
 
 # Local scratch scripts
 bench_validator.py
