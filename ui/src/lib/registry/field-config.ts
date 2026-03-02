@@ -62,6 +62,10 @@ export const SIZE_HINTS: Record<string, string> = {
 /** Fields with enum/Literal types (fixed options from schema) */
 export const ENUM_FIELDS = new Set(["output.mode"]);
 
+/** UI-friendly description overrides (replaces Pydantic description in the UI) */
+export const FIELD_DESCRIPTIONS: Record<string, string> = {
+};
+
 /** Override the auto-generated label for specific dotted keys */
 export const LABEL_OVERRIDES: Record<string, string> = {
   "hotkey.key": "Hotkey",
@@ -83,4 +87,3 @@ export const SECTION_EXTRA_FIELDS: Record<string, string[]> = {
   // Keyboard-mode output settings live here (hidden from Output tab)
   "hotkey": ["output.typing_delay_ms", "output.auto_enter", "output.submit_keys", "output.newline_keys"],
 };
-
