@@ -53,7 +53,7 @@ class TestGetSettingsSchema:
     """GET /settings/schema — returns JSON Schema + current values."""
 
     def test_returns_schema(self, client):
-        r = client.get("/settings/schema")
+        r = client.get("/api/settings/schema")
         assert r.status_code == 200
         data = r.json()
         assert "schema" in data
@@ -62,20 +62,20 @@ class TestGetSettingsSchema:
         assert "version" in data
 
     def test_schema_has_definitions(self, client):
-        r = client.get("/settings/schema")
+        r = client.get("/api/settings/schema")
         schema = r.json()["schema"]
         assert "$defs" in schema
         assert "TTSConfig" in schema["$defs"]
         assert "AudioConfig" in schema["$defs"]
 
     def test_values_match_config(self, client):
-        r = client.get("/settings/schema")
+        r = client.get("/api/settings/schema")
         values = r.json()["values"]
         config = Config()
         assert values["audio"]["advanced"]["sample_rate"] == config.audio.advanced.sample_rate
 
     def test_keys_list_has_entries(self, client):
-        r = client.get("/settings/schema")
+        r = client.get("/api/settings/schema")
         keys = r.json()["keys"]
         assert len(keys) > 10
         # Each key has required fields
@@ -85,7 +85,7 @@ class TestGetSettingsSchema:
         assert "description" in k
 
     def test_tts_engine_has_enum(self, client):
-        r = client.get("/settings/schema")
+        r = client.get("/api/settings/schema")
         schema = r.json()["schema"]
         tts = schema["$defs"]["TTSConfig"]
         engine_field = tts["properties"]["engine"]
@@ -101,7 +101,7 @@ class TestPostSettings:
         config_file.write_text("[stt]\nmodel = \"large-v3-turbo\"\n")
         with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
-                "/settings",
+                "/api/settings",
                 json={"key": "stt.model", "value": "base"},
             )
             assert r.status_code == 200
@@ -111,13 +111,13 @@ class TestPostSettings:
 
     def test_invalid_key_returns_404(self, client):
         r = client.post(
-            "/settings",
+            "/api/settings",
             json={"key": "nonexistent.field", "value": "foo"},
         )
         assert r.status_code == 404
 
     def test_missing_key_returns_400(self, client):
-        r = client.post("/settings", json={"value": "foo"})
+        r = client.post("/api/settings", json={"value": "foo"})
         assert r.status_code == 400
 
     def test_invalid_value_returns_422(self, client, tmp_path):
@@ -125,7 +125,7 @@ class TestPostSettings:
         config_file.write_text("[output]\nmode = \"keyboard\"\n")
         with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
-                "/settings",
+                "/api/settings",
                 json={"key": "output.mode", "value": "invalid_mode"},
             )
             assert r.status_code == 422
@@ -140,7 +140,7 @@ class TestTomlSectionGet:
             '[agent_types.claude]\ncommand = ["claude"]\n'
         )
         with patch("dictare.config.get_config_path", return_value=config_file):
-            r = client.get("/settings/toml-section/agent_types")
+            r = client.get("/api/settings/toml-section/agent_types")
         assert r.status_code == 200
         data = r.json()
         assert data["section"] == "agent_types"
@@ -152,7 +152,7 @@ class TestTomlSectionGet:
         config_file = tmp_path / "config.toml"
         config_file.write_text("")  # no agent_types section
         with patch("dictare.config.get_config_path", return_value=config_file):
-            r = client.get("/settings/toml-section/agent_types")
+            r = client.get("/api/settings/toml-section/agent_types")
         assert r.status_code == 200
         content = r.json()["content"]
         # Template includes pre-filled presets
@@ -162,21 +162,21 @@ class TestTomlSectionGet:
         assert "chatgpt" in content
 
     def test_shortcuts_returns_content(self, client):
-        r = client.get("/settings/toml-section/keyboard.shortcuts")
+        r = client.get("/api/settings/toml-section/keyboard.shortcuts")
         assert r.status_code == 200
         data = r.json()
         assert data["section"] == "keyboard.shortcuts"
         assert isinstance(data["content"], str)
 
     def test_unknown_section_returns_404(self, client):
-        r = client.get("/settings/toml-section/nonexistent")
+        r = client.get("/api/settings/toml-section/nonexistent")
         assert r.status_code == 404
 
     def test_fallback_template_has_defaults(self, client, tmp_path):
         """Template header (when no section in file) contains default presets."""
         config_file = tmp_path / "nonexistent_config.toml"
         with patch("dictare.config.get_config_path", return_value=config_file):
-            r = client.get("/settings/toml-section/agent_types")
+            r = client.get("/api/settings/toml-section/agent_types")
         assert r.status_code == 200
         assert "[agent_types]" in r.json()["content"]
 
@@ -196,7 +196,7 @@ description = "Claude Code"
 """
         with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
-                "/settings/toml-section/agent_types",
+                "/api/settings/toml-section/agent_types",
                 json={"content": toml_content},
             )
         assert r.status_code == 200
@@ -221,7 +221,7 @@ description = "Claude Sonnet"
 """
         with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
-                "/settings/toml-section/agent_types",
+                "/api/settings/toml-section/agent_types",
                 json={"content": toml_content},
             )
         assert r.status_code == 200
@@ -239,7 +239,7 @@ description = "Claude Sonnet"
             'continue_args = ["-c"]\n'
         )
         with patch("dictare.config.get_config_path", return_value=config_file):
-            r = client.get("/settings/toml-section/agent_types")
+            r = client.get("/api/settings/toml-section/agent_types")
         assert r.status_code == 200
         assert "continue_args" in r.json()["content"]
         assert '"-c"' in r.json()["content"]
@@ -253,13 +253,13 @@ description = "Claude Sonnet"
             'command = ["claude"]\n'
         )
         with patch("dictare.config.get_config_path", return_value=config_file):
-            r = client.get("/settings/toml-section/agent_types")
+            r = client.get("/api/settings/toml-section/agent_types")
         assert r.status_code == 200
         assert "my custom comment" in r.json()["content"]
 
     def test_invalid_toml_returns_422(self, client):
         r = client.post(
-            "/settings/toml-section/agent_types",
+            "/api/settings/toml-section/agent_types",
             json={"content": "[[[ invalid toml ==="},
         )
         assert r.status_code == 422
@@ -273,21 +273,21 @@ description = "Missing command field"
 """
         with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
-                "/settings/toml-section/agent_types",
+                "/api/settings/toml-section/agent_types",
                 json={"content": toml_content},
             )
         assert r.status_code == 422
 
     def test_empty_content_returns_400(self, client):
         r = client.post(
-            "/settings/toml-section/agent_types",
+            "/api/settings/toml-section/agent_types",
             json={"content": "   "},
         )
         assert r.status_code == 400
 
     def test_unknown_section_returns_404(self, client):
         r = client.post(
-            "/settings/toml-section/nonexistent",
+            "/api/settings/toml-section/nonexistent",
             json={"content": "foo = 1"},
         )
         assert r.status_code == 404
@@ -302,7 +302,7 @@ command = "toggle-listening"
 """
         with patch("dictare.config.get_config_path", return_value=config_file):
             r = client.post(
-                "/settings/toml-section/keyboard.shortcuts",
+                "/api/settings/toml-section/keyboard.shortcuts",
                 json={"content": toml_content},
             )
         assert r.status_code == 200

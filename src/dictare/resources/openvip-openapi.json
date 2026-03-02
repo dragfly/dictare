@@ -1,0 +1,680 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenVIP API",
+    "description": "Open Voice Interaction Protocol (OpenVIP) HTTP API specification.\n\nThis API allows applications to send and receive voice interaction messages.\n\n## Quick Start\n\n```bash\n# Subscribe to messages (SSE) \u2014 this IS the registration\ncurl http://localhost:8770/agents/my-agent-id/messages\n\n# Send a message to an agent\ncurl -X POST http://localhost:8770/agents/my-agent-id/messages \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"openvip\": \"1.0\", \"type\": \"transcription\", \"id\": \"uuid\", \"timestamp\": \"2026-02-06T10:30:00Z\", \"text\": \"hello\"}'\n\n# Text-to-speech\ncurl -X POST http://localhost:8770/speech \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"openvip\": \"1.0\", \"type\": \"speech\", \"id\": \"uuid\", \"timestamp\": \"2026-02-06T10:30:05Z\", \"text\": \"hello world\", \"language\": \"en\"}'\n```\n\n## Agent Lifecycle\n\nAgents are **ephemeral**. An agent exists only while its SSE connection is open.\nNo explicit registration is needed \u2014 connecting to the SSE endpoint registers the agent.\nDisconnecting automatically de-registers it.\n",
+    "version": "1.0",
+    "license": {
+      "name": "CC BY 4.0",
+      "url": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    "contact": {
+      "name": "OpenVIP",
+      "url": "https://openvip.org"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8770",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/agents/{agent_id}/messages": {
+      "get": {
+        "operationId": "subscribeAgent",
+        "summary": "Subscribe to agent messages (SSE)",
+        "description": "Server-Sent Events stream for messages to this agent.\n\nThe SSE connection acts as agent registration \u2014 the agent exists\nas long as this connection is open. When the client disconnects,\nthe agent is automatically de-registered.\n\nReconnect on disconnect. Messages sent while disconnected are lost\n(ephemeral model).\n\nKeepalive comments (`: keepalive`) are sent every 30 seconds if no data.\n",
+        "tags": [
+          "Messages"
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "description": "Agent identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream established",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "data: {\"openvip\":\"1.0\",\"type\":\"transcription\",\"id\":\"...\",\"text\":\"hello\"}\n"
+              }
+            }
+          },
+          "409": {
+            "description": "Agent ID already connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "sendMessage",
+        "summary": "Send message to agent",
+        "description": "Send a voice interaction message to a specific agent.\nThe agent must be connected via SSE (GET endpoint) to receive messages.\n",
+        "tags": [
+          "Messages"
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "description": "Agent identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Message"
+              },
+              "example": {
+                "openvip": "1.0",
+                "type": "transcription",
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "timestamp": "2026-02-06T10:30:00Z",
+                "text": "turn on the light",
+                "language": "en"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message delivered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid message format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/speech": {
+      "post": {
+        "operationId": "textToSpeech",
+        "summary": "Text-to-speech request",
+        "description": "Request text-to-speech synthesis. The engine will speak the provided text.\n",
+        "tags": [
+          "Speech"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeechRequest"
+              },
+              "example": {
+                "openvip": "1.0",
+                "type": "speech",
+                "id": "660e8400-e29b-41d4-a716-446655440001",
+                "timestamp": "2026-02-06T10:30:05Z",
+                "text": "Light turned on",
+                "language": "en"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Speech synthesis completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeechResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/speech/stop": {
+      "post": {
+        "operationId": "stopSpeech",
+        "summary": "Stop TTS playback",
+        "description": "Interrupt the currently playing TTS audio immediately.\nIf no audio is playing, the request is a no-op (still returns 200).\n",
+        "tags": [
+          "Speech"
+        ],
+        "responses": {
+          "200": {
+            "description": "Stop request delivered (audio may already be finished)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "operationId": "getStatus",
+        "summary": "Get engine status",
+        "description": "Get the current status of the engine. Returns protocol-level information\n(connected agents, protocol version) and implementation-specific details\nin the `platform` object.\n",
+        "tags": [
+          "Status"
+        ],
+        "responses": {
+          "200": {
+            "description": "Engine status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/stream": {
+      "get": {
+        "operationId": "subscribeStatus",
+        "summary": "Subscribe to status changes (SSE)",
+        "description": "Server-Sent Events stream that pushes status updates on state transitions.\n\nEvents are sent when `stt`, `tts`, `connected_agents`, or other\ndiscrete fields change. Continuously changing fields (e.g.,\n`uptime_seconds`) do not trigger events.\n\nThe payload of each event is a `Status` object \u2014 the same schema as\nthe `GET /status` response.\n\nKeepalive comments (`: keepalive`) are sent every 30 seconds if no\nevents occur.\n\nClients that cannot use SSE should fall back to polling `GET /status`.\n",
+        "tags": [
+          "Status"
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream established",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "data: {\"openvip\":\"1.0\",\"stt\":{\"enabled\":true,\"active\":true},\"tts\":{\"enabled\":true},\"connected_agents\":[\"claude\"],\"platform\":{...}}\n"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/control": {
+      "post": {
+        "operationId": "sendControl",
+        "summary": "Send control command",
+        "description": "Send a control command to the engine.\n\nAvailable commands:\n- `stt.start` \u2014 Start speech-to-text\n- `stt.stop` \u2014 Stop speech-to-text\n- `engine.shutdown` \u2014 Graceful shutdown\n",
+        "tags": [
+          "Control"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlRequest"
+              },
+              "example": {
+                "openvip": "1.0",
+                "id": "770e8400-e29b-41d4-a716-446655440000",
+                "command": "stt.stop"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Command executed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Message": {
+        "type": "object",
+        "description": "Base OpenVIP message",
+        "required": [
+          "openvip",
+          "type",
+          "id",
+          "timestamp",
+          "text"
+        ],
+        "properties": {
+          "openvip": {
+            "type": "string",
+            "description": "Protocol version",
+            "const": "1.0"
+          },
+          "type": {
+            "type": "string",
+            "description": "Message type",
+            "enum": [
+              "transcription",
+              "speech"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique message identifier"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp"
+          },
+          "text": {
+            "type": "string",
+            "description": "Message text content"
+          },
+          "origin": {
+            "type": "string",
+            "description": "Producer identifier",
+            "example": "myapp/1.0.0"
+          },
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+            "description": "BCP 47 language tag",
+            "example": "en"
+          },
+          "trace_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the original message (OpenTelemetry-style)"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the parent message (OpenTelemetry-style)"
+          },
+          "x_input": {
+            "type": "object",
+            "description": "Standard extension: text input behavior",
+            "required": [
+              "submit",
+              "newline"
+            ],
+            "properties": {
+              "submit": {
+                "type": "boolean",
+                "description": "If true, submit/send the text (e.g., press Enter)"
+              },
+              "newline": {
+                "type": "boolean",
+                "description": "If true, insert a line break (e.g., Shift+Enter)"
+              },
+              "trigger": {
+                "type": "string",
+                "description": "The voice phrase that triggered this action"
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Confidence score for the trigger (0.0\u20131.0)"
+              },
+              "source": {
+                "type": "string",
+                "description": "Generator identifier \u2014 free-form string identifying the component that produced this extension"
+              }
+            }
+          },
+          "x_agent_switch": {
+            "type": "object",
+            "description": "Standard extension: agent routing",
+            "required": [
+              "target"
+            ],
+            "properties": {
+              "target": {
+                "type": "string",
+                "description": "Identifier of the agent to switch to"
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Confidence score (0.0\u20131.0)"
+              },
+              "source": {
+                "type": "string",
+                "description": "Generator identifier \u2014 free-form string identifying the component that produced this extension"
+              }
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "Transcription": {
+        "description": "Voice transcription message",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Message"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "transcription"
+                ]
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Transcription confidence score"
+              },
+              "partial": {
+                "type": "boolean",
+                "description": "If true, this is an incomplete transcription in progress"
+              }
+            }
+          }
+        ]
+      },
+      "SpeechRequest": {
+        "description": "Text-to-speech request",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Message"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "speech"
+                ]
+              },
+              "voice": {
+                "type": "string",
+                "description": "Voice identifier (engine-specific, e.g. \"af_sky\" for Kokoro)",
+                "example": "af_sky"
+              }
+            }
+          }
+        ]
+      },
+      "SpeechResponse": {
+        "type": "object",
+        "description": "Speech synthesis response",
+        "required": [
+          "openvip",
+          "status"
+        ],
+        "properties": {
+          "openvip": {
+            "type": "string",
+            "description": "Protocol version",
+            "const": "1.0"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "duration_ms": {
+            "type": "integer",
+            "description": "Duration of the synthesized audio in milliseconds"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this response (assigned by the engine)"
+          },
+          "ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the speech request that triggered this response"
+          }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "description": "Engine status",
+        "required": [
+          "openvip"
+        ],
+        "properties": {
+          "openvip": {
+            "type": "string",
+            "description": "Protocol version",
+            "const": "1.0"
+          },
+          "stt": {
+            "type": "object",
+            "description": "Speech-to-text service status",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "STT service available on this engine"
+              },
+              "active": {
+                "type": "boolean",
+                "description": "Microphone is currently listening"
+              }
+            }
+          },
+          "tts": {
+            "type": "object",
+            "description": "Text-to-speech service status",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "TTS service available on this engine"
+              }
+            }
+          },
+          "connected_agents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of connected agent identifiers"
+          },
+          "platform": {
+            "type": "object",
+            "description": "Implementation-specific details (opaque to protocol)",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ControlRequest": {
+        "type": "object",
+        "description": "Control command request",
+        "required": [
+          "openvip",
+          "id",
+          "command"
+        ],
+        "properties": {
+          "openvip": {
+            "type": "string",
+            "description": "Protocol version",
+            "const": "1.0"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique request identifier (UUID v4)"
+          },
+          "command": {
+            "type": "string",
+            "description": "Command to execute",
+            "enum": [
+              "stt.start",
+              "stt.stop",
+              "engine.shutdown"
+            ]
+          }
+        }
+      },
+      "Response": {
+        "type": "object",
+        "description": "Operation response",
+        "required": [
+          "openvip",
+          "status"
+        ],
+        "properties": {
+          "openvip": {
+            "type": "string",
+            "description": "Protocol version",
+            "const": "1.0"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "description": "Operation status"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this response (assigned by the engine)"
+          },
+          "ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the request that triggered this response"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "Error response",
+        "required": [
+          "openvip",
+          "error"
+        ],
+        "properties": {
+          "openvip": {
+            "type": "string",
+            "description": "Protocol version",
+            "const": "1.0"
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message"
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code",
+            "enum": [
+              "INVALID_FORMAT",
+              "MISSING_FIELD",
+              "NOT_FOUND",
+              "CONFLICT",
+              "INTERNAL_ERROR"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this error (assigned by the engine)"
+          },
+          "ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the request that caused this error"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Messages",
+      "description": "Send and receive voice interaction messages"
+    },
+    {
+      "name": "Speech",
+      "description": "Text-to-speech operations"
+    },
+    {
+      "name": "Status",
+      "description": "Engine status and monitoring"
+    },
+    {
+      "name": "Control",
+      "description": "Engine control commands"
+    }
+  ]
+}

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.85] - 2026-03-02
+
+### Changed
+- **URL structure refactor**: OpenVIP protocol endpoints now mounted at `/openvip/`
+  (e.g. `GET /openvip/status`, `POST /openvip/speech`, `GET /openvip/agents/{id}/messages`).
+  Dictare management endpoints now mounted at `/api/`
+  (e.g. `GET /api/settings/schema`, `GET /api/audio/devices`, `GET /api/capabilities`).
+  Root paths `/health`, `/ui`, and `/internal/` are unchanged.
+- **`GET /openvip/openapi.json`**: OpenVIP protocol spec now served at this endpoint
+  for API discovery.
+- **`OPENVIP_BASE_PATH` constant**: new constant in `dictare.__init__` used throughout
+  the codebase for consistent URL prefix construction.
+- **`auto_enter` renamed to `auto_submit`** in config model (`OutputConfig`) —
+  better describes the behavior (submitting a transcription, not pressing Enter).
+- TTS worker subprocess: `--url` now accepts the dictare engine root URL;
+  `/openvip` prefix is derived automatically from `OPENVIP_BASE_PATH`.
+
 ## [0.1.82] - 2026-03-01
 
 ### Changed
