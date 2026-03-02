@@ -74,7 +74,7 @@ export const TOML_NO_ACCORDION = new Set(["agent_types", "stt.advanced", "audio.
 
 /** Custom field ordering: fields listed here appear first, in this order */
 export const FIELD_ORDER: Record<string, string[]> = {
-  "audio": ["audio.input_device", "audio.output_device", "audio.sounds", "audio.advanced"],
+  "audio": ["audio.input_device", "audio.output_device", "audio.headphones_mode", "audio.audio_feedback", "audio.silence_ms", "audio.max_duration", "audio.sounds", "audio.advanced"],
 };
 
 /** Extra fields to show alongside a section (cross-section visibility) */

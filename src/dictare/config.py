@@ -418,7 +418,7 @@ class TTSConfig(BaseModel):
     """Text-to-speech configuration."""
 
     engine: Literal["espeak", "say", "piper", "outetts", "kokoro"] = Field(
-        default="say" if sys.platform == "darwin" else "espeak",
+        default="say" if sys.platform == "darwin" else "piper",
         description="TTS engine: espeak, say (macOS only), piper, outetts (MLX, Apple Silicon), kokoro (ONNX)",
     )
     language: str = Field(
@@ -799,7 +799,7 @@ def create_default_config() -> Path:
 # max_repetitions = 5             # Anti-hallucination: max consecutive repeats
 
 [tts]
-# engine = "espeak"               # espeak, say (macOS), piper, outetts (MLX)
+# engine = "say"                 # say (macOS, default), piper (Linux, default), espeak, outetts (MLX)
 # language = "en"
 # speed = 175                     # WPM (espeak: 80-500, say: 90-720)
 # voice = ""                      # Voice name or speaker WAV path
