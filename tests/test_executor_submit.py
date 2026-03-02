@@ -31,20 +31,20 @@ class TestInputExecutor:
         assert result.action == PipelineAction.PASS
 
     def test_input_consumes_and_calls_write(self) -> None:
-        """Message with x_input is consumed and write_fn is called."""
+        """Message with x_input.ops=['submit'] is consumed and write_fn is called."""
         calls = []
         ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
-        msg = {"text": "hello", "x_input": {"submit": True, "trigger": "ok send"}}
+        msg = {"text": "hello", "x_input": {"ops": ["submit"], "trigger": "ok send"}}
         result = ex.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert result.messages == []
         assert calls == [("hello", True)]
 
-    def test_input_submit_false(self) -> None:
-        """x_input with submit=False still calls write_fn with False."""
+    def test_input_no_submit_op(self) -> None:
+        """x_input with trigger but no submit op still calls write_fn with False."""
         calls = []
         ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
-        msg = {"text": "hello", "x_input": {"submit": False, "trigger": "test"}}
+        msg = {"text": "hello", "x_input": {"ops": [], "trigger": "test"}}
         # x_input is truthy (non-empty dict), so it gets processed
         result = ex.process(msg)
         assert result.action == PipelineAction.CONSUME
@@ -54,34 +54,34 @@ class TestInputExecutor:
         """Empty text with input still calls write_fn."""
         calls = []
         ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
-        msg = {"text": "", "x_input": {"submit": True}}
+        msg = {"text": "", "x_input": {"ops": ["submit"]}}
         result = ex.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert calls == [("", True)]
 
     def test_newline_appends_to_text(self) -> None:
-        """x_input with newline=True appends \\n to text."""
+        """x_input with ops=['newline'] appends \\n to text."""
         calls = []
         ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
-        msg = {"text": "hello", "x_input": {"newline": True}}
+        msg = {"text": "hello", "x_input": {"ops": ["newline"]}}
         result = ex.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert calls == [("hello\n", False)]
 
     def test_newline_empty_text(self) -> None:
-        """x_input with newline=True on empty text produces just \\n."""
+        """x_input with ops=['newline'] on empty text produces just \\n."""
         calls = []
         ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
-        msg = {"text": "", "x_input": {"newline": True}}
+        msg = {"text": "", "x_input": {"ops": ["newline"]}}
         result = ex.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert calls == [("\n", False)]
 
     def test_newline_and_submit(self) -> None:
-        """x_input with both newline and submit."""
+        """x_input with ops=['newline', 'submit']."""
         calls = []
         ex = InputExecutor(write_fn=lambda t, s: calls.append((t, s)))
-        msg = {"text": "line", "x_input": {"newline": True, "submit": True}}
+        msg = {"text": "line", "x_input": {"ops": ["newline", "submit"]}}
         result = ex.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert calls == [("line\n", True)]
