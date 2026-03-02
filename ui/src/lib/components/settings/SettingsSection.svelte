@@ -22,8 +22,11 @@
 			const filtered = schema.keys.filter((k) => {
 				if (SKIP_KEYS.has(k.key)) return false;
 				if (extraKeys.has(k.key)) return true;
-				if (isGeneral) return !k.key.includes(".") && k.type !== "dict";
 				const section = k.key.split(".")[0];
+				if (isGeneral) {
+					const extraSections = sections.filter((s) => s !== "");
+					return (!k.key.includes(".") && k.type !== "dict") || extraSections.includes(section);
+				}
 				return sections.includes(section);
 			});
 			// Sort: normal fields first, TOML/shortcuts editors last.
