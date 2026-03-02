@@ -214,6 +214,53 @@ class TestTrayStates:
         )
 
 
+class TestServiceMenu:
+    """Tests for Start/Stop Service menu based on engine state."""
+
+    def test_stop_service_shown_when_engine_running(self) -> None:
+        """When engine is reachable (state != disconnected), show Stop Service."""
+        app = TrayApp()
+        app._state = "off"
+        with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
+            menu = app._create_menu()
+        # Find the Advanced submenu
+        advanced = [i for i in menu._items if getattr(i, "text", "") == "Advanced"][0]
+        labels = [i.text for i in advanced.action._items if hasattr(i, "text") and i.text != "---"]
+        assert "Stop Service" in labels
+        assert "Start Service" not in labels
+
+    def test_start_service_shown_when_disconnected(self) -> None:
+        """When engine is unreachable, show Start Service."""
+        app = TrayApp()
+        app._state = "disconnected"
+        with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
+            menu = app._create_menu()
+        advanced = [i for i in menu._items if getattr(i, "text", "") == "Advanced"][0]
+        labels = [i.text for i in advanced.action._items if hasattr(i, "text") and i.text != "---"]
+        assert "Start Service" in labels
+        assert "Stop Service" not in labels
+
+    def test_stop_service_shown_when_listening(self) -> None:
+        """Listening state = engine running = Stop Service."""
+        app = TrayApp()
+        app._state = "listening"
+        with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
+            menu = app._create_menu()
+        advanced = [i for i in menu._items if getattr(i, "text", "") == "Advanced"][0]
+        labels = [i.text for i in advanced.action._items if hasattr(i, "text") and i.text != "---"]
+        assert "Stop Service" in labels
+
+    def test_stop_service_shown_when_loading(self) -> None:
+        """Loading state = engine starting up = Stop Service."""
+        app = TrayApp()
+        app._state = "loading"
+        with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
+            menu = app._create_menu()
+        advanced = [i for i in menu._items if getattr(i, "text", "") == "Advanced"][0]
+        labels = [i.text for i in advanced.action._items if hasattr(i, "text") and i.text != "---"]
+        assert "Stop Service" in labels
+
+
 class TestSetTargets:
     """Tests for TrayApp.set_targets — agent list management."""
 
