@@ -417,9 +417,9 @@ class DaemonConfig(BaseModel):
 class TTSConfig(BaseModel):
     """Text-to-speech configuration."""
 
-    engine: Literal["espeak", "say", "piper", "coqui", "outetts", "kokoro"] = Field(
+    engine: Literal["espeak", "say", "piper", "outetts", "kokoro"] = Field(
         default="say" if sys.platform == "darwin" else "espeak",
-        description="TTS engine: espeak, say (macOS), piper, coqui, outetts (MLX), kokoro (ONNX)",
+        description="TTS engine: espeak, say (macOS only), piper, outetts (MLX, Apple Silicon), kokoro (ONNX)",
     )
     language: str = Field(
         default="en",
