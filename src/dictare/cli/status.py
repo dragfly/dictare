@@ -149,7 +149,7 @@ def _get_status_json(online: bool = True) -> dict:
 
         config = load_config()
         client = Client(
-            f"http://{config.server.host}:{config.server.port}",
+            f"http://{config.server.host}:{config.server.port}/openvip",
             timeout=2,
         )
         status = client.get_status()

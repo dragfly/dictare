@@ -195,7 +195,7 @@ class TestStreamActiveAgentStatus:
 
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
 
         assert len(statuses) >= 1
         assert "listening" in statuses[0][0]
@@ -217,7 +217,7 @@ class TestStreamActiveAgentStatus:
 
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
 
         assert len(statuses) >= 1
         assert "idle" in statuses[0][0]
@@ -239,7 +239,7 @@ class TestStreamActiveAgentStatus:
 
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
 
         assert len(statuses) >= 1
         assert "standby" in statuses[0][0]
@@ -268,7 +268,7 @@ class TestStreamActiveAgentStatus:
 
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
 
         assert len(statuses) == 2
         assert "listening" in statuses[0][0]
@@ -300,7 +300,7 @@ class TestStreamActiveAgentStatus:
 
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770", stop, on_status)
+            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
 
         assert len(statuses) >= 1
         assert "loading" in statuses[0][0]

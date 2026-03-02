@@ -29,7 +29,7 @@ class StatusPanel:
     - Status info below when loading is complete
 
     Usage:
-        panel = StatusPanel(console, "http://127.0.0.1:8770")
+        panel = StatusPanel(console, "http://127.0.0.1:8770/openvip")
         panel.run()  # Blocks until stopped or error
     """
 
@@ -56,7 +56,7 @@ class StatusPanel:
     def __init__(
         self,
         console: Console,
-        base_url: str = "http://127.0.0.1:8770",
+        base_url: str = "http://127.0.0.1:8770/openvip",
         poll_interval: float = 0.3,
     ) -> None:
         """Initialize the status panel.

@@ -70,7 +70,7 @@ def _post_completion(
 def main(argv: list[str] | None = None) -> None:
     """Entry point for the TTS worker subprocess."""
     parser = argparse.ArgumentParser(description="Dictare TTS worker")
-    parser.add_argument("--url", default="http://localhost:8770", help="Engine URL")
+    parser.add_argument("--url", default="http://localhost:8770", help="Dictare engine base URL")
     parser.add_argument("--token", required=True, help="Bearer token")
     parser.add_argument("--engine", required=True, help="TTS engine name")
     parser.add_argument("--language", default="en", help="Language code")
@@ -124,9 +124,11 @@ def main(argv: list[str] | None = None) -> None:
         )
         sys.exit(1)
 
-    client = Client(args.url, token=args.token)
+    from dictare import OPENVIP_BASE_PATH
+    openvip_url = args.url.rstrip("/") + OPENVIP_BASE_PATH
+    client = Client(openvip_url, token=args.token)
 
-    logger.info("Subscribing as %s at %s", TTS_AGENT_ID, args.url)
+    logger.info("Subscribing as %s at %s", TTS_AGENT_ID, openvip_url)
 
     # 3. Process speech messages (reconnect=True for resilience)
     import time

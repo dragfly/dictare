@@ -84,8 +84,8 @@ class TestStatusEndpoint:
     """Test GET /status endpoint."""
 
     def test_status_returns_engine_status(self, client: TestClient) -> None:
-        """GET /status returns OpenVIP spec fields at top level."""
-        response = client.get("/status")
+        """GET /openvip/status returns OpenVIP spec fields at top level."""
+        response = client.get("/openvip/status")
         assert response.status_code == 200
         data = response.json()
         assert data["protocol_version"] == "1.0"
@@ -95,23 +95,23 @@ class TestStatusEndpoint:
         assert "platform" in data
 
     def test_status_returns_json(self, client: TestClient) -> None:
-        """GET /status returns valid JSON."""
-        response = client.get("/status")
+        """GET /openvip/status returns valid JSON."""
+        response = client.get("/openvip/status")
         assert response.headers["content-type"] == "application/json"
 
 class TestControlEndpoint:
     """Test POST /control endpoint."""
 
     def test_ping_command(self, client: TestClient, engine: MockEngine) -> None:
-        """POST /control with ping returns pong."""
-        response = client.post("/control", json={"command": "ping"})
+        """POST /openvip/control with ping returns pong."""
+        response = client.post("/openvip/control", json={"command": "ping"})
         assert response.status_code == 200
         assert response.json()["pong"] is True
         assert len(engine._protocol_calls) == 1
 
     def test_stt_start_command(self, client: TestClient, engine: MockEngine) -> None:
-        """POST /control with stt.start routes to engine."""
-        response = client.post("/control", json={"command": "stt.start"})
+        """POST /openvip/control with stt.start routes to engine."""
+        response = client.post("/openvip/control", json={"command": "stt.start"})
         assert response.status_code == 200
         assert engine._protocol_calls[0]["command"] == "stt.start"
 
@@ -119,7 +119,7 @@ class TestControlEndpoint:
         self, client: TestClient, engine: MockEngine, controller: MockController
     ) -> None:
         """Protocol commands go to engine.handle_protocol_command, not controller."""
-        client.post("/control", json={"command": "stt.toggle"})
+        client.post("/openvip/control", json={"command": "stt.toggle"})
         assert len(engine._protocol_calls) == 1
         assert len(controller._app_calls) == 0
 
@@ -127,7 +127,7 @@ class TestControlEndpoint:
         self, client: TestClient, engine: MockEngine, controller: MockController
     ) -> None:
         """App commands go to controller._handle_app_command, not engine."""
-        client.post("/control", json={"command": "output.set_mode:agents"})
+        client.post("/openvip/control", json={"command": "output.set_mode:agents"})
         assert len(controller._app_calls) == 1
         assert len(engine._protocol_calls) == 0
 
@@ -135,31 +135,31 @@ class TestControlEndpoint:
         """Unknown command without controller returns error."""
         server = OpenVIPServer(engine, None, host="127.0.0.1", port=0)
         client = TestClient(server._app)
-        response = client.post("/control", json={"command": "foo.bar"})
+        response = client.post("/openvip/control", json={"command": "foo.bar"})
         assert response.json()["status"] == "error"
 
     def test_control_error_returns_500(
         self, client: TestClient, engine: MockEngine
     ) -> None:
-        """POST /control returns 500 on engine error."""
+        """POST /openvip/control returns 500 on engine error."""
         engine.handle_protocol_command = MagicMock(
             side_effect=RuntimeError("boom")
         )
-        response = client.post("/control", json={"command": "stt.start"})
+        response = client.post("/openvip/control", json={"command": "stt.start"})
         assert response.status_code == 500
 
 class TestSpeechEndpoint:
     """Test POST /speech endpoint."""
 
     def test_tts_request(self, client: TestClient, engine: MockEngine) -> None:
-        """POST /speech calls engine TTS handler."""
+        """POST /openvip/speech calls engine TTS handler."""
         body = {
             "openvip": "1.0", "type": "speech",
             "id": "660e8400-e29b-41d4-a716-446655440001",
             "timestamp": "2026-02-06T10:30:05Z",
             "text": "Hello world",
         }
-        response = client.post("/speech", json=body)
+        response = client.post("/openvip/speech", json=body)
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
         assert response.json()["duration_ms"] == 100
@@ -169,7 +169,7 @@ class TestSpeechEndpoint:
     def test_tts_error_returns_500(
         self, client: TestClient, engine: MockEngine
     ) -> None:
-        """POST /speech returns 500 on engine error."""
+        """POST /openvip/speech returns 500 on engine error."""
         engine.handle_speech = MagicMock(side_effect=RuntimeError("TTS failed"))
         body = {
             "openvip": "1.0", "type": "speech",
@@ -177,7 +177,7 @@ class TestSpeechEndpoint:
             "timestamp": "2026-02-06T10:30:05Z",
             "text": "test",
         }
-        response = client.post("/speech", json=body)
+        response = client.post("/openvip/speech", json=body)
         assert response.status_code == 500
 
 class TestPostAgentMessage:
@@ -186,7 +186,7 @@ class TestPostAgentMessage:
     def test_post_to_unconnected_agent_returns_404(self, client: TestClient) -> None:
         """POST to non-existent agent returns 404."""
         response = client.post(
-            "/agents/ghost/messages",
+            "/openvip/agents/ghost/messages",
             json={"type": "message", "text": "hello"},
         )
         assert response.status_code == 404
@@ -210,7 +210,7 @@ class TestPostAgentMessage:
             "text": "hello",
         }
         response = client.post(
-            "/agents/test-agent/messages", json=body,
+            "/openvip/agents/test-agent/messages", json=body,
         )
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
