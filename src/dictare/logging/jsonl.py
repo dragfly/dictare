@@ -227,7 +227,7 @@ class JSONLLogger:
         text: str,
         method: str,
         success: bool,
-        auto_enter: bool = False,
+        auto_submit: bool = False,
         enter_sent: bool | None = None,
         submit_trigger: str | None = None,
         submit_confidence: float | None = None,
@@ -243,7 +243,7 @@ class JSONLLogger:
             "chars": chars,
             "method": method,
             "success": success,
-            "auto_enter": auto_enter,
+            "auto_submit": auto_submit,
             "enter_sent": enter_sent,
             "inject_ms": round(inject_ms, 1) if inject_ms is not None else None,
         }
