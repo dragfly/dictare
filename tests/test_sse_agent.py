@@ -345,7 +345,7 @@ class TestSSEInputExecutorIntegration:
             "id": self._UUID1,
             "timestamp": "2026-01-01T00:00:00Z",
             "text": "hello",
-            "x_input": {"submit": True},
+            "x_input": {"ops": ["submit"]},
         })
         fake_resp = _FakeSSEResponse([f"data: {msg}\n"], stop)
 
@@ -354,7 +354,7 @@ class TestSSEInputExecutorIntegration:
 
         def stop_after_msg():
             while wq.empty():
-                pass
+                threading.Event().wait(0.01)
             stop.set()
 
         threading.Thread(target=stop_after_msg, daemon=True).start()
@@ -380,7 +380,7 @@ class TestSSEInputExecutorIntegration:
             "id": self._UUID2,
             "timestamp": "2026-01-01T00:00:00Z",
             "text": "line one",
-            "x_input": {"newline": True},
+            "x_input": {"ops": ["newline"]},
         })
         fake_resp = _FakeSSEResponse([f"data: {msg}\n"], stop)
 
@@ -389,7 +389,7 @@ class TestSSEInputExecutorIntegration:
 
         def stop_after_msg():
             while wq.empty():
-                pass
+                threading.Event().wait(0.01)
             stop.set()
 
         threading.Thread(target=stop_after_msg, daemon=True).start()
@@ -421,7 +421,7 @@ class TestSSEInputExecutorIntegration:
 
         def stop_after_msg():
             while wq.empty():
-                pass
+                threading.Event().wait(0.01)
             stop.set()
 
         threading.Thread(target=stop_after_msg, daemon=True).start()

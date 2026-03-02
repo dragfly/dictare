@@ -491,8 +491,7 @@ VALID_MESSAGES = [
             "timestamp": "2026-02-06T10:30:00Z",
             "text": "fix the login bug",
             "x_input": {
-                "submit": True,
-                "newline": False,
+                "ops": ["submit"],
                 "trigger": "ok send",
                 "confidence": 0.95,
             },

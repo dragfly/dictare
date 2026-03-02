@@ -818,9 +818,9 @@ class TestKeyboardAgentSubmit:
         return agent
 
     def test_x_input_submit_sends_enter(self) -> None:
-        """Message with x_input.submit=True sends submit_keys (enter)."""
+        """Message with x_input.ops=['submit'] sends submit_keys (enter)."""
         agent = self._make_agent()
-        agent._process_message({"text": "hello", "x_input": {"submit": True}})
+        agent._process_message({"text": "hello", "x_input": {"ops": ["submit"]}})
 
         agent._injector.type_text.assert_called_once_with(
             "hello",
@@ -831,14 +831,14 @@ class TestKeyboardAgentSubmit:
         )
 
     def test_x_input_newline_sends_shift_enter(self) -> None:
-        """Message with x_input.newline=True (no submit) sends newline_keys."""
+        """Message with x_input.ops=['newline'] (no submit) sends newline_keys."""
         agent = self._make_agent()
-        agent._process_message({"text": "hello", "x_input": {"newline": True}})
+        agent._process_message({"text": "hello", "x_input": {"ops": ["newline"]}})
 
         agent._injector.type_text.assert_called_once_with(
             "hello",
             delay_ms=0,
-            auto_submit=False,  # config.auto_submit is False, submit is False
+            auto_submit=False,  # config.auto_submit is False, submit not in ops
             submit_keys="enter",
             newline_keys="shift+enter",
         )
@@ -846,7 +846,7 @@ class TestKeyboardAgentSubmit:
     def test_submit_only_no_text(self) -> None:
         """Submit-only message (no text) calls send_submit."""
         agent = self._make_agent()
-        agent._process_message({"text": "", "x_input": {"submit": True}})
+        agent._process_message({"text": "", "x_input": {"ops": ["submit"]}})
 
         agent._injector.send_submit.assert_called_once()
         agent._injector.type_text.assert_not_called()
@@ -1076,7 +1076,7 @@ def _should_send_message(msg: dict) -> bool:
     """
     msg_text = msg.get("text", "")
     x_input = msg.get("x_input", {})
-    has_submit = x_input.get("submit", False) if isinstance(x_input, dict) else bool(x_input)
+    has_submit = "submit" in (x_input.get("ops") or []) if isinstance(x_input, dict) else False
     return bool(msg_text.strip()) or has_submit
 
 class TestMessageSendingLogic:
@@ -1093,12 +1093,12 @@ class TestMessageSendingLogic:
 
     def test_empty_text_with_submit_is_sent(self) -> None:
         """Empty text WITH submit flag should be sent (submit-only)."""
-        msg = {"text": "", "x_input": {"submit": True}}
+        msg = {"text": "", "x_input": {"ops": ["submit"]}}
         assert _should_send_message(msg) is True
 
     def test_text_with_submit_is_sent(self) -> None:
         """Text with submit flag should be sent."""
-        msg = {"text": "hello world", "x_input": {"submit": True}}
+        msg = {"text": "hello world", "x_input": {"ops": ["submit"]}}
         assert _should_send_message(msg) is True
 
     def test_text_without_submit_is_sent(self) -> None:
@@ -1113,7 +1113,7 @@ class TestMessageSendingLogic:
 
     def test_whitespace_only_with_submit_is_sent(self) -> None:
         """Whitespace-only text WITH submit should be sent."""
-        msg = {"text": "   ", "x_input": {"submit": True}}
+        msg = {"text": "   ", "x_input": {"ops": ["submit"]}}
         assert _should_send_message(msg) is True
 
     def test_missing_x_input_treated_as_false(self) -> None:
@@ -1123,7 +1123,7 @@ class TestMessageSendingLogic:
 
     def test_missing_text_with_submit_is_sent(self) -> None:
         """Missing text key with submit should be sent."""
-        msg = {"x_input": {"submit": True}}
+        msg = {"x_input": {"ops": ["submit"]}}
         assert _should_send_message(msg) is True
 
     def test_missing_both_not_sent(self) -> None:
@@ -1139,7 +1139,7 @@ class TestMessageSendingLogic:
         # Actually this would fail - let's test that it's handled
         msg_text = msg.get("text", "") or ""  # Handle None
         x_input = msg.get("x_input", {})
-        has_submit = x_input.get("submit", False) if isinstance(x_input, dict) else bool(x_input)
+        has_submit = "submit" in (x_input.get("ops") or []) if isinstance(x_input, dict) else False
         should_send = bool(msg_text.strip()) or has_submit
         assert should_send is False
 
