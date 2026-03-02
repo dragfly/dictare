@@ -10,12 +10,32 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="${PROJECT_DIR}/dist"
 
+# ---------- Constants ----------
+
+LABEL="com.dragfly.dictare"
+TRAY_LABEL="com.dragfly.dictare.tray"
+PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
+TRAY_PLIST="$HOME/Library/LaunchAgents/${TRAY_LABEL}.plist"
+
 # ---------- Helpers ----------
 
 stop_services() {
-    echo "==> Stopping services..."
-    "${BREW_PREFIX}/bin/dictare" tray stop 2>/dev/null || true
-    "${BREW_PREFIX}/bin/dictare" service stop 2>/dev/null || true
+    # Unload LaunchAgents directly — do NOT depend on the dictare binary,
+    # which lives in the Cellar that brew reinstall is about to delete.
+    # launchctl unload also disables KeepAlive, preventing the race condition
+    # where launchd restarts the engine mid-reinstall.
+    echo "==> Unloading LaunchAgents..."
+    launchctl unload "$TRAY_PLIST" 2>/dev/null || true
+    launchctl unload "$PLIST" 2>/dev/null || true
+
+    # Kill any orphan processes that survived unload (e.g., old launcher
+    # without proper SIGTERM handling, or processes from a previous crash).
+    pkill -f "Dictare.app/Contents/MacOS/Dictare" 2>/dev/null || true
+    pkill -f "dictare serve" 2>/dev/null || true
+    pkill -f "dictare tray start" 2>/dev/null || true
+
+    # Brief pause to let processes actually exit before brew wipes the Cellar.
+    sleep 1
 }
 
 start_services() {
