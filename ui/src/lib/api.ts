@@ -9,6 +9,19 @@ export async function fetchSchema(): Promise<SchemaResponse> {
 	return r.json();
 }
 
+export type PresetEntry = {
+	default: unknown;
+	values?: { value: string; label: string }[];
+};
+
+export type PresetsResponse = Record<string, PresetEntry>;
+
+export async function fetchPresets(): Promise<PresetsResponse> {
+	const r = await fetch(`${API}/settings/presets`);
+	if (!r.ok) throw new Error(`Failed to load presets: ${r.status}`);
+	return r.json();
+}
+
 export async function saveSetting(
 	key: string,
 	value: unknown

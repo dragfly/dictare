@@ -589,10 +589,11 @@ class OpenVIPServer:
 
         @app.post("/api/settings")
         async def update_setting(request: Request):
-            """Update a single config value."""
+            """Update a single config value. Send value="" to reset to Pydantic default."""
             from pydantic import ValidationError
 
             from dictare.config import (
+                delete_config_value,
                 get_config_value,
                 load_config,
                 set_config_value,
@@ -603,8 +604,13 @@ class OpenVIPServer:
             value = body.get("value")
             if not key:
                 raise HTTPException(status_code=400, detail="Missing 'key'")
+            if value is None:
+                raise HTTPException(status_code=400, detail="Missing 'value'")
             try:
-                set_config_value(key, str(value))
+                if value == "":
+                    delete_config_value(key)
+                else:
+                    set_config_value(key, str(value))
                 config = load_config()
                 current = get_config_value(key, config)
                 logger.info("settings.change key=%s value=%r", key, current)

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.89] - 2026-03-02
+
+### Added
+- **`SelectField.svelte`** — unified select component replacing `PresetField`, `EnumField`, and
+  `DeviceField`. Three-way source discriminator: backend-driven (options from `/settings/presets`),
+  UI-hints-driven (from `FIELD_PRESETS`), and data-model-driven (Pydantic `Literal` enum).
+  "Custom…" entry available only for UI-hints fields.
+- **`presets.svelte.ts` store** — fetches `/api/settings/presets` once on settings load, provides
+  `getDefault(key)` and `getValues(key)` for `SelectField` to show "Default (x)" labels and
+  populate backend-driven option lists.
+- **`delete_config_value()`** — new function in `config.py` that removes a key from the TOML
+  file, reverting the field to its Pydantic default on next load.
+
+### Changed
+- **`POST /api/settings`** — `value: ""` now deletes the key from the TOML config (revert to
+  Pydantic default) instead of attempting to write an empty string. `value: null` returns 400.
+- **`FieldRenderer.svelte`** — routes all select-type fields (backend/enum/preset) through the
+  new unified `SelectField`. Imports `BACKEND_DRIVEN_FIELDS` instead of `DEVICE_FIELDS`.
+  The presets store is loaded alongside the settings schema in `SettingsLayout.svelte`.
+
+### Removed
+- **`DeviceField.svelte`** — replaced by generic backend-driven behavior in `SelectField`.
+  Audio device direction is handled on the backend (pre-filtered in `/settings/presets`).
+- **`PresetField.svelte`**, **`EnumField.svelte`** — merged into `SelectField`.
+
 ## [0.1.88] - 2026-03-02
 
 ### Added
