@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.94] - 2026-03-02
+
+### Changed
+- **Default STT model** — changed from `parakeet-v3` to `large-v3-turbo` (Whisper).
+  On Apple Silicon this uses MLX for GPU-accelerated inference. On Linux it uses
+  CTranslate2 via faster-whisper. Best quality + speed out of the box.
+
 ## [0.1.93] - 2026-03-02
 
 ### Fixed
