@@ -160,7 +160,7 @@ class TestMuxFileReaderRaceConditions:
     def test_multiline_atomic_writes_no_loss(self) -> None:
         """Atomic writes of multiple lines should not lose data.
 
-        This tests the pattern used by FileInjector when auto_enter=false:
+        This tests the pattern used by FileInjector when auto_submit=false:
         writing text + newline in a single write() call.
         """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:

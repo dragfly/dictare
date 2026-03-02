@@ -57,16 +57,16 @@ class TextInjector(ABC):
         self,
         text: str,
         delay_ms: int = 0,
-        auto_enter: bool = True,
+        auto_submit: bool = True,
         submit_keys: str = "enter",
         newline_keys: str = "alt+enter",
     ) -> bool:
         """Type text into the active window.
 
         Args:
-            text: Text to type. If ends with newline, behavior depends on auto_enter.
+            text: Text to type. If ends with newline, behavior depends on auto_submit.
             delay_ms: Delay between characters in milliseconds.
-            auto_enter: If True, send submit_keys after text. If False, send newline_keys.
+            auto_submit: If True, send submit_keys after text. If False, send newline_keys.
             submit_keys: Key combination for submit (e.g., "enter").
             newline_keys: Key combination for visual newline (e.g., "alt+enter", "shift+enter").
 

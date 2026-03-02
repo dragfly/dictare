@@ -102,7 +102,7 @@ class QuartzInjector(TextInjector):
         self,
         text: str,
         delay_ms: int = 0,
-        auto_enter: bool = True,
+        auto_submit: bool = True,
         submit_keys: str = "enter",
         newline_keys: str = "shift+enter",
     ) -> bool:
@@ -111,7 +111,7 @@ class QuartzInjector(TextInjector):
         Args:
             text: Text to type (without trailing newline).
             delay_ms: Delay between characters in milliseconds.
-            auto_enter: If True, send submit_keys. If False, send newline_keys.
+            auto_submit: If True, send submit_keys. If False, send newline_keys.
             submit_keys: Key combination for submit (e.g., "enter").
             newline_keys: Key combination for visual newline (e.g., "shift+enter").
 
@@ -158,7 +158,7 @@ class QuartzInjector(TextInjector):
 
             # Send terminator using configurable keys
             time.sleep(0.1)
-            keys_to_send = submit_keys if auto_enter else newline_keys
+            keys_to_send = submit_keys if auto_submit else newline_keys
             flags, key_code = parse_macos_key_combo(keys_to_send)
 
             event_down = CGEventCreateKeyboardEvent(source, key_code, True)

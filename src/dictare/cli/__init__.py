@@ -24,6 +24,7 @@ from dictare.cli import (
     setup,
     speak,
     status,
+    transcribe,
     tray,
 )
 from dictare.cli._helpers import console
@@ -52,6 +53,7 @@ setup.register(app)
 status.register(app)
 logs.register(app)
 serve.register(app)
+transcribe.register(app)
 
 
 def version_callback(value: bool) -> None:
