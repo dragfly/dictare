@@ -32,7 +32,7 @@ stop_services() {
     # without proper SIGTERM handling, or processes from a previous crash).
     pkill -f "Dictare.app/Contents/MacOS/Dictare" 2>/dev/null || true
     pkill -f "dictare serve" 2>/dev/null || true
-    pkill -f "dictare tray start" 2>/dev/null || true
+    pkill -f "dictare.tray" 2>/dev/null || true
 
     # Brief pause to let processes actually exit before brew wipes the Cellar.
     sleep 1
