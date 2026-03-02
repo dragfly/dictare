@@ -6,12 +6,9 @@ class Dictare < Formula
   license "MIT"
 
   depends_on "portaudio"
+  depends_on "uv"
 
   def install
-    # uv is required but not a brew dependency — use system uv if available.
-    # The install script ensures it is present before calling brew.
-    raise "uv not found in PATH. Install via: curl -LsSf https://astral.sh/uv/install.sh | sh" unless system("which uv > /dev/null 2>&1")
-
     dictare_tarball = "PLACEHOLDER_DICTARE"
     extras = Hardware::CPU.arm? ? "[mlx]" : ""
 
@@ -19,7 +16,6 @@ class Dictare < Formula
     ENV["UV_TOOL_BIN_DIR"] = (libexec/"bin").to_s
     ENV["UV_PYTHON_INSTALL_DIR"] = (libexec/"uv-python").to_s
 
-    # Install dictare from local tarball; openvip and all other deps from PyPI.
     system "uv", "tool", "install",
            "--python", "3.11",
            "--prerelease=allow",
