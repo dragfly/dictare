@@ -1,51 +1,45 @@
 class Dictare < Formula
-  desc "Voice-to-text for your terminal"
+  desc "Voice-first control for AI coding agents"
   homepage "https://github.com/dragfly/dictare"
-  url "https://github.com/dragfly/dictare.git", tag: "v3.0.0a61"
+  url "file://PLACEHOLDER"
+  sha256 "PLACEHOLDER"
   license "MIT"
 
   depends_on "portaudio"
-  depends_on "uv"
 
   def install
-    # Determine extras based on architecture
-    if Hardware::CPU.arm?
-      pkg_spec = "dictare[mlx]"
-    else
-      pkg_spec = "dictare"
-    end
+    # uv is required but not a brew dependency — use system uv if available.
+    # The install script ensures it is present before calling brew.
+    raise "uv not found in PATH. Install via: curl -LsSf https://astral.sh/uv/install.sh | sh" unless system("which uv > /dev/null 2>&1")
 
+    dictare_tarball = "PLACEHOLDER_DICTARE"
+    extras = Hardware::CPU.arm? ? "[mlx]" : ""
+
+    ENV["UV_TOOL_DIR"] = (libexec/"uv-tools").to_s
+    ENV["UV_TOOL_BIN_DIR"] = (libexec/"bin").to_s
+    ENV["UV_PYTHON_INSTALL_DIR"] = (libexec/"uv-python").to_s
+
+    # Install dictare from local tarball; openvip and all other deps from PyPI.
     system "uv", "tool", "install",
            "--python", "3.11",
            "--prerelease=allow",
-           pkg_spec
+           "#{dictare_tarball}#{extras}"
 
-    # Create a wrapper script so brew can manage the binary
-    uv_tool_bin = Pathname.new(Dir.home) / ".local" / "bin" / "dictare"
-    bin.install_symlink uv_tool_bin => "dictare" if uv_tool_bin.exist?
-  end
-
-  def post_install
-    system "#{bin}/dictare", "service", "install"
-  rescue => e
-    opoo "Could not auto-start dictare service: #{e}"
+    bin.install_symlink (libexec/"bin/dictare") => "dictare"
   end
 
   def caveats
     <<~EOS
-      dictare requires Accessibility permission for keyboard simulation.
-
-        1. Open System Settings -> Privacy & Security -> Accessibility
-        2. Click '+' and add your terminal app
-        3. Enable the toggle
-        4. Restart your terminal
+      On first launch, macOS will ask for Input Monitoring permission.
+      A system dialog will appear — click "Open System Settings" and
+      enable the toggle for Dictare. That's it.
 
       If you installed on Apple Silicon, the MLX backend is included
-      for on-device speech recognition.
+      for hardware-accelerated on-device speech recognition.
     EOS
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/dictare --version")
+    assert_match "PLACEHOLDER", shell_output("#{bin}/dictare --version")
   end
 end
