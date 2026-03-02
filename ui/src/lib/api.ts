@@ -1,7 +1,10 @@
 import type { SchemaResponse } from "./types";
 
+const OPENVIP = "/openvip";
+const API = "/api";
+
 export async function fetchSchema(): Promise<SchemaResponse> {
-	const r = await fetch("/api/settings/schema");
+	const r = await fetch(`${API}/settings/schema`);
 	if (!r.ok) throw new Error(`Failed to load schema: ${r.status}`);
 	return r.json();
 }
@@ -10,7 +13,7 @@ export async function saveSetting(
 	key: string,
 	value: unknown
 ): Promise<{ status: string; key: string; value: unknown }> {
-	const r = await fetch("/api/settings", {
+	const r = await fetch(`${API}/settings`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ key, value: String(value) })
@@ -23,7 +26,7 @@ export async function saveSetting(
 }
 
 export async function fetchTomlSection(section: string): Promise<string> {
-	const r = await fetch(`/api/settings/toml-section/${section}`);
+	const r = await fetch(`${API}/settings/toml-section/${section}`);
 	if (!r.ok) throw new Error(`Failed to load section: ${r.status}`);
 	const data = await r.json();
 	return data.content as string;
@@ -33,7 +36,7 @@ export async function saveTomlSection(
 	section: string,
 	content: string
 ): Promise<void> {
-	const r = await fetch(`/api/settings/toml-section/${section}`, {
+	const r = await fetch(`${API}/settings/toml-section/${section}`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ content })
@@ -47,14 +50,14 @@ export async function saveTomlSection(
 export type Shortcut = { keys: string; command: string };
 
 export async function fetchShortcuts(): Promise<Shortcut[]> {
-	const r = await fetch("/api/settings/shortcuts");
+	const r = await fetch(`${API}/settings/shortcuts`);
 	if (!r.ok) throw new Error(`Failed to load shortcuts: ${r.status}`);
 	const data = await r.json();
 	return data.shortcuts as Shortcut[];
 }
 
 export async function saveShortcuts(shortcuts: Shortcut[]): Promise<void> {
-	const r = await fetch("/api/settings/shortcuts", {
+	const r = await fetch(`${API}/settings/shortcuts`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ shortcuts }),
@@ -67,7 +70,7 @@ export async function saveShortcuts(shortcuts: Shortcut[]): Promise<void> {
 
 export async function pingEngine(): Promise<boolean> {
 	try {
-		const r = await fetch("/openvip/control", {
+		const r = await fetch(`${OPENVIP}/control`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ command: "ping" })
@@ -80,7 +83,7 @@ export async function pingEngine(): Promise<boolean> {
 
 export async function captureHotkey(signal?: AbortSignal): Promise<string | null> {
 	try {
-		const r = await fetch("/openvip/control", {
+		const r = await fetch(`${OPENVIP}/control`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ command: "hotkey.capture", timeout: 10 }),
@@ -111,7 +114,7 @@ export type AudioDevicesResponse = {
 };
 
 export async function fetchAudioDevices(): Promise<AudioDevicesResponse> {
-	const r = await fetch("/api/audio/devices");
+	const r = await fetch(`${API}/audio/devices`);
 	if (!r.ok) throw new Error(`Failed to load audio devices: ${r.status}`);
 	return r.json();
 }
@@ -133,21 +136,21 @@ export type ModelInfo = {
 };
 
 export async function fetchModels(): Promise<ModelInfo[]> {
-	const r = await fetch("/api/models");
+	const r = await fetch(`${API}/models`);
 	if (!r.ok) throw new Error(`Failed to load models: ${r.status}`);
 	const data = await r.json();
 	return data.models as ModelInfo[];
 }
 
 export async function pullModel(modelId: string): Promise<string> {
-	const r = await fetch(`/api/models/${modelId}/pull`, { method: "POST" });
+	const r = await fetch(`${API}/models/${modelId}/pull`, { method: "POST" });
 	if (!r.ok) throw new Error(`Pull failed: ${r.status}`);
 	const data = await r.json();
 	return data.status as string;
 }
 
 export function createPullProgressSource(): EventSource {
-	return new EventSource("/api/models/pull-progress");
+	return new EventSource(`${API}/models/pull-progress`);
 }
 
 // ----- Status / Dashboard API -----
@@ -188,14 +191,14 @@ export type StatusResponse = {
 };
 
 export async function fetchStatus(): Promise<StatusResponse> {
-	const r = await fetch("/openvip/status");
+	const r = await fetch(`${OPENVIP}/status`);
 	if (!r.ok) throw new Error(`Failed to load status: ${r.status}`);
 	return r.json();
 }
 
 export async function setCurrentAgent(agent: string): Promise<void> {
 	try {
-		await fetch("/control", {
+		await fetch(`${OPENVIP}/control`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ command: `output.set_agent:${agent}` }),
@@ -207,7 +210,7 @@ export async function setCurrentAgent(agent: string): Promise<void> {
 
 export async function setOutputMode(mode: "keyboard" | "agents"): Promise<void> {
 	try {
-		await fetch("/control", {
+		await fetch(`${OPENVIP}/control`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ command: `output.set_mode:${mode}` }),
@@ -219,7 +222,7 @@ export async function setOutputMode(mode: "keyboard" | "agents"): Promise<void> 
 
 export async function restartEngine(): Promise<void> {
 	try {
-		await fetch("/control", {
+		await fetch(`${OPENVIP}/control`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ command: "engine.restart" })
@@ -232,14 +235,14 @@ export async function restartEngine(): Promise<void> {
 // ----- TTS Venv Install/Uninstall API -----
 
 export async function installTtsEngine(engine: string): Promise<string> {
-	const r = await fetch(`/api/tts-engines/${engine}/install`, { method: "POST" });
+	const r = await fetch(`${API}/tts-engines/${engine}/install`, { method: "POST" });
 	if (!r.ok) throw new Error(`Install failed: ${r.status}`);
 	const data = await r.json();
 	return data.status as string;
 }
 
 export async function uninstallTtsEngine(engine: string): Promise<void> {
-	const r = await fetch(`/api/tts-engines/${engine}/install`, { method: "DELETE" });
+	const r = await fetch(`${API}/tts-engines/${engine}/install`, { method: "DELETE" });
 	if (!r.ok) throw new Error(`Uninstall failed: ${r.status}`);
 }
 
@@ -261,26 +264,26 @@ export type CapabilityInfo = {
 };
 
 export async function fetchCapabilities(): Promise<CapabilityInfo[]> {
-	const r = await fetch("/api/capabilities");
+	const r = await fetch(`${API}/capabilities`);
 	if (!r.ok) throw new Error(`Failed to load capabilities: ${r.status}`);
 	const data = await r.json();
 	return data.capabilities as CapabilityInfo[];
 }
 
 export async function installCapability(id: string): Promise<string> {
-	const r = await fetch(`/api/capabilities/${id}/install`, { method: "POST" });
+	const r = await fetch(`${API}/capabilities/${id}/install`, { method: "POST" });
 	if (!r.ok) throw new Error(`Install failed: ${r.status}`);
 	const data = await r.json();
 	return data.status as string;
 }
 
 export async function uninstallCapability(id: string): Promise<void> {
-	const r = await fetch(`/api/capabilities/${id}/install`, { method: "DELETE" });
+	const r = await fetch(`${API}/capabilities/${id}/install`, { method: "DELETE" });
 	if (!r.ok) throw new Error(`Uninstall failed: ${r.status}`);
 }
 
 export async function selectCapability(id: string): Promise<void> {
-	const r = await fetch(`/api/capabilities/${id}/select`, { method: "POST" });
+	const r = await fetch(`${API}/capabilities/${id}/select`, { method: "POST" });
 	if (!r.ok) {
 		const data = await r.json().catch(() => ({}));
 		throw new Error(data.detail || `Select failed: ${r.status}`);
@@ -288,13 +291,13 @@ export async function selectCapability(id: string): Promise<void> {
 }
 
 export async function getSystemInfo(): Promise<{ platform: string; launch_at_login: boolean | null }> {
-	const r = await fetch("/api/system");
+	const r = await fetch(`${API}/system`);
 	if (!r.ok) throw new Error(`Failed to get system info: ${r.status}`);
 	return r.json();
 }
 
 export async function setLaunchAtLogin(enabled: boolean): Promise<void> {
-	const r = await fetch("/api/system", {
+	const r = await fetch(`${API}/system`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ launch_at_login: enabled }),
@@ -303,13 +306,13 @@ export async function setLaunchAtLogin(enabled: boolean): Promise<void> {
 }
 
 export async function getHotkeyStatus(): Promise<{ status: string }> {
-	const r = await fetch("/api/hotkey/status");
+	const r = await fetch(`${API}/hotkey/status`);
 	if (!r.ok) throw new Error(`Failed to get hotkey status: ${r.status}`);
 	return r.json();
 }
 
 export async function fixHotkey(): Promise<void> {
-	await fetch("/api/hotkey/fix", { method: "POST" });
+	await fetch(`${API}/hotkey/fix`, { method: "POST" });
 }
 
 export type PermissionDoctorStatus = {
@@ -330,13 +333,13 @@ export type PermissionDoctorStatus = {
 };
 
 export async function getPermissionDoctorStatus(): Promise<PermissionDoctorStatus> {
-	const r = await fetch("/api/permissions/doctor");
+	const r = await fetch(`${API}/permissions/doctor`);
 	if (!r.ok) throw new Error(`Failed to get doctor status: ${r.status}`);
 	return r.json();
 }
 
 export async function openPermissionSetting(target: "input_monitoring" | "accessibility" | "microphone"): Promise<void> {
-	const r = await fetch("/api/permissions/doctor/open", {
+	const r = await fetch(`${API}/permissions/doctor/open`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ target }),
@@ -360,7 +363,7 @@ export type PermissionProbeResult = {
 };
 
 export async function probePermissionDoctor(timeout = 8): Promise<PermissionProbeResult> {
-	const r = await fetch("/api/permissions/doctor/probe", {
+	const r = await fetch(`${API}/permissions/doctor/probe`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ timeout }),

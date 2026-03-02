@@ -180,7 +180,7 @@ def register(app: typer.Typer) -> None:
 
             try:
                 Client(
-                    f"http://{config.server.host}:{config.server.port}", timeout=5
+                    f"http://{config.server.host}:{config.server.port}/openvip", timeout=5
                 ).stop_speech()
                 if not quiet:
                     console.print("[dim]TTS stopped.[/]")
@@ -231,7 +231,7 @@ def register(app: typer.Typer) -> None:
 
         try:
             client = Client(
-                f"http://{config.server.host}:{config.server.port}",
+                f"http://{config.server.host}:{config.server.port}/openvip",
                 timeout=timeout,
             )
             kwargs: dict[str, Any] = {
