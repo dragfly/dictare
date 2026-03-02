@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.90] - 2026-03-02
+
+### Fixed
+- **`macos-install.sh` race condition** — `stop_services()` now calls `launchctl unload`
+  directly on the plist files instead of depending on the `dictare` binary (which lives in
+  the Cellar that `brew reinstall` is about to delete). This eliminates the KeepAlive restart
+  loop that caused the engine to cycle start/kill/start during installation. Orphan processes
+  are explicitly killed with `pkill` before Homebrew runs.
+
 ## [0.1.89] - 2026-03-02
 
 ### Added
