@@ -117,7 +117,7 @@ class YdotoolInjector(TextInjector):
         self,
         text: str,
         delay_ms: int = 0,
-        auto_enter: bool = True,
+        auto_submit: bool = True,
         submit_keys: str = "enter",
         newline_keys: str = "alt+enter",
     ) -> bool:
@@ -126,7 +126,7 @@ class YdotoolInjector(TextInjector):
         Args:
             text: Text to type (without trailing newline).
             delay_ms: Delay between characters in milliseconds.
-            auto_enter: If True, send submit_keys. If False, send newline_keys.
+            auto_submit: If True, send submit_keys. If False, send newline_keys.
             submit_keys: Key combination for submit (e.g., "enter").
             newline_keys: Key combination for visual newline (e.g., "alt+enter").
 
@@ -181,7 +181,7 @@ class YdotoolInjector(TextInjector):
 
             # Send terminator using configurable keys
             time.sleep(0.2)
-            keys_to_send = submit_keys if auto_enter else newline_keys
+            keys_to_send = submit_keys if auto_submit else newline_keys
             key_codes = parse_key_combo(keys_to_send)
 
             if key_codes:
@@ -200,7 +200,7 @@ class YdotoolInjector(TextInjector):
                 if result.returncode != 0:
                     return False
 
-            self._enter_sent = auto_enter
+            self._enter_sent = auto_submit
 
             return True
         except subprocess.TimeoutExpired:

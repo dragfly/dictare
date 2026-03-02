@@ -765,7 +765,7 @@ class DictareEngine:
         - SSEAgent: sends via Server-Sent Events (OpenVIP HTTP server)
 
         Message processing:
-        1. Build initial message with auto_enter setting
+        1. Build initial message with auto_submit setting
         2. Apply pipeline filters (may set x_input.submit, modify text, etc.)
         3. Send processed message(s) to agent
 
@@ -774,7 +774,7 @@ class DictareEngine:
             agent: Optional agent to use. If None, uses current agent.
                    Allows injection to a specific agent even if current changed.
         """
-        auto_enter = self.config.output.auto_enter
+        auto_submit = self.config.output.auto_submit
         success = False
         method = "unknown"
 
@@ -791,7 +791,7 @@ class DictareEngine:
 
         # Build OpenVIP transcription message
         message = create_message(text, language=message_language)
-        if auto_enter:
+        if auto_submit:
             message["x_input"] = {"submit": True, "newline": False, "source": "dictare/engine"}
         else:
             message["x_input"] = {"submit": False, "newline": True, "source": "dictare/engine"}
@@ -849,7 +849,7 @@ class DictareEngine:
                 text=final_text,
                 method=method,
                 success=success,
-                auto_enter=auto_enter or pipeline_submit,
+                auto_submit=auto_submit or pipeline_submit,
                 enter_sent=None,  # Agents handle their own submission
                 submit_trigger=submit_trigger,
                 submit_confidence=submit_confidence,

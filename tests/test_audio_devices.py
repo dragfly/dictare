@@ -148,7 +148,7 @@ class TestEngineStatusAudioDevices:
         config.audio.output_device = ""
         config.output.mode = "keyboard"
         config.output.typing_delay_ms = 0
-        config.output.auto_enter = True
+        config.output.auto_submit = True
         config.hotkey.key = "F18"
         config.hotkey.device = None
         config.keyboard.shortcuts = {}
@@ -186,7 +186,7 @@ class TestEngineStatusAudioDevices:
         config.audio.output_device = "AirPods Pro"
         config.output.mode = "keyboard"
         config.output.typing_delay_ms = 0
-        config.output.auto_enter = True
+        config.output.auto_submit = True
         config.hotkey.key = "F18"
         config.hotkey.device = None
         config.keyboard.shortcuts = {}
