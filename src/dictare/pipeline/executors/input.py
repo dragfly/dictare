@@ -50,11 +50,12 @@ class InputExecutor:
         if not x_input:
             return PipelineResult.passed(message)
 
-        submit = x_input.get("submit", False) if isinstance(x_input, dict) else bool(x_input)
+        ops = x_input.get("ops") or [] if isinstance(x_input, dict) else []
+        submit = "submit" in ops
         text = message.get("text", "")
 
         # Append visual newline if requested by x_input
-        if isinstance(x_input, dict) and x_input.get("newline"):
+        if "newline" in ops:
             text = text + "\n" if text else "\n"
 
         self.write_fn(text, submit)

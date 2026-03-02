@@ -66,16 +66,17 @@
 
     "x_input": {
       "type": "object",
-      "description": "Standard extension: text input behavior. Controls how transcribed text should be delivered to a text-based interface.",
-      "required": ["submit", "newline"],
+      "description": "Standard extension: text input behavior. ops is an ordered list of input operations to perform.",
+      "required": ["ops"],
       "properties": {
-        "submit": {
-          "type": "boolean",
-          "description": "If true, submit/send the text (e.g., press Enter)"
-        },
-        "newline": {
-          "type": "boolean",
-          "description": "If true, insert a line break (e.g., Shift+Enter)"
+        "ops": {
+          "type": "array",
+          "description": "Ordered list of input operations to perform",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": ["submit", "newline"]
+          }
         },
         "trigger": {
           "type": "string",
