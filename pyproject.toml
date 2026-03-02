@@ -51,7 +51,7 @@ dependencies = [
     "uvicorn>=0.32.0",
     "sse-starlette>=2.0.0",
     # OpenVIP client SDK
-    "openvip>=1.0.0rc7",
+    "openvip>=1.0.0rc10",
     "tomlkit>=0.14.0",
     # OpenVIP message schema validation (compiled, ~5μs per call)
     "fastjsonschema>=2.20",
@@ -126,5 +126,3 @@ markers = [
     "macos: tests that require real macOS hardware (CoreAudio ctypes) — run with: pytest -m macos",
 ]
 
-[tool.uv.sources]
-openvip = { path = "../openvip-dev/sdks/python" }

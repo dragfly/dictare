@@ -792,9 +792,9 @@ class DictareEngine:
         # Build OpenVIP transcription message
         message = create_message(text, language=message_language)
         if auto_submit:
-            message["x_input"] = {"submit": True, "newline": False, "source": "dictare/engine"}
+            message["x_input"] = {"ops": ["submit"], "source": "dictare/engine"}
         else:
-            message["x_input"] = {"submit": False, "newline": True, "source": "dictare/engine"}
+            message["x_input"] = {"ops": ["newline"], "source": "dictare/engine"}
 
         # Apply pipeline: filters (enrich) then executors (act)
         messages_to_send = [message]
@@ -819,7 +819,7 @@ class DictareEngine:
                 for msg in messages_to_send:
                     msg_text = msg.get("text", "")
                     x_input = msg.get("x_input", {})
-                    has_submit = x_input.get("submit", False) if isinstance(x_input, dict) else False
+                    has_submit = "submit" in (x_input.get("ops") or []) if isinstance(x_input, dict) else False
                     if not msg_text.strip() and not has_submit:
                         # Skip empty messages without submit flag
                         success = True  # Consider it successful, nothing to send
@@ -839,7 +839,7 @@ class DictareEngine:
         first_msg = messages_to_send[0] if messages_to_send else {}
         final_text = first_msg.get("text", text)
         x_input_info = first_msg.get("x_input", {})
-        pipeline_submit = x_input_info.get("submit", False) if isinstance(x_input_info, dict) else False
+        pipeline_submit = "submit" in (x_input_info.get("ops") or []) if isinstance(x_input_info, dict) else False
         submit_trigger = x_input_info.get("trigger") if isinstance(x_input_info, dict) else None
         submit_confidence = x_input_info.get("confidence") if isinstance(x_input_info, dict) else None
 
@@ -875,7 +875,7 @@ class DictareEngine:
             logger.debug("submit_action: no agent connected, ignoring")
             return
         message = create_message("")
-        message["x_input"] = {"submit": True, "newline": False, "trigger": "<long_press>", "source": "dictare/long-press"}
+        message["x_input"] = {"ops": ["submit"], "trigger": "<long_press>", "source": "dictare/long-press"}
         agent.send(message)
         logger.debug("submit_action: submit sent to agent %s", agent.id)
 
