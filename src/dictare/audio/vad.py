@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -75,13 +78,24 @@ class SileroVAD(VADEngine):
             with_indicator: If True, show loading progress indicator (ignored if headless).
             headless: If True, skip all console output (for Engine/daemon mode).
         """
+        import time as _time
+
         if self._model is not None:
             return
 
         def load_vad_fn():
-            from faster_whisper.vad import get_vad_model
+            _t = _time.monotonic()
+            import onnxruntime
+            logger.info("VAD: import onnxruntime: %.2fs", _time.monotonic() - _t)
 
-            return get_vad_model()
+            _t = _time.monotonic()
+            import faster_whisper.vad as _fwv
+            logger.info("VAD: import faster_whisper.vad: %.2fs", _time.monotonic() - _t)
+
+            _t = _time.monotonic()
+            model = _fwv.get_vad_model()
+            logger.info("VAD: get_vad_model() [InferenceSession]: %.2fs", _time.monotonic() - _t)
+            return model
 
         if with_indicator or headless:
             # Use load_with_indicator for stats tracking, but headless mode suppresses UI
@@ -94,9 +108,7 @@ class SileroVAD(VADEngine):
                 headless=headless,
             )
         else:
-            from faster_whisper.vad import get_vad_model
-
-            self._model = get_vad_model()
+            self._model = load_vad_fn()
 
         self.reset()
 
