@@ -6,7 +6,6 @@ import {
   Keyboard,
   Mic,
   MonitorSpeaker,
-  Server,
   SlidersHorizontal,
   Volume2,
 } from "lucide-svelte";
@@ -86,3 +85,4 @@ export const tabs: TabDef[] = [
     ],
   },
 ];
+
