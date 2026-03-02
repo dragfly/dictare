@@ -143,7 +143,7 @@ class SSEConnection:
         self._http = httpx.Client(base_url=self._base_url)
         try:
             with self._http.stream(
-                "GET", f"/agents/{self.agent_id}/messages"
+                "GET", f"/openvip/agents/{self.agent_id}/messages"
             ) as r:
                 self._connected.set()
                 for line in r.iter_lines():
@@ -183,7 +183,7 @@ def sse_connect(live_url):
 
     Usage:
         conn = sse_connect("alice")
-        agent_url = f"/agents/{conn.agent_id}/messages"
+        agent_url = f"/openvip/agents/{conn.agent_id}/messages"
     """
     connections: list[SSEConnection] = []
 
@@ -210,24 +210,24 @@ class TestGetStatus:
     """OpenVIP: GET /status returns engine status."""
 
     def test_returns_200(self, e2e_client) -> None:
-        """GET /status returns 200 OK."""
-        r = e2e_client.get("/status")
+        """GET /openvip/status returns 200 OK."""
+        r = e2e_client.get("/openvip/status")
         assert r.status_code == 200
 
     def test_returns_json(self, e2e_client) -> None:
         """Response content type is application/json."""
-        r = e2e_client.get("/status")
+        r = e2e_client.get("/openvip/status")
         assert "application/json" in r.headers["content-type"]
 
     def test_has_openvip_version(self, e2e_client) -> None:
         """Response includes openvip protocol version field."""
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert "openvip" in data
         assert data["openvip"] == "1.0"
 
     def test_has_stt(self, e2e_client) -> None:
         """Response includes stt object with enabled and active."""
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert "stt" in data
         assert isinstance(data["stt"], dict)
         assert isinstance(data["stt"]["enabled"], bool)
@@ -235,20 +235,20 @@ class TestGetStatus:
 
     def test_has_tts(self, e2e_client) -> None:
         """Response includes tts object with enabled."""
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert "tts" in data
         assert isinstance(data["tts"], dict)
         assert isinstance(data["tts"]["enabled"], bool)
 
     def test_has_connected_agents(self, e2e_client) -> None:
         """Response includes connected_agents as a list."""
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert "connected_agents" in data
         assert isinstance(data["connected_agents"], list)
 
     def test_has_platform(self, e2e_client) -> None:
         """Response includes opaque platform object."""
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert "platform" in data
         assert isinstance(data["platform"], dict)
 
@@ -263,7 +263,7 @@ class TestControlProtocol:
 
     def test_stt_start(self, e2e_client) -> None:
         """stt.start returns ok with listening=True."""
-        r = e2e_client.post("/control", json={"command": "stt.start"})
+        r = e2e_client.post("/openvip/control", json={"command": "stt.start"})
         assert r.status_code == 200
         data = r.json()
         assert data["status"] == "ok"
@@ -271,7 +271,7 @@ class TestControlProtocol:
 
     def test_stt_stop(self, e2e_client) -> None:
         """stt.stop returns ok with listening=False."""
-        r = e2e_client.post("/control", json={"command": "stt.stop"})
+        r = e2e_client.post("/openvip/control", json={"command": "stt.stop"})
         assert r.status_code == 200
         data = r.json()
         assert data["status"] == "ok"
@@ -279,13 +279,13 @@ class TestControlProtocol:
 
     def test_stt_toggle(self, e2e_client) -> None:
         """stt.toggle returns ok."""
-        r = e2e_client.post("/control", json={"command": "stt.toggle"})
+        r = e2e_client.post("/openvip/control", json={"command": "stt.toggle"})
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
     def test_ping(self, e2e_client) -> None:
         """ping returns ok with pong=True."""
-        r = e2e_client.post("/control", json={"command": "ping"})
+        r = e2e_client.post("/openvip/control", json={"command": "ping"})
         assert r.status_code == 200
         data = r.json()
         assert data["status"] == "ok"
@@ -302,17 +302,17 @@ class TestSpeech:
 
     def test_speech_returns_200(self, e2e_client) -> None:
         """Valid speech request returns 200 OK."""
-        r = e2e_client.post("/speech", json=_speech_request())
+        r = e2e_client.post("/openvip/speech", json=_speech_request())
         assert r.status_code == 200
 
     def test_speech_returns_status_ok(self, e2e_client) -> None:
         """Response has status=ok."""
-        data = e2e_client.post("/speech", json=_speech_request()).json()
+        data = e2e_client.post("/openvip/speech", json=_speech_request()).json()
         assert data["status"] == "ok"
 
     def test_speech_returns_duration(self, e2e_client) -> None:
         """Response includes duration_ms."""
-        data = e2e_client.post("/speech", json=_speech_request()).json()
+        data = e2e_client.post("/openvip/speech", json=_speech_request()).json()
         assert "duration_ms" in data
         assert isinstance(data["duration_ms"], int)
         assert data["duration_ms"] >= 0
@@ -331,7 +331,7 @@ class TestPostAgentMessages:
     ) -> None:
         """Posting to a connected agent returns 200 OK."""
         conn = sse_connect("alice")
-        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=_transcription())
+        r = e2e_client.post(f"/openvip/agents/{conn.agent_id}/messages", json=_transcription())
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
@@ -341,21 +341,21 @@ class TestPostAgentMessages:
         """Posted message is delivered to the agent's SSE stream."""
         conn = sse_connect("alice")
         msg = _transcription(text="test delivery")
-        e2e_client.post(f"/agents/{conn.agent_id}/messages", json=msg)
+        e2e_client.post(f"/openvip/agents/{conn.agent_id}/messages", json=msg)
         _wait_until(lambda: len(conn.events) > 0)
         assert conn.events[0]["text"] == "test delivery"
 
     def test_post_to_unconnected_agent_returns_404(self, e2e_client) -> None:
         """Posting to a non-existent agent returns 404."""
         r = e2e_client.post(
-            "/agents/ghost/messages", json=_transcription()
+            "/openvip/agents/ghost/messages", json=_transcription()
         )
         assert r.status_code == 404
 
     def test_404_detail_mentions_not_connected(self, e2e_client) -> None:
         """404 error detail mentions agent not connected."""
         r = e2e_client.post(
-            "/agents/ghost/messages", json=_transcription()
+            "/openvip/agents/ghost/messages", json=_transcription()
         )
         assert "not connected" in r.json()["detail"].lower()
 
@@ -370,7 +370,7 @@ class TestSSEAgentRegistration:
 
     def test_reserved_agent_id_returns_403(self, e2e_client) -> None:
         """Reserved agent IDs (e.g., __keyboard__) return 403."""
-        r = e2e_client.get("/agents/__keyboard__/messages")
+        r = e2e_client.get("/openvip/agents/__keyboard__/messages")
         assert r.status_code == 403
 
     def test_duplicate_agent_returns_409(
@@ -378,7 +378,7 @@ class TestSSEAgentRegistration:
     ) -> None:
         """Connecting with an already-connected agent ID returns 409."""
         conn = sse_connect("alice")
-        r = e2e_client.get(f"/agents/{conn.agent_id}/messages")
+        r = e2e_client.get(f"/openvip/agents/{conn.agent_id}/messages")
         assert r.status_code == 409
 
     def test_409_detail_mentions_already_connected(
@@ -386,7 +386,7 @@ class TestSSEAgentRegistration:
     ) -> None:
         """409 error detail mentions agent already connected."""
         conn = sse_connect("alice")
-        r = e2e_client.get(f"/agents/{conn.agent_id}/messages")
+        r = e2e_client.get(f"/openvip/agents/{conn.agent_id}/messages")
         assert "already connected" in r.json()["detail"].lower()
 
 
@@ -399,26 +399,26 @@ class TestStatusSchema:
     """OpenVIP: Status object schema compliance."""
 
     def test_openvip_is_string(self, e2e_client) -> None:
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert isinstance(data["openvip"], str)
 
     def test_stt_is_object(self, e2e_client) -> None:
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert isinstance(data["stt"], dict)
 
     def test_tts_is_object(self, e2e_client) -> None:
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert isinstance(data["tts"], dict)
 
     def test_connected_agents_is_list_of_strings(self, e2e_client) -> None:
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         agents = data["connected_agents"]
         assert isinstance(agents, list)
         for a in agents:
             assert isinstance(a, str)
 
     def test_platform_is_object(self, e2e_client) -> None:
-        data = e2e_client.get("/status").json()
+        data = e2e_client.get("/openvip/status").json()
         assert isinstance(data["platform"], dict)
 
 
@@ -433,13 +433,13 @@ class TestAckSchema:
     def test_ack_has_status_ok(self, e2e_client) -> None:
         """Control command ack has status=ok."""
         data = e2e_client.post(
-            "/control", json={"command": "ping"}
+            "/openvip/control", json={"command": "ping"}
         ).json()
         assert data["status"] == "ok"
 
     def test_speech_ack_has_status_ok(self, e2e_client) -> None:
         """Speech ack has status=ok."""
-        data = e2e_client.post("/speech", json=_speech_request()).json()
+        data = e2e_client.post("/openvip/speech", json=_speech_request()).json()
         assert data["status"] == "ok"
 
     def test_message_ack_has_status_ok(
@@ -448,7 +448,7 @@ class TestAckSchema:
         """Post message ack has status=ok."""
         conn = sse_connect("alice")
         data = e2e_client.post(
-            f"/agents/{conn.agent_id}/messages", json=_transcription()
+            f"/openvip/agents/{conn.agent_id}/messages", json=_transcription()
         ).json()
         assert data["status"] == "ok"
 
@@ -611,7 +611,7 @@ class TestValidMessages:
         """Valid OpenVIP messages are delivered to connected agents."""
         conn = sse_connect("test")
 
-        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=message)
+        r = e2e_client.post(f"/openvip/agents/{conn.agent_id}/messages", json=message)
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
@@ -910,7 +910,7 @@ class TestInvalidMessageRejection:
         conn = SSEConnection(live_url, f"validator-{uuid.uuid4().hex[:8]}")
         conn.start()
         conn.wait_connected()
-        self.__class__._agent_url = f"/agents/{conn.agent_id}/messages"
+        self.__class__._agent_url = f"/openvip/agents/{conn.agent_id}/messages"
         yield
         conn.stop()
 
@@ -918,7 +918,7 @@ class TestInvalidMessageRejection:
     def test_post_message_invalid_returns_422(
         self, e2e_client, message,
     ) -> None:
-        """Invalid message posted to /agents/{id}/messages returns 422."""
+        """Invalid message posted to /openvip/agents/{id}/messages returns 422."""
         r = e2e_client.post(self._agent_url, json=message)
         assert r.status_code == 422
         assert "Not OpenVIP v1.0 compliant" in r.json()["detail"]
@@ -982,8 +982,8 @@ class TestInvalidSpeechRejection:
     def test_post_speech_invalid_returns_422(
         self, e2e_client, message,
     ) -> None:
-        """Invalid speech message posted to /speech returns 422."""
-        r = e2e_client.post("/speech", json=message)
+        """Invalid speech message posted to /openvip/speech returns 422."""
+        r = e2e_client.post("/openvip/speech", json=message)
         assert r.status_code == 422
 
 
@@ -996,7 +996,7 @@ class TestValidationErrorMessages:
         conn = SSEConnection(live_url, f"validator-err-{uuid.uuid4().hex[:8]}")
         conn.start()
         conn.wait_connected()
-        self.__class__._agent_url = f"/agents/{conn.agent_id}/messages"
+        self.__class__._agent_url = f"/openvip/agents/{conn.agent_id}/messages"
         yield
         conn.stop()
 
@@ -1023,7 +1023,7 @@ class TestValidationErrorMessages:
 
     def test_valid_speech_still_accepted(self, e2e_client) -> None:
         """Valid speech messages pass validation and return 200."""
-        r = e2e_client.post("/speech", json=_speech_request())
+        r = e2e_client.post("/openvip/speech", json=_speech_request())
         assert r.status_code == 200
 
 
@@ -1036,21 +1036,21 @@ class TestContentType:
     """OpenVIP: Response content types."""
 
     def test_status_json(self, e2e_client) -> None:
-        r = e2e_client.get("/status")
+        r = e2e_client.get("/openvip/status")
         assert "application/json" in r.headers["content-type"]
 
     def test_control_json(self, e2e_client) -> None:
-        r = e2e_client.post("/control", json={"command": "ping"})
+        r = e2e_client.post("/openvip/control", json={"command": "ping"})
         assert "application/json" in r.headers["content-type"]
 
     def test_speech_json(self, e2e_client) -> None:
-        r = e2e_client.post("/speech", json=_speech_request())
+        r = e2e_client.post("/openvip/speech", json=_speech_request())
         assert "application/json" in r.headers["content-type"]
 
     def test_post_message_json(self, e2e_client, sse_connect) -> None:
         """POST message response is application/json."""
         conn = sse_connect("a")
-        r = e2e_client.post(f"/agents/{conn.agent_id}/messages", json=_transcription())
+        r = e2e_client.post(f"/openvip/agents/{conn.agent_id}/messages", json=_transcription())
         assert "application/json" in r.headers["content-type"]
 
     def test_status_stream_event_stream(self) -> None:
@@ -1072,25 +1072,25 @@ class TestEdgeCases:
 
     def test_empty_command(self, e2e_client) -> None:
         """Empty command string is handled gracefully."""
-        r = e2e_client.post("/control", json={"command": ""})
+        r = e2e_client.post("/openvip/control", json={"command": ""})
         # Should not crash — returns error or routes to controller
         assert r.status_code in (200, 400, 500)
 
     def test_missing_command_field(self, e2e_client) -> None:
         """Missing command field is handled gracefully."""
-        r = e2e_client.post("/control", json={})
+        r = e2e_client.post("/openvip/control", json={})
         assert r.status_code in (200, 400, 500)
 
     def test_empty_speech_text(self, e2e_client) -> None:
         """Empty speech text returns 422 error, not crash."""
-        r = e2e_client.post("/speech", json={"text": ""})
+        r = e2e_client.post("/openvip/speech", json={"text": ""})
         assert r.status_code == 422
 
     def test_agent_id_with_special_chars(self, e2e_client) -> None:
         """Agent IDs with dashes and underscores work."""
         # 404 is expected (not connected), but should not 500
         r = e2e_client.post(
-            "/agents/my-agent_v2/messages", json=_transcription()
+            "/openvip/agents/my-agent_v2/messages", json=_transcription()
         )
         assert r.status_code == 404  # Not connected, not server error
 
@@ -1102,11 +1102,11 @@ class TestEdgeCases:
         bob = sse_connect("bob")
 
         e2e_client.post(
-            f"/agents/{alice.agent_id}/messages",
+            f"/openvip/agents/{alice.agent_id}/messages",
             json=_transcription(text="for alice"),
         )
         e2e_client.post(
-            f"/agents/{bob.agent_id}/messages",
+            f"/openvip/agents/{bob.agent_id}/messages",
             json=_transcription(text="for bob"),
         )
 
@@ -1121,7 +1121,7 @@ class TestEdgeCases:
         conn = sse_connect("test")
         big_text = "word " * 10000  # ~50KB
         r = e2e_client.post(
-            f"/agents/{conn.agent_id}/messages",
+            f"/openvip/agents/{conn.agent_id}/messages",
             json=_transcription(text=big_text),
         )
         assert r.status_code == 200
@@ -1136,7 +1136,7 @@ class TestEdgeCases:
         ]
         for text in texts:
             e2e_client.post(
-                f"/agents/{conn.agent_id}/messages",
+                f"/openvip/agents/{conn.agent_id}/messages",
                 json=_transcription(text=text),
             )
 

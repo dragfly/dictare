@@ -40,7 +40,7 @@ class TestStatusInternal:
     def test_state_reflects_engine(self, client, engine) -> None:
         """Status stt.active reflects engine state."""
         engine._state = "listening"
-        data = client.get("/status").json()
+        data = client.get("/openvip/status").json()
         assert data["stt"]["active"] is True
 
 
@@ -55,13 +55,13 @@ class TestControlInternal:
 
     def test_engine_shutdown(self, client) -> None:
         """engine.shutdown returns ok."""
-        r = client.post("/control", json={"command": "engine.shutdown"})
+        r = client.post("/openvip/control", json={"command": "engine.shutdown"})
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
     def test_stt_start_routed_to_engine(self, client, engine) -> None:
         """stt.start is routed to engine, not controller."""
-        client.post("/control", json={"command": "stt.start"})
+        client.post("/openvip/control", json={"command": "stt.start"})
         assert len(engine._protocol_calls) == 1
         assert engine._protocol_calls[0]["command"] == "stt.start"
 
@@ -71,7 +71,7 @@ class TestControlInternal:
         """All protocol commands route to engine, none to controller."""
         for cmd in ["stt.start", "stt.stop", "stt.toggle",
                      "engine.shutdown", "ping"]:
-            client.post("/control", json={"command": cmd})
+            client.post("/openvip/control", json={"command": cmd})
         assert len(engine._protocol_calls) == 5
         assert len(controller._calls) == 0
 
@@ -87,19 +87,19 @@ class TestControlRouting:
 
     def test_app_command_routed_to_controller(self, client, controller) -> None:
         """Non-protocol commands go to controller."""
-        client.post("/control", json={"command": "output.set_mode:agents"})
+        client.post("/openvip/control", json={"command": "output.set_mode:agents"})
         assert len(controller._calls) == 1
 
     def test_app_command_not_routed_to_engine(self, client, engine) -> None:
         """Non-protocol commands do not reach engine."""
-        client.post("/control", json={"command": "output.set_agent:claude"})
+        client.post("/openvip/control", json={"command": "output.set_agent:claude"})
         assert len(engine._protocol_calls) == 0
 
     def test_unknown_command_without_controller(self, engine) -> None:
         """Unknown command without controller returns error."""
         server = OpenVIPServer(engine, None, host="127.0.0.1", port=0)
         c = TestClient(server._app)
-        r = c.post("/control", json={"command": "foo.bar"})
+        r = c.post("/openvip/control", json={"command": "foo.bar"})
         assert r.status_code == 200
         assert r.json()["status"] == "error"
 
@@ -108,7 +108,7 @@ class TestControlRouting:
         engine.handle_protocol_command = MagicMock(
             side_effect=RuntimeError("boom")
         )
-        r = client.post("/control", json={"command": "stt.start"})
+        r = client.post("/openvip/control", json={"command": "stt.start"})
         assert r.status_code == 500
 
 
@@ -123,7 +123,7 @@ class TestSpeechInternal:
 
     def test_speech_with_language(self, client, engine) -> None:
         """Speech request with language is accepted."""
-        r = client.post("/speech", json={
+        r = client.post("/openvip/speech", json={
             "openvip": "1.0", "type": "speech",
             "id": "660e8400-e29b-41d4-a716-446655440001",
             "timestamp": "2026-02-06T10:30:05Z",
@@ -134,7 +134,7 @@ class TestSpeechInternal:
 
     def test_speech_text_forwarded(self, client, engine) -> None:
         """Speech text is forwarded to engine."""
-        client.post("/speech", json={
+        client.post("/openvip/speech", json={
             "openvip": "1.0", "type": "speech",
             "id": "660e8400-e29b-41d4-a716-446655440001",
             "timestamp": "2026-02-06T10:30:05Z",
@@ -145,7 +145,7 @@ class TestSpeechInternal:
     def test_speech_engine_error_returns_500(self, client, engine) -> None:
         """Engine exception results in 500."""
         engine.handle_speech = MagicMock(side_effect=RuntimeError("TTS fail"))
-        r = client.post("/speech", json={
+        r = client.post("/openvip/speech", json={
             "openvip": "1.0", "type": "speech",
             "id": "660e8400-e29b-41d4-a716-446655440001",
             "timestamp": "2026-02-06T10:30:05Z",
