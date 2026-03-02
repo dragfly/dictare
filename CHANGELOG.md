@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.95] - 2026-03-02
+
+### Fixed
+- **Tray "Start/Stop Service" out of sync** — the Advanced menu now reflects the real
+  launchd/systemd state when the service is started or stopped externally (via CLI or
+  system restart). Previously the menu stayed stale until the tray was restarted.
+
 ## [0.1.94] - 2026-03-02
 
 ### Changed
