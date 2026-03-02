@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.92] - 2026-03-02
+
+### Added
+- **Granular timing logs in AudioManager** — `initialize()` now logs elapsed time for
+  AudioCapture, DeviceMonitor, and VAD model load at DEBUG level, making it easy to
+  diagnose slow startup without guessing.
+
 ## [0.1.91] - 2026-03-02
 
 ### Fixed

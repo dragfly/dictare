@@ -120,6 +120,8 @@ class AudioManager:
             on_vad_loading: Callback when VAD model starts loading
             headless: If True, skip all console output (for Engine/daemon mode)
         """
+        import time as _time
+
         self._on_speech_start = on_speech_start
         self._on_speech_end = on_speech_end
         self._on_max_speech = on_max_speech
@@ -128,18 +130,22 @@ class AudioManager:
 
         # Create audio capture — prefer top-level input_device over advanced.device
         device = self._config.input_device or self._config.advanced.device
+        _t0 = _time.monotonic()
         self._audio = AudioCapture(
             sample_rate=self._config.advanced.sample_rate,
             channels=self._config.advanced.channels,
             device=device,
         )
+        logger.info("AudioCapture init: %.1fs", _time.monotonic() - _t0)
 
         # Create device monitor (detects OS-level device changes before PortAudio crashes)
         from dictare.audio.device_monitor import create_device_monitor
 
+        _t0 = _time.monotonic()
         self._device_monitor = create_device_monitor(
             on_device_change=self._on_device_change,
         )
+        logger.info("DeviceMonitor init: %.1fs", _time.monotonic() - _t0)
 
         # Notify VAD loading start
         if self._on_vad_loading:
@@ -154,7 +160,9 @@ class AudioManager:
             min_speech_ms=self._config.advanced.min_speech_ms,
         )
         # Pre-load the model now (headless mode skips progress indicator)
+        _t0 = _time.monotonic()
         self._vad._load_model(with_indicator=not headless, headless=headless)
+        logger.info("VAD model load (onnxruntime): %.1fs", _time.monotonic() - _t0)
 
         # Create streaming VAD processor
         self._streaming_vad = StreamingVAD(
