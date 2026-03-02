@@ -207,7 +207,7 @@ def register(app: typer.Typer) -> None:
         try:
             config = load_config()
             client = Client(
-                f"http://{config.server.host}:{config.server.port}",
+                f"http://{config.server.host}:{config.server.port}/openvip",
                 timeout=2,
             )
             status_data = client.get_status()

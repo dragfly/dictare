@@ -219,8 +219,8 @@ class ClientConfig(BaseModel):
     """Agent client configuration for connecting to a remote engine."""
 
     url: str = Field(
-        default="http://127.0.0.1:8770",
-        description="Default engine URL for 'dictare agent' command",
+        default="http://127.0.0.1:8770/openvip",
+        description="Default engine OpenVIP URL for 'dictare agent' command",
     )
     status_bar: bool = Field(
         default=True,
@@ -789,7 +789,7 @@ def create_default_config() -> Path:
 # port = 8770
 
 [client]
-# url = "http://127.0.0.1:8770"
+# url = "http://127.0.0.1:8770/openvip"
 # status_bar = true
 # clear_on_start = true
 # claim_key = "ctrl+\\\\"           # Hotkey to claim this agent (ctrl+\\, ctrl+], etc.)
