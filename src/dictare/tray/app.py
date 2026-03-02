@@ -621,9 +621,20 @@ class TrayApp:
                         self._update_menu()
                         self._update_icon()
 
+                    # Sync service loaded state (may change externally via CLI)
+                    loaded = self._check_service_loaded()
+                    if loaded != self._service_loaded:
+                        self._service_loaded = loaded
+                        self._update_menu()
+
                 except Exception as _exc:
                     logger.debug("poll: engine unreachable: %s", _exc)
                     self.set_state("disconnected")
+                    # Engine down — re-check service state
+                    loaded = self._check_service_loaded()
+                    if loaded != self._service_loaded:
+                        self._service_loaded = loaded
+                        self._update_menu()
 
                 _time.sleep(1)
 
