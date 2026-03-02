@@ -167,8 +167,9 @@ export type EngineInfo = {
 };
 
 export type StatusResponse = {
-	protocol_version: string;
-	state: string;
+	openvip: string;
+	stt: { enabled: boolean; active: boolean };
+	tts: { enabled: boolean };
 	connected_agents: string[];
 	platform: {
 		name: string;
