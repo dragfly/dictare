@@ -65,7 +65,7 @@ class MockConfig:
         self.output = MagicMock()
         self.output.mode = "agents"
         self.output.typing_delay_ms = 0
-        self.output.auto_enter = True
+        self.output.auto_submit = True
 
         # Hotkey config
         self.hotkey = MagicMock()
@@ -809,7 +809,7 @@ class TestKeyboardAgentSubmit:
         from dictare.agent.keyboard import KeyboardAgent
 
         config = MockConfig()
-        config.output.auto_enter = False
+        config.output.auto_submit = False
         config.output.typing_delay_ms = 0
         config.output.submit_keys = "enter"
         config.output.newline_keys = "shift+enter"
@@ -825,7 +825,7 @@ class TestKeyboardAgentSubmit:
         agent._injector.type_text.assert_called_once_with(
             "hello",
             delay_ms=0,
-            auto_enter=True,
+            auto_submit=True,
             submit_keys="enter",
             newline_keys="shift+enter",
         )
@@ -838,7 +838,7 @@ class TestKeyboardAgentSubmit:
         agent._injector.type_text.assert_called_once_with(
             "hello",
             delay_ms=0,
-            auto_enter=False,  # config.auto_enter is False, submit is False
+            auto_submit=False,  # config.auto_submit is False, submit is False
             submit_keys="enter",
             newline_keys="shift+enter",
         )

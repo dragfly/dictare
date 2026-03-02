@@ -182,17 +182,17 @@ class OutputConfig(BaseModel):
         default=2,
         description="Keyboard mode only: delay between characters in milliseconds",
     )
-    auto_enter: bool = Field(
+    auto_submit: bool = Field(
         default=False,
         description="Keyboard mode only: press Enter to submit after typing",
     )
     submit_keys: str = Field(
         default="enter",
-        description="Keyboard mode only: key combination to submit (when auto_enter=true)",
+        description="Keyboard mode only: key combination to submit (when auto_submit=true)",
     )
     newline_keys: str = Field(
         default_factory=_default_newline_keys,
-        description="Keyboard mode only: key for visual newline (when auto_enter=false). Default: alt+enter (Linux), shift+enter (macOS)",
+        description="Keyboard mode only: key for visual newline (when auto_submit=false). Default: alt+enter (Linux), shift+enter (macOS)",
     )
 
 class KeyboardConfig(BaseModel):
@@ -777,7 +777,7 @@ def create_default_config() -> Path:
 [output]
 # mode = "agents"                 # agents (default, OpenVIP SSE) or keyboard (type into focused window)
 # typing_delay_ms = 2             # keyboard mode only: delay between characters (ms)
-# auto_enter = false              # keyboard mode only: press Enter after typing
+# auto_submit = false              # keyboard mode only: press Enter after typing
 # submit_keys = "enter"           # keyboard mode only
 # newline_keys = "{newline_keys}" # keyboard mode only
 

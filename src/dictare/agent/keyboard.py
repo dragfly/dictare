@@ -46,7 +46,7 @@ class KeyboardAgent(BaseAgent):
         """Initialize keyboard agent.
 
         Args:
-            config: Application configuration for auto_enter, typing_delay, etc.
+            config: Application configuration for auto_submit, typing_delay, etc.
         """
         super().__init__(self.KEYBOARD_ID)
         self.config = config
@@ -163,7 +163,7 @@ class KeyboardAgent(BaseAgent):
 
         # Get config values
         delay_ms = self.config.output.typing_delay_ms
-        auto_enter = self.config.output.auto_enter if not submit else True
+        auto_submit = self.config.output.auto_submit if not submit else True
         submit_keys = self.config.output.submit_keys
         newline_keys = self.config.output.newline_keys
 
@@ -184,7 +184,7 @@ class KeyboardAgent(BaseAgent):
             return bool(self._injector.type_text(
                 text,
                 delay_ms=delay_ms,
-                auto_enter=auto_enter,
+                auto_submit=auto_submit,
                 submit_keys=submit_keys,
                 newline_keys=newline_keys,
             ))

@@ -47,7 +47,7 @@ class TestConfigDefaults:
         config = OutputConfig()
         assert config.mode == "agents"
         assert config.typing_delay_ms == 2
-        assert config.auto_enter is False
+        assert config.auto_submit is False
 
     def test_full_config_defaults(self) -> None:
         """Test Config has all sub-configs with defaults."""
