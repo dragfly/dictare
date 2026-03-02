@@ -1,16 +1,7 @@
 export type PresetOption = string | { value: string; label: string };
 
 /** Fields hidden from the UI form (still configurable via config file) */
-export const HIDDEN_FORM_FIELDS = new Set([
-  "hotkey.device",
-  "stt.model",
-  "tts.engine",
-  // Keyboard-mode-only output fields — shown in Keyboard tab instead
-  "output.typing_delay_ms",
-  "output.auto_enter",
-  "output.submit_keys",
-  "output.newline_keys",
-]);
+export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device", "output.auto_submit", "output.newline_keys", "output.submit_keys", "output.typing_delay_ms", "stt.model", "tts.engine"]);
 
 /** Fields whose text input should be right-aligned */
 export const RIGHT_ALIGN_FIELDS = new Set(["server.host"]);
@@ -37,6 +28,7 @@ export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "aud
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
   "stt.language": [{ value: "auto", label: "Auto-detect" }, { value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }, { value: "ko", label: "Korean" }, { value: "ru", label: "Russian" }],
+  "stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo", "parakeet-v3"],
   "tts.language": [{ value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }],
 };
 
@@ -60,7 +52,7 @@ export const SIZE_HINTS: Record<string, string> = {
 };
 
 /** Fields with enum/Literal types (fixed options from schema) */
-export const ENUM_FIELDS = new Set(["output.mode"]);
+export const ENUM_FIELDS = new Set(["output.mode", "tts.engine"]);
 
 /** UI-friendly description overrides (replaces Pydantic description in the UI) */
 export const FIELD_DESCRIPTIONS: Record<string, string> = {
@@ -68,13 +60,13 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = {
 
 /** Override the auto-generated label for specific dotted keys */
 export const LABEL_OVERRIDES: Record<string, string> = {
-  "hotkey.key": "Hotkey",
   "audio.input_device": "Input Device",
   "audio.output_device": "Output Device",
+  "hotkey.key": "Hotkey",
 };
 
 /** TOML fields rendered without accordion (always visible, no toggle header) */
-export const TOML_NO_ACCORDION = new Set(["agent_types", "stt.advanced", "audio.sounds", "audio.advanced"]);
+export const TOML_NO_ACCORDION = new Set(["agent_types", "audio.advanced", "audio.sounds", "stt.advanced"]);
 
 /** Custom field ordering: fields listed here appear first, in this order */
 export const FIELD_ORDER: Record<string, string[]> = {
@@ -84,6 +76,9 @@ export const FIELD_ORDER: Record<string, string[]> = {
 /** Extra fields to show alongside a section (cross-section visibility) */
 export const SECTION_EXTRA_FIELDS: Record<string, string[]> = {
   "agent_types": ["client.claim_key"],
-  // Keyboard-mode output settings live here (hidden from Output tab)
-  "hotkey": ["output.typing_delay_ms", "output.auto_enter", "output.submit_keys", "output.newline_keys"],
+  "hotkey": ["output.typing_delay_ms", "output.auto_submit", "output.submit_keys", "output.newline_keys"],
 };
+
+/** Fields whose values and defaults are provided by the backend at runtime */
+export const BACKEND_DRIVEN_FIELDS = new Set(["audio.input_device", "audio.output_device"]);
+

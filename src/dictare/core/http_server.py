@@ -543,6 +543,50 @@ class OpenVIPServer:
                 "version": __version__,
             }
 
+        @app.get("/api/settings/presets")
+        async def settings_presets():
+            """Return default values and backend-defined option lists for settings fields.
+
+            Response shape: {key: {default, values?}}
+            - default: the value the backend uses when the field is not set
+            - values: only present for backend-driven fields (e.g. audio devices);
+                      list of {value, label} options available at runtime
+
+            Used by the UI to show "Default (x)" labels and populate backend-driven dropdowns.
+            """
+            from dictare.audio.capture import AudioCapture
+            from dictare.config import list_config_keys
+
+            result: dict[str, dict] = {
+                key: {"default": default}
+                for key, _type_name, default, _desc, _env_var in list_config_keys()
+            }
+
+            # Enrich audio device fields with runtime-available options
+            try:
+                input_devices = AudioCapture.list_devices()
+                output_devices = AudioCapture.list_output_devices()
+                default_input = AudioCapture.get_default_device()
+                default_output = AudioCapture.get_default_output_device()
+
+                if "audio.input_device" in result:
+                    result["audio.input_device"]["values"] = [
+                        {"value": d["name"], "label": d["name"]} for d in input_devices
+                    ]
+                    if default_input:
+                        result["audio.input_device"]["default"] = default_input.get("name", "")
+
+                if "audio.output_device" in result:
+                    result["audio.output_device"]["values"] = [
+                        {"value": d["name"], "label": d["name"]} for d in output_devices
+                    ]
+                    if default_output:
+                        result["audio.output_device"]["default"] = default_output.get("name", "")
+            except Exception:
+                pass
+
+            return result
+
         @app.post("/api/settings")
         async def update_setting(request: Request):
             """Update a single config value."""
