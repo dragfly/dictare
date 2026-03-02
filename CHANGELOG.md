@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.87] - 2026-03-02
+
+### Changed
+- **`x_input` schema**: replaced `submit`/`newline` boolean fields with `ops` array
+  (e.g. `{"ops": ["submit"]}`, `{"ops": ["newline"]}`, `{"ops": ["newline", "submit"]}`).
+  Allows multiple input operations in a single message.
+- **openvip SDK**: bumped to `>=1.0.0rc10` (PyPI). Local `[tool.uv.sources]` override removed —
+  SDK is now resolved exclusively from PyPI.
+- **`full-install.sh` simplified**: no longer regenerates the SDK from local spec or
+  manages `[tool.uv.sources]`. Now just builds the UI and runs `install.sh`.
+
+### Fixed
+- `api.ts`: corrected `StatusResponse` TypeScript type to match actual engine response shape
+  (`openvip`, `stt`, `tts` at root; `state` inside `platform`).
+- `api.ts`: `setCurrentAgent`, `setOutputMode`, `restartEngine` were posting to `/control`
+  instead of `/openvip/control` — now use the `OPENVIP` constant.
+
+## [0.1.86] - 2026-03-02
+
+### Fixed
+- All `Client()` instantiations in CLI commands (`status`, `service`, `speak`) now include
+  the `/openvip` base path — resolves 404 errors on SSE and speech endpoints.
+- `ClientConfig.url` default updated to `http://127.0.0.1:8770/openvip`.
+- `full-install.sh`: corrected `../openvip-dev` path after repo reorganization.
+- `full-install.sh`: added missing UI build step (`pnpm install + pnpm run build`).
+
 ## [0.1.85] - 2026-03-02
 
 ### Changed
