@@ -38,7 +38,7 @@ Options:
   --skip-setup   Skip the first-time setup wizard
   --help         Show this help
 
-macOS:  installs via Homebrew (brew tap dragfly/dictare && brew install dictare)
+macOS:  installs via Homebrew (brew install dragfly/tap/dictare)
 Linux:  installs via uv tool install + systemd service
 EOF
             exit 0
