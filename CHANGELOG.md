@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.91] - 2026-03-02
+
+### Fixed
+- **Tray `launchctl unload` noise** — `install_tray()` now checks if the tray agent is
+  actually loaded before attempting unload, preventing the spurious "Unload failed: 5:
+  Input/output error" message during fresh installs or after the install script already
+  unloaded the agents.
+
 ## [0.1.90] - 2026-03-02
 
 ### Fixed

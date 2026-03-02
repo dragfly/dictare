@@ -316,8 +316,15 @@ def install_tray() -> None:
 
     plist_path = get_tray_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    # Unload first (no-op if not loaded) so we can safely reload after recreating.
-    subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
+    # Unload first so we can safely reload after recreating.
+    # Only attempt unload if the agent is actually loaded — avoids noisy
+    # "Unload failed: 5: Input/output error" when already unloaded.
+    result = subprocess.run(
+        ["launchctl", "list", TRAY_LABEL],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
     plist_path.write_text(plistlib.dumps(plist).decode())
     subprocess.run(["launchctl", "load", str(plist_path)], check=True)
 
