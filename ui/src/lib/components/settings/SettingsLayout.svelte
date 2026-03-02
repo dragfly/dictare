@@ -10,6 +10,7 @@
 	import type { TabDef, NavChild } from "$lib/types";
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import { getFixedBottomPx } from "$lib/stores/settings.svelte";
+	import * as presetsStore from "$lib/stores/presets.svelte";
 	import {
 		restartEngine,
 		pingEngine,
@@ -40,6 +41,7 @@
 
 	onMount(() => {
 		settingsStore.load();
+		presetsStore.load();
 	});
 
 	const schema = $derived(settingsStore.getSchema());

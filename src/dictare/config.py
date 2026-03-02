@@ -653,6 +653,53 @@ def set_config_value(key: str, value: str, config_path: Path | None = None) -> N
     config_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
 
 
+def delete_config_value(key: str, config_path: Path | None = None) -> None:
+    """Remove a config key from the TOML file, reverting to the Pydantic default.
+
+    Args:
+        key: Dot-notation key like 'stt.model' or 'verbose'
+        config_path: Path to config file (uses default if None)
+
+    Raises:
+        KeyError: If key is not a valid schema key
+    """
+    import tomlkit
+
+    if config_path is None:
+        config_path = get_config_path()
+
+    # Validate the key exists in the schema
+    config = load_config(config_path)
+    config_dict = config.model_dump()
+
+    parts = key.split(".")
+    if len(parts) == 1:
+        if parts[0] not in config_dict:
+            raise KeyError(f"Unknown config key: {key}")
+    elif len(parts) == 2:
+        section, field = parts
+        if section not in config_dict or not isinstance(config_dict[section], dict):
+            raise KeyError(f"Unknown config section: {section}")
+        if field not in config_dict[section]:
+            raise KeyError(f"Unknown config key: {key}")
+    else:
+        raise KeyError(f"Invalid config key format: {key}")
+
+    if not config_path.exists():
+        return  # Nothing to delete
+
+    doc = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+    if len(parts) == 1:
+        if parts[0] in doc:
+            del doc[parts[0]]
+    else:
+        section, field = parts
+        if section in doc and field in doc[section]:  # type: ignore[operator]
+            del doc[section][field]  # type: ignore[index]
+
+    config_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
+
+
 def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
     """List all config keys with their descriptions and defaults.
 
