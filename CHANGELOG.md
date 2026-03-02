@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.96] - 2026-03-02
+
+### Fixed
+- **Tray "Start/Stop Service" based on engine state** — simplified: "Stop Service" shown
+  when engine is reachable via HTTP, "Start Service" when disconnected. Removed launchd
+  state checking — the engine is running or it isn't, regardless of how it was started.
+  Start/stop actions use `dictare service start/stop` CLI commands.
+- **Install script: tray survives reinstall** — fixed pkill pattern that failed to match
+  the actual tray process command, causing stale tray with missing icon files.
+
 ## [0.1.95] - 2026-03-02
 
 ### Fixed

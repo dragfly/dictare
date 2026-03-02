@@ -168,9 +168,6 @@ class TrayApp:
         self._microphone_granted = True
         self._input_monitoring_granted = True
 
-        # Service state (from daemon backend)
-        self._service_loaded: bool = self._check_service_loaded()
-
         # Status polling
         self._polling = False
         self._poll_thread: threading.Thread | None = None
@@ -277,7 +274,7 @@ class TrayApp:
             pystray.MenuItem("Restart Engine", self._on_restart_engine),
             pystray.Menu.SEPARATOR,
         ]
-        if self._service_loaded:
+        if self._state != "disconnected":
             advanced_items.append(
                 pystray.MenuItem("Stop Service", self._on_stop_service),
             )
@@ -362,18 +359,15 @@ class TrayApp:
 
         threading.Thread(target=do_restart, daemon=True).start()
 
-    def _check_service_loaded(self) -> bool:
-        """Check if the service is currently loaded (launchd/systemd)."""
-        try:
-            if sys.platform == "darwin":
-                from dictare.daemon import launchd as backend
-            elif sys.platform == "linux":
-                from dictare.daemon import systemd as backend
-            else:
-                return False
-            return backend.is_loaded()
-        except Exception:
-            return False
+    def _get_service_backend(self):
+        """Return the platform service backend (launchd/systemd)."""
+        if sys.platform == "darwin":
+            from dictare.daemon import launchd
+            return launchd
+        elif sys.platform == "linux":
+            from dictare.daemon import systemd
+            return systemd
+        return None
 
     def _on_stop_service(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Stop the dictare service."""
@@ -381,20 +375,29 @@ class TrayApp:
 
         def do_stop() -> None:
             try:
-                if sys.platform == "darwin":
-                    from dictare.daemon import launchd as backend
-                elif sys.platform == "linux":
-                    from dictare.daemon import systemd as backend
+                backend = self._get_service_backend()
+                if backend and backend.is_loaded():
+                    backend.stop()
                 else:
-                    return
-                backend.stop()
+                    # Engine not managed by launchd (e.g. launched via Spotlight)
+                    self._shutdown_engine_http()
             except Exception as e:
                 logger.error("Stop service failed: %s", e)
-            finally:
-                self._service_loaded = self._check_service_loaded()
-                self._update_menu()
 
         threading.Thread(target=do_stop, daemon=True).start()
+
+    def _shutdown_engine_http(self) -> None:
+        """Send engine.shutdown via HTTP."""
+        from dictare.config import load_config
+
+        from openvip import Client
+
+        config = load_config()
+        url = f"http://{config.server.host}:{config.server.port}/openvip"
+        try:
+            Client(url, timeout=2.0).control("engine.shutdown")
+        except Exception:
+            pass
 
     def _on_start_service(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Start the dictare service."""
@@ -402,18 +405,11 @@ class TrayApp:
 
         def do_start() -> None:
             try:
-                if sys.platform == "darwin":
-                    from dictare.daemon import launchd as backend
-                elif sys.platform == "linux":
-                    from dictare.daemon import systemd as backend
-                else:
-                    return
-                backend.start()
+                backend = self._get_service_backend()
+                if backend:
+                    backend.start()
             except Exception as e:
                 logger.error("Start service failed: %s", e)
-            finally:
-                self._service_loaded = self._check_service_loaded()
-                self._update_menu()
 
         threading.Thread(target=do_start, daemon=True).start()
 
@@ -621,20 +617,9 @@ class TrayApp:
                         self._update_menu()
                         self._update_icon()
 
-                    # Sync service loaded state (may change externally via CLI)
-                    loaded = self._check_service_loaded()
-                    if loaded != self._service_loaded:
-                        self._service_loaded = loaded
-                        self._update_menu()
-
                 except Exception as _exc:
                     logger.debug("poll: engine unreachable: %s", _exc)
                     self.set_state("disconnected")
-                    # Engine down — re-check service state
-                    loaded = self._check_service_loaded()
-                    if loaded != self._service_loaded:
-                        self._service_loaded = loaded
-                        self._update_menu()
 
                 _time.sleep(1)
 
