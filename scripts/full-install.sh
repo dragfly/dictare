@@ -2,23 +2,23 @@
 # Full dev install: regenerate SDK from local protocol spec, then install dictare.
 #
 # Use this when you've changed:
-#   - the OpenVIP protocol spec  (../../protocol/bindings/http/openapi.yaml)
-#   - the SDK handwritten layer  (../../sdks/python/openvip/client.py etc.)
+#   - the OpenVIP protocol spec  (../openvip-dev/protocol/bindings/http/openapi.yaml)
+#   - the SDK handwritten layer  (../openvip-dev/sdks/python/openvip/client.py etc.)
 #
 # Use ./scripts/install.sh instead when you've only changed dictare itself.
 #
 # Assumes the standard repo layout:
-#   ~/repos/openvip-dev/
+#   ~/repos/oss/openvip-dev/
 #     protocol/   ← OpenVIP spec
 #     sdks/       ← SDK (generate.sh lives here)
-#     dictare/    ← this repo
+#   ~/repos/oss/dictare/    ← this repo
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-SDKS_DIR="${PROJECT_DIR}/../../openvip-dev/sdks"
-PROTOCOL_SPEC="${PROJECT_DIR}/../../openvip-dev/protocol/bindings/http/openapi.yaml"
+SDKS_DIR="${PROJECT_DIR}/../openvip-dev/sdks"
+PROTOCOL_SPEC="${PROJECT_DIR}/../openvip-dev/protocol/bindings/http/openapi.yaml"
 PYPROJECT="${PROJECT_DIR}/pyproject.toml"
 
 # ---------- 1. Validate paths ----------
@@ -58,11 +58,17 @@ uv build --sdist --quiet
 export OPENVIP_SDK_DIST="${SDK_PATH_REAL}/dist"
 echo "==> SDK dist: ${OPENVIP_SDK_DIST}"
 
-# ---------- 5. Update lock file ----------
+# ---------- 5. Build UI ----------
+echo "==> Building UI..."
+cd "${PROJECT_DIR}/ui"
+pnpm install --frozen-lockfile --silent
+pnpm run build
+
+# ---------- 6. Update lock file ----------
 echo "==> Updating uv.lock..."
 cd "$PROJECT_DIR"
 uv lock --python 3.11
 
-# ---------- 6. Install ----------
+# ---------- 7. Install ----------
 echo "==> Installing dictare..."
 exec "${SCRIPT_DIR}/install.sh"
