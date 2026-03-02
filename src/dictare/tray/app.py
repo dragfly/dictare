@@ -606,7 +606,7 @@ class TrayApp:
                 "idle": "off",
             }
 
-            client = Client(f"http://{host}:{port}", timeout=2.0)
+            client = Client(f"http://{host}:{port}/openvip", timeout=2.0)
 
             while self._polling:
                 try:
@@ -714,7 +714,7 @@ def main() -> None:
         config.output.mode, host, port,
     )
 
-    client = Client(f"http://{host}:{port}", timeout=5.0)
+    client = Client(f"http://{host}:{port}/openvip", timeout=5.0)
 
     app = TrayApp()
 

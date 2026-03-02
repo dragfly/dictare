@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
-from dictare import __version__
+from dictare import OPENVIP_BASE_PATH, __version__
 from dictare.core.openvip_validator import OpenVIPValidationError, validate_message
 
 if TYPE_CHECKING:
@@ -44,13 +44,43 @@ class OpenVIPServer:
     Runs in a background thread with its own asyncio event loop.
     Thread-safe message delivery via asyncio.Queue per agent.
 
-    Endpoints:
-        GET  /agents/{agent_id}/messages  - SSE stream (connection = registration)
-        POST /agents/{agent_id}/messages  - Send message to agent
-        POST /speech                      - Speech (TTS) request
-        GET  /status                      - Engine status
-        GET  /status/stream               - SSE stream for status changes
-        POST /control                     - Control commands
+    Endpoints (OpenVIP protocol — mounted at /openvip):
+        GET  /openvip/agents/{agent_id}/messages  - SSE stream (connection = registration)
+        POST /openvip/agents/{agent_id}/messages  - Send message to agent
+        POST /openvip/speech                      - Speech (TTS) request
+        GET  /openvip/status                      - Engine status
+        GET  /openvip/status/stream               - SSE stream for status changes
+        POST /openvip/control                     - Control commands
+        GET  /openvip/openapi.json                - OpenVIP protocol spec
+
+    Endpoints (dictare management — mounted at /api):
+        GET  /api/speech/voices           - Available TTS voices
+        GET  /api/audio/devices           - Audio input/output devices
+        GET  /api/settings/schema         - Config schema + current values
+        POST /api/settings                - Update a config value
+        GET  /api/settings/shortcuts      - Keyboard shortcuts
+        POST /api/settings/shortcuts      - Save keyboard shortcuts
+        GET  /api/settings/toml-section/* - Read TOML config section
+        POST /api/settings/toml-section/* - Save TOML config section
+        GET  /api/models                  - STT/TTS model list
+        POST /api/models/{id}/pull        - Start model download
+        GET  /api/models/pull-progress    - SSE download progress
+        GET  /api/capabilities            - Unified capability list
+        POST /api/capabilities/{id}/install   - Install capability
+        DELETE /api/capabilities/{id}/install - Uninstall capability
+        POST /api/capabilities/{id}/select    - Select active capability
+        GET  /api/system                  - System info
+        POST /api/system                  - Update system settings
+        GET  /api/hotkey/status           - Hotkey capture status
+        POST /api/hotkey/fix              - Open Input Monitoring settings
+        GET  /api/permissions/doctor      - Permission health check
+        POST /api/permissions/doctor/open - Open permission settings pane
+        POST /api/permissions/doctor/probe - Run runtime hotkey probe
+
+    Root endpoints:
+        GET  /health                      - Liveness probe
+        GET  /ui                          - Web UI (SPA)
+        POST /internal/tts/complete       - TTS worker completion callback
     """
 
     def __init__(
@@ -124,7 +154,7 @@ class OpenVIPServer:
             """Liveness probe — returns 200 when engine is up."""
             return {"status": "ok"}
 
-        @app.get("/agents/{agent_id}/messages")
+        @app.get("/openvip/agents/{agent_id}/messages")
         async def sse_agent_messages(agent_id: str, request: Request):
             """SSE endpoint - connection IS the agent registration."""
             from dictare.core.engine import DictareEngine
@@ -186,7 +216,7 @@ class OpenVIPServer:
 
             return EventSourceResponse(event_generator())
 
-        @app.post("/agents/{agent_id}/messages")
+        @app.post("/openvip/agents/{agent_id}/messages")
         async def post_agent_message(agent_id: str, request: Request):
             """Send a message to a connected agent."""
             with self._agent_queues_lock:
@@ -210,7 +240,7 @@ class OpenVIPServer:
             queue.put_nowait(body)
             return {"status": "ok"}
 
-        @app.post("/speech")
+        @app.post("/openvip/speech")
         async def speech_request(request: Request):
             """Handle speech (TTS) request."""
             try:
@@ -238,13 +268,13 @@ class OpenVIPServer:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @app.post("/speech/stop")
+        @app.post("/openvip/speech/stop")
         async def speech_stop():
             """Interrupt the currently playing TTS audio."""
             stopped = await asyncio.to_thread(self._engine.stop_speaking)
             return {"status": "ok", "stopped": stopped}
 
-        @app.get("/speech/voices")
+        @app.get("/api/speech/voices")
         async def speech_voices():
             """List available voices for the current TTS engine."""
             voices = await asyncio.to_thread(self._engine.list_voices)
@@ -265,12 +295,12 @@ class OpenVIPServer:
             self._engine.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
             return {"status": "ok"}
 
-        @app.get("/status")
+        @app.get("/openvip/status")
         async def get_status():
             """Get engine status."""
             return self._engine.get_status()
 
-        @app.get("/status/stream")
+        @app.get("/openvip/status/stream")
         async def sse_status_stream(request: Request):
             """SSE stream for status changes.
 
@@ -310,7 +340,7 @@ class OpenVIPServer:
 
             return EventSourceResponse(event_generator())
 
-        @app.post("/control")
+        @app.post("/openvip/control")
         async def control_command(request: Request):
             """Handle control commands.
 
@@ -338,7 +368,16 @@ class OpenVIPServer:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @app.get("/system")
+        @app.get("/openvip/openapi.json")
+        async def openvip_spec():
+            """Serve the OpenVIP protocol spec for API discovery."""
+            from starlette.responses import FileResponse
+            spec = _Path(__file__).parent.parent / "resources" / "openvip-openapi.json"
+            if spec.exists():
+                return FileResponse(str(spec), media_type="application/json")
+            raise HTTPException(status_code=404, detail="OpenVIP spec not available")
+
+        @app.get("/api/system")
         async def get_system_info():
             """Return system-level info (platform, launch at login state)."""
             import sys as _sys
@@ -350,7 +389,7 @@ class OpenVIPServer:
                 info["launch_at_login"] = None
             return info
 
-        @app.post("/system")
+        @app.post("/api/system")
         async def update_system(request: Request):
             """Update system-level settings (e.g. launch at login)."""
             import sys as _sys
@@ -365,7 +404,7 @@ class OpenVIPServer:
                 )
             return {"ok": True}
 
-        @app.get("/hotkey/status")
+        @app.get("/api/hotkey/status")
         async def get_hotkey_status():
             """Return CGEventTap status (macOS only)."""
             import sys as _sys
@@ -384,7 +423,7 @@ class OpenVIPServer:
             status = status_file.read_text().strip() if status_file.exists() else "unknown"
             return {"status": status}
 
-        @app.post("/hotkey/fix")
+        @app.post("/api/hotkey/fix")
         async def fix_hotkey():
             """Open System Settings → Input Monitoring (macOS only)."""
             import subprocess
@@ -396,7 +435,7 @@ class OpenVIPServer:
                 ])
             return {"ok": True}
 
-        @app.get("/permissions/doctor")
+        @app.get("/api/permissions/doctor")
         async def permission_doctor_status():
             """Return consolidated permission + runtime capture status."""
             import sys as _sys
@@ -409,7 +448,7 @@ class OpenVIPServer:
             doctor = PermissionDoctor()
             return {"platform": _sys.platform, "status": "ok", **status_to_dict(doctor.get_status())}
 
-        @app.post("/permissions/doctor/open")
+        @app.post("/api/permissions/doctor/open")
         async def permission_doctor_open(request: Request):
             """Open the requested System Settings pane."""
             import sys as _sys
@@ -427,7 +466,7 @@ class OpenVIPServer:
             PermissionDoctor().open_settings(target)  # type: ignore[arg-type]
             return {"ok": True}
 
-        @app.post("/permissions/doctor/probe")
+        @app.post("/api/permissions/doctor/probe")
         async def permission_doctor_probe(request: Request):
             """Run runtime hotkey probe; user must press the hotkey during timeout."""
             import sys as _sys
@@ -445,7 +484,7 @@ class OpenVIPServer:
                 timeout_s=timeout,
             )
 
-        @app.get("/audio/devices")
+        @app.get("/api/audio/devices")
         async def list_audio_devices():
             """List available audio input and output devices."""
             from dictare.audio.capture import AudioCapture
@@ -482,7 +521,7 @@ class OpenVIPServer:
             name="ui",
         )
 
-        @app.get("/settings/schema")
+        @app.get("/api/settings/schema")
         async def settings_schema():
             """Return JSON Schema, current values, and field metadata."""
             from dictare import __version__
@@ -505,7 +544,7 @@ class OpenVIPServer:
                 "version": __version__,
             }
 
-        @app.post("/settings")
+        @app.post("/api/settings")
         async def update_setting(request: Request):
             """Update a single config value."""
             from pydantic import ValidationError
@@ -532,7 +571,7 @@ class OpenVIPServer:
             except (ValueError, ValidationError) as e:
                 raise HTTPException(status_code=422, detail=str(e))
 
-        @app.get("/settings/shortcuts")
+        @app.get("/api/settings/shortcuts")
         async def get_shortcuts():
             """Return keyboard shortcuts as a JSON list."""
             from dictare.config import load_config
@@ -545,7 +584,7 @@ class OpenVIPServer:
             ]
             return {"shortcuts": shortcuts}
 
-        @app.post("/settings/shortcuts")
+        @app.post("/api/settings/shortcuts")
         async def save_shortcuts(request: Request):
             """Save keyboard shortcuts from a JSON list."""
             from pydantic import ValidationError
@@ -568,7 +607,7 @@ class OpenVIPServer:
                 raise HTTPException(status_code=422, detail=str(e))
             return {"status": "ok"}
 
-        @app.get("/settings/toml-section/{section}")
+        @app.get("/api/settings/toml-section/{section}")
         async def get_toml_section(section: str):
             """Return the current TOML fragment for a complex config section."""
             from dictare.config import load_config
@@ -581,7 +620,7 @@ class OpenVIPServer:
                 raise HTTPException(status_code=404, detail=f"Unknown section: {section}")
             return {"section": section, "content": content}
 
-        @app.post("/settings/toml-section/{section}")
+        @app.post("/api/settings/toml-section/{section}")
         async def update_toml_section(section: str, request: Request):
             """Validate and save a TOML section submitted from the UI editor."""
             from pydantic import ValidationError
@@ -605,7 +644,7 @@ class OpenVIPServer:
 
         # ----- Models API -----
 
-        @app.get("/models")
+        @app.get("/api/models")
         async def models_list_api():
             """List all models with cache and configured status."""
             from dictare.cli.models import _get_configured_models, _get_model_registry
@@ -644,7 +683,7 @@ class OpenVIPServer:
 
             return {"models": result}
 
-        @app.post("/models/{model_id}/pull")
+        @app.post("/api/models/{model_id}/pull")
         async def models_pull_api(model_id: str):
             """Start async download of a model."""
             from dictare.cli.models import _get_model_registry
@@ -674,7 +713,7 @@ class OpenVIPServer:
             t.start()
             return {"status": "started"}
 
-        @app.get("/models/pull-progress")
+        @app.get("/api/models/pull-progress")
         async def models_pull_progress(request: Request):
             """SSE stream for model download progress."""
             pq: asyncio.Queue = asyncio.Queue()
@@ -706,7 +745,7 @@ class OpenVIPServer:
 
         # ----- TTS Venv Install/Uninstall API (legacy, kept for compat) -----
 
-        @app.post("/tts-engines/{engine}/install")
+        @app.post("/api/tts-engines/{engine}/install")
         async def tts_engine_install(engine: str):
             """Install an isolated TTS venv for an engine."""
             from dictare.tts.venv import VENV_ENGINES
@@ -731,7 +770,7 @@ class OpenVIPServer:
             t.start()
             return {"status": "started"}
 
-        @app.delete("/tts-engines/{engine}/install")
+        @app.delete("/api/tts-engines/{engine}/install")
         async def tts_engine_uninstall(engine: str):
             """Remove the isolated TTS venv for an engine."""
             from dictare.tts.venv import VENV_ENGINES, uninstall_venv
@@ -747,7 +786,7 @@ class OpenVIPServer:
 
         # ----- Capabilities API (unified models + engines) -----
 
-        @app.get("/capabilities")
+        @app.get("/api/capabilities")
         async def capabilities_list():
             """List all STT/TTS capabilities with install and config status."""
             import shutil
@@ -831,7 +870,7 @@ class OpenVIPServer:
 
             return {"capabilities": result}
 
-        @app.post("/capabilities/{cap_id}/install")
+        @app.post("/api/capabilities/{cap_id}/install")
         async def capability_install(cap_id: str):
             """Install a capability (venv + model download)."""
             from dictare.cli.models import _get_model_registry
@@ -869,7 +908,7 @@ class OpenVIPServer:
             t.start()
             return {"status": "started"}
 
-        @app.delete("/capabilities/{cap_id}/install")
+        @app.delete("/api/capabilities/{cap_id}/install")
         async def capability_uninstall(cap_id: str):
             """Uninstall a capability: removes venv and/or cached model files."""
             import shutil
@@ -902,7 +941,7 @@ class OpenVIPServer:
 
             return {"status": "ok"}
 
-        @app.post("/capabilities/{cap_id}/select")
+        @app.post("/api/capabilities/{cap_id}/select")
         async def capability_select(cap_id: str):
             """Select a capability as the active STT model or TTS engine.
 

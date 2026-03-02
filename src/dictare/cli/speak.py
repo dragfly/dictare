@@ -61,7 +61,7 @@ def _list_voices(engine_override: str | None, config_file: Path | None) -> None:
     engine_name = engine_override or config.tts.engine
 
     # Try the running engine API first
-    url = f"http://{config.server.host}:{config.server.port}/speech/voices"
+    url = f"http://{config.server.host}:{config.server.port}/api/speech/voices"
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=5) as resp:
@@ -85,7 +85,7 @@ def _send_stop(config: Any) -> None:
     from openvip import Client
 
     try:
-        Client(f"http://{config.server.host}:{config.server.port}", timeout=3).stop_speech()
+        Client(f"http://{config.server.host}:{config.server.port}/openvip", timeout=3).stop_speech()
     except Exception:
         pass  # Best-effort
 

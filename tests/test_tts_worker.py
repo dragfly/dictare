@@ -94,18 +94,18 @@ class TestReservedAgentBypass:
     def test_reserved_agent_rejected_without_token(
         self, client: TestClient,
     ) -> None:
-        """GET /agents/__tts__/messages without token → 403."""
+        """GET /openvip/agents/__tts__/messages without token → 403."""
         # 403 responses are returned immediately (no SSE stream)
-        response = client.get("/agents/__tts__/messages")
+        response = client.get("/openvip/agents/__tts__/messages")
         assert response.status_code == 403
         assert "Reserved" in response.json()["detail"]
 
     def test_reserved_agent_rejected_with_wrong_token(
         self, client: TestClient,
     ) -> None:
-        """GET /agents/__tts__/messages with wrong token → 403."""
+        """GET /openvip/agents/__tts__/messages with wrong token → 403."""
         response = client.get(
-            "/agents/__tts__/messages",
+            "/openvip/agents/__tts__/messages",
             headers={"Authorization": "Bearer wrong-token"},
         )
         assert response.status_code == 403
@@ -113,8 +113,8 @@ class TestReservedAgentBypass:
     def test_keyboard_agent_rejected_without_token(
         self, client: TestClient,
     ) -> None:
-        """GET /agents/__keyboard__/messages without token → 403."""
-        response = client.get("/agents/__keyboard__/messages")
+        """GET /openvip/agents/__keyboard__/messages without token → 403."""
+        response = client.get("/openvip/agents/__keyboard__/messages")
         assert response.status_code == 403
 
 

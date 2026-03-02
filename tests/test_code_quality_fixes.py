@@ -86,9 +86,9 @@ class TestJSONParseExceptionType:
     """Verify that invalid JSON returns 422 (tightened from except Exception)."""
 
     def test_invalid_json_speech_returns_422(self, client: TestClient) -> None:
-        """POST /speech with invalid JSON body → 422."""
+        """POST /openvip/speech with invalid JSON body → 422."""
         response = client.post(
-            "/speech",
+            "/openvip/speech",
             content=b"not json at all {{{",
             headers={"Content-Type": "application/json"},
         )
@@ -98,7 +98,7 @@ class TestJSONParseExceptionType:
     def test_invalid_json_agent_message_returns_422(
         self, client: TestClient, server: OpenVIPServer, token: str,
     ) -> None:
-        """POST /agents/{id}/messages with invalid JSON → 422."""
+        """POST /openvip/agents/{id}/messages with invalid JSON → 422."""
         import asyncio
 
         # Create agent queue so endpoint doesn't 404
@@ -107,7 +107,7 @@ class TestJSONParseExceptionType:
             server._agent_queues["test-agent"] = queue
 
         response = client.post(
-            "/agents/test-agent/messages",
+            "/openvip/agents/test-agent/messages",
             content=b"<<<not json>>>",
             headers={"Content-Type": "application/json"},
         )
