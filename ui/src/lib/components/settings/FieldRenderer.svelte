@@ -3,16 +3,16 @@
 	import BoolField from "./fields/BoolField.svelte";
 	import StringField from "./fields/StringField.svelte";
 	import NumberField from "./fields/NumberField.svelte";
-	import EnumField from "./fields/EnumField.svelte";
-	import PresetField from "./fields/PresetField.svelte";
+	import SelectField from "./fields/SelectField.svelte";
 	import ComplexField from "./fields/ComplexField.svelte";
 	import TomlField from "./fields/TomlField.svelte";
 	import ShortcutsField from "./fields/ShortcutsField.svelte";
 	import KeyCaptureField from "./fields/KeyCaptureField.svelte";
-	import DeviceField from "./fields/DeviceField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, TOML_NO_ACCORDION, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS, LABEL_OVERRIDES, DEVICE_FIELDS } from "$lib/registry/field-config";
+	import * as presetsStore from "$lib/stores/presets.svelte";
+	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, TOML_NO_ACCORDION, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS, LABEL_OVERRIDES, BACKEND_DRIVEN_FIELDS } from "$lib/registry/field-config";
+	import type { PresetOption } from "$lib/registry/field-config";
 
 	interface Props {
 		field: FieldMeta;
@@ -40,6 +40,16 @@
 			.join(" ");
 	}
 
+	/** Normalize a PresetOption to {value, label} */
+	function normalizeOption(opt: PresetOption): { value: string; label: string } {
+		return typeof opt === "string" ? { value: opt, label: opt } : opt;
+	}
+
+	/** Capitalize first letter of each word */
+	function capitalize(s: string): string {
+		return s.replace(/\b\w/g, (c) => c.toUpperCase());
+	}
+
 	const fieldSchema = $derived(resolveFieldSchema(field.key, schema));
 	const enumValues = $derived(getEnumValues(fieldSchema));
 	const complex = $derived(isComplex(field));
@@ -54,7 +64,7 @@
 		})()
 	);
 	const keyCaptureFormat = $derived(KEY_CAPTURE_FIELDS[field.key] as "evdev" | "shortcut" | undefined);
-	const deviceDirection = $derived(DEVICE_FIELDS[field.key] as "input" | "output" | undefined);
+	const isBackendDriven = $derived(BACKEND_DRIVEN_FIELDS.has(field.key));
 	const presets = $derived(FIELD_PRESETS[field.key]);
 	const currentValue = $derived(settingsStore.getValue(field.key));
 	const isDirty = $derived(field.key in settingsStore.getDirty());
@@ -62,6 +72,26 @@
 	const label = $derived(LABEL_OVERRIDES[field.key] ?? humanize(field.key));
 	const size = $derived((SIZE_HINTS[field.key] ?? "normal") as "narrow" | "medium" | "normal");
 	const align = $derived(RIGHT_ALIGN_FIELDS.has(field.key) ? "right" as const : "left" as const);
+
+	/** Resolved option list for SelectField — one normalized {value, label}[] array. */
+	const selectOptions = $derived(
+		isBackendDriven
+			? (presetsStore.getValues(field.key) ?? [])
+			: enumValues
+				? enumValues.map((v) => ({ value: v, label: capitalize(v) }))
+				: presets
+					? presets.map(normalizeOption)
+					: []
+	);
+
+	/** True if this field renders as a SelectField (backend/enum/preset). */
+	const isSelect = $derived(isBackendDriven || !!enumValues || !!presets);
+
+	/** "Custom…" option is only available for UI-hints-driven (preset) fields. */
+	const allowCustom = $derived(!isBackendDriven && !enumValues && !!presets);
+
+	/** Default value string for display in SelectField ("Default (x)"). */
+	const defaultDisplay = $derived(presetsStore.getDefault(field.key));
 
 	/** True when the saved config value differs from the schema default. */
 	const isNonDefault = $derived(
@@ -111,13 +141,7 @@
 
 	<!-- Right: control -->
 	<div class="flex items-center gap-2 shrink-0 mt-0.5">
-		{#if deviceDirection}
-			<DeviceField
-				direction={deviceDirection}
-				value={(currentValue as string) ?? ""}
-				onchange={(v) => settingsStore.markDirty(field.key, v)}
-			/>
-		{:else if keyCaptureFormat}
+		{#if keyCaptureFormat}
 			<KeyCaptureField
 				format={keyCaptureFormat}
 				value={(currentValue as string) ?? ""}
@@ -130,18 +154,12 @@
 				checked={currentValue as boolean}
 				onchange={(v) => settingsStore.markDirty(field.key, v)}
 			/>
-		{:else if enumValues}
-			<EnumField
-				options={enumValues}
-				value={currentValue as string}
-				defaultValue={field.default as string}
-				onchange={(v) => settingsStore.markDirty(field.key, v)}
-			/>
-		{:else if presets}
-			<PresetField
-				options={presets}
+		{:else if isSelect}
+			<SelectField
+				options={selectOptions}
 				value={(currentValue as string) ?? ""}
-				defaultValue={field.default as string}
+				{defaultDisplay}
+				{allowCustom}
 				onchange={(v) => settingsStore.markDirty(field.key, v)}
 			/>
 		{:else if field.type === "int" || field.type === "float"}
