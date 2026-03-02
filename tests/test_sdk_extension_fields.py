@@ -44,16 +44,16 @@ class TestExtensionFieldRoundTrip:
     """Extension fields must survive from_dict → to_dict."""
 
     def test_x_input_newline_survives(self) -> None:
-        data = _transcription_dict(x_input={"newline": True})
+        data = _transcription_dict(x_input={"ops": ["newline"]})
         t = Transcription.from_dict(data)
         result = t.to_dict()
-        assert result["x_input"] == {"newline": True}
+        assert result["x_input"] == {"ops": ["newline"]}
 
     def test_x_input_submit_survives(self) -> None:
-        data = _transcription_dict(x_input={"submit": True})
+        data = _transcription_dict(x_input={"ops": ["submit"]})
         t = Transcription.from_dict(data)
         result = t.to_dict()
-        assert result["x_input"] == {"submit": True}
+        assert result["x_input"] == {"ops": ["submit"]}
 
     def test_x_agent_switch_survives(self) -> None:
         data = _transcription_dict(x_agent_switch={"target": "claude"})
@@ -69,12 +69,12 @@ class TestExtensionFieldRoundTrip:
 
     def test_multiple_extensions_survive(self) -> None:
         data = _transcription_dict(
-            x_input={"newline": True},
+            x_input={"ops": ["newline"]},
             x_flags={"urgent": True},
         )
         t = Transcription.from_dict(data)
         result = t.to_dict()
-        assert result["x_input"] == {"newline": True}
+        assert result["x_input"] == {"ops": ["newline"]}
         assert result["x_flags"] == {"urgent": True}
 
     def test_known_fields_unaffected(self) -> None:
@@ -102,7 +102,7 @@ class TestSSEDeserializationPath:
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "timestamp": "2026-02-27T10:00:00Z",
             "text": "hello world",
-            "x_input": {"newline": True},
+            "x_input": {"ops": ["newline"]},
         })
 
         # This is what client._parse_agent_message() does:
@@ -116,7 +116,7 @@ class TestSSEDeserializationPath:
             "x_input dropped by SDK deserialization! "
             "Did you regenerate without patch_pydantic_models.py?"
         )
-        assert msg_dict["x_input"] == {"newline": True}
+        assert msg_dict["x_input"] == {"ops": ["newline"]}
 
     def test_x_input_submit_survives_json_roundtrip(self) -> None:
         sse_payload = json.dumps({
@@ -125,14 +125,14 @@ class TestSSEDeserializationPath:
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "timestamp": "2026-02-27T10:00:00Z",
             "text": "send this",
-            "x_input": {"submit": True, "trigger": "ok send", "confidence": 0.9},
+            "x_input": {"ops": ["submit"], "trigger": "ok send", "confidence": 0.9},
         })
 
         raw = json.loads(sse_payload)
         msg = Transcription.from_dict(raw)
         msg_dict = msg.to_dict()
 
-        assert msg_dict["x_input"]["submit"] is True
+        assert "submit" in msg_dict["x_input"]["ops"]
         assert msg_dict["x_input"]["trigger"] == "ok send"
 
 # -- InputExecutor integration (SDK → executor) ------------------------------
@@ -145,7 +145,7 @@ class TestInputExecutorWithSDK:
     """
 
     def test_newline_detected_after_sdk_roundtrip(self) -> None:
-        data = _transcription_dict(x_input={"newline": True})
+        data = _transcription_dict(x_input={"ops": ["newline"]})
         msg = Transcription.from_dict(data)
         msg_dict = msg.to_dict()
 
@@ -159,7 +159,7 @@ class TestInputExecutorWithSDK:
         assert calls[0][1] is False  # submit=False
 
     def test_submit_detected_after_sdk_roundtrip(self) -> None:
-        data = _transcription_dict(x_input={"submit": True})
+        data = _transcription_dict(x_input={"ops": ["submit"]})
         msg = Transcription.from_dict(data)
         msg_dict = msg.to_dict()
 
