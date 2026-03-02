@@ -160,7 +160,7 @@ class KeyboardAgent(BaseAgent):
         """
         text = message.get("text", "")
         x_input = message.get("x_input", {})
-        submit = x_input.get("submit", False) if isinstance(x_input, dict) else False
+        submit = "submit" in (x_input.get("ops") or []) if isinstance(x_input, dict) else False
         visual_newline = message.get("visual_newline", False)
 
         # Get config values

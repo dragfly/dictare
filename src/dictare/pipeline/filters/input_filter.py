@@ -128,7 +128,7 @@ class InputFilter:
 
         # Already has submit decision? Pass through
         x_input = message.get("x_input")
-        if isinstance(x_input, dict) and x_input.get("submit"):
+        if isinstance(x_input, dict) and "submit" in (x_input.get("ops") or []):
             return PipelineResult.passed(message)
 
         # Tokenize and scan for triggers
@@ -165,8 +165,7 @@ class InputFilter:
             new_message = fork_message(message, {
                 "text": cleaned_text,
                 "x_input": {
-                    "submit": True,
-                    "newline": False,
+                    "ops": ["submit"],
                     "trigger": " ".join(matched_tokens),
                     "confidence": round(match.confidence, 3),
                     "source": "dictare/input-filter",
