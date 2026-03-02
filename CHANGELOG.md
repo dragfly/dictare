@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.88] - 2026-03-02
+
+### Added
+- **`GET /api/settings/presets`** — new endpoint returning default values and backend-defined
+  option lists for all settings fields. Shape: `{key: {default, values?}}`. Audio device fields
+  include a `values` array with the runtime-available devices. Used by the UI to show
+  "Default (x)" labels and populate backend-driven dropdowns.
+- **`BACKEND_DRIVEN_FIELDS`** — new TypeScript constant (Set) exported from `field-config.ts`.
+  Lists fields whose values and defaults come from the backend at runtime (currently:
+  `audio.input_device`, `audio.output_device`).
+
+### Fixed
+- **`output.auto_enter` → `output.auto_submit`** in `field-config.ts` (registry was stale
+  after the `auto_enter` rename in a previous release).
+
+### Changed
+- **`field-config.ts` is now fully generated** by `ui-schema-generator` v0.4.0.
+  All 14 constants are produced by the generator — no more manual edits to the registry.
+  Run: `dump-schema.py` then `generate.py --outdir ui/src/lib/registry/`.
+
 ## [0.1.87] - 2026-03-02
 
 ### Changed
