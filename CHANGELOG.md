@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.93] - 2026-03-02
+
+### Fixed
+- **VAD startup 400x faster** — load the silero ONNX model directly via onnxruntime
+  instead of importing `faster_whisper.vad` (which pulls in ctranslate2 — 20+ seconds
+  on first run after `brew reinstall`). VAD now loads in ~0.05s regardless of install
+  freshness.
+
 ## [0.1.92] - 2026-03-02
 
 ### Added

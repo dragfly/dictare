@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib.util
 import logging
+import os
+import time as _time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -13,6 +16,57 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+
+
+def _find_silero_model_path() -> str:
+    """Locate silero_vad_v6.onnx from the faster-whisper package.
+
+    Uses importlib to find the package path WITHOUT importing it,
+    avoiding the 20+ second ctranslate2 import on first run after install.
+    """
+    spec = importlib.util.find_spec("faster_whisper")
+    if spec is None or spec.submodule_search_locations is None:
+        raise RuntimeError(
+            "faster-whisper package not installed — cannot find silero VAD model"
+        )
+    path = os.path.join(spec.submodule_search_locations[0], "assets", "silero_vad_v6.onnx")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"Silero VAD model not found: {path}")
+    return path
+
+
+def _create_vad_session() -> Any:
+    """Create an ONNX InferenceSession for silero VAD.
+
+    Loads onnxruntime directly instead of going through faster_whisper,
+    which would trigger a slow ctranslate2 import.
+    """
+    import onnxruntime
+
+    model_path = _find_silero_model_path()
+    opts = onnxruntime.SessionOptions()
+    opts.inter_op_num_threads = 1
+    opts.intra_op_num_threads = 1
+    opts.enable_cpu_mem_arena = False
+    opts.log_severity_level = 4
+
+    return onnxruntime.InferenceSession(
+        model_path,
+        providers=["CPUExecutionProvider"],
+        sess_options=opts,
+    )
+
+
+class _DirectVADModel:
+    """Minimal wrapper matching faster_whisper.vad.SileroVADModel interface.
+
+    Only exposes `.session` — the single attribute used by SileroVAD.is_speech().
+    """
+
+    __slots__ = ("session",)
+
+    def __init__(self, session: Any) -> None:
+        self.session = session
 
 
 class VADEngine(ABC):
@@ -37,7 +91,7 @@ class VADEngine(ABC):
 
 
 class SileroVAD(VADEngine):
-    """Silero VAD implementation using faster-whisper's bundled model."""
+    """Silero VAD implementation using the bundled ONNX model."""
 
     # Silero VAD processes 512 samples at a time (32ms at 16kHz)
     CHUNK_SIZE = 512
@@ -76,28 +130,23 @@ class SileroVAD(VADEngine):
     def _load_model(self, with_indicator: bool = False, *, headless: bool = False) -> None:
         """Load the Silero VAD model.
 
+        Loads the ONNX model directly via onnxruntime, bypassing the
+        faster_whisper import chain (which pulls in ctranslate2 and takes
+        20+ seconds on first run after install).
+
         Args:
             with_indicator: If True, show loading progress indicator (ignored if headless).
             headless: If True, skip all console output (for Engine/daemon mode).
         """
-        import time as _time
-
         if self._model is not None:
             return
 
         def load_vad_fn():
             _t = _time.monotonic()
-            import onnxruntime
-            logger.info("VAD: import onnxruntime: %.2fs", _time.monotonic() - _t)
-
-            _t = _time.monotonic()
-            import faster_whisper.vad as _fwv
-            logger.info("VAD: import faster_whisper.vad: %.2fs", _time.monotonic() - _t)
-
-            _t = _time.monotonic()
-            model = _fwv.get_vad_model()
-            logger.info("VAD: get_vad_model() [InferenceSession]: %.2fs", _time.monotonic() - _t)
-            return model
+            session = _create_vad_session()
+            elapsed = _time.monotonic() - _t
+            logger.info("VAD: ONNX session created in %.2fs", elapsed)
+            return _DirectVADModel(session)
 
         if with_indicator or headless:
             # Use load_with_indicator for stats tracking, but headless mode suppresses UI
