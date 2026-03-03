@@ -74,6 +74,7 @@ _DEFAULT_SOUNDS: dict[str, Path] = {
     "transcribing": DEFAULT_SOUND_TRANSCRIBING,
     "ready": DEFAULT_SOUND_READY,
     "transcribed": DEFAULT_SOUND_TRANSCRIBED,
+    "submit": DEFAULT_SOUND_TRANSCRIBING,  # typewriter burst on submit
     "sent": DEFAULT_SOUND_READY,  # carriage-return on submit
 }
 

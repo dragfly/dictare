@@ -37,9 +37,10 @@ def _default_sounds() -> dict[str, SoundConfig]:
     return {
         "start": SoundConfig(),
         "stop": SoundConfig(),
-        "transcribing": SoundConfig(enabled=False),
+        "transcribing": SoundConfig(enabled=False, volume=0.15),
         "ready": SoundConfig(),
         "transcribed": SoundConfig(volume=0.15, focus_gated=True),
+        "submit": SoundConfig(volume=0.25),
         "sent": SoundConfig(volume=0.25),
         "agent_announce": SoundConfig(),
     }
@@ -95,7 +96,7 @@ class AudioConfig(BaseModel):
     )
     sounds: dict[str, SoundConfig] = Field(
         default_factory=_default_sounds,
-        description="Per-event sound configuration (start, stop, transcribing, ready, transcribed, sent, agent_announce)",
+        description="Per-event sound configuration (start, stop, transcribing, ready, transcribed, submit, sent, agent_announce)",
     )
 
     @model_validator(mode="before")
@@ -853,17 +854,22 @@ def create_default_config() -> Path:
 # focus_gated = false             # Skip when agent terminal has focus
 # [audio.sounds.stop]             # LISTENING → OFF  (down-beep.wav)
 # enabled = true
-# [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING  (typewriter.wav)
-# enabled = false                  # Disabled by default (continuous VAD makes it unnecessary)
-# volume = 1.0                    # Reduce to 0.3–0.5 for background typewriter effect
+# [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING  (typewriter.wav, looped)
+# enabled = false                  # Disabled by default
+# volume = 0.15                   # Subtle background typewriter during STT processing
+# focus_gated = false             # Plays regardless of terminal focus
 # [audio.sounds.ready]            # TRANSCRIBING → LISTENING  (carriage return)
 # enabled = true
 # volume = 1.0
-# [audio.sounds.transcribed]      # After each transcription  (pencil-write.wav)
+# [audio.sounds.transcribed]      # Transcription received  (random pencil-write clip)
 # enabled = true
 # volume = 0.15                   # Very subtle
 # focus_gated = true              # Skipped when agent terminal has focus
-# [audio.sounds.sent]             # Text submitted  (carriage-return.wav)
+# [audio.sounds.submit]           # Submit action: typewriter burst  (typewriter.wav)
+# enabled = true
+# volume = 0.25
+# focus_gated = false             # Always plays — audible confirm even when watching terminal
+# [audio.sounds.sent]             # Submit action: carriage-return  (carriage-return.wav)
 # enabled = true
 # volume = 0.25
 # focus_gated = false             # Set true to skip when agent terminal has focus
