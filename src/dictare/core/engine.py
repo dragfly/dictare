@@ -178,15 +178,15 @@ class DictareEngine:
 
         # Tap detection (isolated state machine)
         # Single tap: toggle mute on/off
-        # Double tap: toggle output mode (agents <-> keyboard)
-        # Long press (≥0.8s): submit (inject Enter into active window)
+        # Double tap: submit (inject Enter into active window)
+        # Long press (≥0.8s): toggle output mode (agents <-> keyboard)
         self._tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
             on_single_tap=lambda: self._controller.send(HotkeyPressed(source="hotkey")),
-            on_double_tap=lambda: self.set_output_mode(
+            on_double_tap=self._submit_action,
+            on_long_press=lambda: self.set_output_mode(
                 "keyboard" if self.agent_mode else "agents"
             ),
-            on_long_press=self._submit_action,
         )
 
         # Initialize components
@@ -861,21 +861,18 @@ class DictareEngine:
     # -------------------------------------------------------------------------
 
     def _submit_action(self) -> None:
-        """Send a submit action to the connected agent (long-press hotkey).
+        """Send a submit action to the connected agent (double-tap hotkey).
 
-        Sends x_input={"submit": True, "trigger": "<long_press>"} to the
-        current agent — identical to what the submit filter does when a
-        trigger word is spoken, but fired from the hotkey instead.
-
-        Long press is agents-mode only: in keyboard mode the user can just
-        press Return directly since they already have a window in focus.
+        Sends x_input with ops=["submit"] to the current agent — identical
+        to what the submit filter does when a trigger word is spoken, but
+        fired from the hotkey instead.
         """
         agent = self._get_current_agent()
         if agent is None:
             logger.debug("submit_action: no agent connected, ignoring")
             return
         message = create_message("")
-        message["x_input"] = {"ops": ["submit"], "trigger": "<long_press>", "source": "dictare/long-press"}
+        message["x_input"] = {"ops": ["submit"], "trigger": "<double_tap>", "source": "dictare/double-tap"}
         agent.send(message)
         logger.debug("submit_action: submit sent to agent %s", agent.id)
 
