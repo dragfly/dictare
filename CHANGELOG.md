@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.104] - 2026-03-03
+
+### Changed
+- **Default STT model is now parakeet-v3** — faster and lighter than Whisper,
+  with comparable accuracy across 25 languages.
+- **Removed obsolete STT models** — dropped whisper-tiny, whisper-base,
+  whisper-small, and whisper-medium from the model registry. Remaining models:
+  parakeet-v3, whisper-large-v3-turbo, whisper-large-v3.
+
 ## [0.1.103] - 2026-03-03
 
 ### Fixed
