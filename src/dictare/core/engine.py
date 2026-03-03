@@ -964,6 +964,7 @@ class DictareEngine:
 
     def set_agent_focus(self, agent_id: str, focused: bool) -> None:
         """Update focus state for an agent's terminal."""
+        logger.info("Focus: agent=%s focused=%s", agent_id, focused)
         self._feedback_policy.set_focus(agent_id, focused)
 
     def switch_agent(self, direction: int) -> None:
