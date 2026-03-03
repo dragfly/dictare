@@ -71,3 +71,18 @@ class TestResolveDisplayState:
             "output": {"current_agent": None},
         }
         assert resolve_display_state(platform, "claude") == ("standby", "warn")
+
+    def test_standby_agent_mic_idle(self) -> None:
+        """Standby with mic inactive → dim (gray), not warn (yellow)."""
+        platform = {
+            "state": "idle",
+            "output": {"current_agent": "cursor"},
+        }
+        assert resolve_display_state(platform, "claude") == ("standby", "dim")
+
+    def test_standby_agent_no_current_mic_idle(self) -> None:
+        platform = {
+            "state": "idle",
+            "output": {"current_agent": None},
+        }
+        assert resolve_display_state(platform, "claude") == ("standby", "dim")
