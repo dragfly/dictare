@@ -525,12 +525,25 @@ class OpenVIPServer:
         async def settings_schema():
             """Return JSON Schema, current values, and field metadata."""
             from dictare import __version__
-            from dictare.config import Config, list_config_keys, load_config
+            from dictare.config import Config, list_config_keys, load_config, load_raw_values
 
             config = load_config()
+            values = config.model_dump()
+            raw = load_raw_values()
+
+            # String fields not explicitly in TOML → "" (means "use default").
+            # Bool/number fields keep their Pydantic-resolved defaults.
+            for key, type_name, _default, _desc, _env_var in list_config_keys():
+                if type_name == "str" and key not in raw:
+                    parts = key.split(".")
+                    obj = values
+                    for p in parts[:-1]:
+                        obj = obj[p]
+                    obj[parts[-1]] = ""
+
             return {
                 "schema": Config.model_json_schema(),
-                "values": config.model_dump(),
+                "values": values,
                 "keys": [
                     {
                         "key": key,
