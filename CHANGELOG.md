@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.102] - 2026-03-03
+
+### Changed
+- **Standby status bar color reflects mic state** — when in standby, the status
+  bar is now gray (dim) when the microphone is inactive and yellow (warn) only
+  when the microphone is actively listening. Text remains "dictare standby".
+
 ## [0.1.101] - 2026-03-03
 
 ### Fixed

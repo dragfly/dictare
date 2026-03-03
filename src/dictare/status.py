@@ -42,8 +42,10 @@ def resolve_display_state(
             return ("listening", "ok")
         elif is_active:
             return ("idle", "dim")
-        else:
+        elif engine_state in _ACTIVE_ENGINE_STATES:
             return ("standby", "warn")
+        else:
+            return ("standby", "dim")
     else:
         if engine_state in _ACTIVE_ENGINE_STATES:
             return ("listening", "ok")
