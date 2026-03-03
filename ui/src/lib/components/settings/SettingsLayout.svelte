@@ -44,11 +44,12 @@
 		presetsStore.load();
 	});
 
-	// Reload fresh values from backend on every section change (unless dirty).
+	// Reload fresh values and presets from backend on every section change (unless dirty).
 	$effect(() => {
 		void activeNavId;  // track
 		if (!settingsStore.hasDirtyFields()) {
 			settingsStore.load();
+			presetsStore.load();
 		}
 	});
 
