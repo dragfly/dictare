@@ -264,12 +264,12 @@ def _stream_active_agent(
     from dictare.status import resolve_display_state
 
     client = Client(base_url, timeout=5)
-    last_label: str | None = None
+    last_key: tuple[str, str] | None = None
 
     def _on_disconnect(exc: Exception | None) -> None:
-        nonlocal last_label
+        nonlocal last_key
         if exc:
-            last_label = None  # Force refresh on reconnect
+            last_key = None  # Force refresh on reconnect
 
     for status in client.subscribe_status(
         reconnect=True,
@@ -284,8 +284,9 @@ def _stream_active_agent(
         dot = "●" if state in ("listening", "idle") else "○"
         label = f"{dot} {agent_id} · {state}"
 
-        if label != last_label:
-            last_label = label
+        key = (label, style)
+        if key != last_key:
+            last_key = key
             on_status(label, style)
 
 
