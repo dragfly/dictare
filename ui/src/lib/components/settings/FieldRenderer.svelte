@@ -93,14 +93,14 @@
 	/** Default value string for display in SelectField ("Default (x)"). */
 	const defaultDisplay = $derived(presetsStore.getDefault(field.key));
 
-	/** True when the field has an explicit value in TOML (not using backend default).
-	 *  "" or null means "use backend default" (key absent from TOML) → not yellow.
-	 *  Any other value, even if it matches the schema default, → yellow. */
-	const isNonDefault = $derived(
-		!isDirty &&
-		currentValue !== "" &&
-		currentValue != null
-	);
+	/** True when the field has an explicit value different from its default.
+	 *  Select fields: "" means "use backend default" → not yellow.
+	 *  Bool/number fields: compare against the Pydantic schema default. */
+	const isNonDefault = $derived.by(() => {
+		if (isDirty) return false;
+		if (isSelect) return currentValue !== "" && currentValue != null;
+		return currentValue != null && JSON.stringify(currentValue) !== JSON.stringify(field.default);
+	});
 
 	/** Placeholder text for empty string fields — shows the default value. */
 	const placeholder = $derived(
