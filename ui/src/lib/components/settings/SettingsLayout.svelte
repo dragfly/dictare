@@ -44,6 +44,14 @@
 		presetsStore.load();
 	});
 
+	// Reload fresh values from backend on every section change (unless dirty).
+	$effect(() => {
+		void activeNavId;  // track
+		if (!settingsStore.hasDirtyFields()) {
+			settingsStore.load();
+		}
+	});
+
 	const schema = $derived(settingsStore.getSchema());
 
 	/**
