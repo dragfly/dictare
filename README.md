@@ -118,6 +118,16 @@ dictare agent -- claude --model opus      # explicit command override
 
 Submit triggers are multilingual (en, it, es, de, fr) and fully configurable.
 
+## Hotkey Cheat Sheet
+
+Default hotkey: **Right ⌘** (macOS) / **Scroll Lock** (Linux).
+
+| Gesture | Action |
+|---------|--------|
+| **Single tap** | Toggle listening on/off |
+| **Double tap** | Submit (send Enter to agent) |
+| **Long press** (≥0.8s) | Switch mode: agents ↔ keyboard |
+
 ## Service Management
 
 ```bash

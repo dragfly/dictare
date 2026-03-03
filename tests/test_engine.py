@@ -1392,8 +1392,23 @@ class TestSetOutputMode:
 
         assert engine.agent_mode is True
 
-    def test_double_tap_toggles_output_mode(self) -> None:
-        """Double-tap hotkey toggles between agents and keyboard mode."""
+    def test_double_tap_calls_submit(self) -> None:
+        """Double-tap hotkey triggers submit action."""
+        config = MockConfig()
+        engine = DictareEngine(config=config)
+        mock_agent = MagicMock()
+        mock_agent.id = "claude"
+        engine._agent_mgr._agents["claude"] = mock_agent
+        engine._agent_mgr._agent_order.append("claude")
+        engine._agent_mgr._current_agent_id = "claude"
+
+        engine._tap_detector._on_double_tap()
+        mock_agent.send.assert_called_once()
+        msg = mock_agent.send.call_args[0][0]
+        assert "submit" in msg.get("x_input", {}).get("ops", [])
+
+    def test_long_press_toggles_output_mode(self) -> None:
+        """Long-press hotkey toggles between agents and keyboard mode."""
         config = MockConfig()
         engine = DictareEngine(config=config)
         engine._agent_mgr._current_agent_id = None
@@ -1405,13 +1420,13 @@ class TestSetOutputMode:
         engine._agent_mgr._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude"])
 
-        # Simulate double-tap: should toggle to keyboard
-        engine._tap_detector._on_double_tap()
+        # Simulate long press: should toggle to keyboard
+        engine._tap_detector._on_long_press()
         assert engine.agent_mode is False
         assert engine._agent_mgr._current_agent_id == "__keyboard__"
 
-        # Second double-tap: should toggle back to agents
-        engine._tap_detector._on_double_tap()
+        # Second long press: should toggle back to agents
+        engine._tap_detector._on_long_press()
         assert engine.agent_mode is True
 
 
