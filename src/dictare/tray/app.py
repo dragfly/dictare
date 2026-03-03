@@ -395,9 +395,9 @@ class TrayApp:
 
     def _shutdown_engine_http(self) -> None:
         """Send engine.shutdown via HTTP."""
-        from dictare.config import load_config
-
         from openvip import Client
+
+        from dictare.config import load_config
 
         config = load_config()
         url = f"http://{config.server.host}:{config.server.port}/openvip"
@@ -503,41 +503,40 @@ class TrayApp:
             self._show_about_dialog_tk(__version__, credits)
 
     def _show_about_dialog_macos(self, version: str, credits: list[dict]) -> None:
-        """Show native macOS about panel."""
+        """Show native macOS about dialog using NSAlert."""
         try:
             import AppKit
-            import Foundation
 
-            credits_lines = [f"Dictare v{version}", "Voice layer for AI coding agents", ""]
+            credits_lines = ["Voice layer for AI coding agents", ""]
             if credits:
                 credits_lines.append("Sound Credits:")
                 for c in credits:
                     credits_lines.append(f"  {c.get('title', '')} — {c.get('author', '')} ({c.get('source', '')})")
 
-            credits_text = "\n".join(credits_lines)
-            attrs = Foundation.NSMutableAttributedString.alloc().initWithString_(credits_text)
+            informative = "\n".join(credits_lines)
 
             # Load app icon
             icon_path = Path(__file__).parent.parent / "resources" / "Dictare.icns"
-            ns_icon = None
-            if icon_path.exists():
-                ns_icon = AppKit.NSImage.alloc().initWithContentsOfFile_(str(icon_path))
-
-            options: dict = {
-                "ApplicationName": "Dictare",
-                "Version": version,
-                "ApplicationVersion": version,
-                "Credits": attrs,
-            }
-            if ns_icon:
-                options["ApplicationIcon"] = ns_icon
 
             def _show() -> None:
-                AppKit.NSApplication.sharedApplication().orderFrontStandardAboutPanel_(options)
+                app = AppKit.NSApplication.sharedApplication()
+                app.activateIgnoringOtherApps_(True)
+
+                alert = AppKit.NSAlert.alloc().init()
+                alert.setMessageText_(f"Dictare {version}")
+                alert.setInformativeText_(informative)
+                alert.addButtonWithTitle_("OK")
+
+                if icon_path.exists():
+                    ns_icon = AppKit.NSImage.alloc().initWithContentsOfFile_(str(icon_path))
+                    if ns_icon:
+                        alert.setIcon_(ns_icon)
+
+                alert.runModal()
 
             _run_on_main_thread(_show)
         except Exception:
-            logger.debug("macOS about panel failed, falling back to tkinter", exc_info=True)
+            logger.warning("macOS about dialog failed, falling back to tkinter", exc_info=True)
             self._show_about_dialog_tk(version, credits)
 
     def _show_about_dialog_tk(self, version: str, credits: list[dict]) -> None:
@@ -589,7 +588,7 @@ class TrayApp:
 
             root.mainloop()
         except Exception:
-            logger.debug("tkinter about dialog failed", exc_info=True)
+            logger.warning("tkinter about dialog failed", exc_info=True)
 
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Quit the application."""

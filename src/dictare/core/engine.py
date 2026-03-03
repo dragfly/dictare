@@ -885,30 +885,32 @@ class DictareEngine:
 
     def _play_submit_sequence(self) -> None:
         """Play typewriter burst → carriage-return sequence for submit actions."""
-        from dictare.audio.beep import get_sound_for_event, play_sound_file
+        from dictare.audio.beep import (
+            DEFAULT_SOUND_TRANSCRIBING,
+            get_sound_for_event,
+            play_sound_file,
+        )
 
         if not self._feedback_policy.should_play(
             "sent", self._agent_mgr.current_agent, self.config.audio,
         ):
             return
 
-        # Typewriter burst (one shot, not looped)
-        tw_enabled, tw_path = get_sound_for_event(self.config.audio, "transcribing")
         cr_enabled, cr_path = get_sound_for_event(self.config.audio, "sent")
-
         if not cr_enabled:
             return
 
         sent_cfg = self.config.audio.sounds.get("sent")
         cr_vol = sent_cfg.volume if sent_cfg is not None else 1.0
 
-        if tw_path:
-            tw_cfg = self.config.audio.sounds.get("transcribing")
-            tw_vol = tw_cfg.volume if tw_cfg is not None else 1.0
-            # Typewriter first, then carriage-return on completion
-            play_sound_file(tw_path, volume=tw_vol, on_complete=lambda: play_sound_file(cr_path, volume=cr_vol))
-        else:
-            play_sound_file(cr_path, volume=cr_vol)
+        # Typewriter burst: always plays on submit (ignores transcribing.enabled,
+        # which only gates the looped recording feedback).
+        # Use custom path if configured, otherwise the bundled typewriter.wav.
+        tw_cfg = self.config.audio.sounds.get("transcribing")
+        tw_path = (tw_cfg.path if tw_cfg is not None and tw_cfg.path else None) or str(DEFAULT_SOUND_TRANSCRIBING)
+        tw_vol = tw_cfg.volume if tw_cfg is not None else 1.0
+        # Typewriter first, then carriage-return on completion
+        play_sound_file(tw_path, volume=tw_vol, on_complete=lambda: play_sound_file(cr_path, volume=cr_vol))
 
     # -------------------------------------------------------------------------
     # Hotkey Actions
