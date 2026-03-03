@@ -72,11 +72,58 @@ class TestGetSettingsSchema:
         assert "TTSConfig" in schema["$defs"]
         assert "AudioConfig" in schema["$defs"]
 
-    def test_values_match_config(self, client):
+    def test_non_string_values_keep_pydantic_defaults(self, client):
+        """Bool/number fields keep their Pydantic-resolved defaults."""
         r = client.get("/api/settings/schema")
         values = r.json()["values"]
         config = Config()
         assert values["audio"]["advanced"]["sample_rate"] == config.audio.advanced.sample_rate
+        assert values["audio"]["audio_feedback"] == config.audio.audio_feedback
+
+    def test_string_values_empty_when_not_in_toml(self, client, tmp_path):
+        """String fields not set in TOML are returned as "" (use default)."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")  # empty TOML — nothing set
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            r = client.get("/api/settings/schema")
+        values = r.json()["values"]
+        # stt.language has Pydantic default "auto" but not in TOML → ""
+        assert values["stt"]["language"] == ""
+        # stt.model has Pydantic default "large-v3-turbo" but not in TOML → ""
+        assert values["stt"]["model"] == ""
+        # tts.language has a Pydantic default but not in TOML → ""
+        assert values["tts"]["language"] == ""
+
+    def test_string_values_present_when_in_toml(self, client, tmp_path):
+        """String fields explicitly set in TOML are returned with their value."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[stt]\nlanguage = "it"\nmodel = "base"\n')
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            r = client.get("/api/settings/schema")
+        values = r.json()["values"]
+        assert values["stt"]["language"] == "it"
+        assert values["stt"]["model"] == "base"
+
+    def test_mixed_set_and_unset_fields(self, client, tmp_path):
+        """Only explicitly set string fields have values; others are ""."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[stt]\nlanguage = "en"\n')
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            r = client.get("/api/settings/schema")
+        values = r.json()["values"]
+        assert values["stt"]["language"] == "en"  # set → value
+        assert values["stt"]["model"] == ""  # not set → ""
+        assert values["tts"]["language"] == ""  # not set → ""
+
+    def test_value_matching_default_still_returned(self, client, tmp_path):
+        """If user explicitly sets value = Pydantic default, it's returned (not "")."""
+        config_file = tmp_path / "config.toml"
+        # "auto" is the Pydantic default for stt.language, but user set it explicitly
+        config_file.write_text('[stt]\nlanguage = "auto"\n')
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            r = client.get("/api/settings/schema")
+        values = r.json()["values"]
+        assert values["stt"]["language"] == "auto"  # explicitly set, even if = default
 
     def test_keys_list_has_entries(self, client):
         r = client.get("/api/settings/schema")
@@ -96,6 +143,68 @@ class TestGetSettingsSchema:
         assert "enum" in engine_field
         assert "say" in engine_field["enum"]
         assert "espeak" in engine_field["enum"]
+
+
+class TestDefaultRoundtrip:
+    """Verify save→reload cycle preserves "Default" vs explicit values."""
+
+    def test_save_value_then_schema_returns_it(self, client, tmp_path):
+        """Save a non-default value → schema returns that value."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            # Save stt.language = "it"
+            r = client.post("/api/settings", json={"key": "stt.language", "value": "it"})
+            assert r.status_code == 200
+            # Reload schema
+            r = client.get("/api/settings/schema")
+            values = r.json()["values"]
+            assert values["stt"]["language"] == "it"
+
+    def test_save_empty_resets_to_default(self, client, tmp_path):
+        """Save "" (reset to default) → schema returns ""."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[stt]\nlanguage = "it"\n')
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            # Reset to default
+            r = client.post("/api/settings", json={"key": "stt.language", "value": ""})
+            assert r.status_code == 200
+            # Reload schema — should be "" not "auto"
+            r = client.get("/api/settings/schema")
+            values = r.json()["values"]
+            assert values["stt"]["language"] == ""
+
+    def test_save_default_value_explicitly(self, client, tmp_path):
+        """Save a value that equals the Pydantic default → schema returns that value (not "")."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            # Explicitly save "auto" (which is the Pydantic default for stt.language)
+            r = client.post("/api/settings", json={"key": "stt.language", "value": "auto"})
+            assert r.status_code == 200
+            # Schema should return "auto" — user chose it explicitly
+            r = client.get("/api/settings/schema")
+            values = r.json()["values"]
+            assert values["stt"]["language"] == "auto"
+
+    def test_bool_field_unaffected(self, client, tmp_path):
+        """Bool fields always return their resolved value, not ""."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")  # nothing set
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            r = client.get("/api/settings/schema")
+            values = r.json()["values"]
+            # audio.audio_feedback default is True — should stay True, not ""
+            assert values["audio"]["audio_feedback"] is True
+
+    def test_number_field_unaffected(self, client, tmp_path):
+        """Number fields always return their resolved value, not ""."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            r = client.get("/api/settings/schema")
+            values = r.json()["values"]
+            assert values["output"]["typing_delay_ms"] == 2
 
 
 class TestPostSettings:

@@ -11,6 +11,7 @@ from dictare.config import (
     SoundConfig,
     STTConfig,
     load_config,
+    load_raw_values,
 )
 
 
@@ -99,6 +100,65 @@ language = "en"
             # Other values should be defaults
             assert config.stt.advanced.device == "auto"
             assert config.audio.advanced.sample_rate == 16000
+        finally:
+            temp_path.unlink()
+
+
+class TestLoadRawValues:
+    """Test load_raw_values returns only explicitly set TOML keys."""
+
+    def test_empty_file_returns_empty_dict(self) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write("")
+            temp_path = Path(f.name)
+        try:
+            assert load_raw_values(temp_path) == {}
+        finally:
+            temp_path.unlink()
+
+    def test_nonexistent_file_returns_empty_dict(self) -> None:
+        assert load_raw_values(Path("/nonexistent/config.toml")) == {}
+
+    def test_flat_keys(self) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write("verbose = true\n")
+            temp_path = Path(f.name)
+        try:
+            raw = load_raw_values(temp_path)
+            assert raw == {"verbose": True}
+        finally:
+            temp_path.unlink()
+
+    def test_nested_keys_flattened(self) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write('[stt]\nmodel = "base"\nlanguage = "it"\n')
+            temp_path = Path(f.name)
+        try:
+            raw = load_raw_values(temp_path)
+            assert raw == {"stt.model": "base", "stt.language": "it"}
+        finally:
+            temp_path.unlink()
+
+    def test_only_explicit_keys_no_defaults(self) -> None:
+        """Only keys in the TOML file appear — no Pydantic defaults."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write('[stt]\nmodel = "base"\n')
+            temp_path = Path(f.name)
+        try:
+            raw = load_raw_values(temp_path)
+            assert "stt.model" in raw
+            assert "stt.language" not in raw  # Not in TOML → not in raw
+            assert "output.mode" not in raw
+        finally:
+            temp_path.unlink()
+
+    def test_deeply_nested(self) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write('[stt.advanced]\nbeam_size = 3\n')
+            temp_path = Path(f.name)
+        try:
+            raw = load_raw_values(temp_path)
+            assert raw == {"stt.advanced.beam_size": 3}
         finally:
             temp_path.unlink()
 
