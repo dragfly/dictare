@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.112] - 2026-03-03
+
+### Fixed
+- Submit sequence: typewriter burst now always plays (was skipped when `transcribing` sound disabled)
+- About dialog: use NSAlert instead of `orderFrontStandardAboutPanel_` — works in accessory mode; log errors at warning level
+
 ## [0.1.111] - 2026-03-03
 
 ### Changed
