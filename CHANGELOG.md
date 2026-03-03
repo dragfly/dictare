@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.113] - 2026-03-03
+
+### Added
+- New `submit` sound event: typewriter burst on double-tap/submit, independently configurable (volume 0.25, not focus-gated)
+
+### Changed
+- Submit sequence uses dedicated `submit` event instead of reusing `transcribing`
+- `transcribing` default volume set to 0.15 (subtle background sound when enabled)
+
 ## [0.1.112] - 2026-03-03
 
 ### Fixed

@@ -163,14 +163,14 @@ class TestSoundConfig:
     """Test per-event sound configuration with TOML sub-tables."""
 
     def test_defaults_sound_events(self) -> None:
-        """All 7 sound events present; transcribing disabled by default."""
+        """All 8 sound events present; transcribing disabled by default."""
         cfg = AudioConfig()
-        expected = {"start", "stop", "transcribing", "ready", "transcribed", "sent", "agent_announce"}
+        expected = {"start", "stop", "transcribing", "ready", "transcribed", "submit", "sent", "agent_announce"}
         assert set(cfg.sounds.keys()) == expected
         # Transcribing disabled by default (continuous VAD makes it unnecessary)
         assert cfg.sounds["transcribing"].enabled is False
         # All others enabled
-        for name in ("start", "stop", "ready", "transcribed", "sent", "agent_announce"):
+        for name in ("start", "stop", "ready", "transcribed", "submit", "sent", "agent_announce"):
             assert cfg.sounds[name].enabled is True
         for sc in cfg.sounds.values():
             assert sc.path is None
@@ -217,7 +217,7 @@ silence_ms = 1000
         try:
             config = load_config(temp_path)
             assert config.audio.audio_feedback is True
-            assert len(config.audio.sounds) == 7
+            assert len(config.audio.sounds) == 8
             assert config.audio.sounds["start"].enabled is True
         finally:
             temp_path.unlink()
