@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.105] - 2026-03-03
+
+### Fixed
+- **Agent pre-flight checks before spawning child process** — `dictare agent` now
+  validates engine reachability and agent name uniqueness BEFORE forking the child
+  process or touching the terminal. If the engine is down, prints a clear error and
+  exits. If the agent name is already taken (409), prints the error and exits cleanly.
+  Previously the child process was spawned first, and a duplicate agent would leave
+  the terminal stuck in raw mode with no way to Ctrl+C.
+- **Auto-start engine waits for readiness** — when the engine is not running,
+  `dictare agent` now waits up to 10s for the service to become reachable after
+  starting it, instead of fire-and-forget.
+
 ## [0.1.104] - 2026-03-03
 
 ### Changed

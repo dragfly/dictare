@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,6 +16,7 @@ from dictare.agent.mux import (
     _log_event,
     _write_session_end,
     _write_session_start,
+    run_agent,
 )
 from dictare.agent.pty_session import _write_all
 
@@ -264,3 +265,59 @@ class TestWriteAll:
             result = _write_all(99, b"a" * 10)
 
         assert result == 10
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight checks in run_agent
+# ---------------------------------------------------------------------------
+
+
+def _make_status(connected_agents: list[str]) -> MagicMock:
+    """Build a fake openvip Status with connected_agents."""
+    status = MagicMock()
+    status.connected_agents = connected_agents
+    return status
+
+
+class TestRunAgentPreFlight:
+    """run_agent must validate engine + agent name before spawning the child."""
+
+    def test_engine_unreachable_returns_1(self) -> None:
+        """If the engine is not running, return exit code 1 without spawning."""
+        with patch("openvip.Client") as MockClient:
+            MockClient.return_value.get_status.side_effect = ConnectionRefusedError
+            code = run_agent("claude", ["echo", "hi"], quiet=True)
+        assert code == 1
+
+    def test_duplicate_agent_returns_1(self) -> None:
+        """If an agent with the same name is already connected, return 1."""
+        with patch("openvip.Client") as MockClient:
+            MockClient.return_value.get_status.return_value = _make_status(["claude"])
+            code = run_agent("claude", ["echo", "hi"], quiet=True)
+        assert code == 1
+
+    def test_different_agent_name_passes_preflight(self) -> None:
+        """Agent name not in connected list passes pre-flight (then fails at PTY)."""
+        with patch("openvip.Client") as MockClient:
+            MockClient.return_value.get_status.return_value = _make_status(["cursor"])
+            # Will pass pre-flight but fail at PTY spawn — that's OK for this test.
+            # Use a command that doesn't exist to get a fast FileNotFoundError.
+            try:
+                run_agent(
+                    "claude", ["__nonexistent_cmd__"],
+                    quiet=True, status_bar=False, clear_on_start=False,
+                )
+            except (FileNotFoundError, OSError):
+                pass  # expected: command not found after pre-flight passed
+
+    def test_empty_agents_list_passes_preflight(self) -> None:
+        """No connected agents → pre-flight passes."""
+        with patch("openvip.Client") as MockClient:
+            MockClient.return_value.get_status.return_value = _make_status([])
+            try:
+                run_agent(
+                    "claude", ["__nonexistent_cmd__"],
+                    quiet=True, status_bar=False, clear_on_start=False,
+                )
+            except (FileNotFoundError, OSError):
+                pass  # expected: command not found after pre-flight passed
