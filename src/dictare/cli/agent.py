@@ -187,12 +187,18 @@ def register(app: typer.Typer) -> None:
                 console.print("[yellow]Warning: --live-dangerously given but agent type has no live_dangerously_args configured[/]")
             # With command override (--), --live-dangerously is silently ignored
 
-        # Best-effort: try to start the engine if it's not reachable.
-        # Never block — the SSE layer has its own reconnect loop.
+        # Try to auto-start the engine if not reachable.
         if not _check_engine(server):
             if not quiet:
                 console.print("[dim]Engine not running, starting service...[/]")
-            _try_start_service()  # fire-and-forget, don't gate on result
+            _try_start_service()
+            # Wait up to 10s for engine to become reachable
+            import time
+            for _ in range(20):
+                time.sleep(0.5)
+                if _check_engine(server):
+                    break
+            # run_agent() will do a final check and error out if still unreachable
 
         # CLI flags override config
         if show_status_bar is None:

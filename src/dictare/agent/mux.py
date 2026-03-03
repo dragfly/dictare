@@ -548,6 +548,26 @@ def run_agent(
     Returns:
         Exit code of the process.
     """
+    # --- Pre-flight checks (before touching the terminal) ---
+    # 1. Engine must be reachable
+    # 2. Agent name must not be taken
+    from openvip import Client as _OVClient
+
+    try:
+        _pf_client = _OVClient(base_url, timeout=3)
+        _pf_status = _pf_client.get_status()
+    except Exception:
+        print(f"[dictare] Error: engine is not running at {base_url}", file=sys.stderr)
+        return 1
+
+    if agent_id in _pf_status.connected_agents:
+        print(
+            f"[dictare] Error: agent '{agent_id}' is already connected",
+            file=sys.stderr,
+        )
+        return 1
+
+    # --- Pre-flight OK — proceed with session setup ---
     # Parse claim key once at startup
     claim_raw, claim_csi_u = _parse_claim_key(claim_key)
 
