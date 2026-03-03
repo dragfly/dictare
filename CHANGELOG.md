@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.103] - 2026-03-03
+
+### Fixed
+- **Non-default indicator (yellow dot) incorrect for explicit values matching default** —
+  a value explicitly set in TOML that happened to match the schema default was not
+  flagged as non-default. Now any explicit value (non-empty, non-null) shows yellow,
+  regardless of whether it matches the schema default.
+
 ## [0.1.102] - 2026-03-03
 
 ### Changed
