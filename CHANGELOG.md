@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.114] - 2026-03-03
+
+### Changed
+- Submit typewriter burst trimmed to exactly 1 second (`typewriter-burst.wav`)
+
 ## [0.1.113] - 2026-03-03
 
 ### Added
