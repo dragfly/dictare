@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.109] - 2026-03-03
+
+### Fixed
+- **"sent" sound only on submit** — carriage-return was incorrectly playing after
+  every transcription. Now only fires on double-tap submit and pipeline submit trigger.
+
+### Changed
+- **pencil-write.wav** — replaced synthesized placeholder with real pencil scratch
+  sound (freesound_community via Pixabay).
+
+### Added
+- **About dialog in tray app** — shows Dictare version, description, and sound
+  credits loaded from `credits.json`. Uses native macOS about panel on macOS,
+  tkinter fallback on Linux.
+- **credits.json** — structured attribution file for bundled assets.
+
 ## [0.1.108] - 2026-03-03
 
 ### Added
