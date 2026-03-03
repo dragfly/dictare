@@ -28,7 +28,7 @@ class TestConfigDefaults:
     def test_stt_config_defaults(self) -> None:
         """Test STTConfig has correct defaults."""
         config = STTConfig()
-        assert config.model == "large-v3-turbo"
+        assert config.model == "parakeet-v3"
         assert config.language == "auto"
         assert config.advanced.device == "auto"
         assert config.advanced.compute_type == "int8"
@@ -76,7 +76,7 @@ class TestConfigLoading:
         try:
             config = load_config(temp_path)
             assert config is not None
-            assert config.stt.model == "large-v3-turbo"
+            assert config.stt.model == "parakeet-v3"
         finally:
             temp_path.unlink()
 

@@ -8,34 +8,6 @@
     "onnx_asr_model": "nemo-parakeet-tdt-0.6b-v3",
     "description": "Parakeet V3 (ONNX, 25 languages, ~10x faster than Whisper)"
   },
-  "whisper-tiny": {
-    "type": "stt",
-    "repo": "Systran/faster-whisper-tiny",
-    "size_gb": 0.15,
-    "check_file": "model.bin",
-    "description": "Whisper tiny (fastest, least accurate)"
-  },
-  "whisper-base": {
-    "type": "stt",
-    "repo": "Systran/faster-whisper-base",
-    "size_gb": 0.3,
-    "check_file": "model.bin",
-    "description": "Whisper base"
-  },
-  "whisper-small": {
-    "type": "stt",
-    "repo": "Systran/faster-whisper-small",
-    "size_gb": 0.5,
-    "check_file": "model.bin",
-    "description": "Whisper small"
-  },
-  "whisper-medium": {
-    "type": "stt",
-    "repo": "Systran/faster-whisper-medium",
-    "size_gb": 1.5,
-    "check_file": "model.bin",
-    "description": "Whisper medium"
-  },
   "whisper-large-v3": {
     "type": "stt",
     "repo": "Systran/faster-whisper-large-v3",
