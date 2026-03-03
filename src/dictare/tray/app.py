@@ -40,6 +40,19 @@ def _load_icon(name: str) -> Image.Image:
     return Image.new("RGBA", (22, 22), (0, 0, 0, 0))
 
 
+def _load_credits() -> list[dict]:
+    """Load credits from the bundled credits.json file."""
+    import json
+
+    credits_path = Path(__file__).parent.parent / "credits.json"
+    try:
+        with open(credits_path) as f:
+            data = json.load(f)
+        return data.get("sounds", [])
+    except Exception:
+        return []
+
+
 def _hide_dock_icon() -> None:
     """Hide this process from the macOS Dock.
 
@@ -296,13 +309,8 @@ class TrayApp:
 
         items.append(pystray.Menu.SEPARATOR)
 
-        # About submenu (version info)
-        from dictare import __version__
-
-        about_items = [
-            pystray.MenuItem(f"Dictare v{__version__}", None),
-        ]
-        items.append(pystray.MenuItem("About", pystray.Menu(*about_items)))
+        # About
+        items.append(pystray.MenuItem("About Dictare...", self._on_about))
 
         # Quit
         items.append(pystray.MenuItem("Quit", self._on_quit))
@@ -486,6 +494,110 @@ class TrayApp:
                 subprocess.Popen([editor, str(config_file)])
             elif shutil.which("xdg-open"):
                 subprocess.Popen(["xdg-open", str(config_file)])
+
+    def _on_about(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """Show the About dialog."""
+        threading.Thread(target=self._show_about_dialog, daemon=True).start()
+
+    def _show_about_dialog(self) -> None:
+        """Show the About dialog (runs on background thread)."""
+        from dictare import __version__
+
+        credits = _load_credits()
+
+        if sys.platform == "darwin":
+            self._show_about_dialog_macos(__version__, credits)
+        else:
+            self._show_about_dialog_tk(__version__, credits)
+
+    def _show_about_dialog_macos(self, version: str, credits: list[dict]) -> None:
+        """Show native macOS about panel."""
+        try:
+            import AppKit
+            import Foundation
+
+            credits_lines = [f"Dictare v{version}", "Voice layer for AI coding agents", ""]
+            if credits:
+                credits_lines.append("Sound Credits:")
+                for c in credits:
+                    credits_lines.append(f"  {c.get('title', '')} — {c.get('author', '')} ({c.get('source', '')})")
+
+            credits_text = "\n".join(credits_lines)
+            attrs = Foundation.NSMutableAttributedString.alloc().initWithString_(credits_text)
+
+            # Load app icon
+            icon_path = Path(__file__).parent.parent / "resources" / "Dictare.icns"
+            ns_icon = None
+            if icon_path.exists():
+                ns_icon = AppKit.NSImage.alloc().initWithContentsOfFile_(str(icon_path))
+
+            options: dict = {
+                "ApplicationName": "Dictare",
+                "Version": version,
+                "ApplicationVersion": version,
+                "Credits": attrs,
+            }
+            if ns_icon:
+                options["ApplicationIcon"] = ns_icon
+
+            def _show() -> None:
+                AppKit.NSApplication.sharedApplication().orderFrontStandardAboutPanel_(options)
+
+            _run_on_main_thread(_show)
+        except Exception:
+            logger.debug("macOS about panel failed, falling back to tkinter", exc_info=True)
+            self._show_about_dialog_tk(version, credits)
+
+    def _show_about_dialog_tk(self, version: str, credits: list[dict]) -> None:
+        """Show About dialog using tkinter (cross-platform fallback)."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+
+            root = tk.Tk()
+            root.title("About Dictare")
+            root.resizable(False, False)
+
+            # Load icon
+            icon_path = (
+                Path(__file__).parent / "icons" / "dictare_active@2x.png"
+            )
+
+            frame = ttk.Frame(root, padding=20)
+            frame.pack()
+
+            # Try to show icon
+            try:
+                photo = tk.PhotoImage(file=str(icon_path))
+                icon_label = ttk.Label(frame, image=photo)
+                icon_label.image = photo  # type: ignore[attr-defined]
+                icon_label.pack(pady=(0, 10))
+            except Exception:
+                pass
+
+            ttk.Label(frame, text="Dictare", font=("Helvetica", 18, "bold")).pack()
+            ttk.Label(frame, text=f"Version {version}").pack(pady=(2, 10))
+            ttk.Label(frame, text="Voice layer for AI coding agents").pack(pady=(0, 10))
+
+            if credits:
+                ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=5)
+                ttk.Label(frame, text="Sound Credits", font=("Helvetica", 11, "bold")).pack(pady=(5, 2))
+                for c in credits:
+                    text = f"{c.get('title', '')} — {c.get('author', '')} ({c.get('source', '')})"
+                    ttk.Label(frame, text=text, font=("Helvetica", 10)).pack()
+
+            ttk.Button(frame, text="OK", command=root.destroy).pack(pady=(15, 0))
+
+            # Center on screen
+            root.update_idletasks()
+            w, h = root.winfo_width(), root.winfo_height()
+            x = (root.winfo_screenwidth() - w) // 2
+            y = (root.winfo_screenheight() - h) // 3
+            root.geometry(f"+{x}+{y}")
+
+            root.mainloop()
+        except Exception:
+            logger.debug("tkinter about dialog failed", exc_info=True)
 
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """Quit the application."""

@@ -842,15 +842,16 @@ class DictareEngine:
             inject_elapsed = time.time() - inject_start
             self._stats.injection_seconds += inject_elapsed
 
-        # Play "sent" sound (focus-gated)
-        if success:
-            self._play_focus_gated_sound("sent")
-
         # Determine final text and input info (after pipeline processing)
         first_msg = messages_to_send[0] if messages_to_send else {}
         final_text = first_msg.get("text", text)
         x_input_info = first_msg.get("x_input", {})
         pipeline_submit = "submit" in (x_input_info.get("ops") or []) if isinstance(x_input_info, dict) else False
+
+        # Play "sent" sound only on pipeline-triggered submit (not every transcription).
+        # Double-tap submit is handled separately in _submit_action().
+        if success and pipeline_submit:
+            self._play_focus_gated_sound("sent")
         submit_trigger = x_input_info.get("trigger") if isinstance(x_input_info, dict) else None
         submit_confidence = x_input_info.get("confidence") if isinstance(x_input_info, dict) else None
 
