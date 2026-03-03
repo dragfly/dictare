@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from dictare import __version__
 from dictare.agent.base import Agent
+from dictare.audio.feedback_policy import AudioFeedbackPolicy
 from dictare.core.agent_manager import AgentManager
 from dictare.core.audio_manager import AudioManager
 from dictare.core.controller import StateController
@@ -154,6 +155,9 @@ class DictareEngine:
             "on_agent_change", aid, idx
         )
         self._agent_mgr._on_speak = lambda text: self.speak_text(text)
+
+        # Audio feedback policy — decides whether focus-gated sounds play
+        self._feedback_policy = AudioFeedbackPolicy()
 
         # State machine handles all state (OFF/LISTENING/RECORDING/etc)
         self._state_manager = StateManager(initial_state=AppState.OFF)
@@ -835,6 +839,10 @@ class DictareEngine:
             inject_elapsed = time.time() - inject_start
             self._stats.injection_seconds += inject_elapsed
 
+        # Play "sent" sound (focus-gated)
+        if success:
+            self._play_focus_gated_sound("sent")
+
         # Determine final text and input info (after pipeline processing)
         first_msg = messages_to_send[0] if messages_to_send else {}
         final_text = first_msg.get("text", text)
@@ -857,6 +865,24 @@ class DictareEngine:
             )
 
     # -------------------------------------------------------------------------
+    # Audio Feedback
+    # -------------------------------------------------------------------------
+
+    def _play_focus_gated_sound(self, event: str) -> None:
+        """Play a sound if the feedback policy allows it."""
+        from dictare.audio.beep import get_sound_for_event, play_sound_file_async
+
+        if not self._feedback_policy.should_play(
+            event, self._agent_mgr.current_agent, self.config.audio,
+        ):
+            return
+        enabled, path = get_sound_for_event(self.config.audio, event)
+        if enabled:
+            scfg = self.config.audio.sounds.get(event)
+            vol = scfg.volume if scfg is not None else 1.0
+            play_sound_file_async(path, volume=vol)
+
+    # -------------------------------------------------------------------------
     # Hotkey Actions
     # -------------------------------------------------------------------------
 
@@ -875,6 +901,7 @@ class DictareEngine:
         message["x_input"] = {"ops": ["submit"], "trigger": "<double_tap>", "source": "dictare/double-tap"}
         agent.send(message)
         logger.debug("submit_action: submit sent to agent %s", agent.id)
+        self._play_focus_gated_sound("sent")
 
     # -------------------------------------------------------------------------
     # State Control
@@ -906,7 +933,12 @@ class DictareEngine:
 
     def unregister_agent(self, agent_id: str) -> bool:
         """Unregister an agent by ID."""
+        self._feedback_policy.remove_agent(agent_id)
         return self._agent_mgr.unregister(agent_id)
+
+    def set_agent_focus(self, agent_id: str, focused: bool) -> None:
+        """Update focus state for an agent's terminal."""
+        self._feedback_policy.set_focus(agent_id, focused)
 
     def switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent - sends event to controller."""
