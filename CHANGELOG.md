@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.97] - 2026-03-03
+
+### Fixed
+- **Settings dropdown shows "Default" instead of selected value** — selecting a value
+  that matches the Pydantic default (e.g. "English" for language) showed "Default (en)"
+  instead of the label. Caused by `$derived(() => ...)` (creates a constant function
+  reference) instead of `$derived.by(() => ...)` (reactive computed value) in Svelte 5.
+
 ## [0.1.96] - 2026-03-02
 
 ### Fixed
