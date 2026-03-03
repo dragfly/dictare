@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.99] - 2026-03-03
+## [0.1.100] - 2026-03-03
 
 ### Fixed
 - **Settings dropdown shows "Default" correctly after save** — `/api/settings/schema`
@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings dropdown label not reactive** — `$derived(() => ...)` creates a constant
   function reference in Svelte 5; changed to `$derived.by(() => ...)` for reactive
   computed values.
+- **Settings reload on section change** — switching between menu sections now reloads
+  values from the backend, so changes made externally (CLI, config file) are visible
+  without pressing Refresh.
 
 ## [0.1.96] - 2026-03-02
 
