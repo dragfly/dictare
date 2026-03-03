@@ -848,7 +848,7 @@ class DictareEngine:
         # Play "sent" sound only on pipeline-triggered submit (not every transcription).
         # Double-tap submit is handled separately in _submit_action().
         if success and pipeline_submit:
-            self._play_focus_gated_sound("sent")
+            self._play_submit_sequence()
         submit_trigger = x_input_info.get("trigger") if isinstance(x_input_info, dict) else None
         submit_confidence = x_input_info.get("confidence") if isinstance(x_input_info, dict) else None
 
@@ -883,6 +883,33 @@ class DictareEngine:
             vol = scfg.volume if scfg is not None else 1.0
             play_sound_file_async(path, volume=vol)
 
+    def _play_submit_sequence(self) -> None:
+        """Play typewriter burst → carriage-return sequence for submit actions."""
+        from dictare.audio.beep import get_sound_for_event, play_sound_file
+
+        if not self._feedback_policy.should_play(
+            "sent", self._agent_mgr.current_agent, self.config.audio,
+        ):
+            return
+
+        # Typewriter burst (one shot, not looped)
+        tw_enabled, tw_path = get_sound_for_event(self.config.audio, "transcribing")
+        cr_enabled, cr_path = get_sound_for_event(self.config.audio, "sent")
+
+        if not cr_enabled:
+            return
+
+        sent_cfg = self.config.audio.sounds.get("sent")
+        cr_vol = sent_cfg.volume if sent_cfg is not None else 1.0
+
+        if tw_path:
+            tw_cfg = self.config.audio.sounds.get("transcribing")
+            tw_vol = tw_cfg.volume if tw_cfg is not None else 1.0
+            # Typewriter first, then carriage-return on completion
+            play_sound_file(tw_path, volume=tw_vol, on_complete=lambda: play_sound_file(cr_path, volume=cr_vol))
+        else:
+            play_sound_file(cr_path, volume=cr_vol)
+
     # -------------------------------------------------------------------------
     # Hotkey Actions
     # -------------------------------------------------------------------------
@@ -902,7 +929,7 @@ class DictareEngine:
         message["x_input"] = {"ops": ["submit"], "trigger": "<double_tap>", "source": "dictare/double-tap"}
         agent.send(message)
         logger.debug("submit_action: submit sent to agent %s", agent.id)
-        self._play_focus_gated_sound("sent")
+        self._play_submit_sequence()
 
     # -------------------------------------------------------------------------
     # State Control

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.110] - 2026-03-03
+
+### Changed
+- **Submit sound is now typewriter + carriage-return sequence** — double-tap and
+  pipeline submit play a short typewriter burst followed by carriage-return,
+  matching the typewriter metaphor. Carriage-return never plays alone.
+
 ## [0.1.109] - 2026-03-03
 
 ### Fixed
