@@ -36,7 +36,7 @@
 		isDefault ? SENTINEL : isKnown ? value : CUSTOM
 	);
 
-	const displayLabel = $derived(() => {
+	const displayLabel = $derived.by(() => {
 		if (displayValue === SENTINEL) return defaultLabel;
 		if (displayValue === CUSTOM) return value;
 		const opt = options.find((o) => o.value === value);
@@ -93,7 +93,7 @@
 {:else}
 	<Select.Root type="single" value={displayValue} onValueChange={(v) => { if (v) handleSelect(v); }}>
 		<Select.Trigger class="w-fit max-w-64 whitespace-nowrap">
-			<span class="truncate">{displayLabel()}</span>
+			<span class="truncate">{displayLabel}</span>
 		</Select.Trigger>
 		<Select.Content>
 			<Select.Item value={SENTINEL} label={defaultLabel} />
