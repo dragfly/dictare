@@ -7,14 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.98] - 2026-03-03
+## [0.1.99] - 2026-03-03
 
 ### Fixed
-- **Settings dropdown reverts to "Default" after save** — selecting "Default (en)" then
-  saving correctly deleted the TOML key, but after reload the Pydantic-resolved default
-  "en" was indistinguishable from an explicit "English" selection. The dropdown now
-  compares the schema value against the Pydantic default and shows "Default (x)" when
-  they match (i.e. the user hasn't customized the field).
+- **Settings dropdown shows "Default" correctly after save** — `/api/settings/schema`
+  now returns `""` for string fields not explicitly set in TOML, instead of Pydantic-
+  resolved defaults. This lets the UI correctly distinguish "Default (en)" from an
+  explicit "English" selection.
 - **Settings dropdown label not reactive** — `$derived(() => ...)` creates a constant
   function reference in Svelte 5; changed to `$derived.by(() => ...)` for reactive
   computed values.
