@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.111] - 2026-03-03
+
+### Changed
+- pencil-write sound now randomly picks from 5 bundled clips for variety
+
 ## [0.1.110] - 2026-03-03
 
 ### Changed

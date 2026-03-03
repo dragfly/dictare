@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import random
 import subprocess
 import sys
 import threading
@@ -53,6 +54,15 @@ DEFAULT_SOUND_TRANSCRIBING = _SOUNDS_DIR / "typewriter.wav"
 DEFAULT_SOUND_READY = _SOUNDS_DIR / "carriage-return.wav"
 DEFAULT_SOUND_TRANSCRIBED = _SOUNDS_DIR / "pencil-write.wav"
 
+# Multi-clip random selection for pencil-write sound
+_PENCIL_WRITE_CLIPS: list[Path] = [
+    p for p in (_SOUNDS_DIR / f"pencil-write-{i}.wav" for i in range(1, 6)) if p.exists()
+] or [DEFAULT_SOUND_TRANSCRIBED]
+
+def _pick_pencil_write() -> Path:
+    """Return a random pencil-write clip path."""
+    return random.choice(_PENCIL_WRITE_CLIPS)
+
 # Map event names to their default bundled sound files
 _DEFAULT_SOUNDS: dict[str, Path] = {
     "start": DEFAULT_SOUND_START,
@@ -74,7 +84,7 @@ def _preload_sounds() -> None:
         logger.debug("soundfile not available, sounds will be loaded on demand")
         return
 
-    for path in {DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, DEFAULT_SOUND_TRANSCRIBING, DEFAULT_SOUND_READY, DEFAULT_SOUND_TRANSCRIBED}:
+    for path in {DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, DEFAULT_SOUND_TRANSCRIBING, DEFAULT_SOUND_READY, *_PENCIL_WRITE_CLIPS}:
         try:
             data, sr = sf.read(path)
             _sound_cache[str(path)] = (data, sr)
@@ -207,7 +217,12 @@ def get_sound_for_event(audio_config: Any, name: str) -> tuple[bool, str]:
     if name == "agent_announce":
         return True, ""  # TTS, no file path
 
-    path = sound_cfg.path or str(_DEFAULT_SOUNDS.get(name, ""))
+    if sound_cfg.path:
+        path = sound_cfg.path
+    elif name == "transcribed":
+        path = str(_pick_pencil_write())
+    else:
+        path = str(_DEFAULT_SOUNDS.get(name, ""))
     return True, path
 
 def get_sound_path(name: str) -> Path:
