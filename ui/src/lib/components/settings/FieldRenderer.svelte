@@ -93,11 +93,15 @@
 	/** Default value string for display in SelectField ("Default (x)"). */
 	const defaultDisplay = $derived(presetsStore.getDefault(field.key));
 
-	/** True when the saved config value differs from the schema default. */
+	/** True when the saved config value differs from the schema default.
+	 *  For string fields, "" means "use backend default" (key absent from TOML),
+	 *  so it must never be flagged as non-default. */
 	const isNonDefault = $derived(
 		!isDirty &&
 		field.default !== null &&
 		field.default !== undefined &&
+		currentValue !== "" &&
+		currentValue != null &&
 		JSON.stringify(currentValue) !== JSON.stringify(field.default)
 	);
 
