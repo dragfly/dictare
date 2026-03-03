@@ -93,16 +93,13 @@
 	/** Default value string for display in SelectField ("Default (x)"). */
 	const defaultDisplay = $derived(presetsStore.getDefault(field.key));
 
-	/** True when the saved config value differs from the schema default.
-	 *  For string fields, "" means "use backend default" (key absent from TOML),
-	 *  so it must never be flagged as non-default. */
+	/** True when the field has an explicit value in TOML (not using backend default).
+	 *  "" or null means "use backend default" (key absent from TOML) → not yellow.
+	 *  Any other value, even if it matches the schema default, → yellow. */
 	const isNonDefault = $derived(
 		!isDirty &&
-		field.default !== null &&
-		field.default !== undefined &&
 		currentValue !== "" &&
-		currentValue != null &&
-		JSON.stringify(currentValue) !== JSON.stringify(field.default)
+		currentValue != null
 	);
 
 	/** Placeholder text for empty string fields — shows the default value. */
