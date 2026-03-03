@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.107] - 2026-03-03
+
+### Fixed
+- **Yellow non-default dot only for dropdowns** — the non-default indicator (amber dot)
+  was incorrectly showing on all bool and number fields. The `""` sentinel comparison
+  now applies only to SelectField dropdowns; bool/number fields compare against the
+  Pydantic schema default instead.
+
 ## [0.1.106] - 2026-03-03
 
 ### Changed
