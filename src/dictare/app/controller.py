@@ -104,6 +104,10 @@ class _ControllerEvents(EngineEvents):
                     vol = scfg.volume if scfg is not None else 1.0
                     play_sound_file_async(path, volume=vol)
 
+            # Subtle pencil-write sound after each transcription (focus-gated)
+            if eng:
+                eng._play_focus_gated_sound("transcribed")
+
     def on_agent_change(self, agent_name: str, index: int) -> None:
         logger.info("on_agent_change: %s (index=%d)", agent_name, index)
 

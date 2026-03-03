@@ -26,6 +26,10 @@ class SoundConfig(BaseModel):
     enabled: bool = Field(default=True, description="Enable this sound")
     path: str | None = Field(default=None, description="Custom sound file path (None = bundled default)")
     volume: float = Field(default=1.0, ge=0.0, le=1.0, description="Playback volume (0.0–1.0)")
+    focus_gated: bool = Field(
+        default=False,
+        description="Skip this sound when the active agent's terminal has focus",
+    )
 
 
 def _default_sounds() -> dict[str, SoundConfig]:
@@ -35,7 +39,8 @@ def _default_sounds() -> dict[str, SoundConfig]:
         "stop": SoundConfig(),
         "transcribing": SoundConfig(enabled=False),
         "ready": SoundConfig(),
-        "sent": SoundConfig(),
+        "transcribed": SoundConfig(volume=0.15, focus_gated=True),
+        "sent": SoundConfig(volume=0.25),
         "agent_announce": SoundConfig(),
     }
 
@@ -90,7 +95,7 @@ class AudioConfig(BaseModel):
     )
     sounds: dict[str, SoundConfig] = Field(
         default_factory=_default_sounds,
-        description="Per-event sound configuration (start, stop, transcribing, ready, sent, agent_announce)",
+        description="Per-event sound configuration (start, stop, transcribing, ready, transcribed, sent, agent_announce)",
     )
 
     @model_validator(mode="before")
@@ -845,6 +850,7 @@ def create_default_config() -> Path:
 # enabled = true
 # path = ""                       # Empty = bundled default
 # volume = 1.0                    # 0.0–1.0
+# focus_gated = false             # Skip when agent terminal has focus
 # [audio.sounds.stop]             # LISTENING → OFF  (down-beep.wav)
 # enabled = true
 # [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING  (typewriter.wav)
@@ -853,8 +859,14 @@ def create_default_config() -> Path:
 # [audio.sounds.ready]            # TRANSCRIBING → LISTENING  (carriage return)
 # enabled = true
 # volume = 1.0
-# [audio.sounds.sent]             # Text sent  (up-beep.wav)
+# [audio.sounds.transcribed]      # After each transcription  (pencil-write.wav)
 # enabled = true
+# volume = 0.15                   # Very subtle
+# focus_gated = true              # Skipped when agent terminal has focus
+# [audio.sounds.sent]             # Text submitted  (carriage-return.wav)
+# enabled = true
+# volume = 0.25
+# focus_gated = false             # Set true to skip when agent terminal has focus
 # [audio.sounds.agent_announce]   # TTS announces agent name on switch
 # enabled = true
 

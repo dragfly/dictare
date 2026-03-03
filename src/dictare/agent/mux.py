@@ -127,6 +127,12 @@ class KeystrokeCounter:
 _CTRL_BACKSLASH = b"\x1c"
 _CTRL_BACKSLASH_CSI_U = b"\x1b[92;5u"
 
+# Terminal focus reporting escape sequences (xterm extension, widely supported)
+_FOCUS_ENABLE = b"\x1b[?1004h"
+_FOCUS_DISABLE = b"\x1b[?1004l"
+_FOCUS_IN = b"\x1b[I"
+_FOCUS_OUT = b"\x1b[O"
+
 
 def _parse_claim_key(key_str: str) -> tuple[bytes, bytes]:
     """Parse a claim key string into (raw_byte, csi_u_bytes).
@@ -183,6 +189,47 @@ def _strip_ctrl_backslash(data: bytes) -> tuple[bytes, bool]:
     return _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_CSI_U)
 
 
+def _strip_focus_events(data: bytes) -> tuple[bytes, bool | None]:
+    """Remove focus-in/out escape sequences from *data*.
+
+    Returns (cleaned_data, focused) where *focused* is:
+    - True if the last focus event was focus-in
+    - False if the last focus event was focus-out
+    - None if no focus events were found
+    """
+    focused: bool | None = None
+    if _FOCUS_IN in data or _FOCUS_OUT in data:
+        # Determine last focus state (in case both appear in one read)
+        last_in = data.rfind(_FOCUS_IN)
+        last_out = data.rfind(_FOCUS_OUT)
+        if last_in > last_out:
+            focused = True
+        elif last_out > last_in:
+            focused = False
+        elif last_in >= 0:
+            focused = True  # both equal → only _FOCUS_IN present
+        data = data.replace(_FOCUS_IN, b"").replace(_FOCUS_OUT, b"")
+    return data, focused
+
+
+def _report_focus(agent_id: str, base_url: str, focused: bool) -> None:
+    """POST focus state to engine (fire-and-forget, background thread)."""
+    def _do() -> None:
+        import json as _json
+        import urllib.request
+
+        url = base_url.rstrip("/").rsplit("/openvip", 1)[0]
+        url = f"{url}/api/agents/{agent_id}/focus"
+        body = _json.dumps({"focused": focused}).encode()
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(req, timeout=2)
+        except Exception:
+            pass
+
+    threading.Thread(target=_do, daemon=True).start()
+
+
 def _read_from_stdin(
     write_queue: queue.Queue,
     stop_event: threading.Event,
@@ -210,6 +257,14 @@ def _read_from_stdin(
                 data = os.read(sys.stdin.fileno(), 1024)
                 if not data:
                     break
+
+                # Strip focus events (terminal focus reporting)
+                if agent_id:
+                    data, focus_state = _strip_focus_events(data)
+                    if focus_state is not None:
+                        _report_focus(agent_id, base_url, focus_state)
+                        if not data:
+                            continue
 
                 # Intercept claim key to claim this agent as active
                 if agent_id:
@@ -638,6 +693,10 @@ def run_agent(
         if old_settings:
             tty.setraw(sys.stdin.fileno())
 
+        # Enable terminal focus reporting (xterm extension)
+        sys.stdout.buffer.write(_FOCUS_ENABLE)
+        sys.stdout.buffer.flush()
+
         stop_event = threading.Event()
 
         # Create thread-safe queue for serialized writes to PTY
@@ -696,6 +755,14 @@ def run_agent(
         return exit_code
 
     finally:
+        # Disable focus reporting and signal unfocused before cleanup
+        try:
+            sys.stdout.buffer.write(_FOCUS_DISABLE)
+            sys.stdout.buffer.flush()
+        except OSError:
+            pass
+        _report_focus(agent_id, base_url, False)
+
         # Reset scroll region before restoring terminal
         if sbar:
             sbar.cleanup()

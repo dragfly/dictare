@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.108] - 2026-03-03
+
+### Added
+- **Focus-aware audio feedback** — new `AudioFeedbackPolicy` silences focus-gated
+  sounds when the active agent's terminal has focus (the user can already see the text).
+  Terminal focus reporting via `\033[?1004h` (xterm extension, widely supported).
+- **"transcribed" sound event** — subtle pencil-on-paper sound after each transcription
+  (volume 0.15, focus-gated by default). Configurable in `[audio.sounds.transcribed]`.
+- **"sent" sound wired** — carriage-return plays on text submission (double-tap and
+  pipeline submit). Configurable in `[audio.sounds.sent]`.
+- **`focus_gated` per-event config** — new `SoundConfig.focus_gated` field lets users
+  control which sounds are skipped when the terminal has focus.
+- **`POST /api/agents/{agent_id}/focus`** — HTTP endpoint for terminals to report
+  focus state to the engine.
+
+### Changed
+- **Renamed `ready.wav` → `carriage-return.wav`** — sound file name now describes the
+  sound, not the event.
+- **"sent" default sound** — changed from `up-beep.wav` to `carriage-return.wav`.
+
 ## [0.1.107] - 2026-03-03
 
 ### Fixed

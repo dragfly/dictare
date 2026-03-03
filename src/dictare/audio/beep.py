@@ -52,7 +52,8 @@ _SOUNDS_DIR = Path(__file__).parent / "sounds"
 DEFAULT_SOUND_START = _SOUNDS_DIR / "up-beep.wav"
 DEFAULT_SOUND_STOP = _SOUNDS_DIR / "down-beep.wav"
 DEFAULT_SOUND_TRANSCRIBING = _SOUNDS_DIR / "typewriter.wav"
-DEFAULT_SOUND_READY = _SOUNDS_DIR / "ready.wav"
+DEFAULT_SOUND_READY = _SOUNDS_DIR / "carriage-return.wav"
+DEFAULT_SOUND_TRANSCRIBED = _SOUNDS_DIR / "pencil-write.wav"
 
 
 # Map event names to their default bundled sound files
@@ -61,7 +62,8 @@ _DEFAULT_SOUNDS: dict[str, Path] = {
     "stop": DEFAULT_SOUND_STOP,
     "transcribing": DEFAULT_SOUND_TRANSCRIBING,
     "ready": DEFAULT_SOUND_READY,
-    "sent": DEFAULT_SOUND_START,  # reuses up-beep
+    "transcribed": DEFAULT_SOUND_TRANSCRIBED,
+    "sent": DEFAULT_SOUND_READY,  # carriage-return on submit
 }
 
 # Pre-loaded sound cache: path -> (numpy_array, sample_rate)
@@ -76,7 +78,7 @@ def _preload_sounds() -> None:
         logger.debug("soundfile not available, sounds will be loaded on demand")
         return
 
-    for path in {DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, DEFAULT_SOUND_TRANSCRIBING, DEFAULT_SOUND_READY}:
+    for path in {DEFAULT_SOUND_START, DEFAULT_SOUND_STOP, DEFAULT_SOUND_TRANSCRIBING, DEFAULT_SOUND_READY, DEFAULT_SOUND_TRANSCRIBED}:
         try:
             data, sr = sf.read(path)
             _sound_cache[str(path)] = (data, sr)
