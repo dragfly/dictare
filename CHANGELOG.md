@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.101] - 2026-03-03
+
+### Fixed
+- **Non-default indicator (yellow dot) false positive** — fields at their backend
+  default (value `""` / absent from TOML) were incorrectly flagged as non-default
+  because `""` differs from the Pydantic default string. Now empty/null values are
+  never marked as non-default.
+
 ## [0.1.100] - 2026-03-03
 
 ### Fixed
