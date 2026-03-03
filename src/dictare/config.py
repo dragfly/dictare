@@ -488,6 +488,32 @@ def _apply_env_overrides(config: Config) -> Config:
 
     return Config.model_validate(config_dict)
 
+def load_raw_values(config_path: Path | None = None) -> dict[str, Any]:
+    """Load raw TOML values as a flat dotted-key dict.
+
+    Only returns keys explicitly set in the config file — no Pydantic defaults.
+    Nested sections are flattened: ``{stt: {language: "it"}}`` → ``{"stt.language": "it"}``.
+    """
+    if config_path is None:
+        config_path = get_config_path()
+    if not config_path.exists():
+        return {}
+    with open(config_path, "rb") as f:
+        data = tomllib.load(f)
+
+    flat: dict[str, Any] = {}
+
+    def _flatten(obj: dict, prefix: str = "") -> None:
+        for k, v in obj.items():
+            full = f"{prefix}{k}" if not prefix else f"{prefix}.{k}"
+            if isinstance(v, dict):
+                _flatten(v, full)
+            else:
+                flat[full] = v
+
+    _flatten(data)
+    return flat
+
 def load_config(config_path: Path | None = None) -> Config:
     """Load configuration from file with environment variable overrides.
 
