@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.115] - 2026-03-03
+
+### Changed
+- `transcribed` sound default volume raised from 0.15 to 1.0
+
 ## [0.1.114] - 2026-03-03
 
 ### Changed
