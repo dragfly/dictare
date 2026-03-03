@@ -273,6 +273,19 @@ class OpenVIPServer:
             stopped = await asyncio.to_thread(self._engine.stop_speaking)
             return {"status": "ok", "stopped": stopped}
 
+        @app.post("/api/agents/{agent_id}/focus")
+        async def set_agent_focus(agent_id: str, request: Request):
+            """Report terminal focus state for an agent."""
+            try:
+                body = await request.json()
+            except (ValueError, UnicodeDecodeError):
+                raise HTTPException(status_code=422, detail="Invalid JSON body")
+            focused = body.get("focused")
+            if not isinstance(focused, bool):
+                raise HTTPException(status_code=422, detail="'focused' must be a boolean")
+            self._engine.set_agent_focus(agent_id, focused)
+            return {"status": "ok"}
+
         @app.get("/api/speech/voices")
         async def speech_voices():
             """List available voices for the current TTS engine."""
