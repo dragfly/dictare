@@ -36,7 +36,7 @@ def _default_sounds() -> dict[str, SoundConfig]:
         "stop": SoundConfig(),
         "transcribing": SoundConfig(enabled=False, volume=0.15),
         "ready": SoundConfig(),
-        "transcribed": SoundConfig(volume=0.15, focus_gated=True),
+        "transcribed": SoundConfig(volume=1.0, focus_gated=True),
         "submit": SoundConfig(volume=0.25),
         "sent": SoundConfig(volume=0.25),
         "agent_announce": SoundConfig(),
@@ -827,7 +827,7 @@ def create_default_config() -> Path:
 # volume = 1.0
 # [audio.sounds.transcribed]      # Transcription received  (random pencil-write clip)
 # enabled = true
-# volume = 0.15                   # Very subtle
+# volume = 1.0
 # focus_gated = true              # Skipped when agent terminal has focus
 # [audio.sounds.submit]           # Submit action: typewriter burst  (typewriter.wav)
 # enabled = true
