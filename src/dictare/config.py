@@ -135,8 +135,8 @@ class STTConfig(BaseModel):
     """Speech-to-text configuration."""
 
     model: str = Field(
-        default="large-v3-turbo",
-        description="STT model: large-v3-turbo (default), parakeet-v3, or Whisper: tiny/base/small/medium/large-v3",
+        default="parakeet-v3",
+        description="STT model: parakeet-v3 (default), large-v3-turbo, or large-v3",
     )
     language: str = Field(
         default="auto",
