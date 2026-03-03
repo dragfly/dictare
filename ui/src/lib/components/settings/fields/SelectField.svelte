@@ -7,7 +7,7 @@
 	interface Props {
 		/** The normalized option list — already {value, label} pairs. */
 		options: { value: string; label: string }[];
-		/** Current value. "" means "use default" (dirty sentinel). */
+		/** Current value. "" means "use default". */
 		value: string;
 		/** Display string for the default, e.g. "agents" or "Built-in Microphone". */
 		defaultDisplay: string;

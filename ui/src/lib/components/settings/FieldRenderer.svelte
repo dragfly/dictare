@@ -101,6 +101,20 @@
 		JSON.stringify(currentValue) !== JSON.stringify(field.default)
 	);
 
+	/**
+	 * For SelectField: if the value isn't dirty (comes from schema, not user edit)
+	 * and matches the Pydantic default, pass "" so it shows "Default (x)".
+	 * schema.values returns Pydantic-resolved defaults, which are indistinguishable
+	 * from explicit overrides — this comparison recovers the distinction.
+	 */
+	const selectValue = $derived(
+		isDirty || currentValue == null
+			? ((currentValue as string) ?? "")
+			: String(currentValue) !== String(field.default ?? "")
+				? (currentValue as string)
+				: ""
+	);
+
 	/** Placeholder text for empty string fields — shows the default value. */
 	const placeholder = $derived(
 		field.type === "str" && typeof field.default === "string" && field.default !== ""
@@ -157,7 +171,7 @@
 		{:else if isSelect}
 			<SelectField
 				options={selectOptions}
-				value={(currentValue as string) ?? ""}
+				value={selectValue}
 				{defaultDisplay}
 				{allowCustom}
 				onchange={(v) => settingsStore.markDirty(field.key, v)}
