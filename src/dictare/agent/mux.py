@@ -613,7 +613,7 @@ def run_agent(
         print(f"[dictare] Error: engine is not running at {base_url}", file=sys.stderr)
         return 1
 
-    if agent_id in _pf_status.connected_agents:
+    if _pf_status.connected_agents and agent_id in _pf_status.connected_agents:
         print(
             f"[dictare] Error: agent '{agent_id}' is already connected",
             file=sys.stderr,
