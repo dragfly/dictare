@@ -228,8 +228,12 @@ class AudioManager:
         Smart policy:
         - Default device changed → only reset if we're using default (empty config)
         - Device list changed → check if our fixed device disappeared
+        - Always reinit PortAudio (refreshes sd.query_devices() / sd.default.device)
+        - Always restart input stream (reinit kills active streams)
         - Always notify UI via _on_devices_updated
         """
+        import sounddevice as sd
+
         from dictare.audio.device_monitor import (
             REASON_DEFAULT_INPUT,
             REASON_DEFAULT_OUTPUT,
@@ -241,22 +245,27 @@ class AudioManager:
         configured_input = self._config.input_device or ""
         configured_output = self._config.output_device or ""
 
+        # Reinit PortAudio to refresh cached device lists and defaults.
+        # sd.query_devices() and sd.default.device return stale data without this.
+        # Reinit kills any active input stream, so we restart it below.
+        if self._audio:
+            self._audio.emergency_abort()
+        self._reinit_portaudio(sd, timeout_s=3.0)
+
         if reason == REASON_DEFAULT_INPUT:
             if not configured_input:
-                # Using system default — reset to pick up new default
-                logger.info("Default input changed, resetting audio input")
-                self.reset_audio_input()
+                logger.info("Default input changed — will pick up new default on stream restart")
             # Fixed device — ignore default change
 
         elif reason == REASON_DEFAULT_OUTPUT:
             if not configured_output:
-                # Using system default — update beep output
+                # Using system default — update beep output (device=None uses fresh PA default)
                 logger.info("Default output changed, resetting audio output")
                 self.reset_audio_output("")
             # Fixed device — ignore default change
 
         elif reason == REASON_DEVICES:
-            # Check if our fixed devices disappeared
+            # Check with fresh device lists (PA was just reinited)
             device_names = {d["name"] for d in AudioCapture.list_devices()}
             output_names = {d["name"] for d in AudioCapture.list_output_devices()}
 
@@ -266,7 +275,6 @@ class AudioManager:
                     configured_input,
                 )
                 self._notify_fixed_device_removed("audio.input_device")
-                self.reset_audio_input()
 
             if configured_output and configured_output not in output_names:
                 logger.warning(
@@ -276,7 +284,10 @@ class AudioManager:
                 self._notify_fixed_device_removed("audio.output_device")
                 self.reset_audio_output("")
 
-        # Always notify UI so dropdowns update
+        # Restart input stream (always needed after PortAudio reinit)
+        self._restart_input_stream()
+
+        # Notify UI so dropdowns update with fresh device data
         if self._on_devices_updated:
             self._on_devices_updated()
 
@@ -305,7 +316,15 @@ class AudioManager:
         # Reinit PortAudio to pick up new device list
         self._reinit_portaudio(sd, timeout_s=3.0)
 
-        # Create new AudioCapture with current config
+        # Restart with fresh PortAudio session
+        self._restart_input_stream()
+
+    def _restart_input_stream(self) -> None:
+        """Start a fresh input stream after PortAudio reinit.
+
+        Creates a new AudioCapture with current config and starts streaming.
+        Call this after _reinit_portaudio() to resume audio capture.
+        """
         device = self._config.input_device or self._config.advanced.device
         try:
             self._audio = AudioCapture(
@@ -315,9 +334,9 @@ class AudioManager:
             )
             self._audio.start_streaming(self._on_audio_chunk)
             self.reset_vad()
-            logger.info("Audio input reset complete, device=%r", device or "(default)")
+            logger.info("Input stream restarted, device=%r", device or "(default)")
         except Exception:
-            logger.exception("Failed to reset audio input")
+            logger.exception("Failed to restart input stream")
             self._audio = None
 
     def reset_audio_output(self, device: str) -> None:

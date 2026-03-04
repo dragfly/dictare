@@ -119,7 +119,8 @@
 	function handleChange(v: unknown): void {
 		const devType = AUDIO_DEVICE_KEYS[field.key];
 		if (devType) {
-			// Instant save — no SaveBar, no engine restart
+			// Instant save — update UI immediately, then persist + reset device
+			settingsStore.setValueImmediate(field.key, v);
 			setAudioDevice(devType, (v as string) ?? "");
 		} else {
 			settingsStore.markDirty(field.key, v);
