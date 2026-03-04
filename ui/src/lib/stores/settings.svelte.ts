@@ -9,6 +9,10 @@ let dirtyShortcuts = $state<Shortcut[] | null>(null);
 let saveStatus = $state<"idle" | "saving" | "saved" | "error">("idle");
 let saveErrors = $state<Record<string, string>>({});
 let engineBarVisible = $state(false);
+let audioInUse = $state<{ input: string | null; output: string | null }>({
+	input: null,
+	output: null,
+});
 
 export function getSchema(): SchemaResponse | null {
 	return schema;
@@ -30,6 +34,9 @@ export function setSaveStatus(s: "idle" | "saving" | "saved" | "error"): void {
 }
 export function getSaveErrors(): Record<string, string> {
 	return saveErrors;
+}
+export function getAudioInUse(): { input: string | null; output: string | null } {
+	return audioInUse;
 }
 export function getEngineBarVisible(): boolean {
 	return engineBarVisible;
@@ -150,20 +157,41 @@ export function updateDeviceLists(status: StatusResponse): void {
 	const devices = status.platform?.audio_devices_available;
 	if (!devices || !schema) return;
 
+	// Update "in use" display
+	if (status.platform?.audio_in_use) {
+		audioInUse = status.platform.audio_in_use;
+	}
+
+	// Update available device lists (presets)
 	if (schema.presets["audio.input_device"]) {
+		const inputOpts = devices.input.map((d) => ({ value: d.name, label: d.name }));
+		// Add configured device if not in list (so user sees their preference)
+		const audioValues = schema.values.audio as Record<string, unknown> | undefined;
+		const configuredInput = audioValues?.input_device as string | undefined;
+		if (configuredInput && !inputOpts.some((o) => o.value === configuredInput)) {
+			inputOpts.push({ value: configuredInput, label: `${configuredInput} (unavailable)` });
+		}
 		schema.presets["audio.input_device"] = {
 			...schema.presets["audio.input_device"],
-			values: devices.input.map((d) => ({ value: d.name, label: d.name })),
+			values: inputOpts,
 			default: devices.default_input?.name ?? "",
 		};
 	}
 	if (schema.presets["audio.output_device"]) {
+		const outputOpts = devices.output.map((d) => ({ value: d.name, label: d.name }));
+		const audioValues = schema.values.audio as Record<string, unknown> | undefined;
+		const configuredOutput = audioValues?.output_device as string | undefined;
+		if (configuredOutput && !outputOpts.some((o) => o.value === configuredOutput)) {
+			outputOpts.push({ value: configuredOutput, label: `${configuredOutput} (unavailable)` });
+		}
 		schema.presets["audio.output_device"] = {
 			...schema.presets["audio.output_device"],
-			values: devices.output.map((d) => ({ value: d.name, label: d.name })),
+			values: outputOpts,
 			default: devices.default_output?.name ?? "",
 		};
 	}
+
+	// Config = user preference — never cleared by system.
 	// Force reactivity
 	schema = { ...schema };
 }

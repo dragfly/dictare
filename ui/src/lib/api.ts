@@ -213,6 +213,7 @@ export type StatusResponse = {
 		};
 		loading: { active: boolean; models: { name: string; status: string }[] };
 		stats: { transcriptions: number; words: number; chars: number; audio_seconds: number; phrase: string };
+		audio_in_use?: { input: string | null; output: string | null };
 		audio_devices_available?: {
 			input: AudioDeviceInfo[];
 			output: AudioDeviceInfo[];

@@ -60,8 +60,8 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = {
 
 /** Override the auto-generated label for specific dotted keys */
 export const LABEL_OVERRIDES: Record<string, string> = {
-  "audio.input_device": "Input Device",
-  "audio.output_device": "Output Device",
+  "audio.input_device": "Preferred Input Device",
+  "audio.output_device": "Preferred Output Device",
   "hotkey.key": "Hotkey",
 };
 

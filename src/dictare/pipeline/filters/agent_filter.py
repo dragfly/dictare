@@ -22,6 +22,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from dictare.core.agent_manager import AgentManager
 from dictare.core.bus import bus
 from dictare.pipeline.base import PipelineResult, fork_message
 from dictare.pipeline.filters._text import normalize as _normalize
@@ -139,6 +140,8 @@ class AgentFilter:
         Args:
             agent_id: ID of the registered agent.
         """
+        if agent_id in AgentManager.RESERVED_AGENT_IDS:
+            return
         if agent_id not in self.agent_ids:
             self.agent_ids.append(agent_id)
             logger.info(
@@ -288,6 +291,8 @@ class AgentFilter:
         best_score = 0.0
 
         for agent_id in self.agent_ids:
+            if agent_id in AgentManager.RESERVED_AGENT_IDS:
+                continue
             score = fuzzy_match_score(heard, agent_id)
             if score > best_score:
                 best_agent = agent_id

@@ -17,6 +17,7 @@
 
 	let es: EventSource | null = null;
 	let refreshTimer: ReturnType<typeof setInterval> | null = null;
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 	async function load() {
 		loading = true;
@@ -40,13 +41,26 @@
 			} catch {
 				// ignore malformed events
 			}
+			// SSE is alive — stop polling fallback if active
+			if (refreshTimer) {
+				clearInterval(refreshTimer);
+				refreshTimer = null;
+			}
 		};
 		es.onerror = () => {
-			// SSE disconnected — fall back to polling
+			// SSE disconnected — close and schedule reconnect
 			es?.close();
 			es = null;
+			// Poll while disconnected so dashboard stays updated
 			if (!refreshTimer) {
 				refreshTimer = setInterval(load, 5000);
+			}
+			// Try to reconnect SSE after a delay
+			if (!reconnectTimer) {
+				reconnectTimer = setTimeout(() => {
+					reconnectTimer = null;
+					if (!es) connectSSE();
+				}, 3000);
 			}
 		};
 	}
@@ -74,6 +88,7 @@
 	onDestroy(() => {
 		es?.close();
 		if (refreshTimer) clearInterval(refreshTimer);
+		if (reconnectTimer) clearTimeout(reconnectTimer);
 	});
 
 	const p = $derived(status?.platform);
