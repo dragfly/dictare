@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.120] - 2026-03-04
+
+### Added
+- Audio device monitoring: detect add/remove events and default device changes (macOS CoreAudio + Linux polling)
+- Smart device change policy: auto-reset when using defaults, auto-fallback when fixed device disappears
+- `POST /api/audio/device` endpoint for instant audio device switching (no engine restart)
+- Device lists in SSE status push — UI dropdowns update live when devices change
+- Instant save for audio device dropdowns (no SaveBar, no engine restart needed)
+- UI cache-control middleware: immutable assets cached forever, index.html never cached (fixes stale UI after upgrade)
+
+### Changed
+- DeviceMonitor callback now includes reason string (`default_input_changed`, `default_output_changed`, `devices_changed`)
+- macOS CoreAudio monitor listens for 3 properties (input default, output default, device list) instead of 1
+
 ## [0.1.119] - 2026-03-04
 
 ### Fixed

@@ -132,6 +132,18 @@ export async function fetchAudioDevices(): Promise<AudioDevicesResponse> {
 	return r.json();
 }
 
+export async function setAudioDevice(type: "input" | "output", device: string): Promise<void> {
+	const r = await fetch(`${API}/audio/device`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ type, device }),
+	});
+	if (!r.ok) {
+		const data = await r.json().catch(() => ({}));
+		throw new Error(data.detail || `Failed to set audio device: ${r.status}`);
+	}
+}
+
 // ----- Models API -----
 
 export type ModelInfo = {
@@ -201,6 +213,12 @@ export type StatusResponse = {
 		};
 		loading: { active: boolean; models: { name: string; status: string }[] };
 		stats: { transcriptions: number; words: number; chars: number; audio_seconds: number; phrase: string };
+		audio_devices_available?: {
+			input: AudioDeviceInfo[];
+			output: AudioDeviceInfo[];
+			default_input: AudioDeviceInfo | null;
+			default_output: AudioDeviceInfo | null;
+		};
 	};
 };
 

@@ -18,6 +18,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Reason strings passed to the callback
+REASON_DEFAULT_INPUT = "default_input_changed"
+REASON_DEFAULT_OUTPUT = "default_output_changed"
+REASON_DEVICES = "devices_changed"
+
 class DeviceMonitor(ABC):
     """Monitors OS-level audio device changes.
 
@@ -25,7 +30,7 @@ class DeviceMonitor(ABC):
     reacts, preventing SIGABRT from assertion failures in AudioIOProc.
     """
 
-    def __init__(self, on_device_change: Callable[[], None]) -> None:
+    def __init__(self, on_device_change: Callable[[str], None]) -> None:
         self._on_device_change = on_device_change
         self._running = False
 
@@ -44,34 +49,38 @@ class DeviceMonitor(ABC):
 class CoreAudioDeviceMonitor(DeviceMonitor):
     """macOS device monitor using CoreAudio property listeners.
 
-    Listens for kAudioHardwarePropertyDefaultInputDevice changes on
-    kAudioObjectSystemObject. The callback fires on CoreAudio's internal
-    thread, BEFORE PortAudio's IOThread sees the stale device.
+    Listens for:
+    - kAudioHardwarePropertyDefaultInputDevice  (b"dIn ") — default input changed
+    - kAudioHardwarePropertyDefaultOutputDevice (b"dOut") — default output changed
+    - kAudioHardwarePropertyDevices             (b"dev#") — device list changed
+
+    Callbacks fire on CoreAudio's internal thread, BEFORE PortAudio's IOThread
+    sees the stale device.
 
     Uses ctypes — no pyobjc dependency.
     """
 
-    def __init__(self, on_device_change: Callable[[], None]) -> None:
+    def __init__(self, on_device_change: Callable[[str], None]) -> None:
         super().__init__(on_device_change)
-        self._listener_installed = False
-        self._callback_ref: Any = None  # prevent GC of ctypes callback
-        self._property_address: Any = None
+        self._listeners_installed = False
+        self._callback_refs: list[Any] = []  # prevent GC of ctypes callbacks
+        self._property_addresses: list[Any] = []
         self._core_audio: Any = None
 
     def start(self) -> None:
         if self._running:
             return
-        self._install_listener()
+        self._install_listeners()
         self._running = True
 
     def stop(self) -> None:
         if not self._running:
             return
-        self._remove_listener()
+        self._remove_listeners()
         self._running = False
 
-    def _install_listener(self) -> None:
-        """Install CoreAudio property listener via ctypes."""
+    def _install_listeners(self) -> None:
+        """Install CoreAudio property listeners via ctypes."""
         import ctypes
         from ctypes import CFUNCTYPE, POINTER, Structure, c_int32, c_uint32, c_void_p
 
@@ -92,78 +101,102 @@ class CoreAudioDeviceMonitor(DeviceMonitor):
             POINTER(AudioObjectPropertyAddress), c_void_p,
         )
 
-        def _on_property_change(
-            _obj_id: int, _num: int, _addrs: Any, _data: Any,
-        ) -> int:
-            """CoreAudio callback — runs on CoreAudio's internal thread."""
-            try:
-                self._on_device_change()
-            except Exception:
-                pass  # Never let exceptions escape into C
-            return 0  # noErr
-
-        # Keep reference to prevent garbage collection
-        self._callback_ref = listener_proc_type(_on_property_change)
-
-        # FourCC constants
-        selector = int.from_bytes(b"dIn ", "big")  # kAudioHardwarePropertyDefaultInputDevice
         scope = int.from_bytes(b"glob", "big")  # kAudioObjectPropertyScopeGlobal
         element = 0  # kAudioObjectPropertyElementMain
 
-        self._property_address = AudioObjectPropertyAddress(selector, scope, element)
+        # (FourCC selector, reason string)
+        properties = [
+            (b"dIn ", REASON_DEFAULT_INPUT),
+            (b"dOut", REASON_DEFAULT_OUTPUT),
+            (b"dev#", REASON_DEVICES),
+        ]
+
         self._core_audio = core_audio
 
-        status = core_audio.AudioObjectAddPropertyListener(
-            c_uint32(1),  # kAudioObjectSystemObject
-            ctypes.byref(self._property_address),
-            self._callback_ref,
-            None,
-        )
-        if status != 0:
-            logger.warning("Failed to install CoreAudio device listener: OSStatus %d", status)
-        else:
-            self._listener_installed = True
-            logger.debug("CoreAudio device monitor installed")
+        for fourcc, reason in properties:
+            def _make_callback(r: str) -> Any:
+                def _on_property_change(
+                    _obj_id: int, _num: int, _addrs: Any, _data: Any,
+                ) -> int:
+                    """CoreAudio callback — runs on CoreAudio's internal thread."""
+                    try:
+                        self._on_device_change(r)
+                    except Exception:
+                        pass  # Never let exceptions escape into C
+                    return 0  # noErr
+                return listener_proc_type(_on_property_change)
 
-    def _remove_listener(self) -> None:
-        """Remove CoreAudio property listener."""
-        if not self._listener_installed:
+            callback_ref = _make_callback(reason)
+            self._callback_refs.append(callback_ref)
+
+            selector = int.from_bytes(fourcc, "big")
+            addr = AudioObjectPropertyAddress(selector, scope, element)
+            self._property_addresses.append(addr)
+
+            status = core_audio.AudioObjectAddPropertyListener(
+                c_uint32(1),  # kAudioObjectSystemObject
+                ctypes.byref(addr),
+                callback_ref,
+                None,
+            )
+            if status != 0:
+                logger.warning(
+                    "Failed to install CoreAudio listener %s: OSStatus %d",
+                    fourcc.decode(), status,
+                )
+            else:
+                logger.debug("CoreAudio listener installed: %s", fourcc.decode())
+
+        self._listeners_installed = True
+        logger.debug("CoreAudio device monitor installed (%d listeners)", len(properties))
+
+    def _remove_listeners(self) -> None:
+        """Remove all CoreAudio property listeners."""
+        if not self._listeners_installed:
             return
         try:
             import ctypes
 
-            self._core_audio.AudioObjectRemovePropertyListener(
-                ctypes.c_uint32(1),
-                ctypes.byref(self._property_address),
-                self._callback_ref,
-                None,
-            )
-            self._listener_installed = False
+            for addr, callback_ref in zip(self._property_addresses, self._callback_refs):
+                try:
+                    self._core_audio.AudioObjectRemovePropertyListener(
+                        ctypes.c_uint32(1),
+                        ctypes.byref(addr),
+                        callback_ref,
+                        None,
+                    )
+                except Exception:
+                    pass
+            self._listeners_installed = False
             logger.debug("CoreAudio device monitor removed")
         except Exception:
-            logger.debug("Failed to remove CoreAudio listener", exc_info=True)
+            logger.debug("Failed to remove CoreAudio listeners", exc_info=True)
+        finally:
+            self._callback_refs.clear()
+            self._property_addresses.clear()
 
 class PollingDeviceMonitor(DeviceMonitor):
     """Fallback device monitor using periodic device list polling.
 
-    Polls sounddevice default input device every 2 seconds and fires
-    the callback if the default device index changes. Sufficient for
-    Linux where PulseAudio/PipeWire handle re-routing more gracefully.
+    Polls sounddevice default input/output device and device count every 2 seconds.
+    Fires the callback with a reason string indicating what changed.
     """
 
     POLL_INTERVAL = 2.0
 
-    def __init__(self, on_device_change: Callable[[], None]) -> None:
+    def __init__(self, on_device_change: Callable[[str], None]) -> None:
         super().__init__(on_device_change)
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._last_device: int | None = None
+        self._last_input: int | None = None
+        self._last_output: int | None = None
+        self._last_count: int = 0
 
     def start(self) -> None:
         if self._running:
             return
         self._stop_event.clear()
-        self._last_device = self._get_default_input_device()
+        self._last_input, self._last_output, self._last_count = self._snapshot()
         self._thread = threading.Thread(
             target=self._poll_loop,
             daemon=True,
@@ -187,31 +220,53 @@ class PollingDeviceMonitor(DeviceMonitor):
         """Poll for device changes."""
         while not self._stop_event.wait(timeout=self.POLL_INTERVAL):
             try:
-                current = self._get_default_input_device()
-                if current != self._last_device:
+                cur_in, cur_out, cur_count = self._snapshot()
+
+                if cur_count != self._last_count:
+                    logger.debug(
+                        "Device count changed: %d -> %d",
+                        self._last_count, cur_count,
+                    )
+                    self._last_input = cur_in
+                    self._last_output = cur_out
+                    self._last_count = cur_count
+                    self._on_device_change(REASON_DEVICES)
+                    continue
+
+                if cur_in != self._last_input:
                     logger.debug(
                         "Default input device changed: %s -> %s",
-                        self._last_device, current,
+                        self._last_input, cur_in,
                     )
-                    self._last_device = current
-                    self._on_device_change()
+                    self._last_input = cur_in
+                    self._on_device_change(REASON_DEFAULT_INPUT)
+
+                if cur_out != self._last_output:
+                    logger.debug(
+                        "Default output device changed: %s -> %s",
+                        self._last_output, cur_out,
+                    )
+                    self._last_output = cur_out
+                    self._on_device_change(REASON_DEFAULT_OUTPUT)
+
             except Exception:
                 # query_devices() can fail if PortAudio is in a bad state
                 logger.debug("Device poll failed", exc_info=True)
-                self._on_device_change()
+                self._on_device_change(REASON_DEVICES)
 
     @staticmethod
-    def _get_default_input_device() -> int | None:
-        """Get current default input device index."""
+    def _snapshot() -> tuple[int | None, int | None, int]:
+        """Return (default_input_idx, default_output_idx, device_count)."""
         try:
             import sounddevice as sd
 
-            idx = sd.default.device[0]
-            return idx
+            default = sd.default.device
+            count = len(sd.query_devices())
+            return default[0], default[1], count
         except Exception:
-            return None
+            return None, None, 0
 
-def create_device_monitor(on_device_change: Callable[[], None]) -> DeviceMonitor:
+def create_device_monitor(on_device_change: Callable[[str], None]) -> DeviceMonitor:
     """Create platform-appropriate device monitor.
 
     Returns CoreAudioDeviceMonitor on macOS, PollingDeviceMonitor on Linux.
