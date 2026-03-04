@@ -10,6 +10,7 @@
 	import KeyCaptureField from "./fields/KeyCaptureField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
+	import { setAudioDevice } from "$lib/api";
 	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, TOML_NO_ACCORDION, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS, LABEL_OVERRIDES, BACKEND_DRIVEN_FIELDS } from "$lib/registry/field-config";
 	import type { PresetOption } from "$lib/registry/field-config";
 
@@ -107,6 +108,23 @@
 			? field.default
 			: ""
 	);
+
+	/** Map audio device field keys to their device type for instant save. */
+	const AUDIO_DEVICE_KEYS: Record<string, "input" | "output"> = {
+		"audio.input_device": "input",
+		"audio.output_device": "output",
+	};
+
+	/** Handle field value change — instant save for audio devices, markDirty for others. */
+	function handleChange(v: unknown): void {
+		const devType = AUDIO_DEVICE_KEYS[field.key];
+		if (devType) {
+			// Instant save — no SaveBar, no engine restart
+			setAudioDevice(devType, (v as string) ?? "");
+		} else {
+			settingsStore.markDirty(field.key, v);
+		}
+	}
 </script>
 
 {#if HIDDEN_FORM_FIELDS.has(field.key) || isHiddenByParentToml}
@@ -160,7 +178,7 @@
 				value={(currentValue as string) ?? ""}
 				{defaultDisplay}
 				{allowCustom}
-				onchange={(v) => settingsStore.markDirty(field.key, v)}
+				onchange={(v) => handleChange(v)}
 			/>
 		{:else if field.type === "int" || field.type === "float"}
 			<NumberField
