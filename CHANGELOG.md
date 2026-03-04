@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.116] - 2026-03-04
+
+### Fixed
+- Debounce focus-out to fix terminal focus flicker during text injection (500ms delay)
+- Assume focused on agent launch — mux sends initial focus-in report after enabling `?1004h`
+
 ## [0.1.115] - 2026-03-03
 
 ### Changed
