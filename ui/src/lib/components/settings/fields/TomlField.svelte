@@ -13,7 +13,6 @@
 	import { toml } from "@codemirror/legacy-modes/mode/toml";
 	import { classHighlighter } from "@lezer/highlight";
 	import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
-	import { fetchTomlSection } from "$lib/api";
 	import * as settingsStore from "$lib/stores/settings.svelte";
 
 	interface Props {
@@ -26,12 +25,14 @@
 
 	let editorEl: HTMLDivElement;
 	let view: EditorView | null = null;
-	let status = $state<"loading" | "idle" | "error">("idle");
-	let errorMessage = $state("");
-	let originalContent = $state("");
 	let currentContent = $state("");
 	let isOpen = $state(false);
 	let loaded = false;
+
+	/** The original content from the store (not dirty). */
+	function originalContent(): string {
+		return settingsStore.getSchema()?.toml_sections[section] ?? "";
+	}
 
 	const extensions = [
 		highlightSpecialChars(),
@@ -46,7 +47,7 @@
 			if (update.docChanged) {
 				currentContent = update.state.doc.toString();
 				// Track dirty state in the global store
-				if (currentContent !== originalContent) {
+				if (currentContent !== originalContent()) {
 					settingsStore.markTomlDirty(section, currentContent);
 				} else {
 					settingsStore.markTomlClean(section);
@@ -65,17 +66,25 @@
 	// When resetDirty() clears dirtyToml, revert editor content
 	$effect(() => {
 		const dirtyToml = settingsStore.getDirtyToml();
-		if (loaded && view && !(section in dirtyToml) && currentContent !== originalContent) {
+		if (loaded && view && !(section in dirtyToml) && currentContent !== originalContent()) {
+			const content = originalContent();
 			view.dispatch({
-				changes: { from: 0, to: view.state.doc.length, insert: originalContent }
+				changes: { from: 0, to: view.state.doc.length, insert: content }
 			});
 		}
 	});
 
-	// Reload content from backend after successful save
+	// When schema changes (after load()), update editor with new content
 	$effect(() => {
-		if (settingsStore.getSaveStatus() === "saved" && loaded) {
-			reload();
+		const s = settingsStore.getSchema();
+		if (!loaded || !view || !s) return;
+		// Only update if this section is not dirty
+		if (section in settingsStore.getDirtyToml()) return;
+		const content = s.toml_sections[section] ?? "";
+		if (content !== currentContent) {
+			view.dispatch({
+				changes: { from: 0, to: view.state.doc.length, insert: content }
+			});
 		}
 	});
 
@@ -83,7 +92,7 @@
 		if (noAccordion) {
 			isOpen = true;
 			tick().then(() => {
-				reload();
+				initEditor();
 				loaded = true;
 			});
 		}
@@ -97,32 +106,23 @@
 		isOpen = !isOpen;
 		if (isOpen && !loaded) {
 			await tick(); // wait for editorEl to be in DOM
-			await reload();
+			initEditor();
 			loaded = true;
 		}
 	}
 
-	async function reload() {
-		status = "loading";
-		errorMessage = "";
-		try {
-			const content = await fetchTomlSection(section);
-			originalContent = content;
-			currentContent = content;
-			if (view) {
-				view.dispatch({
-					changes: { from: 0, to: view.state.doc.length, insert: content }
-				});
-			} else {
-				view = new EditorView({
-					state: EditorState.create({ doc: content, extensions }),
-					parent: editorEl,
-				});
-			}
-			status = "idle";
-		} catch (e) {
-			errorMessage = e instanceof Error ? e.message : "Load failed";
-			status = "error";
+	function initEditor() {
+		const content = settingsStore.getTomlSection(section);
+		currentContent = content;
+		if (view) {
+			view.dispatch({
+				changes: { from: 0, to: view.state.doc.length, insert: content }
+			});
+		} else {
+			view = new EditorView({
+				state: EditorState.create({ doc: content, extensions }),
+				parent: editorEl,
+			});
 		}
 	}
 </script>
@@ -137,13 +137,8 @@
 		<!-- CodeMirror editor mount point -->
 		<div
 			bind:this={editorEl}
-			class="rounded-md border bg-muted/30 overflow-hidden
-				{status === 'loading' ? 'opacity-50' : ''}"
+			class="rounded-md border bg-muted/30 overflow-hidden"
 		></div>
-
-		{#if status === "error" && errorMessage}
-			<span class="text-xs text-destructive">{errorMessage}</span>
-		{/if}
 	</div>
 {:else}
 	<!-- Accordion mode -->
@@ -168,13 +163,8 @@
 				<!-- CodeMirror editor mount point -->
 				<div
 					bind:this={editorEl}
-					class="rounded-md border bg-muted/30 overflow-hidden
-						{status === 'loading' ? 'opacity-50' : ''}"
+					class="rounded-md border bg-muted/30 overflow-hidden"
 				></div>
-
-				{#if status === "error" && errorMessage}
-					<span class="text-xs text-destructive">{errorMessage}</span>
-				{/if}
 			</div>
 		{/if}
 	</div>

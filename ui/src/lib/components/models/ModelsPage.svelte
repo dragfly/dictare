@@ -131,9 +131,10 @@
 		return cap.configured;
 	}
 
-	// Reload capabilities after successful save
+	// Reload capabilities when schema changes (e.g. after engine restart → load())
 	$effect(() => {
-		if (settingsStore.getSaveStatus() === "saved") {
+		const s = settingsStore.getSchema();
+		if (s && !loading) {
 			load();
 		}
 	});
