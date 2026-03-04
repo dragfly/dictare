@@ -30,7 +30,7 @@
 	}
 
 	function connectSSE() {
-		es = new EventSource("/status/stream");
+		es = new EventSource("/openvip/status/stream");
 		es.onmessage = (evt) => {
 			try {
 				status = JSON.parse(evt.data) as StatusResponse;
@@ -75,6 +75,19 @@
 
 	const p = $derived(status?.platform);
 	const outputMode = $derived(p?.output.mode ?? "agents");
+
+	async function handleAgentClick(agent: string) {
+		if (!status || agent === p?.output.current_agent) return;
+		// Optimistic update — instant UI response
+		status = {
+			...status,
+			platform: {
+				...status.platform,
+				output: { ...status.platform.output, current_agent: agent },
+			},
+		};
+		await setCurrentAgent(agent);
+	}
 
 	async function switchMode(mode: "keyboard" | "agents") {
 		if (mode === outputMode) return;
@@ -233,7 +246,7 @@
 				<div class="flex flex-wrap gap-2">
 					{#each p.output.available_agents as agent}
 						<button
-							onclick={() => setCurrentAgent(agent)}
+							onclick={() => handleAgentClick(agent)}
 							class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors
 								{agent === p.output.current_agent
 									? 'bg-primary text-primary-foreground border-transparent'
