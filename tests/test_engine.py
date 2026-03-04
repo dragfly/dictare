@@ -1383,8 +1383,8 @@ class TestSetOutputMode:
         msg = mock_agent.send.call_args[0][0]
         assert "submit" in msg.get("x_input", {}).get("ops", [])
 
-    def test_long_press_toggles_output_mode(self) -> None:
-        """Long-press hotkey toggles between agents and keyboard mode."""
+    def test_output_mode_toggle_via_api(self) -> None:
+        """Output mode can be toggled via set_output_mode API."""
         config = MockConfig()
         engine = DictareEngine(config=config)
         engine._agent_mgr._current_agent_id = None
@@ -1396,13 +1396,13 @@ class TestSetOutputMode:
         engine._agent_mgr._agent_order.append("__keyboard__")
         register_test_agents(engine, ["claude"])
 
-        # Simulate long press: should toggle to keyboard
-        engine._tap_detector._on_long_press()
+        # Toggle to keyboard via API
+        engine.set_output_mode("keyboard")
         assert engine.agent_mode is False
         assert engine._agent_mgr._current_agent_id == "__keyboard__"
 
-        # Second long press: should toggle back to agents
-        engine._tap_detector._on_long_press()
+        # Toggle back to agents via API
+        engine.set_output_mode("agents")
         assert engine.agent_mode is True
 
 class TestResendLast:

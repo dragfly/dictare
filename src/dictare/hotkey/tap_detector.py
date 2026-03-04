@@ -1,7 +1,7 @@
 """Tap detection state machine for modifier keys.
 
-Detects single-tap, double-tap, and long-press on a hotkey while ignoring
-key combinations (e.g., Command+Plus should not trigger a tap).
+Detects single-tap, double-tap, and double-tap-and-hold on a hotkey while
+ignoring key combinations (e.g., Command+Plus should not trigger a tap).
 
 State machine:
 
@@ -19,8 +19,8 @@ State machine:
 
     RELEASED_1 ──[double_tap_timeout]──> SINGLE_TAP → IDLE
 
-    PRESSED_1 ──[long_press_timeout]──> LONG_PRESSED ──[key_up]──> IDLE
-                                             (arms; fires on_long_press on key_up)
+    PRESSED_2 ──[hold_timeout]──> HOLD_ACTIVE ──[key_up]──> IDLE
+                                       (arms; fires on_hold on key_up)
 """
 
 from __future__ import annotations
@@ -36,10 +36,10 @@ class TapState(Enum):
     PRESSED_1 = auto()    # First press, key is down
     RELEASED_1 = auto()   # First tap complete, waiting for second
     PRESSED_2 = auto()    # Second press, key is down
-    LONG_PRESSED = auto()  # Long press detected, waiting for key_up
+    HOLD_ACTIVE = auto()  # Double-tap-and-hold detected, waiting for key_up
 
 class TapDetector:
-    """Detects single tap, double tap, and long press on a modifier key.
+    """Detects single tap, double tap, and double-tap-and-hold on a modifier key.
 
     Uses same pattern as StateManager: Enum states + VALID_TRANSITIONS dict.
 
@@ -48,44 +48,47 @@ class TapDetector:
     are pressed while the hotkey is down.
 
     Timer semantics:
-    - key_down starts a long-press timer (default 0.8s).
-      If the key is still held when it fires, on_long_press is called.
-    - key_up (before long-press fires) cancels that timer and starts a
-      double-tap window timer (default 0.4s).
+    - key_down (first press) transitions to PRESSED_1. No timer started —
+      a single long hold just results in a single tap on release.
+    - key_up (from PRESSED_1) starts a double-tap window timer (default 0.4s).
       If no second press arrives, on_single_tap is called.
+    - key_down (second press within window) cancels the double-tap timer
+      and starts a hold timer (default 0.8s). If still held when it fires,
+      transitions to HOLD_ACTIVE; on_hold fires on key_up.
+    - key_up (from PRESSED_2, before hold timer) fires on_double_tap.
     """
 
     VALID_TRANSITIONS: dict[TapState, list[TapState]] = {
         TapState.IDLE: [TapState.PRESSED_1],
-        TapState.PRESSED_1: [TapState.RELEASED_1, TapState.LONG_PRESSED, TapState.IDLE],
+        TapState.PRESSED_1: [TapState.RELEASED_1, TapState.IDLE],
         TapState.RELEASED_1: [TapState.PRESSED_2, TapState.IDLE],
-        TapState.PRESSED_2: [TapState.IDLE],
-        TapState.LONG_PRESSED: [TapState.IDLE],
+        TapState.PRESSED_2: [TapState.HOLD_ACTIVE, TapState.IDLE],
+        TapState.HOLD_ACTIVE: [TapState.IDLE],
     }
 
     def __init__(
         self,
         threshold: float = 0.4,
-        long_press_threshold: float = 0.8,
+        hold_threshold: float = 0.8,
         on_single_tap: Callable[[], None] | None = None,
         on_double_tap: Callable[[], None] | None = None,
-        on_long_press: Callable[[], None] | None = None,
+        on_hold: Callable[[], None] | None = None,
     ) -> None:
         """Initialize tap detector.
 
         Args:
             threshold: Max seconds between taps for double-tap,
                       and delay before single-tap fires after key_up.
-            long_press_threshold: Seconds to hold before long-press fires.
+            hold_threshold: Seconds to hold on second press before hold fires.
             on_single_tap: Callback when single tap detected.
             on_double_tap: Callback when double tap detected.
-            on_long_press: Callback when long press detected (fires on key_up, after the modifier is released).
+            on_hold: Callback when double-tap-and-hold detected (fires on key_up).
         """
         self.threshold = threshold
-        self.long_press_threshold = long_press_threshold
+        self.hold_threshold = hold_threshold
         self._on_single_tap = on_single_tap
         self._on_double_tap = on_double_tap
-        self._on_long_press = on_long_press
+        self._on_hold = on_hold
 
         self._state = TapState.IDLE
         self._combo_detected = False
@@ -112,14 +115,14 @@ class TapDetector:
             if self._state == TapState.IDLE:
                 self._transition(TapState.PRESSED_1)
                 self._combo_detected = False
-                self._start_long_press_timer()
 
             elif self._state == TapState.RELEASED_1:
                 self._cancel_timer()  # Cancel double-tap window timer
                 self._transition(TapState.PRESSED_2)
                 self._combo_detected = False
+                self._start_hold_timer()
 
-            # PRESSED_1, PRESSED_2, LONG_PRESSED = key repeat, ignore
+            # PRESSED_1, PRESSED_2, HOLD_ACTIVE = key repeat, ignore
 
     def on_key_up(self) -> None:
         """Called when the hotkey is released."""
@@ -127,7 +130,6 @@ class TapDetector:
 
         with self._lock:
             if self._state == TapState.PRESSED_1:
-                self._cancel_timer()  # Cancel long-press timer
                 if self._combo_detected:
                     self._reset()
                 else:
@@ -135,16 +137,16 @@ class TapDetector:
                     self._start_double_tap_timer()
 
             elif self._state == TapState.PRESSED_2:
-                self._cancel_timer()
+                self._cancel_timer()  # Cancel hold timer
                 if self._combo_detected:
                     self._reset()
                 else:
                     callback = self._on_double_tap
                     self._reset()
 
-            elif self._state == TapState.LONG_PRESSED:
-                # Long press was armed; fire callback now that modifier is released.
-                callback = self._on_long_press
+            elif self._state == TapState.HOLD_ACTIVE:
+                # Hold was armed; fire callback now that modifier is released.
+                callback = self._on_hold
                 self._reset()
 
         if callback:
@@ -156,10 +158,10 @@ class TapDetector:
             if self._state in (TapState.PRESSED_1, TapState.PRESSED_2):
                 self._combo_detected = True
 
-    def _start_long_press_timer(self) -> None:
-        """Start long-press detection timer."""
+    def _start_hold_timer(self) -> None:
+        """Start hold detection timer (on second press)."""
         self._cancel_timer()
-        self._timer = threading.Timer(self.long_press_threshold, self._on_long_press_timeout)
+        self._timer = threading.Timer(self.hold_threshold, self._on_hold_timeout)
         self._timer.daemon = True
         self._timer.start()
 
@@ -176,13 +178,11 @@ class TapDetector:
             self._timer.cancel()
             self._timer = None
 
-    def _on_long_press_timeout(self) -> None:
-        """Long-press timer fired — key still held. Arms the long-press; callback fires on key_up."""
+    def _on_hold_timeout(self) -> None:
+        """Hold timer fired — key still held on second press. Arms the hold."""
         with self._lock:
-            if self._state == TapState.PRESSED_1 and not self._combo_detected:
-                # Arm: transition to LONG_PRESSED and wait for key_up to fire callback.
-                # This ensures the modifier key is fully released before we inject Return.
-                self._state = TapState.LONG_PRESSED
+            if self._state == TapState.PRESSED_2 and not self._combo_detected:
+                self._state = TapState.HOLD_ACTIVE
                 self._timer = None
 
     def _on_double_tap_timeout(self) -> None:

@@ -13,10 +13,12 @@
 		defaultDisplay: string;
 		/** If true, show a "Custom…" entry and allow free-text input. */
 		allowCustom?: boolean;
+		/** If true, show just "Default" without appending the default display name. */
+		noDefaultSuffix?: boolean;
 		onchange: (value: string) => void;
 	}
 
-	let { options, value, defaultDisplay, allowCustom = false, onchange }: Props = $props();
+	let { options, value, defaultDisplay, allowCustom = false, noDefaultSuffix = false, onchange }: Props = $props();
 
 	/** Internal sentinel for the Select widget — never emitted externally. */
 	const SENTINEL = "__default__";
@@ -27,7 +29,9 @@
 
 	const optionValues = $derived(options.map((o) => o.value));
 
-	const defaultLabel = $derived(defaultDisplay ? `Default (${defaultDisplay})` : "Default");
+	const defaultLabel = $derived(
+		noDefaultSuffix || !defaultDisplay ? "Default" : `Default (${defaultDisplay})`
+	);
 
 	const isDefault = $derived(value === "" || value == null);
 	const isKnown = $derived(isDefault || optionValues.includes(value));
