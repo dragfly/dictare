@@ -370,6 +370,147 @@ class TestAudioManagerDeviceMonitor:
             manager._on_device_change("default_input_changed")
             manager.reset_audio_input.assert_not_called()
 
+    def test_on_device_change_default_output_resets(self) -> None:
+        """Default output change triggers reset_audio_output when config is default."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        config.input_device = ""
+        config.output_device = ""  # Using default
+
+        manager = AudioManager(config=config)
+        manager._audio = MagicMock(spec=AudioCapture)
+
+        with patch.object(manager, "reset_audio_output") as mock_reset:
+            manager._on_device_change("default_output_changed")
+            mock_reset.assert_called_once_with("")
+
+    def test_on_device_change_fixed_output_ignored(self) -> None:
+        """Default output change is ignored when a fixed output device is configured."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        config.input_device = ""
+        config.output_device = "My Speakers"
+
+        manager = AudioManager(config=config)
+        manager._audio = MagicMock(spec=AudioCapture)
+
+        with patch.object(manager, "reset_audio_output") as mock_reset:
+            manager._on_device_change("default_output_changed")
+            mock_reset.assert_not_called()
+
+    def test_devices_changed_fixed_input_gone_fallback(self) -> None:
+        """When fixed input device disappears, fallback to default and clear config."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        config.input_device = "My USB Mic"
+        config.output_device = ""
+
+        manager = AudioManager(config=config)
+        manager._audio = MagicMock(spec=AudioCapture)
+
+        removed_calls: list[str] = []
+        manager._on_fixed_device_removed = lambda key: removed_calls.append(key)
+
+        # Simulate: device list no longer contains "My USB Mic"
+        with (
+            patch.object(AudioCapture, "list_devices", return_value=[
+                {"name": "Built-in Microphone", "index": 0, "channels": 1, "sample_rate": 44100},
+            ]),
+            patch.object(AudioCapture, "list_output_devices", return_value=[
+                {"name": "Built-in Output", "index": 1, "channels": 2, "sample_rate": 44100},
+            ]),
+            patch.object(manager, "reset_audio_input") as mock_reset,
+        ):
+            manager._on_device_change("devices_changed")
+            mock_reset.assert_called_once()
+
+        assert removed_calls == ["audio.input_device"]
+
+    def test_devices_changed_fixed_output_gone_fallback(self) -> None:
+        """When fixed output device disappears, fallback to default and clear config."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        config.input_device = ""
+        config.output_device = "My Headphones"
+
+        manager = AudioManager(config=config)
+        manager._audio = MagicMock(spec=AudioCapture)
+
+        removed_calls: list[str] = []
+        manager._on_fixed_device_removed = lambda key: removed_calls.append(key)
+
+        with (
+            patch.object(AudioCapture, "list_devices", return_value=[
+                {"name": "Built-in Microphone", "index": 0, "channels": 1, "sample_rate": 44100},
+            ]),
+            patch.object(AudioCapture, "list_output_devices", return_value=[
+                {"name": "Built-in Output", "index": 1, "channels": 2, "sample_rate": 44100},
+            ]),
+            patch.object(manager, "reset_audio_output") as mock_reset,
+        ):
+            manager._on_device_change("devices_changed")
+            mock_reset.assert_called_once_with("")
+
+        assert removed_calls == ["audio.output_device"]
+
+    def test_devices_changed_fixed_devices_still_present(self) -> None:
+        """When device list changes but our fixed devices are still present, no reset."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        config.input_device = "My USB Mic"
+        config.output_device = "My Headphones"
+
+        manager = AudioManager(config=config)
+        manager._audio = MagicMock(spec=AudioCapture)
+
+        with (
+            patch.object(AudioCapture, "list_devices", return_value=[
+                {"name": "Built-in Microphone", "index": 0, "channels": 1, "sample_rate": 44100},
+                {"name": "My USB Mic", "index": 2, "channels": 1, "sample_rate": 48000},
+            ]),
+            patch.object(AudioCapture, "list_output_devices", return_value=[
+                {"name": "Built-in Output", "index": 1, "channels": 2, "sample_rate": 44100},
+                {"name": "My Headphones", "index": 3, "channels": 2, "sample_rate": 48000},
+            ]),
+            patch.object(manager, "reset_audio_input") as mock_input,
+            patch.object(manager, "reset_audio_output") as mock_output,
+        ):
+            manager._on_device_change("devices_changed")
+            mock_input.assert_not_called()
+            mock_output.assert_not_called()
+
+    def test_all_reasons_call_on_devices_updated(self) -> None:
+        """Every device change reason triggers _on_devices_updated callback."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        config.input_device = "Fixed"  # Fixed so no reset side-effects
+        config.output_device = "Fixed"
+
+        manager = AudioManager(config=config)
+        manager._audio = MagicMock(spec=AudioCapture)
+
+        updated: list[str] = []
+        manager._on_devices_updated = lambda: updated.append("called")
+
+        with (
+            patch.object(AudioCapture, "list_devices", return_value=[
+                {"name": "Fixed", "index": 0, "channels": 1, "sample_rate": 44100},
+            ]),
+            patch.object(AudioCapture, "list_output_devices", return_value=[
+                {"name": "Fixed", "index": 1, "channels": 2, "sample_rate": 44100},
+            ]),
+        ):
+            for reason in ("default_input_changed", "default_output_changed", "devices_changed"):
+                manager._on_device_change(reason)
+
+        assert len(updated) == 3
+
     def test_on_device_change_safe_without_audio(self) -> None:
         """Device change when _audio is None should not raise."""
         from dictare.core.audio_manager import AudioManager
