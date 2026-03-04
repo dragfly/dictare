@@ -186,20 +186,18 @@ class DictareEngine:
         # Tap detection (isolated state machine)
         # Single tap: toggle mute on/off
         # Double tap: submit (inject Enter into active window)
-        # Long press (≥0.8s): toggle output mode (agents <-> keyboard)
         self._tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
             on_single_tap=lambda: self._controller.send(HotkeyPressed(source="hotkey")),
             on_double_tap=self._submit_action,
-            on_long_press=lambda: self.set_output_mode(
-                "keyboard" if self.agent_mode else "agents"
-            ),
         )
 
         # Initialize components
         self._audio_manager: AudioManager | None = None
         self._stt: STTEngine | None = None
         self._hotkey: HotkeyListener | None = None
+        # Pre-confirmed: launcher binary matches last confirmed hash (TCC still valid)
+        self._hotkey_pre_confirmed = self._check_launcher_hash()
         # Status change callback — registered by AppController to push SSE updates.
         # Engine calls this on every status-relevant change (state, agents, mode).
         self._status_change_callback: Callable[[], None] | None = None
@@ -259,15 +257,6 @@ class DictareEngine:
         from dictare.utils.state import save_state
 
         save_state(active_agent=self._agent_mgr.current_agent, listening=self.is_listening)
-
-    def _clear_device_config(self, config_key: str) -> None:
-        """Clear a device config key when the fixed device is removed."""
-        try:
-            from dictare.config import delete_config_value
-            delete_config_value(config_key)
-            logger.info("Cleared config %s (device removed)", config_key)
-        except Exception:
-            logger.debug("Failed to clear config %s", config_key, exc_info=True)
 
     def save_session_before_shutdown(self) -> None:
         """Save session state before SIGTERM / engine.shutdown / engine.restart."""
@@ -588,9 +577,8 @@ class DictareEngine:
         save_model_load_time(vad_model_id, vad_elapsed)
         logger.info("VAD model loaded in %.1fs", vad_elapsed)
 
-        # Wire device change callbacks — audio manager notifies engine
+        # Wire device change callback — audio manager notifies engine
         self._audio_manager._on_devices_updated = self._notify_status
-        self._audio_manager._on_fixed_device_removed = self._clear_device_config
 
         # Load TTS engine (optional — engine continues if unavailable)
         self._tts_mgr.load(
@@ -1128,6 +1116,7 @@ class DictareEngine:
                     "input": self.config.audio.input_device or "(default)",
                     "output": self.config.audio.output_device or "(default)",
                 },
+                "audio_in_use": self._audio_manager.get_actual_devices() if self._audio_manager else {"input": None, "output": None},
                 "audio_devices_available": self._get_audio_devices(),
                 "permissions": self._get_permissions(),
                 "loading": {
@@ -1244,15 +1233,33 @@ class DictareEngine:
 
             runtime = read_runtime_status()
             if runtime is not None:
-                return str(runtime.get("status", "unknown"))
+                status = str(runtime.get("status", "unknown"))
+            else:
+                from pathlib import Path
+                status_file = Path.home() / ".dictare" / "hotkey_status"
+                try:
+                    status = status_file.read_text().strip()
+                except FileNotFoundError:
+                    status = "unknown"
 
-            from pathlib import Path
-            status_file = Path.home() / ".dictare" / "hotkey_status"
-            try:
-                return status_file.read_text().strip()
-            except FileNotFoundError:
-                return "unknown"
+            # If tap is created ("active") but the launcher binary hasn't
+            # changed since last confirmation, TCC trust is still valid.
+            if status == "active" and self._hotkey_pre_confirmed:
+                return "confirmed"
+            return status
         return "unknown"
+
+    @staticmethod
+    def _check_launcher_hash() -> bool:
+        """Check if launcher binary matches the previously confirmed hash."""
+        import sys
+        if sys.platform != "darwin":
+            return False
+        try:
+            from dictare.hotkey.ipc import check_confirmed_launcher_hash
+            return check_confirmed_launcher_hash()
+        except Exception:
+            return False
 
     @staticmethod
     def _get_permissions() -> dict:

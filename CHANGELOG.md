@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.122] - 2026-03-04
+
+### Fixed
+- Remove long-press hotkey gesture — interfered with modifier key combos (e.g. Cmd+Arrow)
+- Agent filter no longer matches reserved internal agents (`__keyboard__`, `__tts__`); saying "agent keyboard" no longer switches to keyboard mode
+- "In use" output device label now shows actual fallback device when configured device is unavailable
+
+### Changed
+- Output mode toggle (agents/keyboard) is now UI-only
+
 ## [0.1.121] - 2026-03-04
 
 ### Fixed

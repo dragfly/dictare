@@ -125,94 +125,106 @@ class TestDoubleTap:
         assert fired_at[0] - start < 0.1
 
 
-class TestLongPress:
-    """Test long press detection."""
+class TestDoubleTapAndHold:
+    """Test double-tap-and-hold detection."""
 
-    def test_long_press_fires_callback_on_key_up(self):
+    def test_hold_fires_callback_on_key_up(self):
+        """Tap → tap-and-hold → on_hold fires on release."""
         result = []
         detector = TapDetector(
-            threshold=0.4,
-            long_press_threshold=0.02,
+            threshold=0.5,
+            hold_threshold=0.02,
             on_single_tap=lambda: result.append("single"),
-            on_long_press=lambda: result.append("long"),
+            on_double_tap=lambda: result.append("double"),
+            on_hold=lambda: result.append("hold"),
         )
 
+        # First tap
         detector.on_key_down()
-        _wait_until(lambda: detector.state == TapState.LONG_PRESSED)
-        assert result == []  # Armed but not fired yet — modifier still held
+        detector.on_key_up()
+
+        # Second press and hold
+        detector.on_key_down()
+        _wait_until(lambda: detector.state == TapState.HOLD_ACTIVE)
+        assert result == []  # Armed but not fired yet
 
         detector.on_key_up()
-        assert result == ["long"]
+        assert result == ["hold"]
         assert detector.state == TapState.IDLE
 
-    def test_long_press_key_up_resets_to_idle(self):
+    def test_hold_not_fired_on_quick_double_tap(self):
+        """Quick double-tap fires on_double_tap, not on_hold."""
         result = []
         detector = TapDetector(
-            long_press_threshold=0.02,
-            on_long_press=lambda: result.append("long"),
+            threshold=0.5,
+            hold_threshold=0.5,  # Long hold threshold
+            on_double_tap=lambda: result.append("double"),
+            on_hold=lambda: result.append("hold"),
         )
 
         detector.on_key_down()
-        _wait_until(lambda: detector.state == TapState.LONG_PRESSED)
+        detector.on_key_up()
+        detector.on_key_down()
+        detector.on_key_up()  # Released before hold threshold
+
+        assert result == ["double"]
+
+    def test_hold_arms_state(self):
+        """Verify HOLD_ACTIVE state after hold timer fires."""
+        detector = TapDetector(
+            threshold=0.5,
+            hold_threshold=0.02,
+        )
+
+        detector.on_key_down()
+        detector.on_key_up()
+        detector.on_key_down()
+
+        _wait_until(lambda: detector.state == TapState.HOLD_ACTIVE)
+        assert detector.state == TapState.HOLD_ACTIVE
+
+    def test_hold_combo_aborts(self):
+        """Combo during second press aborts hold and double-tap."""
+        result = []
+        detector = TapDetector(
+            threshold=0.5,
+            hold_threshold=0.02,
+            on_double_tap=lambda: result.append("double"),
+            on_hold=lambda: result.append("hold"),
+        )
+
+        detector.on_key_down()
+        detector.on_key_up()
+        detector.on_key_down()
+        detector.on_other_key()  # Combo detected
         detector.on_key_up()
 
+        time.sleep(0.05)  # Wait past hold threshold
+        assert result == []
         assert detector.state == TapState.IDLE
-        assert result == ["long"]
 
-    def test_short_press_does_not_fire_long_press(self):
+    def test_single_hold_does_not_fire_hold(self):
+        """Single press-and-hold results in single tap, NOT hold."""
         result = []
         detector = TapDetector(
             threshold=0.01,
-            long_press_threshold=0.5,
+            hold_threshold=0.02,
             on_single_tap=lambda: result.append("single"),
-            on_long_press=lambda: result.append("long"),
+            on_hold=lambda: result.append("hold"),
         )
 
+        # Single press and hold — no hold timer since it's the first press
         detector.on_key_down()
-        detector.on_key_up()  # Released before long_press_threshold
+        time.sleep(0.05)  # Hold well past thresholds
+        detector.on_key_up()
 
         _wait_until(lambda: len(result) > 0)
-
-        assert "long" not in result
         assert result == ["single"]
 
-    def test_long_press_not_fired_on_combo(self):
-        result = []
-        detector = TapDetector(
-            long_press_threshold=0.02,
-            on_long_press=lambda: result.append("long"),
-        )
-
-        detector.on_key_down()
-        detector.on_other_key()  # Combo: should abort
-        _wait_until(lambda: detector.state == TapState.IDLE, timeout=0.1)
-
-        time.sleep(0.05)  # Wait past long_press_threshold
-        assert result == []
-
-    def test_single_tap_not_fired_after_long_press(self):
-        result = []
-        detector = TapDetector(
-            threshold=0.01,
-            long_press_threshold=0.02,
-            on_single_tap=lambda: result.append("single"),
-            on_long_press=lambda: result.append("long"),
-        )
-
-        detector.on_key_down()
-        _wait_until(lambda: detector.state == TapState.LONG_PRESSED)
-        detector.on_key_up()
-
-        time.sleep(0.05)  # Wait past double-tap threshold — no single tap should fire
-        assert result == ["long"]
-
-    def test_long_pressed_state_in_valid_transitions(self):
-        assert TapState.LONG_PRESSED in TapDetector.VALID_TRANSITIONS
-        assert TapDetector.VALID_TRANSITIONS[TapState.LONG_PRESSED] == [TapState.IDLE]
-
-    def test_pressed_1_can_transition_to_long_pressed(self):
-        transitions = TapDetector.VALID_TRANSITIONS[TapState.PRESSED_1]
-        assert TapState.LONG_PRESSED in transitions
+    def test_hold_active_in_valid_transitions(self):
+        """HOLD_ACTIVE state is in the transition dict."""
+        assert TapState.HOLD_ACTIVE in TapDetector.VALID_TRANSITIONS
+        assert TapDetector.VALID_TRANSITIONS[TapState.HOLD_ACTIVE] == [TapState.IDLE]
 
 
 class TestComboAbort:
@@ -370,8 +382,10 @@ class TestValidTransitions:
         assert TapState.PRESSED_2 in transitions
         assert TapState.IDLE in transitions
 
-    def test_pressed_2_can_only_go_to_idle(self):
-        assert TapDetector.VALID_TRANSITIONS[TapState.PRESSED_2] == [TapState.IDLE]
+    def test_pressed_2_can_go_to_hold_active_or_idle(self):
+        transitions = TapDetector.VALID_TRANSITIONS[TapState.PRESSED_2]
+        assert TapState.HOLD_ACTIVE in transitions
+        assert TapState.IDLE in transitions
 
 
 class TestSimulatedTap:

@@ -838,3 +838,42 @@ class TestAgentFilterEventBus:
         bus.publish("agent.unregistered", agent_id="dictare")
 
         assert f.agent_ids == []
+
+
+class TestAgentFilterReservedIds:
+    """Test that reserved agent IDs are excluded from matching."""
+
+    def test_reserved_agent_not_matched(self) -> None:
+        """AgentFilter with __keyboard__ in agent_ids does NOT match 'agent keyboard'."""
+        f = AgentFilter(
+            agent_ids=["__keyboard__", "dictare"],
+            subscribe_to_events=False,
+        )
+        msg = {"text": "agent keyboard"}
+        result = f.process(msg)
+        # Should NOT match __keyboard__
+        assert result.action == PipelineAction.PASS
+
+    def test_reserved_agent_skipped_on_registration(self) -> None:
+        """Event bus registration of __keyboard__ is not added to filter's list."""
+        f = AgentFilter()
+
+        bus.publish("agent.registered", agent_id="__keyboard__")
+        bus.publish("agent.registered", agent_id="__tts__")
+        bus.publish("agent.registered", agent_id="dictare")
+
+        assert "__keyboard__" not in f.agent_ids
+        assert "__tts__" not in f.agent_ids
+        assert "dictare" in f.agent_ids
+
+    def test_keyboard_word_matches_real_agent_not_reserved(self) -> None:
+        """'agent keyboard' matches a real agent named 'keyboard', not __keyboard__."""
+        f = AgentFilter(
+            agent_ids=["__keyboard__", "keyboard-app"],
+            subscribe_to_events=False,
+        )
+        msg = {"text": "agent keyboard"}
+        result = f.process(msg)
+        # Should match keyboard-app (real agent), not __keyboard__ (reserved)
+        assert result.action == PipelineAction.CONSUME
+        assert result.messages[-1]["x_agent_switch"]["target"] == "keyboard-app"

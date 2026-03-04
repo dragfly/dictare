@@ -6,6 +6,7 @@ Used to avoid blind SIGUSR1 delivery and enable end-to-end delivery checks.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -52,6 +53,7 @@ class HotkeyIPCServer:
         self._lock = threading.Lock()
         self._delivered_count = 0
         self._last_delivered_ts = 0.0
+        self._confirmed_hash_saved = False
 
     @property
     def socket_path(self) -> Path:
@@ -183,6 +185,9 @@ class HotkeyIPCServer:
         status = "unknown"
         if self._delivered_count > 0:
             status = "confirmed"
+            if not self._confirmed_hash_saved:
+                self._save_confirmed_launcher_hash()
+                self._confirmed_hash_saved = True
         elif permission_status == "failed":
             status = "failed"
         elif permission_status in ("active", "confirmed"):
@@ -218,9 +223,50 @@ class HotkeyIPCServer:
         write_runtime_status(payload)
 
     @staticmethod
+    def _save_confirmed_launcher_hash() -> None:
+        """Save launcher binary hash when hotkey is first confirmed.
+
+        TCC (Input Monitoring) trust is tied to the binary — if it hasn't
+        changed since last confirmation, the trust is still valid and we
+        can skip the "confirming" phase on next restart.
+        """
+        try:
+            from dictare.daemon.app_bundle import get_app_path
+
+            launcher = get_app_path() / "Contents" / "MacOS" / "Dictare"
+            if not launcher.exists():
+                return
+            h = hashlib.sha256(launcher.read_bytes()).hexdigest()
+            confirmed_file = Path.home() / ".dictare" / "hotkey_confirmed_hash"
+            confirmed_file.write_text(h, encoding="utf-8")
+            logger.debug("Saved confirmed launcher hash: %s", h[:12])
+        except Exception:
+            logger.debug("Failed to save confirmed launcher hash", exc_info=True)
+
+    @staticmethod
     def _read_launcher_status() -> str:
         status_file = Path.home() / ".dictare" / "hotkey_status"
         try:
             return status_file.read_text().strip()
         except FileNotFoundError:
             return "unknown"
+
+
+def check_confirmed_launcher_hash() -> bool:
+    """Check if current launcher binary matches the previously confirmed hash.
+
+    Returns True if the binary hasn't changed since hotkey was last confirmed,
+    meaning TCC trust is still valid and we can skip the "confirming" phase.
+    """
+    try:
+        from dictare.daemon.app_bundle import get_app_path
+
+        launcher = get_app_path() / "Contents" / "MacOS" / "Dictare"
+        confirmed_file = Path.home() / ".dictare" / "hotkey_confirmed_hash"
+        if not launcher.exists() or not confirmed_file.exists():
+            return False
+        current = hashlib.sha256(launcher.read_bytes()).hexdigest()
+        saved = confirmed_file.read_text(encoding="utf-8").strip()
+        return current == saved
+    except Exception:
+        return False

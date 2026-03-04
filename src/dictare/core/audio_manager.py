@@ -80,8 +80,10 @@ class AudioManager:
 
         # Callback when device list or defaults change — engine sets this to push SSE
         self._on_devices_updated: Callable[[], None] | None = None
-        # Callback when a fixed device is removed — engine sets this to clear config
-        self._on_fixed_device_removed: Callable[[str], None] | None = None
+
+        # Track when preferred (fixed) devices are temporarily unavailable
+        self._input_device_missing = False
+        self._output_device_missing = False
 
         # Circuit breaker: timestamps of recent reconnect attempts
         self._reconnect_timestamps: list[float] = []
@@ -225,19 +227,18 @@ class AudioManager:
         Called from CoreAudio thread (macOS) or polling thread (Linux).
         Must be fast and safe for any thread.
 
-        Smart policy:
-        - Default device changed → only reset if we're using default (empty config)
-        - Device list changed → check if our fixed device disappeared
-        - Always reinit PortAudio (refreshes sd.query_devices() / sd.default.device)
-        - Always restart input stream (reinit kills active streams)
-        - Always notify UI via _on_devices_updated
+        Policy:
+        1. Always reinit PortAudio (refreshes sd.query_devices() / sd.default.device)
+        2. Always check if fixed devices disappeared (regardless of reason —
+           CoreAudio may fire REASON_DEFAULT_OUTPUT before REASON_DEVICES)
+        3. Reason-specific: reset default output if using system default
+        4. Always restart input stream (reinit kills active streams)
+        5. Always notify UI via _on_devices_updated
         """
         import sounddevice as sd
 
         from dictare.audio.device_monitor import (
-            REASON_DEFAULT_INPUT,
             REASON_DEFAULT_OUTPUT,
-            REASON_DEVICES,
         )
 
         logger.info("Device change: reason=%s", reason)
@@ -252,49 +253,63 @@ class AudioManager:
             self._audio.emergency_abort()
         self._reinit_portaudio(sd, timeout_s=3.0)
 
-        if reason == REASON_DEFAULT_INPUT:
-            if not configured_input:
-                logger.info("Default input changed — will pick up new default on stream restart")
-            # Fixed device — ignore default change
-
-        elif reason == REASON_DEFAULT_OUTPUT:
-            if not configured_output:
-                # Using system default — update beep output (device=None uses fresh PA default)
-                logger.info("Default output changed, resetting audio output")
-                self.reset_audio_output("")
-            # Fixed device — ignore default change
-
-        elif reason == REASON_DEVICES:
-            # Check with fresh device lists (PA was just reinited)
+        # --- Check fixed devices: disappearance + auto-reconnect ---
+        # Config is the user's PREFERENCE — never modified by system.
+        # CoreAudio may fire REASON_DEFAULT_OUTPUT before REASON_DEVICES,
+        # so checking only on REASON_DEVICES misses the window.
+        output_handled = False
+        if configured_input or configured_output:
             device_names = {d["name"] for d in AudioCapture.list_devices()}
             output_names = {d["name"] for d in AudioCapture.list_output_devices()}
 
-            if configured_input and configured_input not in device_names:
-                logger.warning(
-                    "Fixed input device %r removed — falling back to default",
-                    configured_input,
-                )
-                self._notify_fixed_device_removed("audio.input_device")
+            if configured_input:
+                gone = configured_input not in device_names
+                if gone and not self._input_device_missing:
+                    logger.warning(
+                        "Preferred input %r unavailable — using default",
+                        configured_input,
+                    )
+                    self._input_device_missing = True
+                elif not gone and self._input_device_missing:
+                    logger.info(
+                        "Preferred input %r is back — reconnecting",
+                        configured_input,
+                    )
+                    self._input_device_missing = False
 
-            if configured_output and configured_output not in output_names:
-                logger.warning(
-                    "Fixed output device %r removed — falling back to default",
-                    configured_output,
-                )
-                self._notify_fixed_device_removed("audio.output_device")
+            if configured_output:
+                gone = configured_output not in output_names
+                if gone and not self._output_device_missing:
+                    logger.warning(
+                        "Preferred output %r unavailable — using default",
+                        configured_output,
+                    )
+                    self._output_device_missing = True
+                    self.reset_audio_output("")  # fall back to default
+                    output_handled = True
+                elif not gone and self._output_device_missing:
+                    logger.info(
+                        "Preferred output %r is back — reconnecting",
+                        configured_output,
+                    )
+                    self._output_device_missing = False
+                    self.reset_audio_output(configured_output)
+                    output_handled = True
+
+        # --- Reason-specific logic ---
+        if reason == REASON_DEFAULT_OUTPUT and not output_handled:
+            if not configured_output:
+                logger.info("Default output changed, resetting audio output")
                 self.reset_audio_output("")
 
         # Restart input stream (always needed after PortAudio reinit)
+        # _restart_input_stream reads config.input_device — AudioCapture falls
+        # back to default when the configured device is gone.
         self._restart_input_stream()
 
         # Notify UI so dropdowns update with fresh device data
         if self._on_devices_updated:
             self._on_devices_updated()
-
-    def _notify_fixed_device_removed(self, config_key: str) -> None:
-        """Notify engine that a fixed device was removed."""
-        if self._on_fixed_device_removed:
-            self._on_fixed_device_removed(config_key)
 
     def reset_audio_input(self) -> None:
         """Reset audio input stream to current config/default device.
@@ -348,6 +363,41 @@ class AudioManager:
         from dictare.audio.beep import set_output_device
         set_output_device(device)
         logger.info("Audio output device set to %r", device or "(default)")
+
+    def get_actual_devices(self) -> dict:
+        """Return the actual devices currently in use (for UI 'in use' label)."""
+        import sounddevice as sd
+
+        input_name = None
+        if self._audio and self._audio._stream:
+            try:
+                info = sd.query_devices(self._audio._stream.device, "input")
+                input_name = info["name"]
+            except Exception:
+                pass
+        if input_name is None:
+            default = AudioCapture.get_default_device()
+            input_name = default["name"] if default else None
+
+        output_name = None
+        from dictare.audio.beep import _output_device
+        if _output_device:
+            # Verify configured device still exists; if not, show actual default
+            try:
+                available = AudioCapture.list_output_devices()
+                exists = any(d["name"] == _output_device for d in available)
+            except Exception:
+                exists = False
+            if exists:
+                output_name = str(_output_device)
+            else:
+                default = AudioCapture.get_default_output_device()
+                output_name = default["name"] if default else None
+        else:
+            default = AudioCapture.get_default_output_device()
+            output_name = default["name"] if default else None
+
+        return {"input": input_name, "output": output_name}
 
     def close(self) -> None:
         """Clean up all resources.

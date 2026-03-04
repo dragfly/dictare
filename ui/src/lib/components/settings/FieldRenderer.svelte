@@ -174,13 +174,23 @@
 				onchange={(v) => settingsStore.markDirty(field.key, v)}
 			/>
 		{:else if isSelect}
+			<div class="flex flex-col items-end gap-1">
 			<SelectField
 				options={selectOptions}
 				value={(currentValue as string) ?? ""}
 				{defaultDisplay}
 				{allowCustom}
+				noDefaultSuffix={isBackendDriven}
 				onchange={(v) => handleChange(v)}
 			/>
+			{#if AUDIO_DEVICE_KEYS[field.key]}
+				{@const inUse = settingsStore.getAudioInUse()}
+				{@const deviceName = AUDIO_DEVICE_KEYS[field.key] === "input" ? inUse.input : inUse.output}
+				{#if deviceName}
+					<span class="text-xs text-muted-foreground">In use: {deviceName}</span>
+				{/if}
+			{/if}
+		</div>
 		{:else if field.type === "int" || field.type === "float"}
 			<NumberField
 				value={currentValue as number}

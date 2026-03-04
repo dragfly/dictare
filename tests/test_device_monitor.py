@@ -331,7 +331,7 @@ class TestAudioManagerDeviceMonitor:
     """Test AudioManager device monitor integration.
 
     _on_device_change() always reinits PortAudio and restarts the input stream.
-    Tests verify the policy decisions (reset output, notify removed, etc.)
+    Tests verify the policy decisions (reset output, track missing flags, etc.)
     while mocking the low-level PA/stream methods.
     """
 
@@ -375,10 +375,16 @@ class TestAudioManagerDeviceMonitor:
             cleanup()
 
     def test_on_device_change_fixed_input_ignored(self) -> None:
-        """Default input change with fixed device: reinit + restart but no output reset."""
+        """Default input change with fixed device still present: no output reset."""
         manager, mock_reinit, mock_restart, cleanup = self._make_manager(input_device="My USB Mic")
         try:
-            with patch.object(manager, "reset_audio_output") as mock_output:
+            with (
+                patch.object(AudioCapture, "list_devices", return_value=[
+                    {"name": "My USB Mic", "index": 0, "channels": 1, "sample_rate": 44100},
+                ]),
+                patch.object(AudioCapture, "list_output_devices", return_value=[]),
+                patch.object(manager, "reset_audio_output") as mock_output,
+            ):
                 manager._on_device_change("default_input_changed")
                 mock_output.assert_not_called()
             mock_reinit.assert_called_once()
@@ -397,21 +403,51 @@ class TestAudioManagerDeviceMonitor:
             cleanup()
 
     def test_on_device_change_fixed_output_ignored(self) -> None:
-        """Default output change is ignored when a fixed output device is configured."""
+        """Default output change is ignored when fixed output device is still present."""
         manager, _, _, cleanup = self._make_manager(output_device="My Speakers")
         try:
-            with patch.object(manager, "reset_audio_output") as mock_reset:
+            with (
+                patch.object(AudioCapture, "list_devices", return_value=[]),
+                patch.object(AudioCapture, "list_output_devices", return_value=[
+                    {"name": "My Speakers", "index": 0, "channels": 2, "sample_rate": 44100},
+                ]),
+                patch.object(manager, "reset_audio_output") as mock_reset,
+            ):
                 manager._on_device_change("default_output_changed")
                 mock_reset.assert_not_called()
         finally:
             cleanup()
 
-    def test_devices_changed_fixed_input_gone_fallback(self) -> None:
-        """When fixed input device disappears, notify config removal."""
+    def test_fixed_output_removed_sets_missing_flag(self) -> None:
+        """Fixed output device removal sets _output_device_missing and falls back to default.
+
+        Config is NOT modified — it remains the user's preference.
+        """
+        manager, _, _, cleanup = self._make_manager(output_device="Jabra Link 380")
+        try:
+            assert not manager._output_device_missing
+
+            with (
+                patch.object(AudioCapture, "list_devices", return_value=[
+                    {"name": "Built-in Microphone", "index": 0, "channels": 1, "sample_rate": 44100},
+                ]),
+                patch.object(AudioCapture, "list_output_devices", return_value=[
+                    {"name": "MacBook Pro Speakers", "index": 1, "channels": 2, "sample_rate": 44100},
+                ]),
+                patch.object(manager, "reset_audio_output") as mock_reset,
+            ):
+                manager._on_device_change("default_output_changed")
+                mock_reset.assert_called_once_with("")  # fall back to default
+
+            assert manager._output_device_missing
+        finally:
+            cleanup()
+
+    def test_fixed_input_removed_sets_missing_flag(self) -> None:
+        """When fixed input device disappears, set _input_device_missing flag (no config change)."""
         manager, _, _, cleanup = self._make_manager(input_device="My USB Mic")
         try:
-            removed_calls: list[str] = []
-            manager._on_fixed_device_removed = lambda key: removed_calls.append(key)
+            assert not manager._input_device_missing
 
             with (
                 patch.object(AudioCapture, "list_devices", return_value=[
@@ -423,30 +459,71 @@ class TestAudioManagerDeviceMonitor:
             ):
                 manager._on_device_change("devices_changed")
 
-            assert removed_calls == ["audio.input_device"]
+            assert manager._input_device_missing
         finally:
             cleanup()
 
-    def test_devices_changed_fixed_output_gone_fallback(self) -> None:
-        """When fixed output device disappears, fallback to default and clear config."""
-        manager, _, _, cleanup = self._make_manager(output_device="My Headphones")
+    def test_fixed_output_returns_reconnects(self) -> None:
+        """When a previously missing fixed output device reappears, re-engage it."""
+        manager, _, _, cleanup = self._make_manager(output_device="Jabra Link 380")
         try:
-            removed_calls: list[str] = []
-            manager._on_fixed_device_removed = lambda key: removed_calls.append(key)
+            manager._output_device_missing = True  # simulate previous removal
 
             with (
                 patch.object(AudioCapture, "list_devices", return_value=[
                     {"name": "Built-in Microphone", "index": 0, "channels": 1, "sample_rate": 44100},
                 ]),
                 patch.object(AudioCapture, "list_output_devices", return_value=[
-                    {"name": "Built-in Output", "index": 1, "channels": 2, "sample_rate": 44100},
+                    {"name": "MacBook Pro Speakers", "index": 1, "channels": 2, "sample_rate": 44100},
+                    {"name": "Jabra Link 380", "index": 2, "channels": 2, "sample_rate": 48000},
                 ]),
                 patch.object(manager, "reset_audio_output") as mock_reset,
             ):
                 manager._on_device_change("devices_changed")
-                mock_reset.assert_called_once_with("")
+                mock_reset.assert_called_once_with("Jabra Link 380")
 
-            assert removed_calls == ["audio.output_device"]
+            assert not manager._output_device_missing
+        finally:
+            cleanup()
+
+    def test_fixed_input_returns_clears_flag(self) -> None:
+        """When a previously missing fixed input device reappears, clear the flag."""
+        manager, _, _, cleanup = self._make_manager(input_device="My USB Mic")
+        try:
+            manager._input_device_missing = True  # simulate previous removal
+
+            with (
+                patch.object(AudioCapture, "list_devices", return_value=[
+                    {"name": "Built-in Microphone", "index": 0, "channels": 1, "sample_rate": 44100},
+                    {"name": "My USB Mic", "index": 2, "channels": 1, "sample_rate": 48000},
+                ]),
+                patch.object(AudioCapture, "list_output_devices", return_value=[
+                    {"name": "Built-in Output", "index": 1, "channels": 2, "sample_rate": 44100},
+                ]),
+            ):
+                manager._on_device_change("devices_changed")
+
+            assert not manager._input_device_missing
+        finally:
+            cleanup()
+
+    def test_already_missing_device_no_duplicate_warning(self) -> None:
+        """When device is already missing, subsequent changes don't re-trigger fallback."""
+        manager, _, _, cleanup = self._make_manager(output_device="Jabra Link 380")
+        try:
+            manager._output_device_missing = True  # already known missing
+
+            with (
+                patch.object(AudioCapture, "list_devices", return_value=[]),
+                patch.object(AudioCapture, "list_output_devices", return_value=[
+                    {"name": "MacBook Pro Speakers", "index": 1, "channels": 2, "sample_rate": 44100},
+                ]),
+                patch.object(manager, "reset_audio_output") as mock_reset,
+            ):
+                manager._on_device_change("devices_changed")
+                mock_reset.assert_not_called()  # no redundant fallback
+
+            assert manager._output_device_missing  # still missing
         finally:
             cleanup()
 
@@ -539,3 +616,77 @@ class TestAudioManagerDeviceMonitor:
         manager.close()
         mock_monitor.stop.assert_called_once()
         assert manager._device_monitor is None
+
+    def test_get_actual_devices_with_stream(self) -> None:
+        """get_actual_devices returns stream device when available."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        manager = AudioManager(config=config)
+        manager._audio = MagicMock(spec=AudioCapture)
+        mock_stream = MagicMock()
+        mock_stream.device = 0
+        manager._audio._stream = mock_stream
+
+        with (
+            patch("sounddevice.query_devices", return_value={"name": "My USB Mic"}),
+            patch.object(AudioCapture, "get_default_output_device", return_value={"name": "Speakers"}),
+            patch("dictare.core.audio_manager._output_device", None, create=True),
+        ):
+            # Need to patch the import inside the method
+            with patch("dictare.audio.beep._output_device", None):
+                result = manager.get_actual_devices()
+                assert result["input"] == "My USB Mic"
+                assert result["output"] == "Speakers"
+
+    def test_get_actual_devices_no_stream(self) -> None:
+        """get_actual_devices falls back to defaults when no stream."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        manager = AudioManager(config=config)
+        manager._audio = None
+
+        with (
+            patch.object(AudioCapture, "get_default_device", return_value={"name": "Built-in Mic"}),
+            patch.object(AudioCapture, "get_default_output_device", return_value={"name": "Built-in Speakers"}),
+            patch("dictare.audio.beep._output_device", None),
+        ):
+            result = manager.get_actual_devices()
+            assert result["input"] == "Built-in Mic"
+            assert result["output"] == "Built-in Speakers"
+
+    def test_get_actual_devices_with_output_device(self) -> None:
+        """get_actual_devices returns explicit output device name when available."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        manager = AudioManager(config=config)
+        manager._audio = None
+
+        with (
+            patch.object(AudioCapture, "get_default_device", return_value={"name": "Built-in Mic"}),
+            patch.object(AudioCapture, "list_output_devices", return_value=[{"name": "Jabra Link 380"}]),
+            patch("dictare.audio.beep._output_device", "Jabra Link 380"),
+        ):
+            result = manager.get_actual_devices()
+            assert result["input"] == "Built-in Mic"
+            assert result["output"] == "Jabra Link 380"
+
+    def test_get_actual_devices_unavailable_output_falls_back(self) -> None:
+        """get_actual_devices falls back to default when configured output device is unavailable."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        manager = AudioManager(config=config)
+        manager._audio = None
+
+        with (
+            patch.object(AudioCapture, "get_default_device", return_value={"name": "Built-in Mic"}),
+            patch.object(AudioCapture, "list_output_devices", return_value=[{"name": "MacBook Pro Speakers"}]),
+            patch.object(AudioCapture, "get_default_output_device", return_value={"name": "MacBook Pro Speakers"}),
+            patch("dictare.audio.beep._output_device", "Jabra Link 380"),
+        ):
+            result = manager.get_actual_devices()
+            assert result["input"] == "Built-in Mic"
+            assert result["output"] == "MacBook Pro Speakers"

@@ -618,6 +618,18 @@ def get_config_value(key: str, config: Config | None = None) -> Any:
     return obj
 
 
+def _stamp_version(doc: Any) -> None:
+    """Stamp the config document with the current dictare version.
+
+    Writes ``_version = "dictare/X.Y.Z"`` at the top level.
+    Used for future config migration — if a breaking config change is made,
+    the migration tool can read this to know what version wrote the file.
+    """
+    from dictare import __version__
+
+    doc["_version"] = f"dictare/{__version__}"
+
+
 def set_config_value(key: str, value: str, config_path: Path | None = None) -> None:
     """Set a config value by dot-notation key.
 
@@ -681,6 +693,9 @@ def set_config_value(key: str, value: str, config_path: Path | None = None) -> N
             doc.add(section, tomlkit.table())
         doc[section][field] = parsed  # type: ignore[index]
 
+    # Stamp version for future config migration
+    _stamp_version(doc)
+
     # Write back (preserves all comments and formatting)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
@@ -731,6 +746,7 @@ def delete_config_value(key: str, config_path: Path | None = None) -> None:
         if isinstance(tbl, dict) and field in tbl:
             del tbl[field]
 
+    _stamp_version(doc)
     config_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
 
 
