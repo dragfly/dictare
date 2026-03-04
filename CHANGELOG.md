@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.121] - 2026-03-04
+
+### Fixed
+- Audio device dropdowns now update live when macOS devices change (PortAudio cache invalidation)
+- Instant-save for audio device dropdowns (frontend was not compiled in v0.1.120)
+- SSE device list updates work on all settings tabs, not just Dashboard
+- Optimistic UI update when switching audio device from dropdown
+
+### Changed
+- PortAudio reinit on every device change reason (ensures fresh `sd.query_devices()` data for SSE push)
+- Extracted `_restart_input_stream()` from `reset_audio_input()` for reuse in device change handler
+
 ## [0.1.120] - 2026-03-04
 
 ### Added
