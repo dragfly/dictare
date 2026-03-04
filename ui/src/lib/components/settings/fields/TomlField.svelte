@@ -13,8 +13,8 @@
 	import { toml } from "@codemirror/legacy-modes/mode/toml";
 	import { classHighlighter } from "@lezer/highlight";
 	import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
-	import { Button } from "$lib/components/ui/button";
-	import { fetchTomlSection, saveTomlSection } from "$lib/api";
+	import { fetchTomlSection } from "$lib/api";
+	import * as settingsStore from "$lib/stores/settings.svelte";
 
 	interface Props {
 		section: string;
@@ -26,16 +26,12 @@
 
 	let editorEl: HTMLDivElement;
 	let view: EditorView | null = null;
-	let status = $state<"loading" | "idle" | "saving" | "saved" | "error">("idle");
+	let status = $state<"loading" | "idle" | "error">("idle");
 	let errorMessage = $state("");
 	let originalContent = $state("");
 	let currentContent = $state("");
 	let isOpen = $state(false);
 	let loaded = false;
-
-	const isDirty = $derived(
-		status !== "loading" && currentContent !== originalContent
-	);
 
 	const extensions = [
 		highlightSpecialChars(),
@@ -49,6 +45,12 @@
 		EditorView.updateListener.of((update) => {
 			if (update.docChanged) {
 				currentContent = update.state.doc.toString();
+				// Track dirty state in the global store
+				if (currentContent !== originalContent) {
+					settingsStore.markTomlDirty(section, currentContent);
+				} else {
+					settingsStore.markTomlClean(section);
+				}
 			}
 		}),
 		EditorView.theme({
@@ -60,11 +62,20 @@
 		}),
 	];
 
-	// Auto-dismiss "saved" feedback
+	// When resetDirty() clears dirtyToml, revert editor content
 	$effect(() => {
-		if (status === "saved") {
-			const t = setTimeout(() => (status = "idle"), 3000);
-			return () => clearTimeout(t);
+		const dirtyToml = settingsStore.getDirtyToml();
+		if (loaded && view && !(section in dirtyToml) && currentContent !== originalContent) {
+			view.dispatch({
+				changes: { from: 0, to: view.state.doc.length, insert: originalContent }
+			});
+		}
+	});
+
+	// Reload content from backend after successful save
+	$effect(() => {
+		if (settingsStore.getSaveStatus() === "saved" && loaded) {
+			reload();
 		}
 	});
 
@@ -114,32 +125,6 @@
 			status = "error";
 		}
 	}
-
-	async function save() {
-		if (!view || !isDirty) return;
-		status = "saving";
-		errorMessage = "";
-		const content = view.state.doc.toString();
-		try {
-			await saveTomlSection(section, content);
-			originalContent = content;
-			currentContent = content;
-			status = "saved";
-		} catch (e) {
-			errorMessage = e instanceof Error ? e.message : "Save failed";
-			status = "error";
-		}
-	}
-
-	function reset() {
-		if (!view || !isDirty) return;
-		view.dispatch({
-			changes: { from: 0, to: view.state.doc.length, insert: originalContent }
-		});
-		// updateListener will set currentContent = originalContent → isDirty = false
-		status = "idle";
-		errorMessage = "";
-	}
 </script>
 
 {#if noAccordion}
@@ -156,28 +141,9 @@
 				{status === 'loading' ? 'opacity-50' : ''}"
 		></div>
 
-		<div class="flex items-center gap-2">
-			<Button
-				size="sm"
-				disabled={!isDirty || status === "saving"}
-				onclick={save}
-			>
-				{status === "saving" ? "Saving…" : "Save"}
-			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				disabled={!isDirty || status === "saving"}
-				onclick={reset}
-			>
-				Reset
-			</Button>
-			{#if status === "saved"}
-				<span class="text-xs text-green-500">Saved</span>
-			{:else if status === "error" && errorMessage}
-				<span class="text-xs text-destructive">{errorMessage}</span>
-			{/if}
-		</div>
+		{#if status === "error" && errorMessage}
+			<span class="text-xs text-destructive">{errorMessage}</span>
+		{/if}
 	</div>
 {:else}
 	<!-- Accordion mode -->
@@ -206,28 +172,9 @@
 						{status === 'loading' ? 'opacity-50' : ''}"
 				></div>
 
-				<div class="flex items-center gap-2">
-					<Button
-						size="sm"
-						disabled={!isDirty || status === "saving"}
-						onclick={save}
-					>
-						{status === "saving" ? "Saving…" : "Save"}
-					</Button>
-					<Button
-						variant="ghost"
-						size="sm"
-						disabled={!isDirty || status === "saving"}
-						onclick={reset}
-					>
-						Reset
-					</Button>
-					{#if status === "saved"}
-						<span class="text-xs text-green-500">Saved</span>
-					{:else if status === "error" && errorMessage}
-						<span class="text-xs text-destructive">{errorMessage}</span>
-					{/if}
-				</div>
+				{#if status === "error" && errorMessage}
+					<span class="text-xs text-destructive">{errorMessage}</span>
+				{/if}
 			</div>
 		{/if}
 	</div>
