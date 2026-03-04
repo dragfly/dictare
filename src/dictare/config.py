@@ -727,8 +727,9 @@ def delete_config_value(key: str, config_path: Path | None = None) -> None:
             del doc[parts[0]]
     else:
         section, field = parts
-        if section in doc and field in doc[section]:  # type: ignore[operator]
-            del doc[section][field]  # type: ignore[index]
+        tbl = doc.get(section)
+        if isinstance(tbl, dict) and field in tbl:
+            del tbl[field]
 
     config_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
 

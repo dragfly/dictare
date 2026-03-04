@@ -87,8 +87,8 @@ class TestTrayStates:
             "listening": "dictare_active",
         }
         for state, icon_name in expected.items():
-            # Reset dedup cache so each state triggers an icon update
-            app._current_icon_name = ""
+            # Force a different state first so set_state sees a change
+            app._state = "__reset__"
             with patch("dictare.tray.app._load_icon", return_value="img") as mock_load:
                 with patch.object(app, "_update_menu"):
                     app.set_state(state)
@@ -106,6 +106,8 @@ class TestTrayStates:
             "listening": "Dictare — Listening",
         }
         for state, title in expected_titles.items():
+            # Force a different state first so set_state sees a change
+            app._state = "__reset__"
             with patch("dictare.tray.app._load_icon", return_value="img"):
                 with patch.object(app, "_update_menu"):
                     app.set_state(state)

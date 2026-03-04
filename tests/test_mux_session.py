@@ -284,22 +284,22 @@ class TestRunAgentPreFlight:
 
     def test_engine_unreachable_returns_1(self) -> None:
         """If the engine is not running, return exit code 1 without spawning."""
-        with patch("openvip.Client") as MockClient:
-            MockClient.return_value.get_status.side_effect = ConnectionRefusedError
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.get_status.side_effect = ConnectionRefusedError
             code = run_agent("claude", ["echo", "hi"], quiet=True)
         assert code == 1
 
     def test_duplicate_agent_returns_1(self) -> None:
         """If an agent with the same name is already connected, return 1."""
-        with patch("openvip.Client") as MockClient:
-            MockClient.return_value.get_status.return_value = _make_status(["claude"])
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.get_status.return_value = _make_status(["claude"])
             code = run_agent("claude", ["echo", "hi"], quiet=True)
         assert code == 1
 
     def test_different_agent_name_passes_preflight(self) -> None:
         """Agent name not in connected list passes pre-flight (then fails at PTY)."""
-        with patch("openvip.Client") as MockClient:
-            MockClient.return_value.get_status.return_value = _make_status(["cursor"])
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.get_status.return_value = _make_status(["cursor"])
             # Will pass pre-flight but fail at PTY spawn — that's OK for this test.
             # Use a command that doesn't exist to get a fast FileNotFoundError.
             try:
@@ -312,8 +312,8 @@ class TestRunAgentPreFlight:
 
     def test_empty_agents_list_passes_preflight(self) -> None:
         """No connected agents → pre-flight passes."""
-        with patch("openvip.Client") as MockClient:
-            MockClient.return_value.get_status.return_value = _make_status([])
+        with patch("openvip.Client") as mock_client:
+            mock_client.return_value.get_status.return_value = _make_status([])
             try:
                 run_agent(
                     "claude", ["__nonexistent_cmd__"],

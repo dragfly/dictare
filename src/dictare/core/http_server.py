@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
-from dictare import OPENVIP_BASE_PATH, __version__
+from dictare import __version__
 from dictare.core.openvip_validator import OpenVIPValidationError, validate_message
 
 if TYPE_CHECKING:
