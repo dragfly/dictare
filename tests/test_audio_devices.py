@@ -393,13 +393,13 @@ class TestAudioManagerReconnectReason:
         manager._audio.reconnect_reason = "stream_stale"
         assert manager.reconnect_reason == "stream_stale"
 
-    def test_no_audio_returns_none(self) -> None:
-        """reconnect_reason returns None when no audio capture."""
+    def test_no_audio_returns_audio_dead(self) -> None:
+        """reconnect_reason returns 'audio_dead' when audio capture is None (e.g. after failed reconnect)."""
         from dictare.core.audio_manager import AudioManager
 
         cfg = AudioConfig()
         manager = AudioManager(config=cfg)
-        assert manager.reconnect_reason is None
+        assert manager.reconnect_reason == "audio_dead"
 
 
 class TestCircuitBreaker:

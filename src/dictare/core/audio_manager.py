@@ -249,6 +249,7 @@ class AudioManager:
         # Reinit PortAudio to refresh cached device lists and defaults.
         # sd.query_devices() and sd.default.device return stale data without this.
         # Reinit kills any active input stream, so we restart it below.
+        # _audio may be None after a failed reconnect (e.g. wake from sleep).
         if self._audio:
             self._audio.emergency_abort()
         self._reinit_portaudio(sd, timeout_s=3.0)
@@ -440,7 +441,9 @@ class AudioManager:
     def reconnect_reason(self) -> str | None:
         """Why audio needs reconnection, or None if healthy."""
         if self._audio is None:
-            return None
+            # Audio object destroyed by a previous failed reconnect —
+            # must try again (e.g. after wake from sleep).
+            return "audio_dead"
         return self._audio.reconnect_reason
 
     def reconnect(self, on_chunk_callback: Callable[[Any], None]) -> bool:

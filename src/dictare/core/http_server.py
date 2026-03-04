@@ -276,7 +276,7 @@ class OpenVIPServer:
         async def speech_stop():
             """Interrupt the currently playing TTS audio."""
             stopped = await asyncio.to_thread(self._engine.stop_speaking)
-            return {"status": "ok", "stopped": stopped}
+            return {"openvip": "1.0", "status": "ok", "stopped": stopped}
 
         @app.post("/api/agents/{agent_id}/focus")
         async def set_agent_focus(agent_id: str, request: Request):
