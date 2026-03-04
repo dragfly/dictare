@@ -37,6 +37,9 @@ _SERVER_JOIN_TIMEOUT: float = 0.5
 # Seconds to keep completed download jobs before cleanup
 _JOB_CLEANUP_DELAY: float = 10.0
 
+# Max concurrent SSE status streams (safety net for tab leaks)
+_MAX_STATUS_STREAMS: int = 5
+
 class OpenVIPServer:
     """FastAPI server implementing OpenVIP protocol endpoints.
 
@@ -322,6 +325,10 @@ class OpenVIPServer:
             """
             sq: asyncio.Queue = asyncio.Queue()
             with self._status_queues_lock:
+                # Evict oldest connections when at capacity
+                while len(self._status_queues) >= _MAX_STATUS_STREAMS:
+                    evicted = self._status_queues.pop(0)
+                    evicted.put_nowait(None)  # sentinel → close
                 self._status_queues.append(sq)
 
             # Send current status immediately on connect
@@ -337,6 +344,8 @@ class OpenVIPServer:
                             status = await asyncio.wait_for(
                                 sq.get(), timeout=30.0
                             )
+                            if status is None:
+                                break  # evicted by cap
                             yield {
                                 "data": json.dumps(
                                     status, ensure_ascii=False, default=str

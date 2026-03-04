@@ -6,6 +6,7 @@ its previous session after a restart.
 What we save:
   - active_agent: which agent was selected (e.g. "voice", "__keyboard__")
   - listening: whether the engine was listening
+  - focused_agent: which agent's terminal had focus (for audio feedback policy)
   - last_active: timestamp for session expiry
 
 What we do NOT save:
@@ -34,14 +35,17 @@ def save_state(
     *,
     active_agent: str | None = None,
     listening: bool = False,
+    focused_agent: str | None = None,
 ) -> None:
     """Save engine state to disk with a timestamp."""
     path = _state_path()
-    data = {
+    data: dict[str, Any] = {
         "active_agent": active_agent,
         "listening": listening,
         "last_active": time.time(),
     }
+    if focused_agent is not None:
+        data["focused_agent"] = focused_agent
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2) + "\n")
@@ -79,6 +83,7 @@ def load_state() -> dict[str, Any] | None:
     return {
         "active_agent": data.get("active_agent"),
         "listening": data.get("listening", False),
+        "focused_agent": data.get("focused_agent"),
     }
 
 def clear_state() -> None:

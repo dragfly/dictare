@@ -8,6 +8,7 @@
 
 	let barState = $state<BarState>("hidden");
 	let sawDown = false;
+	let consecutiveDownCount = 0;
 	let timer: ReturnType<typeof setInterval> | null = null;
 	let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -40,10 +41,15 @@
 		const status = await checkEngine();
 
 		if (status === "down") {
+			consecutiveDownCount++;
 			if (barState === "restarting") {
 				// Good — engine went down as expected during restart
 				sawDown = true;
-			} else {
+			} else if (barState !== "hidden") {
+				// Was visible (loading/ready) — show disconnected immediately
+				barState = "disconnected";
+			} else if (consecutiveDownCount >= 3) {
+				// From hidden: only show after 3 consecutive failures (3s)
 				barState = "disconnected";
 			}
 			if (hideTimer) {
@@ -54,8 +60,10 @@
 			// Engine still up after restart command — wait for it to go down first
 			return;
 		} else if (status === "loading") {
+			consecutiveDownCount = 0;
 			barState = "loading";
 		} else {
+			consecutiveDownCount = 0;
 			// Engine is ready
 			if (barState !== "hidden" && barState !== "ready") {
 				barState = "ready";

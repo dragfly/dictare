@@ -63,6 +63,15 @@ class AudioFeedbackPolicy:
             with self._lock:
                 self._timers[agent_id] = t
 
+    @property
+    def focused_agent(self) -> str | None:
+        """Return the agent ID that currently has focus, or None."""
+        with self._lock:
+            for agent_id, focused in self._focus.items():
+                if focused:
+                    return agent_id
+        return None
+
     def remove_agent(self, agent_id: str) -> None:
         """Clean up focus state when an agent disconnects."""
         with self._lock:
