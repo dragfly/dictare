@@ -697,6 +697,11 @@ def run_agent(
         sys.stdout.buffer.write(_FOCUS_ENABLE)
         sys.stdout.buffer.flush()
 
+        # Assume focused at launch — the terminal we just opened almost certainly
+        # has focus.  The ?1004h API only sends events (gained/lost), it cannot
+        # answer "do you have focus right now?", so we must assume.
+        _report_focus(agent_id, base_url, True)
+
         stop_event = threading.Event()
 
         # Create thread-safe queue for serialized writes to PTY
