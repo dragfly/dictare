@@ -10,6 +10,7 @@ Trigger words are organized by language. The filter checks triggers for:
 
 Pattern types:
 - Multi-word: ["ok", "send"] - position-weighted confidence (closer to end = higher)
+- Alternatives: ["ok|okay", "send|submit|invia"] - "|" means OR within each slot
 - Last-word-only: ["go."] - word ending with "." triggers ONLY if it's the last word
 
 Examples:
@@ -229,18 +230,20 @@ class InputFilter:
         if not pattern or not tokens:
             return None
 
-        # Normalize pattern
-        pattern_norm = [_normalize(w) for w in pattern]
+        # Normalize pattern — each slot may have "|" alternatives (e.g. "ok|okay")
+        pattern_norm = [
+            [_normalize(alt) for alt in w.split("|")] for w in pattern
+        ]
 
         # Find positions of each pattern word, searching from the end
         positions: list[int] = []
         search_start = len(tokens)
 
-        for word in reversed(pattern_norm):
+        for alternatives in reversed(pattern_norm):
             # Search backwards from current position
             found = False
             for i in range(search_start - 1, -1, -1):
-                if tokens[i] == word:
+                if tokens[i] in alternatives:
                     positions.append(i)
                     search_start = i  # Next word must be before this
                     found = True
@@ -304,12 +307,14 @@ class InputFilter:
         if not tokens or not pattern:
             return None
 
-        # Strip "." marker and normalize pattern words
-        clean_pattern = [_normalize(w.rstrip(".")) for w in pattern]
+        # Strip "." marker and normalize — each slot may have "|" alternatives
+        clean_pattern = [
+            [_normalize(alt.rstrip(".")) for alt in w.split("|")] for w in pattern
+        ]
 
         # The last word of the pattern (which has ".") must be the last token
         last_token = tokens[-1]
-        if last_token != clean_pattern[-1]:
+        if last_token not in clean_pattern[-1]:
             return None
 
         # Single-word pattern: just the last word check
@@ -325,10 +330,10 @@ class InputFilter:
         positions = [len(tokens) - 1]  # Last word already matched
         search_end = len(tokens) - 1
 
-        for word in reversed(clean_pattern[:-1]):
+        for alternatives in reversed(clean_pattern[:-1]):
             found = False
             for i in range(search_end - 1, -1, -1):
-                if tokens[i] == word:
+                if tokens[i] in alternatives:
                     positions.append(i)
                     search_end = i
                     found = True

@@ -946,27 +946,27 @@ def create_default_config() -> Path:
 # max_scan_words = 15
 # decay_rate = 0.95               # 5% confidence decay per word from end
 
-# Submit triggers by language. No triggers active by default.
+# Submit triggers by language.
 # Each trigger is a multi-word sequence — all words must appear in order.
 # Single words trigger too easily; always use 2+ word sequences.
+# Use "|" for alternatives within a slot: "ok|okay" matches either word.
+# Punctuation is ignored: "ok, send." matches "ok send".
 # Use "*" for language-agnostic triggers (always active regardless of detected language).
-# Uncomment and customize for your language.
 [pipeline.submit_filter.triggers]
-# "*" = [
-#     ["ok", "send"],
-#     ["ok", "submit"],
-# ]
+"*" = [
+    ["ok|okay", "send|submit"],
+]
 # es = [
-#     ["ok", "enviar"],
-#     ["ok", "mandar"],
+#     ["ok|okay", "enviar|mandar"],
 # ]
 # de = [
-#     ["ok", "senden"],
-#     ["ok", "abschicken"],
+#     ["ok|okay", "senden|abschicken"],
 # ]
 # fr = [
-#     ["ok", "envoyer"],
-#     ["ok", "soumettre"],
+#     ["ok|okay", "envoyer|soumettre"],
+# ]
+# it = [
+#     ["ok|okay", "invia|manda"],
 # ]
 
 [pipeline.agent_filter]
