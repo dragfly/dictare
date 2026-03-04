@@ -5,10 +5,11 @@
 	interface Props {
 		format: "evdev" | "shortcut";
 		value: string;
+		defaultValue?: string;
 		onchange: (v: string) => void;
 	}
 
-	let { format, value, onchange }: Props = $props();
+	let { format, value, defaultValue = "", onchange }: Props = $props();
 
 	let capturing = $state(false);
 	let abortController: AbortController | null = null;
@@ -120,7 +121,10 @@
 		return v.split("+").map(p => SHORTCUT_PART_HUMAN[p] ?? p.toUpperCase()).join(" ");
 	}
 
-	const display = $derived(humanLabel(value));
+	/** Effective value: user-set or resolved default. */
+	const effectiveValue = $derived(value || defaultValue);
+	const isDefault = $derived(!value && !!defaultValue);
+	const display = $derived(humanLabel(effectiveValue));
 
 	// ---------------------------------------------------------------------------
 	// Key capture logic
@@ -213,10 +217,15 @@
 				{format === "evdev" ? "Press modifier key…" : "Press combination…"}
 			</span>
 		{:else if display}
-			<kbd class="inline-flex items-center rounded border border-border bg-muted px-2 py-0.5
-				text-sm font-mono font-medium text-foreground shadow-sm">
-				{display}
-			</kbd>
+			<span class="inline-flex items-center gap-1.5">
+				<kbd class="inline-flex items-center rounded border border-border bg-muted px-2 py-0.5
+					text-sm font-mono font-medium text-foreground shadow-sm">
+					{display}
+				</kbd>
+				{#if isDefault}
+					<span class="text-xs text-muted-foreground">(default)</span>
+				{/if}
+			</span>
 		{:else}
 			<span class="text-sm text-muted-foreground">—</span>
 		{/if}

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.125] - 2026-03-04
+
+### Fixed
+- Hotkey and other string fields no longer show as "modified" (amber) when using the platform default
+- KeyCaptureField shows the resolved default key with "(default)" label when not explicitly configured
+
 ## [0.1.124] - 2026-03-04
 
 ### Fixed
