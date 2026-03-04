@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.127] - 2026-03-04
+
+### Added
+- Pipe `|` syntax for submit filter triggers: `["ok|okay", "send|submit"]` matches any combination
+- Default submit trigger enabled out of the box: "ok send" / "okay submit" (wildcard, all languages)
+
+### Fixed
+- Favicon now renders correctly (static file instead of data URI)
+
 ## [0.1.126] - 2026-03-04
 
 ### Fixed

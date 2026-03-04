@@ -505,6 +505,36 @@ class TestEdgeCases:
         # With gap_penalty and low threshold (0.7), still triggers
         assert result2.action == PipelineAction.AUGMENT
 
+    def test_pipe_alternatives_syntax(self) -> None:
+        """Pipe '|' syntax expands alternatives within a pattern slot."""
+        f = InputFilter(
+            triggers={"*": [["ok|okay", "send|submit|invia"]]},
+            confidence_threshold=0.85,
+        )
+        # All combinations should match
+        for first in ("ok", "okay"):
+            for second in ("send", "submit", "invia"):
+                msg = {"text": f"fix the bug {first} {second}"}
+                result = f.process(msg)
+                assert result.action == PipelineAction.AUGMENT, f"Failed: {first} {second}"
+                assert result.messages[0]["text"] == "fix the bug"
+
+    def test_pipe_alternatives_last_word_only(self) -> None:
+        """Pipe '|' syntax works with last-word-only '.' marker."""
+        f = InputFilter(
+            triggers={"*": [["go.|via."]]},
+            confidence_threshold=0.85,
+        )
+        for word in ("go", "via"):
+            msg = {"text": f"fix the bug {word}"}
+            result = f.process(msg)
+            assert result.action == PipelineAction.AUGMENT, f"Failed: {word}"
+
+        # Not at end — should not trigger
+        msg2 = {"text": "go fix the bug"}
+        result2 = f.process(msg2)
+        assert result2.action == PipelineAction.PASS
+
     def test_message_preserves_other_fields(self) -> None:
         """Message preserves other fields when augmented."""
         f = _make_filter()
