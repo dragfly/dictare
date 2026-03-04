@@ -55,6 +55,7 @@ class OpenVIPServer:
     Endpoints (dictare management — mounted at /api):
         GET  /api/speech/voices           - Available TTS voices
         GET  /api/audio/devices           - Audio input/output devices
+        POST /api/audio/device            - Switch audio device instantly
         GET  /api/settings/schema         - Config schema + current values
         POST /api/settings                - Update a config value
         GET  /api/settings/shortcuts      - Keyboard shortcuts
@@ -508,6 +509,36 @@ class OpenVIPServer:
                 "default_output": AudioCapture.get_default_output_device(),
             }
 
+        @app.post("/api/audio/device")
+        async def set_audio_device(request: Request):
+            """Switch audio input or output device instantly (no engine restart).
+
+            Body: {"type": "input"|"output", "device": "DeviceName" or ""}
+            Empty string means "use system default".
+            """
+            from dictare.config import delete_config_value, set_config_value
+
+            body = await request.json()
+            dev_type = body.get("type", "")
+            device = body.get("device", "")
+
+            if dev_type not in ("input", "output"):
+                raise HTTPException(status_code=400, detail="type must be 'input' or 'output'")
+
+            config_key = f"audio.{dev_type}_device"
+            if device:
+                set_config_value(config_key, device)
+            else:
+                delete_config_value(config_key)
+
+            if dev_type == "input":
+                self._engine.reset_audio_input()
+            else:
+                self._engine.reset_audio_output(device)
+
+            self.notify_status_change()
+            return {"status": "ok"}
+
         # ----- Settings UI -----
 
         from pathlib import Path as _Path
@@ -516,6 +547,22 @@ class OpenVIPServer:
         from starlette.staticfiles import StaticFiles
 
         _ui_dist = _Path(__file__).parent.parent / "ui" / "dist"
+
+        @app.middleware("http")
+        async def ui_cache_control(request: Request, call_next):  # type: ignore[no-untyped-def]
+            """Cache-control for UI static assets.
+
+            SvelteKit hashes JS/CSS in _app/immutable/ → cache forever.
+            index.html and other top-level files → never cache (prevents stale UI after upgrade).
+            """
+            response = await call_next(request)
+            path = request.url.path
+            if path.startswith("/ui/"):
+                if "/immutable/" in path:
+                    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                else:
+                    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            return response
 
         @app.get("/settings")
         async def settings_redirect():

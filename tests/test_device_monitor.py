@@ -41,19 +41,19 @@ class TestCreateDeviceMonitor:
     def test_returns_coreaudio_on_darwin(self) -> None:
         with patch("dictare.audio.device_monitor.sys") as mock_sys:
             mock_sys.platform = "darwin"
-            monitor = create_device_monitor(lambda: None)
+            monitor = create_device_monitor(lambda _reason: None)
             assert isinstance(monitor, CoreAudioDeviceMonitor)
 
     def test_returns_polling_on_linux(self) -> None:
         with patch("dictare.audio.device_monitor.sys") as mock_sys:
             mock_sys.platform = "linux"
-            monitor = create_device_monitor(lambda: None)
+            monitor = create_device_monitor(lambda _reason: None)
             assert isinstance(monitor, PollingDeviceMonitor)
 
     def test_returns_polling_on_unknown(self) -> None:
         with patch("dictare.audio.device_monitor.sys") as mock_sys:
             mock_sys.platform = "win32"
-            monitor = create_device_monitor(lambda: None)
+            monitor = create_device_monitor(lambda _reason: None)
             assert isinstance(monitor, PollingDeviceMonitor)
 
     def test_all_subclass_device_monitor(self) -> None:
@@ -68,7 +68,7 @@ class TestPollingDeviceMonitor:
     """Test the polling fallback device monitor."""
 
     def test_start_stop(self) -> None:
-        monitor = PollingDeviceMonitor(on_device_change=lambda: None)
+        monitor = PollingDeviceMonitor(on_device_change=lambda _reason: None)
         monitor.POLL_INTERVAL = 0.05
         monitor.start()
         assert monitor.running
@@ -76,7 +76,7 @@ class TestPollingDeviceMonitor:
         assert not monitor.running
 
     def test_start_idempotent(self) -> None:
-        monitor = PollingDeviceMonitor(on_device_change=lambda: None)
+        monitor = PollingDeviceMonitor(on_device_change=lambda _reason: None)
         monitor.POLL_INTERVAL = 0.05
         monitor.start()
         monitor.start()  # Should not raise or create second thread
@@ -84,29 +84,29 @@ class TestPollingDeviceMonitor:
         monitor.stop()
 
     def test_stop_idempotent(self) -> None:
-        monitor = PollingDeviceMonitor(on_device_change=lambda: None)
+        monitor = PollingDeviceMonitor(on_device_change=lambda _reason: None)
         monitor.stop()  # Not started, should not raise
         assert not monitor.running
 
     def test_detects_device_change(self) -> None:
-        changes: list[int] = []
-        monitor = PollingDeviceMonitor(on_device_change=lambda: changes.append(1))
+        changes: list[str] = []
+        monitor = PollingDeviceMonitor(on_device_change=lambda reason: changes.append(reason))
         monitor.POLL_INTERVAL = 0.02
 
-        device_sequence = iter([0, 0, 1, 1, 1])
+        # Simulate default input changing: (input=0, output=0, count=2) -> (input=1, output=0, count=2)
+        snapshot_sequence = iter([(0, 0, 2), (1, 0, 2), (1, 0, 2)])
 
         with patch.object(
             PollingDeviceMonitor,
-            "_get_default_input_device",
-            side_effect=device_sequence,
+            "_snapshot",
+            side_effect=snapshot_sequence,
         ):
-            monitor._last_device = 0  # Set initial state
+            monitor._last_input = 0
+            monitor._last_output = 0
+            monitor._last_count = 2
             monitor._stop_event.clear()
             monitor._running = True
-            # Run a few poll iterations manually
-            monitor._poll_loop.__wrapped__ if hasattr(monitor._poll_loop, "__wrapped__") else None
 
-            # Use the thread-based approach
             monitor._thread = threading.Thread(target=monitor._poll_loop, daemon=True)
             monitor._thread.start()
 
@@ -115,18 +115,21 @@ class TestPollingDeviceMonitor:
             monitor._thread.join(timeout=1.0)
 
         assert len(changes) >= 1
+        assert changes[0] == "default_input_changed"
 
     def test_no_callback_when_device_unchanged(self) -> None:
-        changes: list[int] = []
-        monitor = PollingDeviceMonitor(on_device_change=lambda: changes.append(1))
+        changes: list[str] = []
+        monitor = PollingDeviceMonitor(on_device_change=lambda reason: changes.append(reason))
         monitor.POLL_INTERVAL = 0.02
 
         with patch.object(
             PollingDeviceMonitor,
-            "_get_default_input_device",
-            return_value=0,
+            "_snapshot",
+            return_value=(0, 0, 2),
         ):
-            monitor._last_device = 0
+            monitor._last_input = 0
+            monitor._last_output = 0
+            monitor._last_count = 2
             monitor._stop_event.clear()
             monitor._running = True
             monitor._thread = threading.Thread(target=monitor._poll_loop, daemon=True)
@@ -143,16 +146,18 @@ class TestPollingDeviceMonitor:
 
     def test_callback_on_query_failure(self) -> None:
         """When query_devices fails, treat it as device change."""
-        changes: list[int] = []
-        monitor = PollingDeviceMonitor(on_device_change=lambda: changes.append(1))
+        changes: list[str] = []
+        monitor = PollingDeviceMonitor(on_device_change=lambda reason: changes.append(reason))
         monitor.POLL_INTERVAL = 0.02
 
         with patch.object(
             PollingDeviceMonitor,
-            "_get_default_input_device",
+            "_snapshot",
             side_effect=Exception("PortAudio error"),
         ):
-            monitor._last_device = 0
+            monitor._last_input = 0
+            monitor._last_output = 0
+            monitor._last_count = 2
             monitor._stop_event.clear()
             monitor._running = True
             monitor._thread = threading.Thread(target=monitor._poll_loop, daemon=True)
@@ -163,6 +168,63 @@ class TestPollingDeviceMonitor:
             monitor._thread.join(timeout=1.0)
 
         assert len(changes) >= 1
+        assert changes[0] == "devices_changed"
+
+    def test_detects_output_change(self) -> None:
+        changes: list[str] = []
+        monitor = PollingDeviceMonitor(on_device_change=lambda reason: changes.append(reason))
+        monitor.POLL_INTERVAL = 0.02
+
+        snapshot_sequence = iter([(0, 0, 2), (0, 1, 2), (0, 1, 2)])
+
+        with patch.object(
+            PollingDeviceMonitor,
+            "_snapshot",
+            side_effect=snapshot_sequence,
+        ):
+            monitor._last_input = 0
+            monitor._last_output = 0
+            monitor._last_count = 2
+            monitor._stop_event.clear()
+            monitor._running = True
+
+            monitor._thread = threading.Thread(target=monitor._poll_loop, daemon=True)
+            monitor._thread.start()
+
+            _wait_until(lambda: len(changes) > 0, timeout=1.0)
+            monitor._stop_event.set()
+            monitor._thread.join(timeout=1.0)
+
+        assert len(changes) >= 1
+        assert changes[0] == "default_output_changed"
+
+    def test_detects_device_count_change(self) -> None:
+        changes: list[str] = []
+        monitor = PollingDeviceMonitor(on_device_change=lambda reason: changes.append(reason))
+        monitor.POLL_INTERVAL = 0.02
+
+        snapshot_sequence = iter([(0, 0, 2), (0, 0, 3), (0, 0, 3)])
+
+        with patch.object(
+            PollingDeviceMonitor,
+            "_snapshot",
+            side_effect=snapshot_sequence,
+        ):
+            monitor._last_input = 0
+            monitor._last_output = 0
+            monitor._last_count = 2
+            monitor._stop_event.clear()
+            monitor._running = True
+
+            monitor._thread = threading.Thread(target=monitor._poll_loop, daemon=True)
+            monitor._thread.start()
+
+            _wait_until(lambda: len(changes) > 0, timeout=1.0)
+            monitor._stop_event.set()
+            monitor._thread.join(timeout=1.0)
+
+        assert len(changes) >= 1
+        assert changes[0] == "devices_changed"
 
 # =============================================================================
 # CoreAudioDeviceMonitor
@@ -174,36 +236,36 @@ class TestCoreAudioDeviceMonitor:
     @pytest.mark.macos
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
     def test_install_and_remove_listener(self) -> None:
-        monitor = CoreAudioDeviceMonitor(on_device_change=lambda: None)
+        monitor = CoreAudioDeviceMonitor(on_device_change=lambda _reason: None)
         monitor.start()
         assert monitor.running
-        assert monitor._listener_installed
+        assert monitor._listeners_installed
         monitor.stop()
-        assert not monitor._listener_installed
+        assert not monitor._listeners_installed
         assert not monitor.running
 
     @pytest.mark.macos
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
     def test_start_idempotent(self) -> None:
-        monitor = CoreAudioDeviceMonitor(on_device_change=lambda: None)
+        monitor = CoreAudioDeviceMonitor(on_device_change=lambda _reason: None)
         monitor.start()
         monitor.start()  # Should not install twice
-        assert monitor._listener_installed
+        assert monitor._listeners_installed
         monitor.stop()
 
     @pytest.mark.macos
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
     def test_stop_idempotent(self) -> None:
-        monitor = CoreAudioDeviceMonitor(on_device_change=lambda: None)
+        monitor = CoreAudioDeviceMonitor(on_device_change=lambda _reason: None)
         monitor.stop()  # Not started, should not raise
 
     @pytest.mark.macos
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
-    def test_callback_ref_kept(self) -> None:
-        """Ctypes callback reference must not be garbage collected."""
-        monitor = CoreAudioDeviceMonitor(on_device_change=lambda: None)
+    def test_callback_refs_kept(self) -> None:
+        """Ctypes callback references must not be garbage collected."""
+        monitor = CoreAudioDeviceMonitor(on_device_change=lambda _reason: None)
         monitor.start()
-        assert monitor._callback_ref is not None
+        assert len(monitor._callback_refs) == 3  # dIn, dOut, dev#
         monitor.stop()
 
 # =============================================================================
@@ -257,34 +319,56 @@ class TestEmergencyAbort:
 class TestAudioManagerDeviceMonitor:
     """Test AudioManager device monitor integration."""
 
-    def test_on_device_change_calls_emergency_abort(self) -> None:
-        """Device change callback triggers emergency_abort on AudioCapture."""
+    def test_on_device_change_default_input(self) -> None:
+        """Default input change triggers reset when config is default."""
         from dictare.core.audio_manager import AudioManager
 
         config = MagicMock()
+        config.input_device = ""  # Using default
+        config.output_device = ""
         config.advanced.sample_rate = 16000
         config.advanced.channels = 1
         config.advanced.device = None
-        config.advanced.pre_buffer_ms = 640
-        config.advanced.min_speech_ms = 100
-        config.silence_ms = 1200
-        config.max_duration = 60
 
         manager = AudioManager(config=config)
         mock_audio = MagicMock(spec=AudioCapture)
         manager._audio = mock_audio
 
-        manager._on_device_change()
-        mock_audio.emergency_abort.assert_called_once()
+        # Track if _on_devices_updated is called
+        updated = []
+        manager._on_devices_updated = lambda: updated.append(1)
+
+        with patch.object(manager, "reset_audio_input"):
+            manager._on_device_change("default_input_changed")
+            manager.reset_audio_input.assert_called_once()
+
+        assert len(updated) == 1
+
+    def test_on_device_change_fixed_input_ignored(self) -> None:
+        """Default input change is ignored when a fixed device is configured."""
+        from dictare.core.audio_manager import AudioManager
+
+        config = MagicMock()
+        config.input_device = "My USB Mic"
+        config.output_device = ""
+
+        manager = AudioManager(config=config)
+        manager._audio = MagicMock(spec=AudioCapture)
+
+        with patch.object(manager, "reset_audio_input"):
+            manager._on_device_change("default_input_changed")
+            manager.reset_audio_input.assert_not_called()
 
     def test_on_device_change_safe_without_audio(self) -> None:
         """Device change when _audio is None should not raise."""
         from dictare.core.audio_manager import AudioManager
 
         config = MagicMock()
+        config.input_device = ""
+        config.output_device = ""
         manager = AudioManager(config=config)
         manager._audio = None
-        manager._on_device_change()  # Should not raise
+        manager._on_device_change("default_input_changed")  # Should not raise
 
     def test_close_stops_device_monitor(self) -> None:
         """AudioManager.close() stops the device monitor."""

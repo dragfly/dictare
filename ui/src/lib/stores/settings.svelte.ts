@@ -1,4 +1,4 @@
-import { fetchSchema, saveSetting, saveTomlSection, saveShortcuts, selectCapability, restartEngine, type Shortcut } from "$lib/api";
+import { fetchSchema, saveSetting, saveTomlSection, saveShortcuts, selectCapability, restartEngine, type Shortcut, type StatusResponse } from "$lib/api";
 import type { SchemaResponse } from "$lib/types";
 
 let schema = $state<SchemaResponse | null>(null);
@@ -130,6 +130,28 @@ export function markDirty(key: string, value: unknown): void {
 	saveStatus = "idle";
 	const { [key]: _, ...rest } = saveErrors;
 	saveErrors = rest;
+}
+
+export function updateDeviceLists(status: StatusResponse): void {
+	const devices = status.platform?.audio_devices_available;
+	if (!devices || !schema) return;
+
+	if (schema.presets["audio.input_device"]) {
+		schema.presets["audio.input_device"] = {
+			...schema.presets["audio.input_device"],
+			values: devices.input.map((d) => ({ value: d.name, label: d.name })),
+			default: devices.default_input?.name ?? "",
+		};
+	}
+	if (schema.presets["audio.output_device"]) {
+		schema.presets["audio.output_device"] = {
+			...schema.presets["audio.output_device"],
+			values: devices.output.map((d) => ({ value: d.name, label: d.name })),
+			default: devices.default_output?.name ?? "",
+		};
+	}
+	// Force reactivity
+	schema = { ...schema };
 }
 
 export async function saveAll(): Promise<void> {

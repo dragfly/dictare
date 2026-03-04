@@ -257,6 +257,15 @@ class DictareEngine:
 
         save_state(active_agent=self._agent_mgr.current_agent, listening=self.is_listening)
 
+    def _clear_device_config(self, config_key: str) -> None:
+        """Clear a device config key when the fixed device is removed."""
+        try:
+            from dictare.config import delete_config_value
+            delete_config_value(config_key)
+            logger.info("Cleared config %s (device removed)", config_key)
+        except Exception:
+            logger.debug("Failed to clear config %s", config_key, exc_info=True)
+
     def save_session_before_shutdown(self) -> None:
         """Save session state before SIGTERM / engine.shutdown / engine.restart."""
         from dictare.utils.state import save_state
@@ -575,6 +584,10 @@ class DictareEngine:
         self._loading_models[1]["status"] = "done"
         save_model_load_time(vad_model_id, vad_elapsed)
         logger.info("VAD model loaded in %.1fs", vad_elapsed)
+
+        # Wire device change callbacks — audio manager notifies engine
+        self._audio_manager._on_devices_updated = self._notify_status
+        self._audio_manager._on_fixed_device_removed = self._clear_device_config
 
         # Load TTS engine (optional — engine continues if unavailable)
         self._tts_mgr.load(
@@ -1031,6 +1044,18 @@ class DictareEngine:
         """Announce agent name via TTS (delegates to TTSManager)."""
         self._tts_mgr.speak_agent(agent_name)
 
+    def reset_audio_input(self) -> None:
+        """Reset audio input to current config. Called from HTTP endpoint."""
+        if self._audio_manager:
+            self._audio_manager.reset_audio_input()
+            self._notify_status()
+
+    def reset_audio_output(self, device: str) -> None:
+        """Reset audio output device. Called from HTTP endpoint."""
+        if self._audio_manager:
+            self._audio_manager.reset_audio_output(device)
+            self._notify_status()
+
     # -------------------------------------------------------------------------
     # Public Domain API (called by HTTP adapter and tests)
     # -------------------------------------------------------------------------
@@ -1100,6 +1125,7 @@ class DictareEngine:
                     "input": self.config.audio.input_device or "(default)",
                     "output": self.config.audio.output_device or "(default)",
                 },
+                "audio_devices_available": self._get_audio_devices(),
                 "permissions": self._get_permissions(),
                 "loading": {
                     "active": self._loading,
@@ -1130,6 +1156,20 @@ class DictareEngine:
         "Your vocal cords are your best developer tool.",
         "Less typing, more thinking.",
     ]
+
+    def _get_audio_devices(self) -> dict:
+        """Return current audio device lists for status response."""
+        from dictare.audio.capture import AudioCapture
+
+        try:
+            return {
+                "input": AudioCapture.list_devices(),
+                "output": AudioCapture.list_output_devices(),
+                "default_input": AudioCapture.get_default_device(),
+                "default_output": AudioCapture.get_default_output_device(),
+            }
+        except Exception:
+            return {"input": [], "output": [], "default_input": None, "default_output": None}
 
     def _get_session_stats(self) -> dict:
         """Return today's cumulative stats for the status response.

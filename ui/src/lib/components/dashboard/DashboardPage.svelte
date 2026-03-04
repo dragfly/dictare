@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
 	import { fetchStatus, setOutputMode, setCurrentAgent, type StatusResponse } from "$lib/api";
+	import { updateDeviceLists } from "$lib/stores/settings.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { CheckCircle, XCircle, AlertCircle } from "lucide-svelte";
 
@@ -33,7 +34,9 @@
 		es = new EventSource("/openvip/status/stream");
 		es.onmessage = (evt) => {
 			try {
-				status = JSON.parse(evt.data) as StatusResponse;
+				const parsed = JSON.parse(evt.data) as StatusResponse;
+				status = parsed;
+				updateDeviceLists(parsed);
 			} catch {
 				// ignore malformed events
 			}
