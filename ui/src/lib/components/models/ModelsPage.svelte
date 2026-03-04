@@ -4,12 +4,10 @@
 		fetchCapabilities,
 		installCapability,
 		uninstallCapability,
-		selectCapability,
 		createPullProgressSource,
 		type CapabilityInfo,
 	} from "$lib/api";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import { getEngineBarVisible, setModelsSaveBarVisible } from "$lib/stores/settings.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { Download, CheckCircle, AlertCircle, Loader, Trash2 } from "lucide-svelte";
 
@@ -26,8 +24,6 @@
 	let installing = $state<Record<string, boolean>>({});
 	let installErrors = $state<Record<string, string>>({});
 
-	let pendingSelection = $state<{ type: "stt" | "tts"; id: string } | null>(null);
-	let saving = $state(false);
 	let confirmUninstallId = $state<string | null>(null);
 
 	let es: EventSource | null = null;
@@ -102,35 +98,45 @@
 
 	function handleRowClick(cap: CapabilityInfo) {
 		const isInstalling = !!progress[cap.id] || cap.downloading;
-		if (!cap.ready || isInstalling || saving || cap.configured) return;
-		pendingSelection = { type: cap.type, id: cap.id };
-	}
+		if (!cap.ready || isInstalling) return;
 
-	function handleCancel() {
-		pendingSelection = null;
-	}
+		const dirtyModels = settingsStore.getDirtyModels();
+		const pendingForType = dirtyModels[cap.type];
 
-	async function handleSave() {
-		if (!pendingSelection) return;
-		saving = true;
-		try {
-			await selectCapability(pendingSelection.id);
-			pendingSelection = null;
-			settingsStore.setNeedsRestart();
-			await load();
-		} catch (e) {
-			installErrors = { ...installErrors, [pendingSelection.id]: String(e) };
-		} finally {
-			saving = false;
+		if (cap.configured && !pendingForType) {
+			// Already active and no pending change — nothing to do
+			return;
 		}
+
+		if (pendingForType === cap.id) {
+			// Clicking the pending selection again — deselect it
+			settingsStore.clearModelDirty(cap.type);
+			return;
+		}
+
+		if (cap.configured) {
+			// Clicking the currently configured model while another is pending — clear the pending
+			settingsStore.clearModelDirty(cap.type);
+			return;
+		}
+
+		settingsStore.markModelDirty(cap.type, cap.id);
 	}
 
 	function isSelected(cap: CapabilityInfo): boolean {
-		if (pendingSelection && pendingSelection.type === cap.type) {
-			return pendingSelection.id === cap.id;
+		const dirtyModels = settingsStore.getDirtyModels();
+		if (cap.type in dirtyModels) {
+			return dirtyModels[cap.type] === cap.id;
 		}
 		return cap.configured;
 	}
+
+	// Reload capabilities after successful save
+	$effect(() => {
+		if (settingsStore.getSaveStatus() === "saved") {
+			load();
+		}
+	});
 
 	onMount(() => {
 		load();
@@ -143,12 +149,6 @@
 
 	const sttCaps = $derived(capabilities.filter((c) => c.type === "stt"));
 	const ttsCaps = $derived(capabilities.filter((c) => c.type === "tts"));
-	const engineBarVisible = $derived(getEngineBarVisible());
-
-	$effect(() => {
-		setModelsSaveBarVisible(!!pendingSelection);
-		return () => setModelsSaveBarVisible(false);
-	});
 
 	function fmtGb(gb: number): string {
 		if (gb === 0) return "—";
@@ -188,7 +188,7 @@
 					{@const pct = snap ? Math.round(snap.fraction * 100) : 0}
 					{@const selected = isSelected(cap)}
 					{@const badge = platformBadge(cap)}
-					{@const clickable = cap.ready && !isInstalling && !saving && !cap.configured}
+					{@const clickable = cap.ready && !isInstalling && !cap.configured}
 					<tr
 						class="border-b last:border-0 transition-colors
 							{!cap.platform_ok ? 'opacity-40' : ''}
@@ -329,31 +329,6 @@
 				<div class="flex gap-2 justify-end">
 					<Button variant="outline" size="sm" onclick={() => confirmUninstallId = null}>Cancel</Button>
 					<Button variant="destructive" size="sm" onclick={confirmUninstall}>Remove</Button>
-				</div>
-			</div>
-		</div>
-	{/if}
-
-	<!-- Save bar -->
-	{#if pendingSelection}
-		<div class="fixed left-0 right-0 border-t bg-background/95 backdrop-blur px-6 py-3 z-50 transition-[bottom] duration-200 {engineBarVisible ? 'bottom-11' : 'bottom-0'}">
-			<div class="max-w-2xl mx-auto flex items-center justify-between">
-				<p class="text-sm text-muted-foreground">
-					Switch {pendingSelection.type === "stt" ? "STT model" : "TTS engine"} to
-					<span class="font-medium text-foreground">{pendingSelection.id}</span>?
-				</p>
-				<div class="flex items-center gap-2">
-					<Button variant="outline" size="sm" onclick={handleCancel} disabled={saving}>
-						Cancel
-					</Button>
-					<Button size="sm" onclick={handleSave} disabled={saving}>
-						{#if saving}
-							<Loader class="size-3 animate-spin mr-1.5" />
-							Saving...
-						{:else}
-							Save
-						{/if}
-					</Button>
 				</div>
 			</div>
 		</div>

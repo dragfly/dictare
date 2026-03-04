@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.117] - 2026-03-04
+
+### Changed
+- Settings UI: unified save UX (BIOS-style) — any change (form fields, TOML editors, model selection) shows one SaveBar, Save auto-restarts engine
+- Removed per-editor Save/Reset buttons from TOML fields
+- Removed local save bar from Models page
+- Removed "Settings changed. Restart engine?" prompt — save always restarts
+
 ## [0.1.116] - 2026-03-04
 
 ### Fixed
