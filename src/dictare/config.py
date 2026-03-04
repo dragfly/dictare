@@ -40,7 +40,7 @@ def _default_sounds() -> dict[str, SoundConfig]:
         "transcribing": SoundConfig(enabled=False, volume=0.15),
         "ready": SoundConfig(),
         "transcribed": SoundConfig(volume=1.0, focus_gated=True),
-        "submit": SoundConfig(volume=0.25),
+        "submit": SoundConfig(volume=0.25, focus_gated=True),
         "sent": SoundConfig(volume=0.25),
         "agent_announce": SoundConfig(),
     }
@@ -101,14 +101,43 @@ class AudioConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _migrate_advanced_device(cls, values: Any) -> Any:
-        """Migrate audio.advanced.device → audio.input_device."""
+    def _merge_sound_defaults(cls, values: Any) -> Any:
+        """Merge user sound configs over application defaults.
+
+        Without this, a partial ``[audio.sounds.transcribed]`` section in
+        TOML would replace the entire default SoundConfig, losing fields
+        like ``focus_gated=True`` that differ from Pydantic field defaults.
+        """
         if not isinstance(values, dict):
             return values
+
+        # Migrate audio.advanced.device → audio.input_device
         advanced = values.get("advanced")
         if isinstance(advanced, dict) and advanced.get("device") and not values.get("input_device"):
             values["input_device"] = advanced["device"]
             advanced["device"] = None
+
+        # Merge user sounds over defaults
+        user_sounds = values.get("sounds")
+        if isinstance(user_sounds, dict):
+            defaults = _default_sounds()
+            merged: dict[str, Any] = {}
+            for key, default_cfg in defaults.items():
+                if key in user_sounds:
+                    user_val = user_sounds[key]
+                    if isinstance(user_val, dict):
+                        # Merge: default fields + user overrides
+                        merged[key] = {**default_cfg.model_dump(), **user_val}
+                    else:
+                        merged[key] = user_val
+                else:
+                    merged[key] = default_cfg
+            # Preserve any extra user-defined sound events
+            for key in user_sounds:
+                if key not in merged:
+                    merged[key] = user_sounds[key]
+            values["sounds"] = merged
+
         return values
 
 
@@ -882,14 +911,13 @@ def create_default_config() -> Path:
 # enabled = true
 # volume = 1.0
 # focus_gated = true              # Skipped when agent terminal has focus
-# [audio.sounds.submit]           # Submit action: typewriter burst  (typewriter.wav)
+# [audio.sounds.submit]           # Submit action: typewriter burst  (typewriter-burst.wav)
 # enabled = true
 # volume = 0.25
-# focus_gated = false             # Always plays — audible confirm even when watching terminal
-# [audio.sounds.sent]             # Submit action: carriage-return  (carriage-return.wav)
+# focus_gated = true              # Skipped when agent terminal has focus
+# [audio.sounds.sent]             # Standalone carriage-return  (carriage-return.wav)
 # enabled = true
 # volume = 0.25
-# focus_gated = false             # Set true to skip when agent terminal has focus
 # [audio.sounds.agent_announce]   # TTS announces agent name on switch
 # enabled = true
 

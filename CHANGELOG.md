@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.123] - 2026-03-04
+
+### Fixed
+- Focus-gated sounds (transcribed, submit) now survive engine restart — focus state persisted in session-state.json
+- Partial sound config in TOML no longer loses `focus_gated=true` default (config merge over defaults)
+- SSE connection exhaustion from multiple browser tabs — client-side tab takeover + server-side cap at 5 streams
+- EngineStatusBar: "disconnected" only shown after 3 consecutive poll failures from hidden state
+
+### Changed
+- Submit sound simplified: single typewriter-burst (focus-gated), decoupled from carriage-return
+- Duplicate settings tabs show "Settings moved to another tab" instead of opening new SSE connections
+
 ## [0.1.122] - 2026-03-04
 
 ### Fixed

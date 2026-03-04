@@ -256,13 +256,21 @@ class DictareEngine:
             return
         from dictare.utils.state import save_state
 
-        save_state(active_agent=self._agent_mgr.current_agent, listening=self.is_listening)
+        save_state(
+            active_agent=self._agent_mgr.current_agent,
+            listening=self.is_listening,
+            focused_agent=self._feedback_policy.focused_agent,
+        )
 
     def save_session_before_shutdown(self) -> None:
         """Save session state before SIGTERM / engine.shutdown / engine.restart."""
         from dictare.utils.state import save_state
 
-        save_state(active_agent=self._agent_mgr.current_agent, listening=self.is_listening)
+        save_state(
+            active_agent=self._agent_mgr.current_agent,
+            listening=self.is_listening,
+            focused_agent=self._feedback_policy.focused_agent,
+        )
         logger.info(
             "session_saved: agent=%r, mode=%s, listening=%r",
             self._agent_mgr.current_agent,
@@ -289,10 +297,14 @@ class DictareEngine:
 
         saved_agent = saved.get("active_agent")
         saved_listening = saved.get("listening", False)
+        saved_focus = saved.get("focused_agent")
 
-        logger.info("restore_state: fresh session → agent=%r, listening=%r", saved_agent, saved_listening)
+        logger.info("restore_state: fresh session → agent=%r, listening=%r, focused=%r", saved_agent, saved_listening, saved_focus)
 
         self._agent_mgr.restore_session(saved_agent)
+
+        if saved_focus:
+            self._feedback_policy.set_focus(saved_focus, True)
 
         return saved_listening
 
@@ -849,10 +861,10 @@ class DictareEngine:
         x_input_info = first_msg.get("x_input", {})
         pipeline_submit = "submit" in (x_input_info.get("ops") or []) if isinstance(x_input_info, dict) else False
 
-        # Play "sent" sound only on pipeline-triggered submit (not every transcription).
+        # Play submit sound on pipeline-triggered submit (not every transcription).
         # Double-tap submit is handled separately in _submit_action().
         if success and pipeline_submit:
-            self._play_submit_sequence()
+            self._play_focus_gated_sound("submit")
         submit_trigger = x_input_info.get("trigger") if isinstance(x_input_info, dict) else None
         submit_confidence = x_input_info.get("confidence") if isinstance(x_input_info, dict) else None
 
@@ -887,31 +899,6 @@ class DictareEngine:
             vol = scfg.volume if scfg is not None else 1.0
             play_sound_file_async(path, volume=vol)
 
-    def _play_submit_sequence(self) -> None:
-        """Play typewriter burst (submit) → carriage-return (sent) sequence."""
-        from dictare.audio.beep import get_sound_for_event, play_sound_file
-
-        if not self._feedback_policy.should_play(
-            "sent", self._agent_mgr.current_agent, self.config.audio,
-        ):
-            return
-
-        tw_enabled, tw_path = get_sound_for_event(self.config.audio, "submit")
-        cr_enabled, cr_path = get_sound_for_event(self.config.audio, "sent")
-
-        if not cr_enabled:
-            return
-
-        sent_cfg = self.config.audio.sounds.get("sent")
-        cr_vol = sent_cfg.volume if sent_cfg is not None else 1.0
-
-        if tw_enabled and tw_path:
-            submit_cfg = self.config.audio.sounds.get("submit")
-            tw_vol = submit_cfg.volume if submit_cfg is not None else 1.0
-            play_sound_file(tw_path, volume=tw_vol, on_complete=lambda: play_sound_file(cr_path, volume=cr_vol))
-        else:
-            play_sound_file(cr_path, volume=cr_vol)
-
     # -------------------------------------------------------------------------
     # Hotkey Actions
     # -------------------------------------------------------------------------
@@ -931,7 +918,7 @@ class DictareEngine:
         message["x_input"] = {"ops": ["submit"], "trigger": "<double_tap>", "source": "dictare/double-tap"}
         agent.send(message)
         logger.debug("submit_action: submit sent to agent %s", agent.id)
-        self._play_submit_sequence()
+        self._play_focus_gated_sound("submit")
 
     # -------------------------------------------------------------------------
     # State Control
@@ -970,6 +957,7 @@ class DictareEngine:
         """Update focus state for an agent's terminal."""
         logger.info("Focus: agent=%s focused=%s", agent_id, focused)
         self._feedback_policy.set_focus(agent_id, focused)
+        self._save_state()
 
     def switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent - sends event to controller."""
