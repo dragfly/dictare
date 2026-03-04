@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 REASON_DEFAULT_INPUT = "default_input_changed"
 REASON_DEFAULT_OUTPUT = "default_output_changed"
 REASON_DEVICES = "devices_changed"
+REASON_WAKE = "system_wake"
 
 class DeviceMonitor(ABC):
     """Monitors OS-level audio device changes.
@@ -66,17 +67,20 @@ class CoreAudioDeviceMonitor(DeviceMonitor):
         self._callback_refs: list[Any] = []  # prevent GC of ctypes callbacks
         self._property_addresses: list[Any] = []
         self._core_audio: Any = None
+        self._wake_observer: Any = None
 
     def start(self) -> None:
         if self._running:
             return
         self._install_listeners()
+        self._install_wake_observer()
         self._running = True
 
     def stop(self) -> None:
         if not self._running:
             return
         self._remove_listeners()
+        self._remove_wake_observer()
         self._running = False
 
     def _install_listeners(self) -> None:
@@ -149,6 +153,50 @@ class CoreAudioDeviceMonitor(DeviceMonitor):
 
         self._listeners_installed = True
         logger.debug("CoreAudio device monitor installed (%d listeners)", len(properties))
+
+    def _install_wake_observer(self) -> None:
+        """Listen for NSWorkspaceDidWakeNotification (system wake from sleep).
+
+        Uses PyObjC (bundled with macOS Python and available via pyobjc-framework-Cocoa).
+        Runs a dedicated CFRunLoop thread to receive the notification.
+        """
+        try:
+            from AppKit import NSWorkspace  # type: ignore[import-untyped]
+        except ImportError:
+            logger.debug("PyObjC not available — wake observer skipped")
+            return
+
+        try:
+            def _on_wake(_notification: Any) -> None:
+                logger.info("System wake detected (NSWorkspaceDidWakeNotification)")
+                try:
+                    self._on_device_change(REASON_WAKE)
+                except Exception:
+                    pass
+
+            center = NSWorkspace.sharedWorkspace().notificationCenter()
+            center.addObserverForName_object_queue_usingBlock_(
+                "NSWorkspaceDidWakeNotification",
+                None,
+                None,  # deliver on posting thread (CoreAudio/AppKit thread)
+                _on_wake,
+            )
+            self._wake_observer = (center, _on_wake)
+            logger.debug("macOS wake observer installed")
+        except Exception:
+            logger.debug("Failed to install wake observer", exc_info=True)
+
+    def _remove_wake_observer(self) -> None:
+        """Remove the wake notification observer."""
+        if self._wake_observer is None:
+            return
+        try:
+            center, _block = self._wake_observer
+            center.removeObserver_(self._wake_observer)
+            logger.debug("macOS wake observer removed")
+        except Exception:
+            logger.debug("Failed to remove wake observer", exc_info=True)
+        self._wake_observer = None
 
     def _remove_listeners(self) -> None:
         """Remove all CoreAudio property listeners."""

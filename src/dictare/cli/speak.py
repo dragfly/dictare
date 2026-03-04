@@ -183,6 +183,10 @@ def register(app: typer.Typer) -> None:
                 if not quiet:
                     console.print("[red]Engine not running.[/]")
                 raise typer.Exit(1)
+            except Exception:
+                # SDK validation error (e.g. server version mismatch) — stop was sent
+                if not quiet:
+                    console.print("[dim]TTS stopped.[/]")
             raise typer.Exit(0)
 
         # Read from stdin if no text provided or text is "-"

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.124] - 2026-03-04
+
+### Fixed
+- Audio recovery after Mac sleep/wake — detect system wake via NSWorkspaceDidWakeNotification, retry when audio object is dead
+- `dictare speak stop` no longer crashes with ValidationError when no TTS is playing (OpenVIP-compliant response)
+- Favicon now shows the actual Dictare icon (green microphone) instead of generic placeholder
+
 ## [0.1.123] - 2026-03-04
 
 ### Fixed
