@@ -99,6 +99,8 @@
 	const isNonDefault = $derived.by(() => {
 		if (isDirty) return false;
 		if (isSelect) return currentValue !== "" && currentValue != null;
+		// Empty string means "use default" for all string fields (not just selects)
+		if (field.type === "str" && (currentValue === "" || currentValue == null)) return false;
 		return currentValue != null && JSON.stringify(currentValue) !== JSON.stringify(field.default);
 	});
 
@@ -164,6 +166,7 @@
 			<KeyCaptureField
 				format={keyCaptureFormat}
 				value={(currentValue as string) ?? ""}
+				defaultValue={typeof field.default === "string" ? field.default : ""}
 				onchange={(v) => settingsStore.markDirty(field.key, v)}
 			/>
 		{:else if complex}
