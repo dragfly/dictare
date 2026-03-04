@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.119] - 2026-03-04
+
+### Fixed
+- Tray icon flickering every second on Linux — skip icon/menu updates when state is unchanged
+
 ## [0.1.118] - 2026-03-04
 
 ### Changed
