@@ -647,29 +647,38 @@ class TrayApp:
             loading_stage: What's loading ("STT", "VAD", "")
         """
         if state in ("disconnected", "loading", "off", "listening"):
+            changed = (
+                state != self._state
+                or progress != self._progress
+                or loading_stage != self._loading_stage
+            )
             self._state = state
             self._progress = progress
             self._loading_stage = loading_stage
-            self._update_icon()
-            self._update_menu()
+            if changed:
+                self._update_icon()
+                self._update_menu()
 
     def set_targets(self, targets: list[str], current: str = "") -> None:
         """Set available targets."""
-        self._targets = targets
+        new_current = self._current_target
         if current:
-            self._current_target = current
+            new_current = current
         elif targets and not self._current_target:
-            self._current_target = targets[0]
+            new_current = targets[0]
         elif not targets:
-            self._current_target = ""
-        self._update_menu()
+            new_current = ""
+        if targets != self._targets or new_current != self._current_target:
+            self._targets = targets
+            self._current_target = new_current
+            self._update_menu()
 
     def set_output_mode(self, mode: str) -> None:
         """Set output mode (called by SSE status handler)."""
         if mode != self._output_mode:
             logger.info("tray set_output_mode: %r → %r (from engine SSE)", self._output_mode, mode)
-        self._output_mode = mode
-        self._update_menu()
+            self._output_mode = mode
+            self._update_menu()
 
     def on_toggle_listening(self, callback: Callable[[], None]) -> None:
         """Register callback for listening toggle."""
