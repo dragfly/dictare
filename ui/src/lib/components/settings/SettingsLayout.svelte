@@ -21,7 +21,9 @@
 		type PermissionDoctorStatus,
 		type PermissionProbeResult
 	} from "$lib/api";
-	import { onMount } from "svelte";
+	import { onMount, onDestroy } from "svelte";
+	import { updateDeviceLists } from "$lib/stores/settings.svelte";
+	import type { StatusResponse } from "$lib/api";
 
 	interface Props {
 		tabs: TabDef[];
@@ -38,8 +40,35 @@
 
 	let activeNavId = $state(defaultNavId());
 
+	// Global SSE listener for device list updates — stays active on ALL tabs.
+	// DashboardPage has its own SSE for dashboard-specific status display.
+	let deviceSSE: EventSource | null = null;
+
+	function connectDeviceSSE() {
+		deviceSSE = new EventSource("/openvip/status/stream");
+		deviceSSE.onmessage = (evt) => {
+			try {
+				const parsed = JSON.parse(evt.data) as StatusResponse;
+				updateDeviceLists(parsed);
+			} catch {
+				// ignore
+			}
+		};
+		deviceSSE.onerror = () => {
+			deviceSSE?.close();
+			deviceSSE = null;
+			// Retry after 5s
+			setTimeout(connectDeviceSSE, 5000);
+		};
+	}
+
 	onMount(() => {
 		settingsStore.load();
+		connectDeviceSSE();
+	});
+
+	onDestroy(() => {
+		deviceSSE?.close();
 	});
 
 	const schema = $derived(settingsStore.getSchema());

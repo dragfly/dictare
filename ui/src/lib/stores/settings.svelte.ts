@@ -132,6 +132,20 @@ export function markDirty(key: string, value: unknown): void {
 	saveErrors = rest;
 }
 
+/** Update a value in the in-memory schema immediately (no dirty flag, no SaveBar).
+ *  Used by instant-save fields (audio devices) to update the UI optimistically. */
+export function setValueImmediate(key: string, value: unknown): void {
+	if (!schema) return;
+	const parts = key.split(".");
+	let obj: Record<string, unknown> = schema.values;
+	for (const p of parts.slice(0, -1)) {
+		if (obj[p] == null) return;
+		obj = obj[p] as Record<string, unknown>;
+	}
+	obj[parts[parts.length - 1]] = value;
+	schema = { ...schema };
+}
+
 export function updateDeviceLists(status: StatusResponse): void {
 	const devices = status.platform?.audio_devices_available;
 	if (!devices || !schema) return;
