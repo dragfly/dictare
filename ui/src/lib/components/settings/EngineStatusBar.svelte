@@ -4,9 +4,10 @@
 	import * as settingsStore from "$lib/stores/settings.svelte";
 	import { setEngineBarVisible } from "$lib/stores/settings.svelte";
 
-	type BarState = "hidden" | "restarting" | "disconnected" | "ready";
+	type BarState = "hidden" | "restarting" | "loading" | "disconnected" | "ready";
 
 	let barState = $state<BarState>("hidden");
+	let sawDown = false;
 	let timer: ReturnType<typeof setInterval> | null = null;
 	let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -14,40 +15,58 @@
 		setEngineBarVisible(barState !== "hidden");
 	});
 
-	// When saveStatus becomes "saved", engine was already restarted by saveAll() —
-	// show "restarting" and poll until healthy.
+	// When saveStatus becomes "saved", transition to restarting and reset to idle.
 	$effect(() => {
-		if (settingsStore.getSaveStatus() === "saved" && barState !== "restarting") {
+		if (settingsStore.getSaveStatus() === "saved") {
 			barState = "restarting";
+			sawDown = false;
+			settingsStore.setSaveStatus("idle");
 		}
 	});
 
-	async function checkEngine(): Promise<boolean> {
+	async function checkEngine(): Promise<"down" | "loading" | "ready"> {
 		try {
-			const r = await fetch("/health", { signal: AbortSignal.timeout(1000) });
-			return r.ok;
+			const r = await fetch("/openvip/status", { signal: AbortSignal.timeout(2000) });
+			if (!r.ok) return "down";
+			const data = await r.json();
+			if (data.platform?.loading?.active) return "loading";
+			return "ready";
 		} catch {
-			return false;
+			return "down";
 		}
 	}
 
 	async function poll() {
-		const up = await checkEngine();
+		const status = await checkEngine();
 
-		if (!up && barState !== "restarting") {
-			// Engine is down and we're not already waiting for a restart
-			barState = "disconnected";
+		if (status === "down") {
+			if (barState === "restarting") {
+				// Good — engine went down as expected during restart
+				sawDown = true;
+			} else {
+				barState = "disconnected";
+			}
 			if (hideTimer) {
 				clearTimeout(hideTimer);
 				hideTimer = null;
 			}
-		} else if (up && (barState === "disconnected" || barState === "restarting")) {
-			// Engine is back
-			barState = "ready";
-			hideTimer = setTimeout(() => {
-				barState = "hidden";
-				hideTimer = null;
-			}, 1500);
+		} else if (barState === "restarting" && !sawDown) {
+			// Engine still up after restart command — wait for it to go down first
+			return;
+		} else if (status === "loading") {
+			barState = "loading";
+		} else {
+			// Engine is ready
+			if (barState !== "hidden" && barState !== "ready") {
+				barState = "ready";
+				sawDown = false;
+				// Reload full schema from backend now that engine is ready
+				settingsStore.load();
+				hideTimer = setTimeout(() => {
+					barState = "hidden";
+					hideTimer = null;
+				}, 1500);
+			}
 		}
 	}
 
@@ -63,23 +82,35 @@
 
 {#if barState !== "hidden"}
 	<div
-		class="fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 border-t backdrop-blur
-			{barState === 'restarting'
-				? 'border-orange-500/30 bg-orange-950/90'
-				: barState === 'disconnected'
-					? 'border-red-500/30 bg-red-950/90'
-					: 'border-green-500/30 bg-green-950/90'}"
+		class="fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 border-t backdrop-blur"
+		style="border-color: {barState === 'restarting'
+				? 'rgb(249 115 22 / 0.3)'
+				: barState === 'loading'
+					? 'rgb(245 158 11 / 0.3)'
+					: barState === 'disconnected'
+						? 'rgb(239 68 68 / 0.3)'
+						: 'rgb(109 92 230 / 0.3)'};
+			background-color: {barState === 'restarting'
+				? 'rgb(67 20 7 / 0.9)'
+				: barState === 'loading'
+					? 'rgb(69 26 3 / 0.9)'
+					: barState === 'disconnected'
+						? 'rgb(69 10 10 / 0.9)'
+						: 'rgb(29 20 66 / 0.9)'};"
 	>
 		<div class="max-w-2xl mx-auto flex items-center justify-center gap-2 py-2.5 px-6">
 			{#if barState === "restarting"}
 				<Loader class="size-3.5 animate-spin text-orange-400" />
 				<span class="text-sm text-orange-300">Engine restarting...</span>
+			{:else if barState === "loading"}
+				<Loader class="size-3.5 animate-spin text-amber-400" />
+				<span class="text-sm text-amber-300">Engine loading...</span>
 			{:else if barState === "disconnected"}
 				<Loader class="size-3.5 animate-spin text-red-400" />
 				<span class="text-sm text-red-300">Engine disconnected</span>
 			{:else}
-				<CheckCircle class="size-3.5 text-green-400" />
-				<span class="text-sm text-green-300">Engine ready</span>
+				<CheckCircle class="size-3.5" style="color: #6d5ce6" />
+				<span class="text-sm" style="color: #a99bf0">Engine ready</span>
 			{/if}
 		</div>
 	</div>

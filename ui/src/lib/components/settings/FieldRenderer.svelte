@@ -10,7 +10,6 @@
 	import KeyCaptureField from "./fields/KeyCaptureField.svelte";
 	import { resolveFieldSchema, getEnumValues } from "$lib/schema";
 	import * as settingsStore from "$lib/stores/settings.svelte";
-	import * as presetsStore from "$lib/stores/presets.svelte";
 	import { COMPLEX_KEYS, TOML_EDITABLE_KEYS, TOML_NO_ACCORDION, FIELD_PRESETS, SIZE_HINTS, HIDDEN_FORM_FIELDS, KEY_CAPTURE_FIELDS, RIGHT_ALIGN_FIELDS, LABEL_OVERRIDES, BACKEND_DRIVEN_FIELDS } from "$lib/registry/field-config";
 	import type { PresetOption } from "$lib/registry/field-config";
 
@@ -76,7 +75,7 @@
 	/** Resolved option list for SelectField — one normalized {value, label}[] array. */
 	const selectOptions = $derived(
 		isBackendDriven
-			? (presetsStore.getValues(field.key) ?? [])
+			? (settingsStore.getPresetValues(field.key) ?? [])
 			: enumValues
 				? enumValues.map((v) => ({ value: v, label: capitalize(v) }))
 				: presets
@@ -91,7 +90,7 @@
 	const allowCustom = $derived(!isBackendDriven && !enumValues && !!presets);
 
 	/** Default value string for display in SelectField ("Default (x)"). */
-	const defaultDisplay = $derived(presetsStore.getDefault(field.key));
+	const defaultDisplay = $derived(settingsStore.getPresetDefault(field.key));
 
 	/** True when the field has an explicit value different from its default.
 	 *  Select fields: "" means "use backend default" → not yellow.

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.118] - 2026-03-04
+
+### Changed
+- Settings UI: single in-memory model — one fetch loads everything (schema, TOML sections, shortcuts, presets), no cascading reloads
+- Backend `/api/settings/schema` now includes `toml_sections`, `shortcuts`, and `presets`
+- Shortcuts field integrated into global SaveBar (removed local Save/Reset buttons)
+- EngineStatusBar: loading state is amber/yellow, ready state uses brand purple
+- Dashboard: agent switch is instant (optimistic update)
+
+### Fixed
+- Dashboard SSE path corrected (`/status/stream` → `/openvip/status/stream`) — was falling back to 5s polling
+- Save no longer flickers values back to pre-save state while engine restarts
+
+### Removed
+- Separate presets store (`presets.svelte.ts`) — merged into schema response
+- `engineReadyGen` / `notifyEngineReady()` / `clearSaveStatus()` — replaced by direct `load()` on engine ready
+- Settings reload on tab navigation — load once on mount
+
 ## [0.1.117] - 2026-03-04
 
 ### Changed

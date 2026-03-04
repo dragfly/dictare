@@ -536,9 +536,12 @@ class OpenVIPServer:
 
         @app.get("/api/settings/schema")
         async def settings_schema():
-            """Return JSON Schema, current values, and field metadata."""
+            """Return JSON Schema, current values, field metadata, plus TOML sections,
+            shortcuts, and presets — everything the UI needs in ONE fetch."""
             from dictare import __version__
+            from dictare.audio.capture import AudioCapture
             from dictare.config import Config, list_config_keys, load_config, load_raw_values
+            from dictare.core.toml_sections import SUPPORTED_SECTIONS, serialize_section
 
             config = load_config()
             values = config.model_dump()
@@ -546,13 +549,56 @@ class OpenVIPServer:
 
             # String fields not explicitly in TOML → "" (means "use default").
             # Bool/number fields keep their Pydantic-resolved defaults.
-            for key, type_name, _default, _desc, _env_var in list_config_keys():
+            config_keys = list(list_config_keys())
+            for key, type_name, _default, _desc, _env_var in config_keys:
                 if type_name == "str" and key not in raw:
                     parts = key.split(".")
                     obj = values
                     for p in parts[:-1]:
                         obj = obj[p]
                     obj[parts[-1]] = ""
+
+            # TOML sections — serialized fragments for all supported sections
+            toml_sections: dict[str, str] = {}
+            for section in SUPPORTED_SECTIONS:
+                try:
+                    toml_sections[section] = serialize_section(section, config)
+                except KeyError:
+                    pass
+
+            # Shortcuts
+            shortcuts = [
+                {"keys": str(s.get("keys", "")), "command": str(s.get("command", ""))}
+                for s in config.keyboard.shortcuts
+                if s.get("keys") and s.get("command")
+            ]
+
+            # Presets — defaults + backend-driven option lists
+            presets: dict[str, dict] = {
+                key: {"default": default}
+                for key, _type_name, default, _desc, _env_var in config_keys
+            }
+            try:
+                input_devices = AudioCapture.list_devices()
+                output_devices = AudioCapture.list_output_devices()
+                default_input = AudioCapture.get_default_device()
+                default_output = AudioCapture.get_default_output_device()
+
+                if "audio.input_device" in presets:
+                    presets["audio.input_device"]["values"] = [
+                        {"value": d["name"], "label": d["name"]} for d in input_devices
+                    ]
+                    if default_input:
+                        presets["audio.input_device"]["default"] = default_input.get("name", "")
+
+                if "audio.output_device" in presets:
+                    presets["audio.output_device"]["values"] = [
+                        {"value": d["name"], "label": d["name"]} for d in output_devices
+                    ]
+                    if default_output:
+                        presets["audio.output_device"]["default"] = default_output.get("name", "")
+            except Exception:
+                pass
 
             return {
                 "schema": Config.model_json_schema(),
@@ -565,9 +611,12 @@ class OpenVIPServer:
                         "description": desc,
                         "env_var": env_var,
                     }
-                    for key, type_name, default, desc, env_var in list_config_keys()
+                    for key, type_name, default, desc, env_var in config_keys
                 ],
                 "version": __version__,
+                "toml_sections": toml_sections,
+                "shortcuts": shortcuts,
+                "presets": presets,
             }
 
         @app.get("/api/settings/presets")

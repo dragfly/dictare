@@ -8,11 +8,19 @@ export interface FieldMeta {
 	env_var: string;
 }
 
+export interface PresetEntry {
+	default: unknown;
+	values?: { value: string; label: string }[];
+}
+
 export interface SchemaResponse {
 	schema: JsonSchema;
 	values: Record<string, unknown>;
 	keys: FieldMeta[];
 	version: string;
+	toml_sections: Record<string, string>;
+	shortcuts: { keys: string; command: string }[];
+	presets: Record<string, PresetEntry>;
 }
 
 export interface JsonSchema {
