@@ -434,6 +434,16 @@ class AppController:
             return
         self._engine._tap_detector.on_key_up()
 
+    def on_hotkey_other_key(self) -> None:
+        """Called when another key is pressed while the hotkey modifier is held.
+
+        This signals a key combo (e.g. Command+I), not a hotkey tap.
+        TapDetector will cancel the pending tap detection.
+        """
+        if not self._engine:
+            return
+        self._engine._tap_detector.on_other_key()
+
     def next_agent(self) -> None:
         """Switch to next agent.
 
