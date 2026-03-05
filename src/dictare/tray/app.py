@@ -615,6 +615,7 @@ class TrayApp:
                 "off": "dictare",
                 "muted": "dictare",
                 "listening": "dictare_active",
+                "recording": "dictare_active",
             }.get(self._state, "dictare_disconnected")
 
             perms_ok = self._microphone_granted and self._input_monitoring_granted
@@ -630,6 +631,7 @@ class TrayApp:
                 "off": "Dictare — Off",
                 "muted": "Dictare — Muted",
                 "listening": "Dictare — Listening",
+                "recording": "Dictare — Recording",
             }
             self._icon.title = title_map.get(self._state, "Dictare")
 
@@ -723,6 +725,9 @@ class TrayApp:
             _tray_state_map = {
                 "loading": "loading",
                 "listening": "listening",
+                "recording": "listening",
+                "transcribing": "listening",
+                "playing": "listening",
                 "muted": "muted",
                 "off": "off",
             }

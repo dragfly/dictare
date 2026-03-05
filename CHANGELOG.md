@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.132] - 2026-03-05
+
+### Fixed
+- Double-tap submit deferred when VAD detects active speech, preventing premature submit during transcription gaps
+- Status bar and tray show "recording" state when VAD detects speech
+- SSE push for RECORDING state transition (was missing `on_state_change` callback)
+- Audio reconnect retry delay reduced from 30s to 3s for faster recovery after sleep/wake
+- Focus event triggers immediate audio reconnect when stream is dead (eliminates 15s+ delay)
+- Added reconnect lock to prevent concurrent reconnect attempts
+
 ## [0.1.130] - 2026-03-05
 
 ### Fixed

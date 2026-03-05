@@ -18,9 +18,9 @@ class TestResolveDisplayState:
         platform = {"state": "listening", "loading": {"active": False}}
         assert resolve_display_state(platform) == ("listening", "ok")
 
-    def test_recording_returns_listening_ok(self) -> None:
+    def test_recording_returns_recording_ok(self) -> None:
         platform = {"state": "recording"}
-        assert resolve_display_state(platform) == ("listening", "ok")
+        assert resolve_display_state(platform) == ("recording", "ok")
 
     def test_off_returns_off_dim(self) -> None:
         platform = {"state": "off"}
