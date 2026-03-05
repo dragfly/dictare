@@ -392,10 +392,68 @@ class AgentTypesConfig(BaseModel):
     def __bool__(self) -> bool:
         return bool(self.model_extra)
 
+def _default_mute_triggers() -> dict[str, list[list[str]]]:
+    return {"*": [["ok|okay", "mute|stop"]]}
+
+def _default_listen_triggers() -> dict[str, list[list[str]]]:
+    return {"*": [["ok|okay", "listen"]]}
+
+class MuteFilterConfig(BaseModel):
+    """Voice mute filter configuration.
+
+    Trigger patterns and TTS feedback for the mute/listen feature.
+    The filter detects triggers; the engine executes mute/unmute and
+    plays TTS feedback using the phrases configured here.
+    """
+
+    enabled: bool = Field(default=True, description="Enable voice mute/unmute filter")
+    mute_triggers: dict[str, list[list[str]]] = Field(
+        default_factory=_default_mute_triggers,
+        description="Trigger patterns to mute voice (by language). Use '*' for language-agnostic.",
+    )
+    listen_triggers: dict[str, list[list[str]]] = Field(
+        default_factory=_default_listen_triggers,
+        description="Trigger patterns to unmute voice (by language). Use '*' for language-agnostic.",
+    )
+    mute_phrases: list[str] = Field(
+        default_factory=lambda: [
+            "Going quiet.",
+            "I'll be here when you need me.",
+            "Taking a break.",
+            "Standing by.",
+        ],
+        description="TTS phrases spoken when muting (random selection)",
+    )
+    listen_phrases: list[str] = Field(
+        default_factory=lambda: [
+            "I'm all ears.",
+            "Ready when you are.",
+            "Listening.",
+            "At your service.",
+        ],
+        description="TTS phrases spoken when unmuting (random selection)",
+    )
+    confidence_threshold: float = Field(
+        default=0.85,
+        description="Minimum confidence to trigger mute/unmute (0.0-1.0)",
+    )
+    max_scan_words: int = Field(
+        default=10,
+        description="Maximum words from end to scan for triggers",
+    )
+    decay_rate: float = Field(
+        default=0.95,
+        description="Confidence decay rate per word from end (0.95 = 5% per word)",
+    )
+
 class PipelineConfig(BaseModel):
     """Pipeline filter configuration."""
 
     enabled: bool = Field(default=True, description="Enable the message pipeline")
+    mute_filter: MuteFilterConfig = Field(
+        default_factory=MuteFilterConfig,
+        description="Voice mute/unmute filter (OK mute / OK listen)",
+    )
     submit_filter: SubmitFilterConfig = Field(
         default_factory=SubmitFilterConfig,
         description="Submit trigger detection filter",
@@ -423,7 +481,7 @@ class DaemonConfig(BaseModel):
 
     restore_listening: bool = Field(
         default=False,
-        description="Restore listening state on restart (false = always start idle)",
+        description="Restore listening state on restart (false = always start off)",
     )
 
 class TTSConfig(BaseModel):
@@ -939,6 +997,28 @@ def create_default_config() -> Path:
 
 [pipeline]
 # enabled = true
+
+[pipeline.mute_filter]
+# enabled = true
+# confidence_threshold = 0.85
+# max_scan_words = 10
+# decay_rate = 0.95
+
+# TTS phrases spoken on mute/unmute (random selection)
+# mute_phrases = ["Going quiet.", "I'll be here when you need me.", "Taking a break.", "Standing by."]
+# listen_phrases = ["I'm all ears.", "Ready when you are.", "Listening.", "At your service."]
+
+# Mute triggers — say these to mute voice input (engine keeps running, text discarded)
+# [pipeline.mute_filter.mute_triggers]
+# "*" = [["ok|okay", "mute|stop"]]
+# es = [["ok|okay", "silencio|para"]]
+# de = [["ok|okay", "stumm|stopp"]]
+
+# Listen triggers — say these to unmute and resume normal voice input
+# [pipeline.mute_filter.listen_triggers]
+# "*" = [["ok|okay", "listen"]]
+# es = [["ok|okay", "escucha"]]
+# de = [["ok|okay", "hoer|zuhoeren"]]
 
 [pipeline.submit_filter]
 # enabled = true

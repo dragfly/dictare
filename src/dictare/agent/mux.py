@@ -296,7 +296,7 @@ def _stream_active_agent(
 ) -> None:
     """Subscribe to /status/stream SSE to track active agent.
 
-    Updates status bar with listening/idle/standby indicator.
+    Updates status bar with listening/off/standby indicator.
     Push-based: engine sends status on every state transition and
     agent connect/disconnect — no polling needed.
     """
@@ -322,7 +322,7 @@ def _stream_active_agent(
 
         platform = status.platform or {}
         state, style = resolve_display_state(platform, agent_id)
-        dot = "●" if state in ("listening", "idle") else "○"
+        dot = "●" if state in ("listening", "off", "muted") else "○"
         label = f"{dot} {agent_id} · {state}"
 
         key = (label, style)
@@ -714,7 +714,7 @@ def run_agent(
             args=(master_fd, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
-        # Stream engine status via SSE (status bar: listening/idle/standby)
+        # Stream engine status via SSE (status bar: listening/off/standby)
         if sbar:
             status_thread = threading.Thread(
                 target=_stream_active_agent,

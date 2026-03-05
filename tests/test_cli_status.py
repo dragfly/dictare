@@ -22,7 +22,7 @@ def _mock_status() -> MagicMock:
         "name": "Dictare",
         "version": "0.1.0b280",
         "mode": "agents",
-        "state": "idle",
+        "state": "off",
         "uptime_seconds": 3600,
         "stt": {"model_name": "parakeet-v3", "device": "cpu", "last_text": ""},
         "tts": {"engine": "piper", "language": "en", "available": True, "error": None},

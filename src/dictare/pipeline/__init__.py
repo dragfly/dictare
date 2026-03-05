@@ -17,25 +17,32 @@ from dictare.pipeline.base import (
     PipelineResult,
     fork_message,
 )
-from dictare.pipeline.filters import AgentFilter, InputFilter
+from dictare.pipeline.filters import AgentFilter, InputFilter, MuteFilter
 from dictare.pipeline.loader import PipelineLoader, register_step
 
 # Register built-in steps
+register_step("mute_filter", MuteFilter)
 register_step("agent_filter", AgentFilter)
 register_step("input_filter", InputFilter)
 
 # Executors — imported here to register, but not re-exported
 # (use dictare.pipeline.executors for direct access)
-from dictare.pipeline.executors import AgentSwitchExecutor, InputExecutor  # noqa: E402
+from dictare.pipeline.executors import (  # noqa: E402
+    AgentSwitchExecutor,
+    InputExecutor,
+    MuteExecutor,
+)
 
 register_step("agent_switch", AgentSwitchExecutor)
 register_step("input", InputExecutor)
+register_step("mute", MuteExecutor)
 
 __all__ = [
     "AgentFilter",
     "Executor",
     "Filter",
     "InputFilter",
+    "MuteFilter",
     "Pipeline",
     "PipelineAction",
     "PipelineLoader",

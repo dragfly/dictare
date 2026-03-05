@@ -64,6 +64,13 @@ class PipelineLoader:
         services = services or {}
         pipeline = Pipeline()
 
+        # Mute filter (must run FIRST — discards all text when muted)
+        mute_cfg = getattr(pipeline_config, "mute_filter", None)
+        if mute_cfg and getattr(mute_cfg, "enabled", False):
+            step = self._build_step("mute_filter", mute_cfg, services)
+            if step is not None:
+                pipeline.add_step(step)
+
         # Agent filter
         agent_cfg = getattr(pipeline_config, "agent_filter", None)
         if agent_cfg and getattr(agent_cfg, "enabled", False):
@@ -97,6 +104,10 @@ class PipelineLoader:
         """
         services = services or {}
         pipeline = Pipeline()
+
+        step = self._build_step("mute", None, services)
+        if step is not None:
+            pipeline.add_step(step)
 
         step = self._build_step("agent_switch", None, services)
         if step is not None:
@@ -132,6 +143,7 @@ class PipelineLoader:
 
         sig = inspect.signature(cls)
         kwargs: dict = {}
+        missing: list[str] = []
 
         for param_name, param in sig.parameters.items():
             if param_name == "self":
@@ -149,11 +161,13 @@ class PipelineLoader:
             elif param.default is inspect.Parameter.empty and _has_dataclass_default(cls, param_name):
                 continue
             else:
-                logger.warning(
-                    "Cannot resolve param '%s' for step '%s'",
-                    param_name,
-                    name,
-                )
+                missing.append(param_name)
+
+        if missing:
+            logger.debug(
+                "Skipping step '%s': unresolved params %s", name, missing,
+            )
+            return None
 
         return cls(**kwargs)
 

@@ -207,7 +207,7 @@ class TrayApp:
         elif self._state == "disconnected":
             status_text = "Disconnected"
         else:
-            state_display = "IDLE" if self._state == "off" else self._state.upper()
+            state_display = "OFF" if self._state == "off" else self._state.upper()
             status_text = state_display
 
         items = [
@@ -618,7 +618,7 @@ class TrayApp:
                 "disconnected": "Dictare — Disconnected",
                 "loading": "Dictare — Loading"
                 + (f" {self._loading_stage}…" if self._loading_stage else "…"),
-                "off": "Dictare — Idle",
+                "off": "Dictare — Off",
                 "listening": "Dictare — Listening",
             }
             self._icon.title = title_map.get(self._state, "Dictare")
@@ -711,7 +711,8 @@ class TrayApp:
             _tray_state_map = {
                 "loading": "loading",
                 "listening": "listening",
-                "idle": "off",
+                "muted": "off",
+                "off": "off",
             }
 
             client = Client(f"http://{host}:{port}/openvip", timeout=2.0)

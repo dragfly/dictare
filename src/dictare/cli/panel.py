@@ -44,7 +44,8 @@ class StatusPanel:
 
     # State display configuration: (label, style)
     STATE_STYLES = {
-        "idle": ("IDLE", "dim"),
+        "off": ("OFF", "dim"),
+        "muted": ("MUTED", "dim yellow"),
         "listening": ("LISTENING", "bold green"),
         "recording": ("RECORDING...", "bold cyan"),
         "transcribing": ("TRANSCRIBING...", "bold yellow"),
@@ -251,7 +252,7 @@ class StatusPanel:
 
         # Get model info
         stt_model = stt.get("model_name", "unknown")
-        stt_state = platform.get("state", "idle")
+        stt_state = platform.get("state", "off")
 
         # Device from engine status (reflects actual device after fallback)
         stt_device = stt.get("device", "cpu")

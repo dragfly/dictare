@@ -272,6 +272,45 @@ class TTSManager:
         logger.info("TTS worker connected")
 
     # ------------------------------------------------------------------
+    # Pre-caching
+    # ------------------------------------------------------------------
+
+    def precache_phrases(self, phrases: list[str]) -> None:
+        """Pre-cache TTS audio for phrases in a background thread.
+
+        For in-process engines (say, espeak): generates audio + saves to
+        cache without playing. For worker engines: skipped (first call
+        will cache).
+
+        Args:
+            phrases: List of phrases to pre-generate.
+        """
+        if not phrases or self._tts_engine is None:
+            return
+
+        # Worker engines don't support precaching easily
+        if self._tts_proxy is not None:
+            return
+
+        def _precache() -> None:
+            cached = 0
+            for phrase in phrases:
+                try:
+                    hit = self._tts_engine.check_cache(phrase)
+                    if hit:
+                        cached += 1
+                        continue
+                    ok = self._tts_engine.speak(phrase, play=False)
+                    if ok:
+                        cached += 1
+                except Exception:
+                    logger.debug("precache failed for %r", phrase, exc_info=True)
+            logger.info("TTS precache: %d/%d phrases cached", cached, len(phrases))
+
+        t = threading.Thread(target=_precache, daemon=True, name="tts-precache")
+        t.start()
+
+    # ------------------------------------------------------------------
     # Speech
     # ------------------------------------------------------------------
 
