@@ -1383,6 +1383,91 @@ class TestSetOutputMode:
         msg = mock_agent.send.call_args[0][0]
         assert "submit" in msg.get("x_input", {}).get("ops", [])
 
+    def test_double_tap_during_recording_defers_submit(self) -> None:
+        """Double-tap during RECORDING sets _submit_pending instead of sending."""
+        from dictare.core.fsm import AppState
+
+        config = MockConfig()
+        engine = DictareEngine(config=config)
+        mock_agent = MagicMock()
+        mock_agent.id = "claude"
+        engine._agent_mgr._agents["claude"] = mock_agent
+        engine._agent_mgr._agent_order.append("claude")
+        engine._agent_mgr._current_agent_id = "claude"
+
+        # Simulate RECORDING state
+        engine._state_manager._state = AppState.RECORDING
+
+        engine._tap_detector._on_double_tap()
+        # Should NOT send immediately
+        mock_agent.send.assert_not_called()
+        # Should set pending flag
+        assert engine._submit_pending is True
+
+    def test_double_tap_during_transcribing_defers_submit(self) -> None:
+        """Double-tap during TRANSCRIBING sets _submit_pending."""
+        from dictare.core.fsm import AppState
+
+        config = MockConfig()
+        engine = DictareEngine(config=config)
+        mock_agent = MagicMock()
+        mock_agent.id = "claude"
+        engine._agent_mgr._agents["claude"] = mock_agent
+        engine._agent_mgr._agent_order.append("claude")
+        engine._agent_mgr._current_agent_id = "claude"
+
+        engine._state_manager._state = AppState.TRANSCRIBING
+
+        engine._tap_detector._on_double_tap()
+        mock_agent.send.assert_not_called()
+        assert engine._submit_pending is True
+
+    def test_pending_submit_consumed_by_inject_text(self) -> None:
+        """_submit_pending is consumed by _inject_text, attaching submit to message."""
+        config = MockConfig()
+        config.output.auto_submit = False
+        engine = DictareEngine(config=config)
+        mock_agent = MagicMock()
+        mock_agent.id = "claude"
+        mock_agent.send.return_value = True
+        engine._agent_mgr._agents["claude"] = mock_agent
+        engine._agent_mgr._agent_order.append("claude")
+        engine._agent_mgr._current_agent_id = "claude"
+
+        # Set pending submit
+        engine._submit_pending = True
+
+        engine._inject_text("hello world")
+
+        # Flag should be consumed
+        assert engine._submit_pending is False
+        # Message should have submit
+        mock_agent.send.assert_called_once()
+        msg = mock_agent.send.call_args[0][0]
+        x_input = msg.get("x_input", {})
+        assert "submit" in x_input.get("ops", [])
+        assert x_input.get("source") == "dictare/double-tap"
+
+    def test_no_pending_submit_uses_newline(self) -> None:
+        """Without _submit_pending, _inject_text uses newline (when auto_submit=False)."""
+        config = MockConfig()
+        config.output.auto_submit = False
+        engine = DictareEngine(config=config)
+        mock_agent = MagicMock()
+        mock_agent.id = "claude"
+        mock_agent.send.return_value = True
+        engine._agent_mgr._agents["claude"] = mock_agent
+        engine._agent_mgr._agent_order.append("claude")
+        engine._agent_mgr._current_agent_id = "claude"
+
+        engine._submit_pending = False
+
+        engine._inject_text("hello world")
+
+        msg = mock_agent.send.call_args[0][0]
+        x_input = msg.get("x_input", {})
+        assert "newline" in x_input.get("ops", [])
+
     def test_output_mode_toggle_via_api(self) -> None:
         """Output mode can be toggled via set_output_mode API."""
         config = MockConfig()
