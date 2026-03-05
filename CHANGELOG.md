@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.134] - 2026-03-05
+
+### Fixed
+- Hotkey combo detection on macOS: modifier+key combos (e.g. Cmd+I) no longer trigger dictare
+
 ## [0.1.133] - 2026-03-05
 
 ### Fixed
