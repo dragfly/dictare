@@ -9,10 +9,13 @@ alacritty, wezterm, ghostty.
 
 from __future__ import annotations
 
+import re
 import sys
 import threading
 import time
 from pathlib import Path
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 from dictare import __version__
 
@@ -191,7 +194,8 @@ class StatusBar:
             parts.append(f"[{self._agent_label}]")
         parts.append(f"dictare {__version__}")
         right = " \u00b7 ".join(parts)
-        gap = cols - len(text) - len(right)
+        visible_text_len = len(_ANSI_RE.sub("", text))
+        gap = cols - visible_text_len - len(right)
         if gap >= 2:
             display = text + " " * gap + right
         else:
