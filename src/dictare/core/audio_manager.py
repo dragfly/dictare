@@ -624,6 +624,12 @@ class AudioManager:
                 break
 
     @property
+    def is_speaking(self) -> bool:
+        """Whether VAD currently detects speech."""
+        with self._vad_lock:
+            return self._streaming_vad is not None and self._streaming_vad._is_speaking
+
+    @property
     def has_queued_audio(self) -> bool:
         """Check if there's queued audio."""
         return not self._audio_queue.empty()

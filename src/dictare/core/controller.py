@@ -186,6 +186,8 @@ class StateController:
             return
 
         if self._state_manager.try_transition(AppState.RECORDING):
+            if self._on_state_change:
+                self._on_state_change(AppState.LISTENING, AppState.RECORDING, "speech_start")
             if self._on_recording_start:
                 self._on_recording_start()
 

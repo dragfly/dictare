@@ -188,6 +188,9 @@ class DictareEngine:
         # except listen triggers. Engine stays in LISTENING (VAD+STT active).
         self._voice_muted = False
 
+        # Guard against concurrent audio reconnect attempts
+        self._reconnecting = threading.Lock()
+
         # Tap detection (isolated state machine)
         # Single tap: toggle mute on/off
         # Double tap: submit (inject Enter into active window)
@@ -939,16 +942,25 @@ class DictareEngine:
     def _submit_action(self) -> None:
         """Send a submit action to the connected agent (double-tap hotkey).
 
-        If the engine is currently recording or transcribing, defers the
-        submit until the transcription completes — the next _inject_text
-        call will attach x_input.submit to the transcribed message.
+        If the engine is currently recording/transcribing or the VAD
+        detects active speech, defers the submit until the next
+        _inject_text call attaches it to the transcribed message.
 
-        If idle (LISTENING), sends an immediate empty submit message.
+        If truly idle (LISTENING, no speech), sends an immediate empty
+        submit message.
         """
         state = self._state_manager.state
-        if state in (AppState.RECORDING, AppState.TRANSCRIBING):
+        vad_speaking = (
+            self._audio_manager is not None
+            and self._audio_manager.is_speaking
+        )
+
+        if state in (AppState.RECORDING, AppState.TRANSCRIBING) or vad_speaking:
             self._submit_pending = True
-            logger.debug("submit_action: deferred (state=%s)", state.name)
+            logger.debug(
+                "submit_action: deferred (state=%s, vad=%s)",
+                state.name, vad_speaking,
+            )
             return
 
         agent = self._get_current_agent()
@@ -1044,6 +1056,38 @@ class DictareEngine:
         logger.info("Focus: agent=%s focused=%s", agent_id, focused)
         self._feedback_policy.set_focus(agent_id, focused)
         self._save_state()
+
+        # Trigger immediate audio reconnect on focus-in if audio is dead.
+        # After sleep/wake the main loop may be waiting on a retry timer —
+        # this bypasses the wait so audio recovers in ~2-3s instead of 30s.
+        if focused and self._audio_manager:
+            reason = self._audio_manager.reconnect_reason
+            if reason:
+                logger.info("Focus-triggered audio reconnect (reason=%s)", reason)
+                threading.Thread(
+                    target=self._focus_reconnect,
+                    daemon=True,
+                    name="focus-reconnect",
+                ).start()
+
+    def _focus_reconnect(self) -> None:
+        """Attempt audio reconnect triggered by focus-in event.
+
+        Runs in a daemon thread so it doesn't block the HTTP handler.
+        Uses self._reconnecting lock to avoid racing with the main loop.
+        """
+        if not self._audio_manager:
+            return
+        if not self._reconnecting.acquire(blocking=False):
+            logger.debug("Focus-reconnect skipped: reconnect already in progress")
+            return
+        try:
+            if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
+                logger.info("Focus-triggered audio reconnect succeeded")
+            else:
+                logger.warning("Focus-triggered audio reconnect failed")
+        finally:
+            self._reconnecting.release()
 
     def switch_agent(self, direction: int) -> None:
         """Switch to next/previous agent - sends event to controller."""
@@ -1529,13 +1573,18 @@ class DictareEngine:
                 reason = self._audio_manager.reconnect_reason
                 if reason:
                     logger.warning("Audio reconnect needed: %s", reason)
-                    if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
-                        logger.info("Audio reconnect succeeded")
-                    else:
-                        logger.error("Audio reconnect failed — waiting 30s before retry")
-                        _deadline = time.monotonic() + 30.0
-                        while self._running and time.monotonic() < _deadline:
-                            time.sleep(0.5)
+                    if not self._reconnecting.acquire(blocking=False):
+                        continue  # focus-reconnect already in progress
+                    try:
+                        if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
+                            logger.info("Audio reconnect succeeded")
+                        else:
+                            logger.error("Audio reconnect failed — waiting 3s before retry")
+                            _deadline = time.monotonic() + 3.0
+                            while self._running and time.monotonic() < _deadline:
+                                time.sleep(0.5)
+                    finally:
+                        self._reconnecting.release()
         except KeyboardInterrupt:
             pass
 
