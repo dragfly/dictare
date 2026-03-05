@@ -183,6 +183,10 @@ class DictareEngine:
         self._input_manager: Any = None  # InputManager for keyboard/device inputs
         self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
 
+        # Pending submit — set by double-tap during recording/transcription.
+        # Consumed by _inject_text to attach submit to the next transcription.
+        self._submit_pending = False
+
         # Tap detection (isolated state machine)
         # Single tap: toggle mute on/off
         # Double tap: submit (inject Enter into active window)
@@ -809,10 +813,19 @@ class DictareEngine:
         else:
             message_language = None
 
+        # Consume pending double-tap submit (deferred from recording/transcribing)
+        submit_from_double_tap = self._submit_pending
+        if submit_from_double_tap:
+            self._submit_pending = False
+
         # Build OpenVIP transcription message
         message = create_message(text, language=message_language)
-        if auto_submit:
-            message["x_input"] = {"ops": ["submit"], "source": "dictare/engine"}
+        if auto_submit or submit_from_double_tap:
+            message["x_input"] = {
+                "ops": ["submit"],
+                "source": "dictare/double-tap" if submit_from_double_tap else "dictare/engine",
+                **({"trigger": "<double_tap>"} if submit_from_double_tap else {}),
+            }
         else:
             message["x_input"] = {"ops": ["newline"], "source": "dictare/engine"}
 
@@ -861,8 +874,8 @@ class DictareEngine:
         x_input_info = first_msg.get("x_input", {})
         pipeline_submit = "submit" in (x_input_info.get("ops") or []) if isinstance(x_input_info, dict) else False
 
-        # Play submit sound on pipeline-triggered submit (not every transcription).
-        # Double-tap submit is handled separately in _submit_action().
+        # Play submit sound when message is actually sent (pipeline or deferred double-tap).
+        # Immediate double-tap (LISTENING state) plays in _submit_action() instead.
         if success and pipeline_submit:
             self._play_focus_gated_sound("submit")
         submit_trigger = x_input_info.get("trigger") if isinstance(x_input_info, dict) else None
@@ -906,10 +919,18 @@ class DictareEngine:
     def _submit_action(self) -> None:
         """Send a submit action to the connected agent (double-tap hotkey).
 
-        Sends x_input with ops=["submit"] to the current agent — identical
-        to what the submit filter does when a trigger word is spoken, but
-        fired from the hotkey instead.
+        If the engine is currently recording or transcribing, defers the
+        submit until the transcription completes — the next _inject_text
+        call will attach x_input.submit to the transcribed message.
+
+        If idle (LISTENING), sends an immediate empty submit message.
         """
+        state = self._state_manager.state
+        if state in (AppState.RECORDING, AppState.TRANSCRIBING):
+            self._submit_pending = True
+            logger.debug("submit_action: deferred (state=%s)", state.name)
+            return
+
         agent = self._get_current_agent()
         if agent is None:
             logger.debug("submit_action: no agent connected, ignoring")

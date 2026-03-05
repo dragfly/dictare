@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.128] - 2026-03-05
+
+### Changed
+- Double-tap during recording/transcription now defers submit until transcription completes, attaching submit to the transcribed message instead of sending an empty one
+
 ## [0.1.127] - 2026-03-04
 
 ### Added
