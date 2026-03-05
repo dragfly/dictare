@@ -323,7 +323,11 @@ def _stream_active_agent(
         platform = status.platform or {}
         state, style = resolve_display_state(platform, agent_id)
         dot = "●" if state in ("listening", "recording", "off", "muted") else "○"
-        label = f"{dot} {agent_id} · {state}"
+        if state == "recording":
+            # Red text for "recording", revert to bar style after
+            label = f"{dot} {agent_id} \u00b7 \x1b[38;5;210mrecording\x1b[38;5;114m"
+        else:
+            label = f"{dot} {agent_id} \u00b7 {state}"
 
         key = (label, style)
         if key != last_key:
