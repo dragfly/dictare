@@ -818,6 +818,100 @@ class TestRegisterAgent:
         assert agent is mock_kb
 
 
+class TestAgentModeAudioProcessing:
+    """Audio processing should be skipped when in agent mode with no agents."""
+
+    def test_should_process_false_when_no_visible_agents(self) -> None:
+        """In agent mode with no SSE agents, should_process returns False."""
+        config = MockConfig()
+        engine = DictareEngine(config=config)
+        engine._agent_mgr._current_agent_id = None
+
+        # Register only __keyboard__ — agent_mode is True but no visible agents
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+
+        assert engine.agent_mode is True
+        assert engine.visible_agents == []
+
+        # Build the same lambda used in start_streaming
+        should_process = (
+            engine._state_manager.should_process_audio
+            and (not engine.agent_mode or bool(engine.visible_agents))
+        )
+        assert should_process is False
+
+    def test_should_process_true_when_agents_connected(self) -> None:
+        """In agent mode with SSE agents connected, should_process returns True."""
+        config = MockConfig()
+        engine = DictareEngine(config=config)
+        engine._agent_mgr._current_agent_id = None
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+        register_test_agents(engine, ["claude"])
+
+        assert engine.agent_mode is True
+        assert engine.visible_agents == ["claude"]
+
+        # Engine must be in LISTENING for should_process_audio to be True
+        engine._state_manager.try_transition(AppState.LISTENING)
+
+        should_process = (
+            engine._state_manager.should_process_audio
+            and (not engine.agent_mode or bool(engine.visible_agents))
+        )
+        assert should_process is True
+
+    def test_should_process_true_in_keyboard_mode(self) -> None:
+        """In keyboard mode, should_process is True regardless of agents."""
+        config = MockConfig()
+        config.output.mode = "keyboard"
+        engine = DictareEngine(config=config)
+
+        assert engine.agent_mode is False
+
+        engine._state_manager.try_transition(AppState.LISTENING)
+
+        should_process = (
+            engine._state_manager.should_process_audio
+            and (not engine.agent_mode or bool(engine.visible_agents))
+        )
+        assert should_process is True
+
+    def test_agent_disconnect_stops_processing(self) -> None:
+        """When last SSE agent disconnects, should_process becomes False."""
+        config = MockConfig()
+        engine = DictareEngine(config=config)
+        engine._agent_mgr._current_agent_id = None
+
+        mock_kb = MagicMock()
+        mock_kb.id = "__keyboard__"
+        engine.register_agent(mock_kb)
+        register_test_agents(engine, ["claude"])
+
+        engine._state_manager.try_transition(AppState.LISTENING)
+
+        # With agent connected: True
+        should_process = (
+            engine._state_manager.should_process_audio
+            and (not engine.agent_mode or bool(engine.visible_agents))
+        )
+        assert should_process is True
+
+        # Agent disconnects
+        engine.unregister_agent("claude")
+        assert engine.visible_agents == []
+
+        should_process = (
+            engine._state_manager.should_process_audio
+            and (not engine.agent_mode or bool(engine.visible_agents))
+        )
+        assert should_process is False
+
+
 class TestKeyboardAgentSubmit:
     """Test that KeyboardAgent reads submit from x_input, not top-level."""
 
