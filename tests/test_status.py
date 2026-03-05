@@ -11,7 +11,7 @@ class TestResolveDisplayState:
     # --- Engine-level (no agent_id) ---
 
     def test_loading_returns_loading_warn(self) -> None:
-        platform = {"state": "idle", "loading": {"active": True}}
+        platform = {"state": "off", "loading": {"active": True}}
         assert resolve_display_state(platform) == ("loading", "warn")
 
     def test_listening_returns_listening_ok(self) -> None:
@@ -22,13 +22,13 @@ class TestResolveDisplayState:
         platform = {"state": "recording"}
         assert resolve_display_state(platform) == ("listening", "ok")
 
-    def test_idle_returns_idle_dim(self) -> None:
-        platform = {"state": "idle"}
-        assert resolve_display_state(platform) == ("idle", "dim")
+    def test_off_returns_off_dim(self) -> None:
+        platform = {"state": "off"}
+        assert resolve_display_state(platform) == ("off", "dim")
 
-    def test_missing_state_defaults_idle(self) -> None:
+    def test_missing_state_defaults_off(self) -> None:
         platform = {}
-        assert resolve_display_state(platform) == ("idle", "dim")
+        assert resolve_display_state(platform) == ("off", "dim")
 
     def test_loading_overrides_listening(self) -> None:
         """Loading takes priority even if engine state is listening."""
@@ -44,12 +44,12 @@ class TestResolveDisplayState:
         }
         assert resolve_display_state(platform, "claude") == ("listening", "ok")
 
-    def test_active_idle_agent(self) -> None:
+    def test_active_off_agent(self) -> None:
         platform = {
-            "state": "idle",
+            "state": "off",
             "output": {"current_agent": "claude"},
         }
-        assert resolve_display_state(platform, "claude") == ("idle", "dim")
+        assert resolve_display_state(platform, "claude") == ("off", "dim")
 
     def test_standby_agent(self) -> None:
         platform = {
@@ -73,17 +73,17 @@ class TestResolveDisplayState:
         }
         assert resolve_display_state(platform, "claude") == ("standby", "warn")
 
-    def test_standby_agent_mic_idle(self) -> None:
+    def test_standby_agent_mic_off(self) -> None:
         """Standby with mic inactive → dim (gray), not warn (yellow)."""
         platform = {
-            "state": "idle",
+            "state": "off",
             "output": {"current_agent": "cursor"},
         }
         assert resolve_display_state(platform, "claude") == ("standby", "dim")
 
-    def test_standby_agent_no_current_mic_idle(self) -> None:
+    def test_standby_agent_no_current_mic_off(self) -> None:
         platform = {
-            "state": "idle",
+            "state": "off",
             "output": {"current_agent": None},
         }
         assert resolve_display_state(platform, "claude") == ("standby", "dim")

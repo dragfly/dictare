@@ -48,7 +48,7 @@ class MockEngine:
         return True
 
     def get_status(self) -> dict:
-        return {"protocol_version": "1.0", "state": "idle", "connected_agents": []}
+        return {"protocol_version": "1.0", "state": "off", "connected_agents": []}
 
     def complete_tts(self, message_id: str, *, ok: bool, duration_ms: int = 0) -> None:
         self._tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)

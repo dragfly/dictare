@@ -5,7 +5,7 @@ from __future__ import annotations
 from dictare.cli.panel import StatusPanel
 
 
-def _make_status(*, state: str = "idle", device: str = "cpu", model: str = "large-v3-turbo") -> dict:
+def _make_status(*, state: str = "off", device: str = "cpu", model: str = "large-v3-turbo") -> dict:
     """Build a realistic /status response for testing."""
     return {
         "protocol_version": "1.0",
@@ -40,24 +40,24 @@ class TestPanelState:
     def test_state_read_from_platform_not_stt(self) -> None:
         """Panel must read state from platform.state, not platform.stt.state.
 
-        Regression test for v3.0.0a36: panel always showed IDLE because it
+        Regression test for v3.0.0a36: panel always showed OFF because it
         read from the wrong path in the status dict.
         """
         panel = StatusPanel(console=None, base_url="http://127.0.0.1:0")
         panel._status = _make_status(state="recording")
         built = panel._build_panel()
-        # The rendered panel text must contain RECORDING, not IDLE
+        # The rendered panel text must contain RECORDING, not OFF
         rendered = built.renderable.plain if hasattr(built.renderable, "plain") else str(built.renderable)
         assert "RECORDING" in rendered.upper()
-        assert "IDLE" not in rendered.upper()
+        assert "OFF" not in rendered.upper()
 
-    def test_idle_state(self) -> None:
-        """Panel shows IDLE when state is idle."""
+    def test_off_state(self) -> None:
+        """Panel shows OFF when state is off."""
         panel = StatusPanel(console=None, base_url="http://127.0.0.1:0")
-        panel._status = _make_status(state="idle")
+        panel._status = _make_status(state="off")
         built = panel._build_panel()
         rendered = built.renderable.plain if hasattr(built.renderable, "plain") else str(built.renderable)
-        assert "IDLE" in rendered.upper()
+        assert "OFF" in rendered.upper()
 
 
 class TestPanelDevice:

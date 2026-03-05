@@ -187,6 +187,10 @@ class DictareEngine:
         # Consumed by _inject_text to attach submit to the next transcription.
         self._submit_pending = False
 
+        # Voice muted flag — when True, MuteFilter discards all text
+        # except listen triggers. Engine stays in LISTENING (VAD+STT active).
+        self._voice_muted = False
+
         # Tap detection (isolated state machine)
         # Single tap: toggle mute on/off
         # Double tap: submit (inject Enter into active window)
@@ -264,6 +268,7 @@ class DictareEngine:
             active_agent=self._agent_mgr.current_agent,
             listening=self.is_listening,
             focused_agent=self._feedback_policy.focused_agent,
+            voice_muted=self._voice_muted,
         )
 
     def save_session_before_shutdown(self) -> None:
@@ -274,6 +279,7 @@ class DictareEngine:
             active_agent=self._agent_mgr.current_agent,
             listening=self.is_listening,
             focused_agent=self._feedback_policy.focused_agent,
+            voice_muted=self._voice_muted,
         )
         logger.info(
             "session_saved: agent=%r, mode=%s, listening=%r",
@@ -302,13 +308,16 @@ class DictareEngine:
         saved_agent = saved.get("active_agent")
         saved_listening = saved.get("listening", False)
         saved_focus = saved.get("focused_agent")
+        saved_muted = saved.get("voice_muted", False)
 
-        logger.info("restore_state: fresh session → agent=%r, listening=%r, focused=%r", saved_agent, saved_listening, saved_focus)
+        logger.info("restore_state: fresh session → agent=%r, listening=%r, focused=%r, muted=%r", saved_agent, saved_listening, saved_focus, saved_muted)
 
         self._agent_mgr.restore_session(saved_agent)
 
         if saved_focus:
             self._feedback_policy.set_focus(saved_focus, True)
+
+        self._voice_muted = saved_muted
 
         return saved_listening
 
@@ -478,7 +487,11 @@ class DictareEngine:
         Returns:
             Pipeline if enabled, None otherwise.
         """
-        services = {"agent_ids": self.agents, "subscribe_to_events": True}
+        services = {
+            "agent_ids": self.agents,
+            "subscribe_to_events": True,
+            "is_muted": lambda: self._voice_muted,
+        }
         return PipelineLoader().build_filter_pipeline(
             self.config.pipeline, services,
         )
@@ -488,11 +501,16 @@ class DictareEngine:
 
         Executors run after filters and handle side effects:
         - AgentSwitchExecutor: switches the current agent on x_agent_switch
+        - MuteExecutor: mutes/unmutes voice on x_mute
 
         Returns:
             Pipeline with executors (always created, may be empty).
         """
-        services = {"switch_fn": self._switch_to_agent_by_name_internal}
+        services = {
+            "switch_fn": self._switch_to_agent_by_name_internal,
+            "mute_fn": self.mute,
+            "unmute_fn": self.unmute,
+        }
         return PipelineLoader().build_executor_pipeline(
             self.config.pipeline, services,
         )
@@ -602,6 +620,11 @@ class DictareEngine:
             estimated=get_model_load_time(tts_engine_name) or 1,
         )
         self._loading_models[2] = self._tts_mgr.loading_status
+
+        # Pre-cache mute/listen TTS phrases in background
+        precache = self.config.pipeline.mute_filter.mute_phrases + self.config.pipeline.mute_filter.listen_phrases
+        if precache:
+            self._tts_mgr.precache_phrases(precache)
 
         # Create hotkey listener for toggle (if available and enabled)
         # Note: hotkey disabled in daemon mode - macOS requires main thread
@@ -954,6 +977,51 @@ class DictareEngine:
         self._controller.send(SetListening(on=on, source="api"))
 
     # -------------------------------------------------------------------------
+    # Voice Mute
+    # -------------------------------------------------------------------------
+
+    def mute(self) -> None:
+        """Mute voice input (idempotent).
+
+        Engine stays in LISTENING — VAD+STT keep running so MuteFilter
+        can detect the listen trigger. All other text is discarded.
+        Plays a random TTS mute phrase.
+        """
+        if self._voice_muted:
+            return
+        self._voice_muted = True
+        logger.info("voice_muted")
+
+        # TTS feedback
+        import random
+        phrases = self.config.pipeline.mute_filter.mute_phrases
+        if phrases and self._tts_mgr.available:
+            phrase = random.choice(phrases)  # noqa: S311
+            self._tts_mgr.speak_text(phrase)
+
+        self._notify_status()
+
+    def unmute(self) -> None:
+        """Unmute voice input (idempotent).
+
+        Resumes normal text flow through the pipeline.
+        Plays a random TTS listen phrase.
+        """
+        if not self._voice_muted:
+            return
+        self._voice_muted = False
+        logger.info("voice_unmuted")
+
+        # TTS feedback
+        import random
+        phrases = self.config.pipeline.mute_filter.listen_phrases
+        if phrases and self._tts_mgr.available:
+            phrase = random.choice(phrases)  # noqa: S311
+            self._tts_mgr.speak_text(phrase)
+
+        self._notify_status()
+
+    # -------------------------------------------------------------------------
     # Output Mode
     # -------------------------------------------------------------------------
 
@@ -1070,14 +1138,18 @@ class DictareEngine:
 
         # Map engine state to string
         state_map = {
-            AppState.OFF: "idle",
+            AppState.OFF: "off",
             AppState.LISTENING: "listening",
             AppState.RECORDING: "recording",
             AppState.TRANSCRIBING: "transcribing",
             AppState.INJECTING: "transcribing",
             AppState.PLAYING: "playing",
         }
-        stt_state = state_map.get(self.state, "idle")
+        stt_state = state_map.get(self.state, "off")
+
+        # Voice muted overrides the displayed state
+        if self._voice_muted and stt_state == "listening":
+            stt_state = "muted"
 
         uptime = (
             time.time() - self._stats.start_time
@@ -1085,7 +1157,7 @@ class DictareEngine:
             else 0
         )
 
-        stt_active = stt_state in ("listening", "recording", "transcribing")
+        stt_active = stt_state not in ("off",)
 
         return {
             # OpenVIP protocol-level fields

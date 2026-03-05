@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.129] - 2026-03-05
+
+### Added
+- Voice mute/unmute commands: "OK mute" silences voice input, "OK listen" resumes
+- MuteFilter pipeline filter with configurable triggers and language support
+- MuteExecutor pipeline executor for mute/unmute actions
+- TTS feedback phrases on mute/unmute (random selection, pre-cached at startup)
+- `play` parameter on say/espeak TTS engines for cache-only generation
+- TTS precache support in TTSManager (background daemon thread)
+
+### Changed
+- Renamed API state "idle" to "off" (AppState.OFF)
+- Voice-muted state reported as "muted" in status API (engine stays in LISTENING)
+- Extracted shared pattern matching to `pipeline/filters/_text.py` (reused by InputFilter and MuteFilter)
+
 ## [0.1.128] - 2026-03-05
 
 ### Changed

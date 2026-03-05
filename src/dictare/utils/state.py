@@ -38,6 +38,7 @@ def save_state(
     active_agent: str | None = None,
     listening: bool = False,
     focused_agent: str | None = None,
+    voice_muted: bool = False,
 ) -> None:
     """Save engine state to disk with a timestamp."""
     path = _state_path()
@@ -45,6 +46,7 @@ def save_state(
         "active_agent": active_agent,
         "listening": listening,
         "last_active": time.time(),
+        "voice_muted": voice_muted,
     }
     if focused_agent is not None:
         data["focused_agent"] = focused_agent
@@ -87,6 +89,7 @@ def load_state() -> dict[str, Any] | None:
         "active_agent": data.get("active_agent"),
         "listening": data.get("listening", False),
         "focused_agent": data.get("focused_agent"),
+        "voice_muted": data.get("voice_muted", False),
     }
 
 

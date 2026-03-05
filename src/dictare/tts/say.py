@@ -54,11 +54,18 @@ class SayTTS(TTSEngine):
         *,
         voice: str | None = None,
         language: str | None = None,
+        play: bool = True,
     ) -> bool:
         """Speak text using macOS say.
 
         Per-request voice/language overrides are ignored (say uses
         config values set at init time).
+
+        Args:
+            text: Text to speak.
+            voice: Ignored (uses init value).
+            language: Ignored (uses init value).
+            play: If False, generate and cache only (no playback).
         """
         if voice or language:
             logger.debug("say ignores per-request voice/language overrides")
@@ -69,11 +76,12 @@ class SayTTS(TTSEngine):
         try:
             key = self._cache_key(text)
 
-            # Cache hit → play directly
+            # Cache hit → play directly (or skip if play=False)
             cached = cache_hit(key)
             if cached:
                 logger.debug("TTS cache hit: %s", key[:12])
-                play_audio_native(cached, timeout=120.0)
+                if play:
+                    play_audio_native(cached, timeout=120.0)
                 return True
 
             # Cache miss → generate audio file (macOS say only writes AIFF)
@@ -95,10 +103,11 @@ class SayTTS(TTSEngine):
                 wav_path.unlink(missing_ok=True)
                 return False
 
-            # Save to cache → play → evict
+            # Save to cache → play (if requested) → evict
             try:
                 cached_path = cache_save(key, wav_path)
-                play_audio_native(cached_path, timeout=120.0)
+                if play:
+                    play_audio_native(cached_path, timeout=120.0)
                 cache_evict()
             finally:
                 wav_path.unlink(missing_ok=True)

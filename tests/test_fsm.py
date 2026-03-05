@@ -26,7 +26,7 @@ class TestAppState:
 
     def test_str_returns_capitalized_name(self) -> None:
         """Test __str__ returns human-readable state name."""
-        assert str(AppState.OFF) == "muted"
+        assert str(AppState.OFF) == "off"
         assert str(AppState.LISTENING) == "Listening"
         assert str(AppState.RECORDING) == "Recording"
         assert str(AppState.TRANSCRIBING) == "Transcribing"
@@ -40,7 +40,7 @@ class TestInvalidTransitionError:
         error = InvalidTransitionError(AppState.OFF, AppState.INJECTING)
         assert error.from_state == AppState.OFF
         assert error.to_state == AppState.INJECTING
-        assert "muted" in str(error)
+        assert "off" in str(error)
         assert "Injecting" in str(error)
 
 
@@ -94,7 +94,7 @@ class TestStateManagerBasics:
     def test_str_returns_state_name(self) -> None:
         """Test __str__ returns current state."""
         sm = StateManager()
-        assert str(sm) == "muted"
+        assert str(sm) == "off"
 
 
 class TestValidTransitions:

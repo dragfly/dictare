@@ -102,7 +102,7 @@ class TestTrayStates:
 
         expected_titles = {
             "disconnected": "Dictare — Disconnected",
-            "off": "Dictare — Idle",
+            "off": "Dictare — Off",
             "listening": "Dictare — Listening",
         }
         for state, title in expected_titles.items():
@@ -127,13 +127,13 @@ class TestTrayStates:
         first_label = menu._items[0].text
         assert "Disconnected" in first_label
 
-    def test_menu_status_idle(self) -> None:
+    def test_menu_status_off(self) -> None:
         app = TrayApp()
         app._state = "off"
         with patch.dict(sys.modules, {"pystray": _mock_pystray()}):
             menu = app._create_menu()
         first_label = menu._items[0].text
-        assert "IDLE" in first_label
+        assert "OFF" in first_label
 
     def test_menu_status_restarting(self) -> None:
         """Unknown/restarting state falls through to upper-case display."""

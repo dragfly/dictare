@@ -37,7 +37,7 @@ _STATUS_STYLES = {
     "ok": "\x1b[48;5;236m\x1b[38;5;114m",        # soft green on dark gray
     "warn": "\x1b[48;5;236m\x1b[38;5;229m",       # warm yellow on dark gray
     "error": "\x1b[48;5;236m\x1b[38;5;210m",      # soft red on dark gray
-    "dim": "\x1b[48;5;236m\x1b[38;5;245m",        # gray on dark gray (idle)
+    "dim": "\x1b[48;5;236m\x1b[38;5;245m",        # gray on dark gray (off)
 }
 
 
