@@ -57,7 +57,7 @@ class AppState(Enum):
     def __str__(self) -> str:
         """Return human-readable state name."""
         if self == AppState.OFF:
-            return "muted"
+            return "off"
         return self.name.capitalize()
 
 class InvalidTransitionError(Exception):

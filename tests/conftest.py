@@ -55,7 +55,7 @@ class ComplianceMockEngine:
         self._unregistered: list[str] = []
         self._speech_calls: list[dict] = []
         self._protocol_calls: list[dict] = []
-        self._state = "idle"
+        self._state = "off"
 
     def register_agent(self, agent) -> bool:
         self._registered.append(agent)
@@ -92,7 +92,7 @@ class ComplianceMockEngine:
             self._state = "listening"
             return {"status": "ok", "listening": True}
         elif cmd == "stt.stop":
-            self._state = "idle"
+            self._state = "off"
             return {"status": "ok", "listening": False}
         elif cmd == "stt.toggle":
             return {"status": "ok"}

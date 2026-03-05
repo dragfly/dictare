@@ -32,13 +32,13 @@ class MockEngine:
     def get_status(self) -> dict:
         return {
             "protocol_version": "1.0",
-            "state": "idle",
+            "state": "off",
             "connected_agents": [],
             "uptime_seconds": 0,
             "platform": {
                 "name": "Dictare",
                 "version": "test",
-                "state": "idle",
+                "state": "off",
                 "uptime_seconds": 0,
             },
         }
@@ -89,7 +89,7 @@ class TestStatusEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["protocol_version"] == "1.0"
-        assert data["state"] == "idle"
+        assert data["state"] == "off"
         assert data["connected_agents"] == []
         assert data["uptime_seconds"] == 0
         assert "platform" in data

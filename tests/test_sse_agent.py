@@ -201,8 +201,8 @@ class TestStreamActiveAgentStatus:
         assert "listening" in statuses[0][0]
         assert statuses[0][1] == "ok"
 
-    def test_stream_shows_idle_when_engine_off(self) -> None:
-        """Active agent with engine idle shows 'idle' (dim)."""
+    def test_stream_shows_off_when_engine_off(self) -> None:
+        """Active agent with engine off shows 'off' (dim)."""
         from unittest.mock import patch
 
         stop = threading.Event()
@@ -213,14 +213,14 @@ class TestStreamActiveAgentStatus:
             stop.set()
 
         def fake_subscribe(**kwargs):
-            yield self._make_status("idle", "myagent")
+            yield self._make_status("off", "myagent")
 
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.subscribe_status.side_effect = fake_subscribe
             _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
 
         assert len(statuses) >= 1
-        assert "idle" in statuses[0][0]
+        assert "off" in statuses[0][0]
         assert statuses[0][1] == "dim"
 
     def test_stream_shows_standby_when_not_active(self) -> None:
@@ -264,7 +264,7 @@ class TestStreamActiveAgentStatus:
             yield self._make_status("listening", "myagent")
             yield self._make_status("listening", "myagent")
             # Yield different status to trigger second on_status and stop
-            yield self._make_status("idle", "myagent")
+            yield self._make_status("off", "myagent")
 
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.subscribe_status.side_effect = fake_subscribe
@@ -272,7 +272,7 @@ class TestStreamActiveAgentStatus:
 
         assert len(statuses) == 2
         assert "listening" in statuses[0][0]
-        assert "idle" in statuses[1][0]
+        assert "off" in statuses[1][0]
 
     def test_stream_shows_loading_when_loading(self) -> None:
         """Engine loading models shows 'loading' (warn)."""
@@ -292,7 +292,7 @@ class TestStreamActiveAgentStatus:
                 openvip="1.0",
                 connected_agents=[],
                 platform={
-                    "state": "idle",
+                    "state": "off",
                     "output": {"current_agent": None},
                     "loading": {"active": True},
                 },

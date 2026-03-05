@@ -10,16 +10,14 @@ from dictare.pipeline import (
     PipelineAction,
     PipelineResult,
 )
+from dictare.pipeline.filters._text import normalize as _normalize
+from dictare.pipeline.filters._text import tokenize as _tokenize
 from dictare.pipeline.filters.agent_filter import (
     edit_score,
     fuzzy_match_score,
     phonetic_score,
 )
-from dictare.pipeline.filters.input_filter import (
-    DEFAULT_SUBMIT_TRIGGERS,
-    _normalize,
-    _tokenize,
-)
+from dictare.pipeline.filters.input_filter import DEFAULT_SUBMIT_TRIGGERS
 
 # Triggers used in tests only — production default is empty dict (must configure in config.toml)
 _TEST_TRIGGERS: dict[str, list[list[str]]] = {
