@@ -6,6 +6,17 @@ This module provides a single source of truth for that logic.
 
 from __future__ import annotations
 
+# All valid engine display states (as returned by get_status platform.state).
+ENGINE_DISPLAY_STATES = frozenset(
+    {"off", "listening", "recording", "transcribing", "playing", "muted"}
+)
+
+# UI-only states (not from engine, set by client-side logic).
+UI_DISPLAY_STATES = frozenset({"loading", "disconnected"})
+
+# All valid display states (engine + UI).
+ALL_DISPLAY_STATES = ENGINE_DISPLAY_STATES | UI_DISPLAY_STATES
+
 # Engine states that mean "actively processing audio"
 _ACTIVE_ENGINE_STATES = frozenset(
     {"listening", "recording", "transcribing", "playing", "muted"}

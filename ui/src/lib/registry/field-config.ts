@@ -20,15 +20,15 @@ export const KEY_CAPTURE_FIELDS: Record<string, "evdev" | "shortcut"> = {
 };
 
 /** Fields rendered as read-only 'Edit in config file' */
-export const COMPLEX_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.submit_filter", "stt.advanced"]);
+export const COMPLEX_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.mute_filter", "pipeline.submit_filter", "stt.advanced"]);
 
 /** Fields rendered as TOML textarea with syntax highlighting */
-export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "pipeline.agent_filter", "pipeline.submit_filter", "stt.advanced"]);
+export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "pipeline.agent_filter", "pipeline.mute_filter", "pipeline.submit_filter", "stt.advanced"]);
 
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
   "stt.language": [{ value: "auto", label: "Auto-detect" }, { value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }, { value: "ko", label: "Korean" }, { value: "ru", label: "Russian" }],
-  "stt.model": ["parakeet-v3", "large-v3-turbo", "large-v3"],
+  "stt.model": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo", "parakeet-v3"],
   "tts.language": [{ value: "en", label: "English" }, { value: "it", label: "Italian" }, { value: "es", label: "Spanish" }, { value: "de", label: "German" }, { value: "fr", label: "French" }, { value: "pt", label: "Portuguese" }, { value: "ja", label: "Japanese" }, { value: "zh", label: "Chinese" }],
 };
 
@@ -60,8 +60,8 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = {
 
 /** Override the auto-generated label for specific dotted keys */
 export const LABEL_OVERRIDES: Record<string, string> = {
-  "audio.input_device": "Preferred Input Device",
-  "audio.output_device": "Preferred Output Device",
+  "audio.input_device": "Input Device",
+  "audio.output_device": "Output Device",
   "hotkey.key": "Hotkey",
 };
 
