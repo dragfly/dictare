@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.133] - 2026-03-05
+
+### Fixed
+- Agent mode: skip VAD/transcription when no agents connected (zero CPU idle)
+
 ## [0.1.132] - 2026-03-05
 
 ### Fixed
