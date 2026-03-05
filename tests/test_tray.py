@@ -103,6 +103,7 @@ class TestTrayStates:
         expected_titles = {
             "disconnected": "Dictare — Disconnected",
             "off": "Dictare — Off",
+            "muted": "Dictare — Muted",
             "listening": "Dictare — Listening",
         }
         for state, title in expected_titles.items():

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.130] - 2026-03-05
+
+### Fixed
+- Tray app now shows "Muted" state correctly (was showing "Off")
+- Mute filter TOML section visible in Settings UI (was empty)
+- Centralized valid display states in `status.py` to prevent missing-state bugs
+
 ## [0.1.129] - 2026-03-05
 
 ### Added

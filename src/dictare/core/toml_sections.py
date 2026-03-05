@@ -31,6 +31,7 @@ SUPPORTED_SECTIONS = frozenset([
     "audio.advanced",
     "audio.sounds",
     "stt.advanced",
+    "pipeline.mute_filter",
     "pipeline.submit_filter",
     "pipeline.agent_filter",
 ])
@@ -144,6 +145,30 @@ _SOUNDS_HEADER = """\
 # enabled = true
 """
 
+_MUTE_FILTER_HEADER = """\
+[pipeline.mute_filter]
+# enabled = true
+# confidence_threshold = 0.85
+# max_scan_words = 10
+# decay_rate = 0.95
+
+# TTS phrases spoken on mute/unmute (random selection)
+# mute_phrases = ["Going quiet.", "I'll be here when you need me.", "Taking a break.", "Standing by."]
+# listen_phrases = ["I'm all ears.", "Ready when you are.", "Listening.", "At your service."]
+
+# Mute triggers — say these to mute voice input (engine keeps running, text discarded)
+# [pipeline.mute_filter.mute_triggers]
+# "*" = [["ok|okay", "mute|stop"]]
+# es = [["ok|okay", "silencio|para"]]
+# de = [["ok|okay", "stumm|stopp"]]
+
+# Listen triggers — say these to unmute and resume normal voice input
+# [pipeline.mute_filter.listen_triggers]
+# "*" = [["ok|okay", "listen"]]
+# es = [["ok|okay", "escucha"]]
+# de = [["ok|okay", "hoer|zuhoeren"]]
+"""
+
 _SUBMIT_FILTER_HEADER = """\
 [pipeline.submit_filter]
 # enabled = true
@@ -186,6 +211,7 @@ _SECTION_HEADERS: dict[str, str] = {
     "audio.advanced": _AUDIO_ADVANCED_HEADER,
     "audio.sounds": _SOUNDS_HEADER,
     "stt.advanced": _STT_ADVANCED_HEADER,
+    "pipeline.mute_filter": _MUTE_FILTER_HEADER,
     "pipeline.submit_filter": _SUBMIT_FILTER_HEADER,
     "pipeline.agent_filter": _AGENT_FILTER_HEADER,
 }
@@ -277,6 +303,7 @@ def _extract_section_lines(text: str, section: str) -> str | None:
         "audio.advanced": ("[audio.advanced",),
         "audio.sounds": ("[audio.sounds",),
         "stt.advanced": ("[stt.advanced",),
+        "pipeline.mute_filter": ("[pipeline.mute_filter",),
         "pipeline.submit_filter": ("[pipeline.submit_filter",),
         "pipeline.agent_filter": ("[pipeline.agent_filter",),
     }
@@ -349,6 +376,7 @@ def _strip_section_lines(text: str, section: str) -> str:
         "audio.advanced": ("[audio.advanced",),
         "audio.sounds": ("[audio.sounds",),
         "stt.advanced": ("[stt.advanced",),
+        "pipeline.mute_filter": ("[pipeline.mute_filter",),
         "pipeline.submit_filter": ("[pipeline.submit_filter",),
         "pipeline.agent_filter": ("[pipeline.agent_filter",),
     }
@@ -480,6 +508,13 @@ def _validate_section(section: str, content: str) -> None:
         audio = doc.get("audio") or {}
         for _k, v in dict(audio.get("sounds", {})).items():
             SoundConfig.model_validate(dict(v))
+
+    elif section == "pipeline.mute_filter":
+        from dictare.config import MuteFilterConfig
+
+        pipeline = doc.get("pipeline") or {}
+        raw = pipeline.get("mute_filter") or {}
+        MuteFilterConfig.model_validate(dict(raw))
 
     elif section == "pipeline.submit_filter":
         from dictare.config import SubmitFilterConfig

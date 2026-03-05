@@ -613,6 +613,7 @@ class TrayApp:
                 "disconnected": "dictare_disconnected",
                 "loading": "dictare_loading",
                 "off": "dictare",
+                "muted": "dictare",
                 "listening": "dictare_active",
             }.get(self._state, "dictare_disconnected")
 
@@ -627,6 +628,7 @@ class TrayApp:
                 "loading": "Dictare — Loading"
                 + (f" {self._loading_stage}…" if self._loading_stage else "…"),
                 "off": "Dictare — Off",
+                "muted": "Dictare — Muted",
                 "listening": "Dictare — Listening",
             }
             self._icon.title = title_map.get(self._state, "Dictare")
@@ -654,7 +656,9 @@ class TrayApp:
             progress: Loading progress 0-100 (only for loading state)
             loading_stage: What's loading ("STT", "VAD", "")
         """
-        if state in ("disconnected", "loading", "off", "listening"):
+        from dictare.status import ALL_DISPLAY_STATES
+
+        if state in ALL_DISPLAY_STATES:
             changed = (
                 state != self._state
                 or progress != self._progress
@@ -719,7 +723,7 @@ class TrayApp:
             _tray_state_map = {
                 "loading": "loading",
                 "listening": "listening",
-                "muted": "off",
+                "muted": "muted",
                 "off": "off",
             }
 
