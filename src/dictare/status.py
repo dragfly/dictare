@@ -50,6 +50,8 @@ def resolve_display_state(
 
         if is_active and engine_state == "muted":
             return ("muted", "dim")
+        elif is_active and engine_state == "recording":
+            return ("recording", "ok")
         elif is_active and engine_state in _ACTIVE_ENGINE_STATES:
             return ("listening", "ok")
         elif is_active:
@@ -61,6 +63,8 @@ def resolve_display_state(
     else:
         if engine_state == "muted":
             return ("muted", "dim")
+        elif engine_state == "recording":
+            return ("recording", "ok")
         elif engine_state in _ACTIVE_ENGINE_STATES:
             return ("listening", "ok")
         else:
