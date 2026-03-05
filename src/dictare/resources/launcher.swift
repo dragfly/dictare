@@ -148,6 +148,8 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
 
     // Track whether key.down was sent via IPC so we send key.up the same way
     var keyDownSentViaIPC = false
+    // Track whether the hotkey modifier is currently held down (for combo detection)
+    var hotkeyIsDown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         hotkeyKeyCode = resolveHotkeyKeyCode()
@@ -307,6 +309,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         // as AXIsProcessTrusted()).  CGEvent.tapCreate() itself is reliable: returns
         // nil when permission is missing, non-nil when granted.
         let eventMask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
+                                   | (1 << CGEventType.keyDown.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -346,7 +349,11 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
                     delegate.writeHotkeyStatus("confirmed")
                     fputs("CGEventTap confirmed: first event received\n", stderr)
                 }
-                delegate.handleFlagsChanged(event: event)
+                if type == .keyDown {
+                    delegate.handleKeyDown(event: event)
+                } else {
+                    delegate.handleFlagsChanged(event: event)
+                }
                 return Unmanaged.passUnretained(event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -395,12 +402,21 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         let keyIsDown = flags.contains(hotkeyFlagMask)
 
         if keyIsDown {
+            hotkeyIsDown = true
             fputs("Hotkey: key DOWN (keyCode=\(keyCode))\n", stderr)
             sendKeyDown()
         } else {
+            hotkeyIsDown = false
             fputs("Hotkey: key UP (keyCode=\(keyCode))\n", stderr)
             sendKeyUp()
         }
+    }
+
+    /// Handle a keyDown CGEvent — if the hotkey modifier is held, this is a combo
+    /// (e.g., Command+I).  Notify Python's TapDetector so it cancels the tap.
+    func handleKeyDown(event: CGEvent) {
+        guard hotkeyIsDown else { return }
+        sendOtherKey()
     }
 
     func hotkeyTransportMode() -> String {
@@ -447,6 +463,20 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             // key.up lost — TapDetector long-press timer will fire at 0.8s and reset.
             // Not ideal but acceptable: the worst case is an unintended submit action.
         }
+    }
+
+    /// Send other_key to Python via IPC (combo detection).
+    func sendOtherKey() {
+        guard keyDownSentViaIPC else {
+            // key.down was sent as SIGUSR1; combo detection not possible
+            return
+        }
+        hotkeySeq += 1
+        let seq = hotkeySeq
+        if sendIPCMessage(type: "other_key", seq: seq) {
+            fputs("Hotkey: IPC other_key delivered (seq \(seq))\n", stderr)
+        }
+        // If IPC fails, no fallback needed — worst case is a false tap
     }
 
     /// Send a single IPC message to the Python engine and wait for ACK.
