@@ -1540,7 +1540,10 @@ class DictareEngine:
         _t0 = time.monotonic()
         if self._audio_manager:
             self._audio_manager.start_streaming(
-                should_process=lambda: self._state_manager.should_process_audio,
+                should_process=lambda: (
+                    self._state_manager.should_process_audio
+                    and (not self.agent_mode or bool(self.visible_agents))
+                ),
                 is_running=lambda: self._running,
             )
         _audio_ms = (time.monotonic() - _t0) * 1000
