@@ -1,4 +1,4 @@
-name: Claude Issue Triage
+name: "claude: issue triage"
 
 on:
   issues:

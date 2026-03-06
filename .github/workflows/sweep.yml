@@ -1,4 +1,4 @@
-name: Issue Sweep
+name: "auto: stale issues"
 
 on:
   schedule:
