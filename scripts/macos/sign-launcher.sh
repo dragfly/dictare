@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build, sign, and optionally notarize the Swift launcher.
 # Usage:
-#   ./scripts/sign-launcher.sh                    # build + sign only
-#   ./scripts/sign-launcher.sh --notarize         # build + sign + notarize
+#   ./scripts/macos/sign-launcher.sh                    # build + sign only
+#   ./scripts/macos/sign-launcher.sh --notarize         # build + sign + notarize
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
