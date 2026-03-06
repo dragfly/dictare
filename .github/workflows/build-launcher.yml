@@ -43,7 +43,7 @@ jobs:
       - name: Build and sign launcher
         run: |
           DICTARE_SIGN_IDENTITY="Developer ID Application" \
-            ./scripts/sign-launcher.sh
+            ./scripts/macos/sign-launcher.sh
 
       # Notarize with App Store Connect API key
       - name: Notarize

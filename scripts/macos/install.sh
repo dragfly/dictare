@@ -47,7 +47,7 @@ start_services() {
     # Developer ID, no swiftc needed, no Gatekeeper warnings).
     # Look for pre-built signed launcher:
     #   1. Cellar (Homebrew formula resource)
-    #   2. Local build (./scripts/sign-launcher.sh)
+    #   2. Local build (./scripts/macos/sign-launcher.sh)
     #   3. GitHub Release (download for this version)
     PREBUILT=""
     for candidate in \
