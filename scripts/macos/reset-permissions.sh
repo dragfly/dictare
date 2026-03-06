@@ -43,6 +43,10 @@ echo "==> Resetting TCC permissions..."
 tccutil reset Accessibility dev.dragfly.dictare || true
 tccutil reset Microphone dev.dragfly.dictare || true
 tccutil reset ListenEvent dev.dragfly.dictare || true
+# Also reset legacy Bundle ID (pre-v0.1.135)
+tccutil reset Accessibility com.dragfly.dictare 2>/dev/null || true
+tccutil reset Microphone com.dragfly.dictare 2>/dev/null || true
+tccutil reset ListenEvent com.dragfly.dictare 2>/dev/null || true
 
 echo "==> Reinstalling and starting Dictare service..."
 "${DICTARE_BIN}" service install
