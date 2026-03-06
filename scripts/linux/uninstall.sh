@@ -114,7 +114,7 @@ fi
 
 # ── 8. Remove dev venv if inside a dictare repo ───────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 if [[ -d "$PROJECT_DIR/.venv" && -f "$PROJECT_DIR/pyproject.toml" ]]; then
     if grep -q 'name = "dictare"' "$PROJECT_DIR/pyproject.toml" 2>/dev/null; then
         rm -rf "$PROJECT_DIR/.venv"

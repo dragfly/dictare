@@ -2,7 +2,7 @@
 # Dictare Linux development install script.
 # Installs all system dependencies + builds from local source.
 #
-# Usage: ./scripts/linux-install.sh [--gpu]
+# Usage: ./scripts/linux/install.sh [--gpu]
 #
 # Options:
 #   --gpu    Install CUDA support for GPU-accelerated inference
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
 BOLD='\033[1m'
@@ -33,7 +33,7 @@ for arg in "$@"; do
             cat <<'EOF'
 Dictare Linux development install script.
 
-Usage: ./scripts/linux-install.sh [--gpu]
+Usage: ./scripts/linux/install.sh [--gpu]
 
 Options:
   --gpu      Install CUDA support for GPU-accelerated Whisper
@@ -177,7 +177,7 @@ fi
 
 if [[ "$HAS_NVIDIA" == true && "$INSTALL_GPU" == false ]]; then
     warn "GPU detected but --gpu not specified. Whisper will run on CPU."
-    printf "  Re-run with: ./scripts/linux-install.sh --gpu\n\n"
+    printf "  Re-run with: ./scripts/linux/install.sh --gpu\n\n"
 fi
 
 # ─── 3. Install uv if missing ──────────────────────────────────────────
