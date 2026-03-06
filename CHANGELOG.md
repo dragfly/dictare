@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.136] - 2026-03-06
+
+### Added
+- Auto-populate STT hotwords from pipeline trigger words (submit, mute, agent filters)
+
+### Fixed
+- `PROJECT_DIR` path in all scripts after reorganization to subdirectories
+- CI notarization timeout (10 min) to prevent runner hanging indefinitely
+- Legacy TCC permissions reset (`com.dragfly.dictare`) in `reset-permissions.sh`
+
 ## [0.1.135] - 2026-03-06
 
 ### Changed
