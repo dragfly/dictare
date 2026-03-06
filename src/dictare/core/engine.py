@@ -479,10 +479,38 @@ class DictareEngine:
         )
 
     def _get_hotwords(self) -> str | None:
-        """Build hotwords string from config."""
+        """Build hotwords string from config and pipeline trigger words."""
         if self.config.stt.advanced.hotwords:
             return self.config.stt.advanced.hotwords
+        # Auto-populate from pipeline trigger words
+        if self._pipeline:
+            words = self._collect_pipeline_trigger_words()
+            if words:
+                return ", ".join(words)
         return None
+
+    def _collect_pipeline_trigger_words(self) -> set[str]:
+        """Extract unique trigger words from all pipeline filters."""
+        from dictare.pipeline.filters.input_filter import InputFilter
+        from dictare.pipeline.filters.mute_filter import MuteFilter
+        from dictare.pipeline.filters.agent_filter import AgentFilter
+
+        words: set[str] = set()
+        for step in self._pipeline._steps:
+            if isinstance(step, InputFilter):
+                for patterns in step.triggers.values():
+                    for pattern in patterns:
+                        words.update(w.rstrip(".") for w in pattern)
+            elif isinstance(step, MuteFilter):
+                for patterns in step.mute_triggers.values():
+                    for pattern in patterns:
+                        words.update(w.rstrip(".") for w in pattern)
+                for patterns in step.listen_triggers.values():
+                    for pattern in patterns:
+                        words.update(w.rstrip(".") for w in pattern)
+            elif isinstance(step, AgentFilter):
+                words.update(step.triggers)
+        return words
 
     def _create_pipeline(self) -> Pipeline | None:
         """Create message pipeline from config.

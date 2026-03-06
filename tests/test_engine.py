@@ -587,6 +587,130 @@ class TestHotwords:
         result = engine._get_hotwords()
         assert result is None
 
+    def test_get_hotwords_from_pipeline_triggers(self) -> None:
+        """Hotwords auto-populated from pipeline filter trigger words."""
+        from dictare.pipeline.base import Pipeline
+        from dictare.pipeline.filters.input_filter import InputFilter
+
+        config = MockConfig()
+        config.stt.advanced.hotwords = ""
+        engine = DictareEngine(config=config)
+
+        submit_filter = InputFilter(
+            triggers={"*": [["send"], ["submit"]], "it": [["invia"]]},
+        )
+        engine._pipeline = Pipeline(steps=[submit_filter])
+
+        result = engine._get_hotwords()
+        assert result is not None
+        words = {w.strip() for w in result.split(",")}
+        assert words == {"send", "submit", "invia"}
+
+    def test_get_hotwords_from_mute_filter(self) -> None:
+        """Hotwords include mute/listen trigger words."""
+        from dictare.pipeline.base import Pipeline
+        from dictare.pipeline.filters.mute_filter import MuteFilter
+
+        config = MockConfig()
+        config.stt.advanced.hotwords = ""
+        engine = DictareEngine(config=config)
+
+        mute_filter = MuteFilter(
+            mute_triggers={"*": [["mute"], ["silence"]]},
+            listen_triggers={"*": [["listen"], ["unmute"]]},
+        )
+        engine._pipeline = Pipeline(steps=[mute_filter])
+
+        result = engine._get_hotwords()
+        assert result is not None
+        words = {w.strip() for w in result.split(",")}
+        assert words == {"mute", "silence", "listen", "unmute"}
+
+    def test_get_hotwords_from_agent_filter(self) -> None:
+        """Hotwords include agent switch trigger words."""
+        from dictare.pipeline.base import Pipeline
+        from dictare.pipeline.filters.agent_filter import AgentFilter
+
+        config = MockConfig()
+        config.stt.advanced.hotwords = ""
+        engine = DictareEngine(config=config)
+
+        agent_filter = AgentFilter(
+            triggers=["agent", "agente"],
+            agent_ids=[],
+        )
+        engine._pipeline = Pipeline(steps=[agent_filter])
+
+        result = engine._get_hotwords()
+        assert result is not None
+        words = {w.strip() for w in result.split(",")}
+        assert words == {"agent", "agente"}
+
+    def test_get_hotwords_combined_filters(self) -> None:
+        """Hotwords combined from multiple filters, deduplicated."""
+        from dictare.pipeline.base import Pipeline
+        from dictare.pipeline.filters.input_filter import InputFilter
+        from dictare.pipeline.filters.mute_filter import MuteFilter
+
+        config = MockConfig()
+        config.stt.advanced.hotwords = ""
+        engine = DictareEngine(config=config)
+
+        submit_filter = InputFilter(triggers={"*": [["send"]]})
+        mute_filter = MuteFilter(
+            mute_triggers={"*": [["mute"]]},
+            listen_triggers={"*": [["listen"]]},
+        )
+        engine._pipeline = Pipeline(steps=[submit_filter, mute_filter])
+
+        result = engine._get_hotwords()
+        assert result is not None
+        words = {w.strip() for w in result.split(",")}
+        assert words == {"send", "mute", "listen"}
+
+    def test_get_hotwords_config_overrides_pipeline(self) -> None:
+        """Manual config hotwords take priority over pipeline triggers."""
+        from dictare.pipeline.base import Pipeline
+        from dictare.pipeline.filters.input_filter import InputFilter
+
+        config = MockConfig()
+        config.stt.advanced.hotwords = "custom,words"
+        engine = DictareEngine(config=config)
+
+        submit_filter = InputFilter(triggers={"*": [["send"]]})
+        engine._pipeline = Pipeline(steps=[submit_filter])
+
+        result = engine._get_hotwords()
+        assert result == "custom,words"
+
+    def test_get_hotwords_strips_dot_suffix(self) -> None:
+        """Trigger patterns with dot suffix are cleaned."""
+        from dictare.pipeline.base import Pipeline
+        from dictare.pipeline.filters.input_filter import InputFilter
+
+        config = MockConfig()
+        config.stt.advanced.hotwords = ""
+        engine = DictareEngine(config=config)
+
+        submit_filter = InputFilter(triggers={"*": [["go."], ["send"]]})
+        engine._pipeline = Pipeline(steps=[submit_filter])
+
+        result = engine._get_hotwords()
+        assert result is not None
+        words = {w.strip() for w in result.split(",")}
+        assert "go" in words
+        assert "go." not in words
+
+    def test_get_hotwords_no_pipeline(self) -> None:
+        """No pipeline and no config returns None."""
+        config = MockConfig()
+        config.stt.advanced.hotwords = ""
+        engine = DictareEngine(config=config)
+        engine._pipeline = None
+
+        result = engine._get_hotwords()
+        assert result is None
+
 
 class TestAgentId:
     """Test agent ID retrieval for socket-based injection."""
