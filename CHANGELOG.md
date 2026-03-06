@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.137] - 2026-03-06
+
+### Changed
+- Agent session summary now shows the same detailed stats as `dictare serve` (two-column layout with timing breakdown, effective WPM, time saved, lifetime stats)
+
+### Added
+- `transcription_seconds` and `injection_seconds` exposed in `/status` API stats
+
+
 ## [0.1.136] - 2026-03-06
 
 ### Added
