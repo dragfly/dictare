@@ -21,6 +21,9 @@ jobs:
           # Note: cannot use IFS='=' because base64 values contain '=' padding
           infisical export \
             --domain "https://eu.infisical.com" \
+            --projectId "7d6c2573-e67b-4243-9911-0a9ddaed58b8" \
+            --path "/work/dictare/app/ci" \
+            --env prod \
             --format json | \
             jq -c '.[]' | while read -r item; do
               key=$(echo "$item" | jq -r '.key')
