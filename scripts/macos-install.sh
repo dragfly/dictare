@@ -45,7 +45,10 @@ start_services() {
     # service start alone leaves the old path pointing to the deleted Cellar dir.
     # If a pre-built signed launcher exists in the Cellar, use it (stable TCC via
     # Developer ID, no swiftc needed, no Gatekeeper warnings).
-    # Look for pre-built signed launcher: Cellar (Homebrew) or build/ (dev)
+    # Look for pre-built signed launcher:
+    #   1. Cellar (Homebrew formula resource)
+    #   2. Local build (./scripts/sign-launcher.sh)
+    #   3. GitHub Release (download for this version)
     PREBUILT=""
     for candidate in \
         "${BREW_PREFIX}/opt/dictare/libexec/launcher/Dictare" \
@@ -56,6 +59,27 @@ start_services() {
             break
         fi
     done
+
+    # If no local launcher, try downloading from GitHub Release
+    if [[ -z "$PREBUILT" ]] && command -v gh &>/dev/null; then
+        echo "==> Checking GitHub Release for signed launcher..."
+        RELEASE_DIR="${PROJECT_DIR}/build/launcher"
+        mkdir -p "$RELEASE_DIR"
+        RELEASE_ZIP="${RELEASE_DIR}/Dictare-launcher.zip"
+        if gh release download "v${VERSION}" \
+            --repo dragfly/dictare \
+            --pattern "Dictare-launcher-*-universal.zip" \
+            --output "$RELEASE_ZIP" 2>/dev/null; then
+            ditto -x -k "$RELEASE_ZIP" "$RELEASE_DIR"
+            rm -f "$RELEASE_ZIP"
+            if [[ -f "${RELEASE_DIR}/Dictare" ]]; then
+                PREBUILT="${RELEASE_DIR}/Dictare"
+                echo "==> Downloaded signed launcher from GitHub Release"
+            fi
+        else
+            echo "==> No signed launcher in GitHub Release (compiling locally)"
+        fi
+    fi
 
     if [[ -n "$PREBUILT" ]]; then
         echo "==> Using pre-built signed launcher: $PREBUILT"

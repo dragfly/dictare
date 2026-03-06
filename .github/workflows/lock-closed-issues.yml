@@ -1,4 +1,4 @@
-name: Lock Closed Issues
+name: "auto: lock issues"
 
 on:
   schedule:
