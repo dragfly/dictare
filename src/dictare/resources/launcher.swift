@@ -223,9 +223,9 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     func ensureTrayRunning() {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        task.arguments = ["start", "com.dragfly.dictare.tray"]
+        task.arguments = ["start", "dev.dragfly.dictare.tray"]
         try? task.run()
-        fputs("Tray: launchctl start com.dragfly.dictare.tray\n", stderr)
+        fputs("Tray: launchctl start dev.dragfly.dictare.tray\n", stderr)
     }
 
     // --- Python engine ---

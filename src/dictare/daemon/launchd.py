@@ -12,8 +12,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-LABEL = "com.dragfly.dictare"
-TRAY_LABEL = "com.dragfly.dictare.tray"
+LABEL = "dev.dragfly.dictare"
+TRAY_LABEL = "dev.dragfly.dictare.tray"
 LOG_DIR = Path.home() / "Library" / "Logs" / "dictare"
 
 def get_plist_path() -> Path:
@@ -47,7 +47,7 @@ def generate_plist(python_path: str) -> str:
     }
     return plistlib.dumps(plist).decode()
 
-def install() -> None:
+def install(prebuilt_launcher: Path | None = None) -> None:
     """Create .app bundle, write plist, and load the LaunchAgent.
 
     The .app bundle contains a Swift launcher that:
@@ -56,10 +56,15 @@ def install() -> None:
     3. Spawns the Python engine and sends SIGUSR1 on hotkey tap
 
     Also installs and starts the tray LaunchAgent.
+
+    Args:
+        prebuilt_launcher: Path to a pre-built signed launcher binary.
+            When provided, skips swiftc compilation and uses the signed binary
+            (stable TCC via Developer ID Team ID).
     """
     from dictare.daemon.app_bundle import create_app_bundle
 
-    create_app_bundle(sys.executable)
+    create_app_bundle(sys.executable, prebuilt_launcher=prebuilt_launcher)
 
     # Request Input Monitoring permission (shows system dialog on first install).
     # Must run BEFORE launchctl load — the dialog only works from terminal context.

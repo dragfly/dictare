@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.135] - 2026-03-06
+
+### Changed
+- Bundle ID renamed from `com.dragfly.dictare` to `dev.dragfly.dictare`
+
+### Added
+- Pre-built signed launcher support: `--prebuilt-launcher` option in `service install`
+- `scripts/sign-launcher.sh` for building, signing, and notarizing the Swift launcher
+- GitHub Actions workflow for automated launcher signing and notarization
+- Hardened Runtime entitlements for microphone access
+
 ## [0.1.134] - 2026-03-05
 
 ### Fixed

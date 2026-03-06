@@ -93,7 +93,7 @@ Issues = "https://github.com/dragfly/dictare/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dictare"]
-artifacts = ["*.mp3", "*.icns", "*.png", "*.swift", "*.html", "*.js", "*.css", "*.json"]
+artifacts = ["*.mp3", "*.icns", "*.png", "*.swift", "*.entitlements", "*.html", "*.js", "*.css", "*.json"]
 
 [tool.hatch.version]
 path = "src/dictare/__init__.py"

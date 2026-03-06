@@ -54,7 +54,7 @@ done
 pkill -f "dictare serve" 2>/dev/null && warn "Killed lingering dictare processes" || true
 
 # ── 2. Remove launchd plist directly (belt and suspenders) ────────────────
-PLIST="$HOME/Library/LaunchAgents/com.dragfly.dictare.plist"
+PLIST="$HOME/Library/LaunchAgents/dev.dragfly.dictare.plist"
 if [[ -f "$PLIST" ]]; then
     launchctl unload "$PLIST" 2>/dev/null || true
     rm -f "$PLIST"
