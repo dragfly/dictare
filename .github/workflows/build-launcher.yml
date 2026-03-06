@@ -17,14 +17,36 @@ jobs:
           INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
         run: |
           brew install infisical/get-cli/infisical
-          # Export secrets as JSON → parse → write to GITHUB_ENV + mask values
+          # Export secrets as JSON → write to GITHUB_ENV + mask values
+          # Note: cannot use IFS='=' because base64 values contain '=' padding
           infisical export \
             --domain "https://eu.infisical.com" \
             --format json | \
-            jq -r '.[] | "\(.key)=\(.value)"' | while IFS='=' read -r key value; do
+            jq -c '.[]' | while read -r item; do
+              key=$(echo "$item" | jq -r '.key')
+              value=$(echo "$item" | jq -r '.value')
               echo "::add-mask::$value"
               echo "$key=$value" >> "$GITHUB_ENV"
             done
+
+      # Verify secrets were loaded
+      - name: Verify secrets
+        run: |
+          missing=()
+          for var in APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_P12_PASSWORD \
+                     APPLE_NOTARIZATION_DICTARE_KEY APPLE_NOTARIZATION_DICTARE_KEY_ID \
+                     APPLE_NOTARIZATION_ISSUER_ID; do
+            if [[ -z "${!var:-}" ]]; then
+              missing+=("$var")
+            else
+              val="${!var}"
+              echo "✓ $var is set (${#val} chars)"
+            fi
+          done
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::Missing secrets: ${missing[*]}"
+            exit 1
+          fi
 
       # Import Developer ID certificate into a temporary keychain
       - name: Import signing certificate
