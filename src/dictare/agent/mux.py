@@ -541,13 +541,15 @@ def _write_to_pty(
 
 def _print_session_summary(base_url: str) -> None:
     """Fetch session stats from the engine and print a summary to stderr."""
+    import random
     import urllib.error
     import urllib.request
 
     try:
         with urllib.request.urlopen(f"{base_url}/status", timeout=2) as resp:
             data = json.loads(resp.read())
-            stats = data.get("platform", {}).get("stats", {})
+            platform = data.get("platform", {})
+            stats = platform.get("stats", {})
     except Exception:
         return
 
@@ -556,25 +558,83 @@ def _print_session_summary(base_url: str) -> None:
         return
 
     words = stats.get("words", 0)
+    chars = stats.get("chars", 0)
     audio = stats.get("audio_seconds", 0.0)
-    phrase = stats.get("phrase", "")
+    stt = stats.get("transcription_seconds", 0.0)
+    injection = stats.get("injection_seconds", 0.0)
+    processing = audio + stt + injection
 
-    # Format audio duration
-    if audio < 60:
-        audio_str = f"{audio:.0f}s"
-    else:
-        audio_str = f"{audio / 60:.1f}m"
+    # Effective WPM
+    processing_min = processing / 60
+    effective_wpm = words / processing_min if processing_min > 0 else 0
 
-    line = f"{count} transcriptions · {words} words · {audio_str} of audio"
-    width = max(len(line), len(phrase)) + 4
-    bar = "─" * width
+    # Time saved vs typing (assume 40 WPM typing)
+    typing_wpm = 40
+    typing_time = (chars / (typing_wpm * 5)) * 60  # seconds
+    time_saved = typing_time - processing
+
+    # Two-column layout (plain text, no rich dependency)
+    col1 = [
+        ("Transcriptions", str(count)),
+        ("Words", str(words)),
+        ("Characters", str(chars)),
+        ("Effective WPM", f"{effective_wpm:.0f}"),
+    ]
+    col2 = [
+        ("Audio", f"{audio:.1f}s"),
+        ("STT", f"{stt:.1f}s"),
+        ("Injection", f"{injection:.1f}s"),
+        ("Processing", f"{processing:.1f}s"),
+    ]
+
+    # Format columns
+    w1k = max(len(k) for k, _ in col1)
+    w1v = max(len(v) for _, v in col1)
+    w2k = max(len(k) for k, _ in col2)
+    w2v = max(len(v) for _, v in col2)
 
     print(file=sys.stderr)
-    print(bar, file=sys.stderr)
-    print(f"  {line}", file=sys.stderr)
-    if phrase:
-        print(f"  {phrase}", file=sys.stderr)
-    print(bar, file=sys.stderr)
+    header = f" {'Output':<{w1k + w1v + 2}}       {'Timing'}"
+    print(header, file=sys.stderr)
+    for (k1, v1), (k2, v2) in zip(col1, col2):
+        line = f" {k1:<{w1k}}  {v1:>{w1v}}       {k2:<{w2k}}  {v2:>{w2v}}"
+        print(line, file=sys.stderr)
+
+    # Time saved phrase
+    if time_saved > 0:
+        phrases = [
+            "{time} extra for coffee.",
+            "Saved you {time}. You're welcome.",
+            "{time} back in your pocket.",
+            "{time} gained. Use them wisely!",
+        ]
+        if time_saved >= 60:
+            time_str = f"{time_saved / 60:.1f} minutes"
+        else:
+            time_str = f"{time_saved:.0f} seconds"
+        print(file=sys.stderr)
+        print(random.choice(phrases).format(time=time_str), file=sys.stderr)
+
+    # Lifetime stats
+    try:
+        from dictare.stats import load_stats
+        lifetime = load_stats()
+        lifetime_saved = lifetime.get("total_time_saved_seconds", 0)
+        sessions = lifetime.get("sessions", 0)
+        first_use = lifetime.get("first_use", "")
+        if lifetime_saved > 0 and first_use:
+            from datetime import datetime
+            if lifetime_saved >= 3600:
+                lt_str = f"{lifetime_saved / 3600:.1f} hours"
+            elif lifetime_saved >= 60:
+                lt_str = f"{lifetime_saved / 60:.0f} minutes"
+            else:
+                lt_str = f"{lifetime_saved:.0f} seconds"
+            s_str = f"{sessions} session{'s' if sessions != 1 else ''}"
+            since = datetime.fromisoformat(first_use).strftime("%b %d, %Y")
+            print(f"All time: {lt_str} saved across {s_str} (since {since})", file=sys.stderr)
+    except Exception:
+        pass
 
 def run_agent(
     agent_id: str,

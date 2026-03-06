@@ -1331,6 +1331,8 @@ class DictareEngine:
             "words": words,
             "chars": chars,
             "audio_seconds": round(audio, 1),
+            "transcription_seconds": round(self._stats.transcription_seconds + b.get("transcription_seconds", 0.0), 1),
+            "injection_seconds": round(self._stats.injection_seconds + b.get("injection_seconds", 0.0), 1),
             "phrase": phrase,
         }
 
