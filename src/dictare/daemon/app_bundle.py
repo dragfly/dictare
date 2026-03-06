@@ -23,7 +23,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 APP_NAME = "Dictare"
-BUNDLE_ID = "com.dragfly.dictare"
+BUNDLE_ID = "dev.dragfly.dictare"
 
 
 def get_app_path() -> Path:
@@ -39,6 +39,7 @@ def get_executable_path() -> str:
 def create_app_bundle(
     python_path: str | None = None,
     app_dir: Path | None = None,
+    prebuilt_launcher: Path | None = None,
 ) -> Path:
     """Create the Dictare.app bundle.
 
@@ -66,11 +67,14 @@ def create_app_bundle(
     # Skip recreation if the bundle already exists with same Python path AND
     # same launcher source.  Recreating the binary invalidates macOS TCC trust
     # (Accessibility / Input Monitoring), forcing re-grant.
+    # Signed launchers (Developer ID) have stable TCC via Team ID — even
+    # replacing the binary preserves permissions across updates.
     launcher_hash = _get_launcher_source_hash()
     if app_path.exists():
         existing_python_file = macos_dir / "python_path"
         existing_launcher = macos_dir / APP_NAME
         existing_hash_file = macos_dir / "launcher_hash"
+        existing_signed = macos_dir / "launcher_signed"
         if existing_launcher.exists():
             same_python = (
                 existing_python_file.exists()
@@ -80,13 +84,22 @@ def create_app_bundle(
                 existing_hash_file.exists()
                 and existing_hash_file.read_text().strip() == launcher_hash
             )
-            if same_python and same_launcher:
+            # If prebuilt provided but current launcher isn't signed, don't skip —
+            # we want to upgrade from ad-hoc to Developer ID signed.
+            upgrade_to_signed = prebuilt_launcher and not existing_signed.exists()
+            if same_python and same_launcher and not upgrade_to_signed:
                 logger.debug("App bundle already up to date, skipping recreation")
                 return app_path
-            if same_launcher and not same_python:
+            if same_launcher and not same_python and not upgrade_to_signed:
                 # Only python_path changed — update without recompiling
                 existing_python_file.write_text(python_path)
                 logger.debug("Updated python_path in existing bundle")
+                return app_path
+            if existing_signed.exists() and not prebuilt_launcher:
+                # Signed launcher installed, no new prebuilt provided —
+                # keep existing signed binary, just update python_path.
+                existing_python_file.write_text(python_path)
+                logger.debug("Keeping existing signed launcher, updated python_path")
                 return app_path
             # Launcher source changed — must rebuild (TCC re-grant needed)
             logger.info("Launcher source changed — rebuilding app bundle")
@@ -124,11 +137,17 @@ def create_app_bundle(
     # Write python_path config file (read by the native launcher)
     (macos_dir / "python_path").write_text(python_path)
 
-    # Build native launcher (Swift → compiled binary).
-    # Falls back to bash wrapper if swiftc is not available.
+    # Install launcher binary.
+    # Priority: pre-built signed binary → compile from source → bash fallback.
     launcher_path = macos_dir / APP_NAME
-    if not _build_native_launcher(launcher_path):
+    if prebuilt_launcher and _install_prebuilt_launcher(prebuilt_launcher, launcher_path):
+        logger.info("Using pre-built signed launcher")
+        (macos_dir / "launcher_signed").write_text("true")
+    elif _build_native_launcher(launcher_path):
+        (macos_dir / "launcher_signed").unlink(missing_ok=True)
+    else:
         _write_bash_launcher(launcher_path, python_path)
+        (macos_dir / "launcher_signed").unlink(missing_ok=True)
 
     # Store launcher source hash for skip-if-unchanged logic
     (macos_dir / "launcher_hash").write_text(launcher_hash)
@@ -144,6 +163,28 @@ def remove_app_bundle() -> None:
     for path in [get_app_path(), Path("/Applications") / f"{APP_NAME}.app"]:
         if path.exists():
             subprocess.run(["rm", "-rf", str(path)], check=False, capture_output=True)
+
+
+def _install_prebuilt_launcher(prebuilt: Path, dest: Path) -> bool:
+    """Install a pre-built signed launcher binary.
+
+    Returns True if the binary was copied and its code signature is valid.
+    """
+    if not prebuilt.exists():
+        logger.warning("Pre-built launcher not found: %s", prebuilt)
+        return False
+    # Verify code signature on the SOURCE binary (not inside .app bundle,
+    # where codesign would treat it as a bundle executable and expect resources).
+    result = subprocess.run(
+        ["codesign", "--verify", str(prebuilt)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        logger.warning("Pre-built launcher signature invalid: %s", result.stderr)
+        return False
+    shutil.copy2(prebuilt, dest)
+    dest.chmod(dest.stat().st_mode | stat.S_IEXEC)
+    return True
 
 
 def _build_native_launcher(dest: Path) -> bool:

@@ -27,12 +27,19 @@ def _get_backend():
 
 
 @app.command("install")
-def service_install() -> None:
+def service_install(
+    prebuilt_launcher: str | None = typer.Option(
+        None, "--prebuilt-launcher",
+        help="Path to a pre-built signed launcher binary (skips swiftc compilation).",
+    ),
+) -> None:
     """Install (or reinstall) dictare as a system service.
 
     Idempotent: safe to run multiple times. Always updates the service
     configuration (plist / unit file) and restarts the service.
     """
+    from pathlib import Path
+
     backend = _get_backend()
 
     from dictare.config import create_default_config, get_config_path
@@ -43,7 +50,10 @@ def service_install() -> None:
 
     console.print("[dim]Installing service...[/]")
     try:
-        backend.install()
+        kwargs = {}
+        if prebuilt_launcher and sys.platform == "darwin":
+            kwargs["prebuilt_launcher"] = Path(prebuilt_launcher)
+        backend.install(**kwargs)
         # On macOS, install() already loads the agent (= starts it).
         # On Linux, we need an explicit start after install.
         if sys.platform == "linux":

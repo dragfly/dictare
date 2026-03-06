@@ -19,7 +19,7 @@ fi
 echo "This will:"
 echo "  1) stop Dictare service/tray"
 echo "  2) clear local runtime status files"
-echo "  3) reset macOS TCC permissions for com.dragfly.dictare"
+echo "  3) reset macOS TCC permissions for dev.dragfly.dictare"
 echo "  4) reinstall/start Dictare service"
 echo
 read -r -p "Continue? [y/N] " REPLY
@@ -40,9 +40,9 @@ rm -f "${HOME}/.dictare/hotkey_status" \
       "${HOME}/.dictare/input_monitoring_setup"
 
 echo "==> Resetting TCC permissions..."
-tccutil reset Accessibility com.dragfly.dictare || true
-tccutil reset Microphone com.dragfly.dictare || true
-tccutil reset ListenEvent com.dragfly.dictare || true
+tccutil reset Accessibility dev.dragfly.dictare || true
+tccutil reset Microphone dev.dragfly.dictare || true
+tccutil reset ListenEvent dev.dragfly.dictare || true
 
 echo "==> Reinstalling and starting Dictare service..."
 "${DICTARE_BIN}" service install

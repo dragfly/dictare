@@ -190,7 +190,7 @@ class TestGetServicePid:
         launchctl_output = (
             '{\n'
             '\t"StandardOutPath" = "/Users/x/Library/Logs/dictare/stdout.log";\n'
-            '\t"Label" = "com.dragfly.dictare";\n'
+            '\t"Label" = "dev.dragfly.dictare";\n'
             '\t"OnDemand" = false;\n'
             '\t"PID" = 12345;\n'
             '};\n'
@@ -211,7 +211,7 @@ class TestGetServicePid:
     def test_returns_none_when_no_pid_line(self):
         launchctl_output = (
             '{\n'
-            '\t"Label" = "com.dragfly.dictare";\n'
+            '\t"Label" = "dev.dragfly.dictare";\n'
             '\t"LastExitStatus" = 0;\n'
             '};\n'
         )

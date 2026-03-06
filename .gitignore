@@ -51,6 +51,12 @@ build/ydotool
 build/ydotoold
 build/evdev-*.whl
 build/evdev.whl
+build/launcher/
+
+# Apple signing/notarization secrets (never commit)
+*.p12
+*.p8
+*.keychain-db
 
 # Debug session logs
 debug-session*.jsonl
