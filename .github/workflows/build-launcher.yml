@@ -80,7 +80,7 @@ jobs:
       # Notarize with App Store Connect API key
       - name: Notarize
         run: |
-          echo "$APPLE_NOTARIZATION_DICTARE_KEY" | base64 -d > "$RUNNER_TEMP/AuthKey.p8"
+          echo "$APPLE_NOTARIZATION_DICTARE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
           ditto -c -k build/launcher/Dictare build/launcher/Dictare.zip
           xcrun notarytool submit build/launcher/Dictare.zip \
             --key "$RUNNER_TEMP/AuthKey.p8" \
