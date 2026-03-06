@@ -11,18 +11,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Fetch secrets from Infisical (single token, all secrets centralized)
+      - name: Load secrets from Infisical
+        env:
+          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+        run: |
+          brew install infisical/get-cli/infisical
+          # Export secrets as JSON → parse → write to GITHUB_ENV + mask values
+          infisical export \
+            --domain "https://eu.infisical.com" \
+            --format json | \
+            jq -r '.[] | "\(.key)=\(.value)"' | while IFS='=' read -r key value; do
+              echo "::add-mask::$value"
+              echo "$key=$value" >> "$GITHUB_ENV"
+            done
+
       # Import Developer ID certificate into a temporary keychain
       - name: Import signing certificate
-        env:
-          CERTIFICATE_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
         run: |
           KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
           security create-keychain -p "" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          echo "$CERTIFICATE_P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          echo "$APPLE_DEVELOPER_ID_P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
           security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
-            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+            -P "$APPLE_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: \
             -s -k "" "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN" login.keychain
@@ -35,17 +47,13 @@ jobs:
 
       # Notarize with App Store Connect API key
       - name: Notarize
-        env:
-          NOTARY_KEY: ${{ secrets.APPLE_NOTARIZATION_DICTARE_KEY }}
-          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_DICTARE_KEY_ID }}
-          NOTARY_ISSUER: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
         run: |
-          echo "$NOTARY_KEY" | base64 -d > "$RUNNER_TEMP/AuthKey.p8"
+          echo "$APPLE_NOTARIZATION_DICTARE_KEY" | base64 -d > "$RUNNER_TEMP/AuthKey.p8"
           ditto -c -k build/launcher/Dictare build/launcher/Dictare.zip
           xcrun notarytool submit build/launcher/Dictare.zip \
             --key "$RUNNER_TEMP/AuthKey.p8" \
-            --key-id "$NOTARY_KEY_ID" \
-            --issuer "$NOTARY_ISSUER" \
+            --key-id "$APPLE_NOTARIZATION_DICTARE_KEY_ID" \
+            --issuer "$APPLE_NOTARIZATION_ISSUER_ID" \
             --wait
 
       # Upload as release asset (only on tag push)
