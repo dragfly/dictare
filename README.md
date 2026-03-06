@@ -41,7 +41,7 @@ of window focus**. Your coding agent can be behind 3 other windows — it still 
 
 ```bash
 git clone https://github.com/dragfly/dictare && cd dictare
-./scripts/macos-install.sh
+./scripts/install.sh
 ```
 
 **Linux:**

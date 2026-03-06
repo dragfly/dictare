@@ -55,7 +55,7 @@ done
 
 # ─── Check we're on Linux ──────────────────────────────────────────────
 if [[ "$(uname -s)" != "Linux" ]]; then
-    error "This script is for Linux only. Use ./scripts/macos-install.sh on macOS."
+    error "This script is for Linux only. Use ./scripts/install.sh on macOS."
 fi
 
 # ─── Check we're NOT running as root ───────────────────────────────────
