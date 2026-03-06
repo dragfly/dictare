@@ -1,4 +1,4 @@
-name: "_ release: sign launcher"
+name: "0 release: sign launcher"
 
 on:
   push:
