@@ -60,13 +60,15 @@ start_services() {
         fi
     done
 
-    # If no local launcher, try downloading from GitHub Release
+    # If no local launcher, try downloading from GitHub Release.
+    # The launcher binary is version-independent (same Swift code across versions),
+    # so we use a fixed "launcher" release tag updated only when launcher.swift changes.
     if [[ -z "$PREBUILT" ]] && command -v gh &>/dev/null; then
         echo "==> Checking GitHub Release for signed launcher..."
         RELEASE_DIR="${PROJECT_DIR}/build/launcher"
         mkdir -p "$RELEASE_DIR"
         RELEASE_ZIP="${RELEASE_DIR}/Dictare-launcher.zip"
-        if gh release download "v${VERSION}" \
+        if gh release download "launcher" \
             --repo dragfly/dictare \
             --pattern "Dictare-launcher-*-universal.zip" \
             --output "$RELEASE_ZIP" 2>/dev/null; then
