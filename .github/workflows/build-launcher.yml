@@ -29,7 +29,11 @@ jobs:
               key=$(echo "$item" | jq -r '.key')
               value=$(echo "$item" | jq -r '.value')
               echo "::add-mask::$value"
-              echo "$key=$value" >> "$GITHUB_ENV"
+              # Use heredoc for multiline values (e.g. PEM keys)
+              EOF_MARKER="EOF_$(head -c 8 /dev/urandom | xxd -p)"
+              echo "$key<<$EOF_MARKER" >> "$GITHUB_ENV"
+              echo "$value" >> "$GITHUB_ENV"
+              echo "$EOF_MARKER" >> "$GITHUB_ENV"
             done
 
       # Verify secrets were loaded
