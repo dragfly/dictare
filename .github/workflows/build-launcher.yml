@@ -1,4 +1,4 @@
-name: Build & Notarize Launcher
+name: "_ release: sign launcher"
 
 on:
   push:
@@ -56,8 +56,8 @@ jobs:
             --issuer "$APPLE_NOTARIZATION_ISSUER_ID" \
             --wait
 
-      # Upload as release asset (only on tag push)
-      - name: Upload to release
+      # Create draft release + upload signed launcher (only on tag push)
+      - name: Create draft release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -65,7 +65,13 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           ZIP="Dictare-launcher-${VERSION}-universal.zip"
           ditto -c -k build/launcher/Dictare "$ZIP"
-          gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
+          # Create draft release (or upload to existing)
+          gh release create "$GITHUB_REF_NAME" "$ZIP" \
+            --draft \
+            --title "v${VERSION}" \
+            --generate-notes \
+            2>/dev/null \
+          || gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
 
       # Upload as artifact (always, for manual builds)
       - name: Upload artifact

@@ -1,4 +1,4 @@
-name: Claude Issue Dedupe
+name: "claude: issue dedupe"
 
 on:
   issues:

@@ -1,4 +1,4 @@
-name: CI macOS
+name: "auto: test macOS"
 
 on:
   schedule:
