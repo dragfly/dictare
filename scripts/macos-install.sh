@@ -12,8 +12,8 @@ DIST_DIR="${PROJECT_DIR}/dist"
 
 # ---------- Constants ----------
 
-LABEL="com.dragfly.dictare"
-TRAY_LABEL="com.dragfly.dictare.tray"
+LABEL="dev.dragfly.dictare"
+TRAY_LABEL="dev.dragfly.dictare.tray"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 TRAY_PLIST="$HOME/Library/LaunchAgents/${TRAY_LABEL}.plist"
 
@@ -43,7 +43,26 @@ start_services() {
     # Always run service install after a version bump — it updates python_path
     # inside Dictare.app (the Swift launcher reads it to find the new Cellar Python).
     # service start alone leaves the old path pointing to the deleted Cellar dir.
-    "${BREW_PREFIX}/bin/dictare" service install 2>&1
+    # If a pre-built signed launcher exists in the Cellar, use it (stable TCC via
+    # Developer ID, no swiftc needed, no Gatekeeper warnings).
+    # Look for pre-built signed launcher: Cellar (Homebrew) or build/ (dev)
+    PREBUILT=""
+    for candidate in \
+        "${BREW_PREFIX}/opt/dictare/libexec/launcher/Dictare" \
+        "${PROJECT_DIR}/build/launcher/Dictare"
+    do
+        if [[ -f "$candidate" ]]; then
+            PREBUILT="$candidate"
+            break
+        fi
+    done
+
+    if [[ -n "$PREBUILT" ]]; then
+        echo "==> Using pre-built signed launcher: $PREBUILT"
+        "${BREW_PREFIX}/bin/dictare" service install --prebuilt-launcher "$PREBUILT" 2>&1
+    else
+        "${BREW_PREFIX}/bin/dictare" service install 2>&1
+    fi
     echo "==> Done."
 }
 
