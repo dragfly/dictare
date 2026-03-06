@@ -1,4 +1,4 @@
-name: "0 release: sign launcher"
+name: "0 - release: sign launcher"
 
 on:
   push:
@@ -86,7 +86,7 @@ jobs:
             --key "$RUNNER_TEMP/AuthKey.p8" \
             --key-id "$APPLE_NOTARIZATION_DICTARE_KEY_ID" \
             --issuer "$APPLE_NOTARIZATION_ISSUER_ID" \
-            --wait
+            --wait --timeout 10m
 
       # Create draft release + upload signed launcher (only on tag push)
       - name: Create draft release
