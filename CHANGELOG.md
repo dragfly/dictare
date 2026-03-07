@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.138] - 2026-03-07
+
+### Changed
+- `auto_submit` setting now visible in UI under Output (was hidden)
+- `auto_submit` description corrected: works in both agent and keyboard mode
+
 ## [0.1.137] - 2026-03-06
 
 ### Changed

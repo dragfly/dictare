@@ -219,7 +219,7 @@ class OutputConfig(BaseModel):
     )
     auto_submit: bool = Field(
         default=False,
-        description="Keyboard mode only: press Enter to submit after typing",
+        description="Automatically submit each transcription (press Enter / send to agent). When off, text accumulates until manual submit via double-tap or trigger word.",
     )
     submit_keys: str = Field(
         default="enter",
@@ -969,7 +969,7 @@ def create_default_config() -> Path:
 [output]
 # mode = "agents"                 # agents (default, OpenVIP SSE) or keyboard (type into focused window)
 # typing_delay_ms = 2             # keyboard mode only: delay between characters (ms)
-# auto_submit = false              # keyboard mode only: press Enter after typing
+# auto_submit = false              # auto-send each transcription (default: accumulate)
 # submit_keys = "enter"           # keyboard mode only
 # newline_keys = "{newline_keys}" # keyboard mode only
 
