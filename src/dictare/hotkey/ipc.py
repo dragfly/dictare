@@ -42,12 +42,14 @@ class HotkeyIPCServer:
         on_key_down: Callable[[], None] | None = None,
         on_key_up: Callable[[], None] | None = None,
         on_other_key: Callable[[], None] | None = None,
+        on_combo: Callable[[], None] | None = None,
         socket_path: Path | None = None,
     ) -> None:
         self._on_tap = on_tap
         self._on_key_down = on_key_down
         self._on_key_up = on_key_up
         self._on_other_key = on_other_key
+        self._on_combo = on_combo
         self._socket_path = socket_path or DEFAULT_SOCKET_PATH
         self._server_sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
@@ -170,6 +172,12 @@ class HotkeyIPCServer:
                         self._on_other_key()
                 except Exception:
                     logger.exception("Hotkey IPC callback failed (other_key)")
+            elif msg_type == "key.combo":
+                try:
+                    if self._on_combo is not None:
+                        self._on_combo()
+                except Exception:
+                    logger.exception("Hotkey IPC callback failed (key.combo)")
             else:
                 logger.warning("Unknown hotkey IPC message type: %s", msg_type)
                 return

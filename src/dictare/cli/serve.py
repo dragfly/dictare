@@ -172,6 +172,7 @@ def _run_serve(
                     on_key_down=controller.on_hotkey_key_down,
                     on_key_up=controller.on_hotkey_key_up,
                     on_other_key=controller.on_hotkey_other_key,
+                    on_combo=controller.on_hotkey_combo,
                 )
                 hotkey_ipc.start()
                 _logger.info("Hotkey transport active: ipc+signal-fallback")
