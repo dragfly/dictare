@@ -200,6 +200,10 @@ class HotkeyConfig(BaseModel):
         default="",
         description="Keyboard device name for hotkey (empty = auto-detect)",
     )
+    mode_switch_modifier: str = Field(
+        default="",
+        description="Modifier key that, when held while tapping the hotkey, switches between agent and keyboard mode (e.g. KEY_RIGHTALT). Empty = disabled.",
+    )
 
 def _default_newline_keys() -> str:
     """Return platform-specific default for newline keys."""

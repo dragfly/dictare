@@ -442,6 +442,15 @@ class AppController:
             return
         self._engine._tap_detector.on_other_key()
 
+    def on_hotkey_combo(self) -> None:
+        """Called when the mode-switch combo is pressed (modifier + hotkey).
+
+        Toggles between agent mode and keyboard mode.
+        """
+        if not self._engine:
+            return
+        self._engine.toggle_mode()
+
     def next_agent(self) -> None:
         """Switch to next agent.
 
