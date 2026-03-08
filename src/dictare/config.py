@@ -555,6 +555,11 @@ class Config(BaseModel):
         description='Agent type presets. Set default = "claude" for default type. Names with dots must be quoted: [agent_types."sonnet-4.6"].',
     )
 
+    redact: list[list[str]] = Field(
+        default_factory=list,
+        description="Text redaction rules: list of [find, replace] pairs applied to terminal output",
+    )
+
     editor: str = Field(
         default="",
         description="Editor command for 'dictare config edit' (empty = $EDITOR or system default)",
