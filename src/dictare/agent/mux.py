@@ -706,7 +706,21 @@ def run_agent(
     rows, cols = _get_winsize()
     sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd()) if status_bar else None
 
+    # Load redact rules (list of [find, replace] byte pairs)
+    from dictare.config import load_config
+
+    _redact_rules: list[tuple[bytes, bytes]] = []
+    try:
+        _cfg = load_config()
+        for rule in _cfg.redact:
+            if len(rule) == 2:
+                _redact_rules.append((rule[0].encode(), rule[1].encode()))
+    except Exception:
+        pass
+
     def on_output(data: bytes) -> None:
+        for find, replace in _redact_rules:
+            data = data.replace(find, replace)
         os.write(sys.stdout.fileno(), data)
         if sbar:
             sbar.after_child_output()
