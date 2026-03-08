@@ -488,9 +488,9 @@ class DictareEngine:
 
     def _collect_pipeline_trigger_words(self) -> set[str]:
         """Extract unique trigger words from all pipeline filters."""
+        from dictare.pipeline.filters.agent_filter import AgentFilter
         from dictare.pipeline.filters.input_filter import InputFilter
         from dictare.pipeline.filters.mute_filter import MuteFilter
-        from dictare.pipeline.filters.agent_filter import AgentFilter
 
         words: set[str] = set()
         for step in self._pipeline._steps:
@@ -1065,6 +1065,11 @@ class DictareEngine:
     def set_output_mode(self, mode: str) -> None:
         """Switch output mode at runtime (keyboard <-> agents)."""
         self._agent_mgr.set_output_mode(mode)
+
+    def toggle_mode(self) -> None:
+        """Toggle between agent mode and keyboard mode."""
+        new_mode = "keyboard" if self.agent_mode else "agents"
+        self._agent_mgr.set_output_mode(new_mode)
 
     # -------------------------------------------------------------------------
     # Agent Control

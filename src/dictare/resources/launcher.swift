@@ -130,6 +130,20 @@ func resolveHotkeyKeyCode() -> Int64 {
     return 54
 }
 
+/// Resolve the mode_switch_modifier flag mask from config.toml.
+/// Returns nil if the feature is disabled (key missing or empty).
+func resolveModeSwitchModifier() -> CGEventFlags? {
+    let configPath = NSHomeDirectory() + "/.config/dictare/config.toml"
+    guard let keyName = readTomlString(path: configPath, section: "hotkey", key: "mode_switch_modifier"),
+          !keyName.isEmpty,
+          let code = evdevToKeyCode(keyName) else {
+        return nil
+    }
+    let mask = flagMaskForKeyCode(code)
+    fputs("Hotkey: mode_switch_modifier=\(keyName) keyCode=\(code)\n", stderr)
+    return mask
+}
+
 // ---------------------------------------------------------------------------
 // App Delegate — manages CGEventTap and child process
 // ---------------------------------------------------------------------------
@@ -146,6 +160,9 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     var hotkeyKeyCode: Int64 = 54
     var hotkeyFlagMask: CGEventFlags = .maskCommand
 
+    // Optional secondary modifier for mode switching (nil = disabled)
+    var modeSwitchFlagMask: CGEventFlags? = nil
+
     // Track whether key.down was sent via IPC so we send key.up the same way
     var keyDownSentViaIPC = false
     // Track whether the hotkey modifier is currently held down (for combo detection)
@@ -154,6 +171,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         hotkeyKeyCode = resolveHotkeyKeyCode()
         hotkeyFlagMask = flagMaskForKeyCode(hotkeyKeyCode)
+        modeSwitchFlagMask = resolveModeSwitchModifier()
         requestMicrophonePermission()
         writeAccessibilityStatus()
         spawnPythonEngine()
@@ -403,8 +421,14 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
 
         if keyIsDown {
             hotkeyIsDown = true
-            fputs("Hotkey: key DOWN (keyCode=\(keyCode))\n", stderr)
-            sendKeyDown()
+            // Check if the mode-switch modifier is held simultaneously
+            if let modMask = modeSwitchFlagMask, flags.contains(modMask) {
+                fputs("Hotkey: combo DOWN (keyCode=\(keyCode) + modifier)\n", stderr)
+                sendCombo()
+            } else {
+                fputs("Hotkey: key DOWN (keyCode=\(keyCode))\n", stderr)
+                sendKeyDown()
+            }
         } else {
             hotkeyIsDown = false
             fputs("Hotkey: key UP (keyCode=\(keyCode))\n", stderr)
@@ -477,6 +501,19 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             fputs("Hotkey: IPC other_key delivered (seq \(seq))\n", stderr)
         }
         // If IPC fails, no fallback needed — worst case is a false tap
+    }
+
+    /// Send key.combo to Python via IPC (mode-switch: modifier + hotkey tap).
+    /// Does not send key.down/key.up — the combo is treated as an atomic event.
+    func sendCombo() {
+        hotkeySeq += 1
+        let seq = hotkeySeq
+        keyDownSentViaIPC = false  // Skip key.up — combo is atomic
+        if sendIPCMessage(type: "key.combo", seq: seq) {
+            fputs("Hotkey: IPC key.combo delivered (seq \(seq))\n", stderr)
+        } else {
+            fputs("Hotkey: IPC key.combo failed (seq \(seq)) — no fallback\n", stderr)
+        }
     }
 
     /// Send a single IPC message to the Python engine and wait for ACK.

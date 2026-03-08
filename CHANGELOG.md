@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.139] - 2026-03-08
+
+### Added
+- `mode_switch_modifier` hotkey config: hold a secondary modifier (e.g. `KEY_RIGHTALT`) while tapping the hotkey to toggle between agent and keyboard mode
+- Swift launcher detects modifier+hotkey combo and sends `key.combo` IPC event
+- `on_hotkey_combo` in controller and `toggle_mode` in engine wired end-to-end
+
 ## [0.1.138] - 2026-03-07
 
 ### Changed
