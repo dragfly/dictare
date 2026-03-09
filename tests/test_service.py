@@ -60,15 +60,16 @@ class TestAppBundleCreate:
         app_path = create_app_bundle("/opt/brew/bin/python3.11")
         launcher = app_path / "Contents" / "MacOS" / APP_NAME
         assert launcher.stat().st_mode & stat.S_IEXEC
-        # python_path config file always written (used by both native and bash)
-        python_path_file = app_path / "Contents" / "MacOS" / "python_path"
+        # python_path written externally to ~/.dictare/python_path (not inside bundle)
+        python_path_file = Path.home() / ".dictare" / "python_path"
         assert python_path_file.read_text().strip() == "/opt/brew/bin/python3.11"
 
     def test_replaces_existing_bundle(self, tmp_path, monkeypatch):
         monkeypatch.setattr("dictare.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
         create_app_bundle("/usr/bin/python3")
         create_app_bundle("/other/python")
-        python_path_file = tmp_path / "Test.app" / "Contents" / "MacOS" / "python_path"
+        # python_path written externally, not inside bundle
+        python_path_file = Path.home() / ".dictare" / "python_path"
         assert python_path_file.read_text().strip() == "/other/python"
 
 
