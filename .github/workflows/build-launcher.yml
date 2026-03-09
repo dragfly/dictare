@@ -155,7 +155,7 @@ jobs:
       - name: Notarize
         run: |
           echo "$APPLE_NOTARIZATION_DICTARE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
-          ditto -c -k build/bundle/Dictare.app build/bundle/Dictare.app.zip
+          ditto -c -k --keepParent build/bundle/Dictare.app build/bundle/Dictare.app.zip
           xcrun notarytool submit build/bundle/Dictare.app.zip \
             --key "$RUNNER_TEMP/AuthKey.p8" \
             --key-id "$APPLE_NOTARIZATION_DICTARE_KEY_ID" \
@@ -174,14 +174,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ZIP="Dictare-launcher-universal.zip"
-          ditto -c -k build/bundle/Dictare.app "$ZIP"
+          # ditto -c -k on a directory zips its CONTENTS, losing the .app
+          # wrapper.  Use -keepParent to preserve the Dictare.app directory
+          # so extraction yields Dictare.app/Contents/... as expected.
+          ditto -c -k --keepParent build/bundle/Dictare.app "$ZIP"
           # Create or update the fixed "launcher" release.
           # First try to upload to existing release; if it doesn't exist, create it.
           if gh release view "launcher" &>/dev/null; then
             gh release upload "launcher" "$ZIP" --clobber
           else
             gh release create "launcher" "$ZIP" \
-              --title "Signed Launcher (Developer ID)" \
+              --title "Universal Dictare Launcher" \
               --notes "Pre-built signed + notarized Dictare.app bundle. Downloaded automatically by install.sh."
           fi
           echo "==> Uploaded $ZIP to 'launcher' release"
