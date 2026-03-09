@@ -22,7 +22,7 @@ Usage
     bus.subscribe("agents.changed", lambda agent_ids: print(agent_ids))
 
     # Publish events
-    bus.publish("agents.changed", agent_ids=["dictare", "koder"])
+    bus.publish("agents.changed", agent_ids=["dictare", "desktop"])
 
 Thread Safety
 -------------

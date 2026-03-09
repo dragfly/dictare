@@ -16,6 +16,7 @@ This backend provides:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import sys
@@ -24,6 +25,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from dictare.input.backends.base import DeviceBackend
+
+logger = logging.getLogger(__name__)
 
 # Karabiner config paths
 KARABINER_CONFIG_DIR = Path.home() / ".config" / "karabiner"
@@ -102,24 +105,21 @@ class KarabinerBackend(DeviceBackend):
             vendor_id = int(vendor_str, 16)
             product_id = int(product_str, 16)
         except (ValueError, AttributeError):
-            if self._verbose:
-                print(f"[karabiner] Invalid device_id: {device_id}")
+            logger.warning("Invalid device_id: %s", device_id)
             return False
 
         # Generate Karabiner config
         config_path = self._generate_config(vendor_id, product_id, bindings)
         if config_path:
-            if self._verbose:
-                print(f"[karabiner] Config written to: {config_path}")
-                print("[karabiner] Enable 'dictare' rules in Karabiner-Elements preferences")
+            logger.info("Config written to: %s", config_path)
+            logger.info("Enable 'dictare' rules in Karabiner-Elements preferences")
 
         # Start socket server
         if not self._start_socket_server():
             return False
 
         self._running = True
-        if self._verbose:
-            print(f"[karabiner] Listening on {_get_socket_path()}")
+        logger.info("Listening on %s", _get_socket_path())
 
         return True
 
@@ -209,8 +209,7 @@ class KarabinerBackend(DeviceBackend):
             self._socket.listen(1)
             self._socket.settimeout(0.5)  # For clean shutdown
         except Exception as e:
-            if self._verbose:
-                print(f"[karabiner] Socket error: {e}")
+            logger.error("Socket error: %s", e)
             return False
 
         self._thread = threading.Thread(target=self._socket_loop, daemon=True)
@@ -229,15 +228,14 @@ class KarabinerBackend(DeviceBackend):
                 conn.close()
 
                 if data and self._on_command:
-                    if self._verbose:
-                        print(f"[karabiner] Received: {data}")
+                    logger.debug("Received: %s", data)
                     self._on_command(data, {})
 
             except TimeoutError:
                 continue
             except Exception as e:
-                if self._running and self._verbose:
-                    print(f"[karabiner] Socket error: {e}")
+                if self._running:
+                    logger.error("Socket error: %s", e)
                 break
 
     def stop(self) -> None:

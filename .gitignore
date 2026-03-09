@@ -100,3 +100,13 @@ bench_validator.py
 # Proof-of-concept experiments (not for release)
 /experiments/
 .wrangler/
+
+# Environment files
+.env
+.env.*
+
+# Video assets (large, not for source control)
+/videos/
+
+# Build output (catch-all)
+/build/

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 import time
@@ -11,6 +12,8 @@ from typing import Any
 
 from dictare.input.base import InputCallback, InputEvent, InputSource
 from dictare.input.constants import HID_KEY_MAP
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class DeviceProfile:
@@ -85,31 +88,27 @@ class DeviceInputSource(InputSource):
         """Start listening to the device."""
         if sys.platform != "linux":
             # evdev only works on Linux
-            if self._verbose:
-                print(f"[device] {self._profile.name}: evdev not available on {sys.platform}")
+            logger.debug("%s: evdev not available on %s", self._profile.name, sys.platform)
             return False
 
         try:
             import evdev  # noqa: F401
         except ImportError:
-            if self._verbose:
-                print(f"[device] {self._profile.name}: evdev not installed")
+            logger.debug("%s: evdev not installed", self._profile.name)
             return False
 
         self._on_input = on_input
         self._device = self._find_device()
 
         if not self._device:
-            if self._verbose:
-                print(f"[device] {self._profile.name}: device not found")
+            logger.debug("%s: device not found", self._profile.name)
             return False
 
         if self._profile.grab_exclusive:
             try:
                 self._device.grab()
             except Exception as e:
-                if self._verbose:
-                    print(f"[device] {self._profile.name}: failed to grab: {e}")
+                logger.warning("%s: failed to grab: %s", self._profile.name, e)
 
         self._running = True
         self._stop_event.clear()
@@ -117,8 +116,7 @@ class DeviceInputSource(InputSource):
         self._thread = threading.Thread(target=self._listen_loop, daemon=True)
         self._thread.start()
 
-        if self._verbose:
-            print(f"[device] {self._profile.name}: started on {self._device.name}")
+        logger.info("%s: started on %s", self._profile.name, self._device.name)
 
         return True
 
@@ -164,8 +162,8 @@ class DeviceInputSource(InputSource):
                     self._last_command_time = now
                     self._emit_command(key_name, binding)
         except Exception as e:
-            if self._verbose and self._running:
-                print(f"[device] {self._profile.name}: error: {e}")
+            if self._running:
+                logger.error("%s: error: %s", self._profile.name, e)
 
     def _emit_command(self, key_name: str, binding: str | dict) -> None:
         """Emit command event from binding."""
@@ -176,8 +174,7 @@ class DeviceInputSource(InputSource):
             command = binding.get("command", "")
             args = binding.get("args", {})
 
-        if self._verbose:
-            print(f"[device] {self._profile.name}: {key_name} -> {command}")
+        logger.debug("%s: %s -> %s", self._profile.name, key_name, command)
 
         event = InputEvent(
             command=command,
@@ -232,8 +229,7 @@ class HIDDeviceInputSource(InputSource):
     def start(self, on_input: InputCallback) -> bool:
         """Start listening to the HID device."""
         if not self._profile.has_hid_ids:
-            if self._verbose:
-                print(f"[hid] {self._profile.name}: no vendor_id/product_id configured")
+            logger.debug("%s: no vendor_id/product_id configured", self._profile.name)
             return False
 
         # Try hid package first, then hidapi
@@ -246,8 +242,7 @@ class HIDDeviceInputSource(InputSource):
                 import hidapi
                 hid_module = hidapi
             except ImportError:
-                if self._verbose:
-                    print(f"[hid] {self._profile.name}: no HID package installed")
+                logger.debug("%s: no HID package installed", self._profile.name)
                 return False
 
         self._on_input = on_input
@@ -270,8 +265,7 @@ class HIDDeviceInputSource(InputSource):
                 manufacturer = self._device.manufacturer or "Unknown"
                 product = self._device.product or "Unknown"
         except Exception as e:
-            if self._verbose:
-                print(f"[hid] {self._profile.name}: failed to open: {e}")
+            logger.warning("%s: failed to open: %s", self._profile.name, e)
             return False
 
         self._running = True
@@ -280,8 +274,7 @@ class HIDDeviceInputSource(InputSource):
         self._thread = threading.Thread(target=self._listen_loop, daemon=True)
         self._thread.start()
 
-        if self._verbose:
-            print(f"[hid] {self._profile.name}: connected to {manufacturer} {product}")
+        logger.info("%s: connected to %s %s", self._profile.name, manufacturer, product)
 
         return True
 
@@ -299,8 +292,8 @@ class HIDDeviceInputSource(InputSource):
                 if data:
                     self._handle_report(list(data) if isinstance(data, bytes) else data)
             except Exception as e:
-                if self._verbose and self._running:
-                    print(f"[hid] {self._profile.name}: read error: {e}")
+                if self._running:
+                    logger.error("%s: read error: %s", self._profile.name, e)
                 break
 
     def _handle_report(self, data: list[int]) -> None:
@@ -338,8 +331,7 @@ class HIDDeviceInputSource(InputSource):
             command = binding.get("command", "")
             args = binding.get("args", {})
 
-        if self._verbose:
-            print(f"[hid] {self._profile.name}: {key_name} -> {command}")
+        logger.debug("%s: %s -> %s", self._profile.name, key_name, command)
 
         event = InputEvent(
             command=command,

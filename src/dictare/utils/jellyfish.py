@@ -45,9 +45,9 @@ def metaphone(word: str) -> str:
     Examples::
 
         >>> metaphone("koder")
-        'KNT'
+        'KTR'
         >>> metaphone("coder")
-        'KNT'
+        'KTR'
         >>> metaphone("python")
         'P0N'
     """
