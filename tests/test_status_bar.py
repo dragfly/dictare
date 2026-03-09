@@ -36,7 +36,7 @@ class TestFormatCwd:
         assert len(result) == 10
 
     def test_truncated_shows_tail_of_path(self) -> None:
-        path = Path.home() / "repos" / "personal" / "myproject"
+        path = Path.home() / "projects" / "myapp"
         full = "~/projects/myapp"
         result = _format_cwd(path, max_chars=15)
         assert result.startswith("\u2026")

@@ -9,6 +9,7 @@ For exclusive device access on macOS, use the Karabiner backend instead.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -16,6 +17,8 @@ from typing import Any
 
 from dictare.input.backends.base import DeviceBackend
 from dictare.input.constants import HID_KEY_MAP
+
+logger = logging.getLogger(__name__)
 
 class HIDAPIBackend(DeviceBackend):
     """Direct HID device access using hidapi.
@@ -105,8 +108,7 @@ class HIDAPIBackend(DeviceBackend):
             vendor_id = int(vendor_str, 16)
             product_id = int(product_str, 16)
         except (ValueError, AttributeError):
-            if self._verbose:
-                print(f"[hidapi] Invalid device_id: {device_id}")
+            logger.warning("Invalid device_id: %s", device_id)
             return False
 
         # Try hidapi package first, then hid
@@ -118,8 +120,7 @@ class HIDAPIBackend(DeviceBackend):
                 import hid
                 self._hid_module = hid
             except ImportError:
-                if self._verbose:
-                    print("[hidapi] No HID package installed")
+                logger.debug("No HID package installed")
                 return False
 
         self._bindings = bindings
@@ -139,8 +140,7 @@ class HIDAPIBackend(DeviceBackend):
                 manufacturer = self._device.get_manufacturer_string() or "Unknown"
                 product = self._device.get_product_string() or "Unknown"
         except Exception as e:
-            if self._verbose:
-                print(f"[hidapi] Failed to open device: {e}")
+            logger.warning("Failed to open device: %s", e)
             return False
 
         self._running = True
@@ -149,9 +149,8 @@ class HIDAPIBackend(DeviceBackend):
         self._thread = threading.Thread(target=self._listen_loop, daemon=True)
         self._thread.start()
 
-        if self._verbose:
-            print(f"[hidapi] Connected to {manufacturer} {product}")
-            print("[hidapi] WARNING: No device grab - keys also go to focused app")
+        logger.info("Connected to %s %s", manufacturer, product)
+        logger.warning("No device grab - keys also go to focused app")
 
         return True
 
@@ -167,8 +166,8 @@ class HIDAPIBackend(DeviceBackend):
                 if data:
                     self._handle_report(list(data) if isinstance(data, bytes) else data)
             except Exception as e:
-                if self._verbose and self._running:
-                    print(f"[hidapi] Read error: {e}")
+                if self._running:
+                    logger.error("Read error: %s", e)
                 break
 
     def _handle_report(self, data: list[int]) -> None:
@@ -189,8 +188,7 @@ class HIDAPIBackend(DeviceBackend):
             command = self._bindings.get(key_name)
             if command and self._on_command:
                 self._last_command_time = now
-                if self._verbose:
-                    print(f"[hidapi] {key_name} -> {command}")
+                logger.debug("%s -> %s", key_name, command)
                 self._on_command(command, {})
                 return
 

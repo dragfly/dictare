@@ -548,7 +548,7 @@ class TestPhoneticMatching:
     def test_phonetic_score_similar(self) -> None:
         """Similar sounding words have high phonetic score."""
         # These should have same metaphone
-        score = phonetic_score("koder", "quant")
+        score = phonetic_score("koder", "codor")
         assert score >= 0.7  # At least partial match
 
     def test_phonetic_score_different(self) -> None:
@@ -614,7 +614,7 @@ class TestAgentFilterDetection:
 
     def test_exact_match(self) -> None:
         """Exact agent name match produces two messages."""
-        f = AgentFilter(agent_ids=["dictare", "koder"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["dictare", "helper"], subscribe_to_events=False)
         msg = {"text": "fammi vedere il codice agent dictare"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
@@ -637,10 +637,10 @@ class TestAgentFilterDetection:
         assert len(result.messages) == 2
         assert result.messages[1]["x_agent_switch"]["target"] == "koder"
 
-    def test_phonetic_match_koder_quant(self) -> None:
-        """Phonetic match: 'quant' matches 'koder'."""
+    def test_phonetic_match_koder_codor(self) -> None:
+        """Phonetic match: 'codor' matches 'koder'."""
         f = AgentFilter(agent_ids=["koder", "dictare"], subscribe_to_events=False)
-        msg = {"text": "questo bug agent quant"}  # Heard as "quant"
+        msg = {"text": "questo bug agent codor"}  # Heard as "codor"
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert len(result.messages) == 2
@@ -680,11 +680,11 @@ class TestAgentFilterDetection:
 
     def test_best_match_selected(self) -> None:
         """Best matching agent is selected when multiple could match."""
-        f = AgentFilter(agent_ids=["koder", "quant-analysis"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["koder", "codex-analysis"], subscribe_to_events=False)
         msg = {"text": "agent coder"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
-        # koder should match better than quant-analysis
+        # koder should match better than codex-analysis
         # Only switch message (no text before trigger)
         assert len(result.messages) == 1
         assert result.messages[0]["x_agent_switch"]["target"] == "koder"
@@ -764,10 +764,10 @@ class TestAgentFilterEventBus:
 
         # Register agents via events
         bus.publish("agent.registered", agent_id="dictare")
-        bus.publish("agent.registered", agent_id="koder")
+        bus.publish("agent.registered", agent_id="helper")
 
         # Filter should have both agents
-        assert f.agent_ids == ["dictare", "koder"]
+        assert f.agent_ids == ["dictare", "helper"]
 
     def test_dynamic_agent_update(self) -> None:
         """Filter updates agent_ids when event is published."""
@@ -792,7 +792,7 @@ class TestAgentFilterEventBus:
 
         # Add agents
         bus.publish("agent.registered", agent_id="dictare")
-        bus.publish("agent.registered", agent_id="koder")
+        bus.publish("agent.registered", agent_id="helper")
 
         # Should match dictare
         msg = {"text": "agent dictare"}
@@ -806,8 +806,8 @@ class TestAgentFilterEventBus:
         result = f.process(msg)
         assert result.action == PipelineAction.PASS
 
-        # koder should still work
-        msg = {"text": "agent koder"}
+        # helper should still work
+        msg = {"text": "agent helper"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
 
