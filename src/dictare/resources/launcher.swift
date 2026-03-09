@@ -79,6 +79,11 @@ func readTomlString(path: String, section: String, key: String) -> String? {
         let lineKey = parts[0].trimmingCharacters(in: .whitespaces)
         guard lineKey == key else { continue }
         var value = parts[1...].joined(separator: "=").trimmingCharacters(in: .whitespaces)
+        // Strip inline comment (e.g. `key = "value"  # comment`)
+        // Only strip if the # is outside quotes
+        if value.hasPrefix("\""), let closeQuote = value.dropFirst().firstIndex(of: "\"") {
+            value = String(value[...closeQuote])
+        }
         // Strip surrounding quotes
         if value.hasPrefix("\"") && value.hasSuffix("\"") && value.count >= 2 {
             value = String(value.dropFirst().dropLast())
@@ -248,12 +253,25 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
 
     // --- Python engine ---
     func spawnPythonEngine() {
+        // python_path lookup order:
+        // 1. ~/.dictare/python_path  (external — survives signed bundle updates)
+        // 2. Contents/MacOS/python_path  (legacy — inside bundle, breaks signature)
+        let externalConfig = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".dictare/python_path")
         let binDir = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
-        let configFile = binDir.appendingPathComponent("python_path")
+        let bundleConfig = binDir.appendingPathComponent("python_path")
 
-        guard let pythonPath = try? String(contentsOf: configFile, encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines) else {
-            fputs("Error: cannot read \(configFile.path)\n", stderr)
+        var pythonPath: String? = nil
+        for configFile in [externalConfig, bundleConfig] {
+            if let content = try? String(contentsOf: configFile, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty {
+                pythonPath = content
+                fputs("python_path: \(configFile.path)\n", stderr)
+                break
+            }
+        }
+        guard let pythonPath = pythonPath else {
+            fputs("Error: cannot read python_path from ~/.dictare/ or bundle\n", stderr)
             NSApplication.shared.terminate(nil)
             return
         }

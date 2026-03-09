@@ -40,55 +40,87 @@ stop_services() {
 
 start_services() {
     echo "==> Starting service..."
-    # Always run service install after a version bump — it updates python_path
-    # inside Dictare.app (the Swift launcher reads it to find the new Cellar Python).
-    # service start alone leaves the old path pointing to the deleted Cellar dir.
-    # If a pre-built signed launcher exists in the Cellar, use it (stable TCC via
-    # Developer ID, no swiftc needed, no Gatekeeper warnings).
-    # Look for pre-built signed launcher:
-    #   1. Cellar (Homebrew formula resource)
-    #   2. Local build (./scripts/macos/sign-launcher.sh)
-    #   3. GitHub Release (download for this version)
-    PREBUILT=""
+    # The signed+notarized .app bundle is downloaded from GitHub Release and
+    # placed in ~/Applications/Dictare.app.  python_path is written externally
+    # to ~/.dictare/python_path so the signed bundle stays immutable.
+    #
+    # Lookup order for pre-built bundle:
+    #   1. Cellar (Homebrew formula resource — future)
+    #   2. Local build (./build/bundle/)
+    #   3. GitHub Release (download complete .app bundle)
+    APP_DEST="$HOME/Applications/Dictare.app"
+    BUNDLE_FOUND=""
+
+    # Check local pre-built bundle
     for candidate in \
-        "${BREW_PREFIX}/opt/dictare/libexec/launcher/Dictare" \
-        "${PROJECT_DIR}/build/launcher/Dictare"
+        "${BREW_PREFIX}/opt/dictare/libexec/bundle/Dictare.app" \
+        "${PROJECT_DIR}/build/bundle/Dictare.app"
     do
-        if [[ -f "$candidate" ]]; then
-            PREBUILT="$candidate"
+        if [[ -d "$candidate" ]]; then
+            echo "==> Using local pre-built bundle: $candidate"
+            mkdir -p "$HOME/Applications"
+            if [[ -d "$APP_DEST" ]]; then
+                rm -rf "$APP_DEST"
+            fi
+            cp -R "$candidate" "$APP_DEST"
+            xattr -dr com.apple.quarantine "$APP_DEST" 2>/dev/null || true
+            BUNDLE_FOUND="true"
             break
         fi
     done
 
-    # If no local launcher, try downloading from GitHub Release.
-    # The launcher binary is version-independent (same Swift code across versions),
-    # so we use a fixed "launcher" release tag updated only when launcher.swift changes.
-    if [[ -z "$PREBUILT" ]] && command -v gh &>/dev/null; then
-        echo "==> Checking GitHub Release for signed launcher..."
-        RELEASE_DIR="${PROJECT_DIR}/build/launcher"
+    # Download complete .app bundle from GitHub Release
+    if [[ -z "$BUNDLE_FOUND" ]] && command -v gh &>/dev/null; then
+        echo "==> Checking GitHub Release for signed bundle..."
+        RELEASE_DIR="${PROJECT_DIR}/build/bundle"
         mkdir -p "$RELEASE_DIR"
         RELEASE_ZIP="${RELEASE_DIR}/Dictare-launcher.zip"
         if gh release download "launcher" \
             --repo dragfly/dictare \
-            --pattern "Dictare-launcher-*-universal.zip" \
+            --pattern "Dictare-launcher-universal.zip" \
             --output "$RELEASE_ZIP" 2>/dev/null; then
+            # Extract .app bundle from zip
             ditto -x -k "$RELEASE_ZIP" "$RELEASE_DIR"
             rm -f "$RELEASE_ZIP"
-            if [[ -f "${RELEASE_DIR}/Dictare" ]]; then
-                PREBUILT="${RELEASE_DIR}/Dictare"
-                echo "==> Downloaded signed launcher from GitHub Release"
+            if [[ -d "${RELEASE_DIR}/Dictare.app" ]]; then
+                mkdir -p "$HOME/Applications"
+                if [[ -d "$APP_DEST" ]]; then
+                    rm -rf "$APP_DEST"
+                fi
+                cp -R "${RELEASE_DIR}/Dictare.app" "$APP_DEST"
+                xattr -dr com.apple.quarantine "$APP_DEST" 2>/dev/null || true
+                BUNDLE_FOUND="true"
+                echo "==> Downloaded signed bundle from GitHub Release"
             fi
         else
-            echo "==> No signed launcher in GitHub Release (compiling locally)"
+            echo "==> No signed bundle in GitHub Release"
         fi
     fi
 
-    if [[ -n "$PREBUILT" ]]; then
-        echo "==> Using pre-built signed launcher: $PREBUILT"
-        "${BREW_PREFIX}/bin/dictare" service install --prebuilt-launcher "$PREBUILT" 2>&1
-    else
-        "${BREW_PREFIX}/bin/dictare" service install 2>&1
+    # Fallback: check for pre-built binary only (legacy flow)
+    if [[ -z "$BUNDLE_FOUND" ]]; then
+        PREBUILT=""
+        for candidate in \
+            "${BREW_PREFIX}/opt/dictare/libexec/launcher/Dictare" \
+            "${PROJECT_DIR}/build/launcher/Dictare"
+        do
+            if [[ -f "$candidate" ]]; then
+                PREBUILT="$candidate"
+                xattr -d com.apple.quarantine "$PREBUILT" 2>/dev/null || true
+                break
+            fi
+        done
+        if [[ -n "$PREBUILT" ]]; then
+            echo "==> Using pre-built launcher binary (legacy): $PREBUILT"
+            "${BREW_PREFIX}/bin/dictare" service install --prebuilt-launcher "$PREBUILT" 2>&1
+            echo "==> Done."
+            return
+        fi
     fi
+
+    # service install writes ~/.dictare/python_path and creates launchd plist.
+    # When a signed bundle is already in ~/Applications, it skips bundle creation.
+    "${BREW_PREFIX}/bin/dictare" service install 2>&1
     echo "==> Done."
 }
 

@@ -75,37 +75,114 @@ jobs:
           DICTARE_SIGN_IDENTITY="Developer ID Application" \
             ./scripts/macos/sign-launcher.sh
 
-      # Notarize with App Store Connect API key
+      # Assemble the complete .app bundle (binary + Info.plist + icon)
+      # python_path is NOT inside the bundle — the launcher reads it from
+      # ~/.dictare/python_path at runtime, so the signed bundle stays immutable.
+      - name: Assemble .app bundle
+        run: |
+          VERSION=$(grep -E '^__version__' src/dictare/__init__.py | sed 's/.*"\(.*\)"/\1/')
+          BUNDLE="build/bundle/Dictare.app"
+          CONTENTS="$BUNDLE/Contents"
+          MACOS_DIR="$CONTENTS/MacOS"
+          RESOURCES_DIR="$CONTENTS/Resources"
+
+          mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+
+          # Binary
+          cp build/launcher/Dictare "$MACOS_DIR/Dictare"
+
+          # Info.plist
+          /usr/libexec/PlistBuddy -c "Clear dict" "$CONTENTS/Info.plist" 2>/dev/null || true
+          cat > "$CONTENTS/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key>
+            <string>Dictare</string>
+            <key>CFBundleDisplayName</key>
+            <string>Dictare</string>
+            <key>CFBundleIdentifier</key>
+            <string>dev.dragfly.dictare</string>
+            <key>CFBundleVersion</key>
+            <string>VERSION_PLACEHOLDER</string>
+            <key>CFBundleShortVersionString</key>
+            <string>VERSION_PLACEHOLDER</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleExecutable</key>
+            <string>Dictare</string>
+            <key>CFBundleIconFile</key>
+            <string>Dictare</string>
+            <key>LSUIElement</key>
+            <true/>
+            <key>NSMicrophoneUsageDescription</key>
+            <string>Dictare needs microphone access for voice-to-text.</string>
+            <key>NSInputMonitoringUsageDescription</key>
+            <string>Dictare uses Input Monitoring to detect the global Right ⌘ hotkey.</string>
+          </dict>
+          </plist>
+          PLIST
+          # Inject actual version
+          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" "$CONTENTS/Info.plist"
+
+          # Icon
+          cp src/dictare/resources/Dictare.icns "$RESOURCES_DIR/Dictare.icns"
+
+          # Launcher metadata (sealed inside the signed bundle)
+          HASH=$(shasum -a 256 src/dictare/resources/launcher.swift | cut -c1-16)
+          echo "$HASH" > "$MACOS_DIR/launcher_hash"
+          echo "true" > "$MACOS_DIR/launcher_signed"
+
+          echo "==> Bundle assembled: $BUNDLE (version $VERSION)"
+          ls -laR "$BUNDLE"
+
+      # Sign the complete .app bundle (not just the binary)
+      - name: Sign bundle
+        run: |
+          codesign --force --options runtime \
+            --entitlements src/dictare/resources/Dictare.entitlements \
+            --sign "Developer ID Application" \
+            build/bundle/Dictare.app
+          codesign --verify --strict build/bundle/Dictare.app
+          echo "==> Bundle signed and verified"
+
+      # Notarize the complete bundle
       - name: Notarize
         run: |
           echo "$APPLE_NOTARIZATION_DICTARE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
-          ditto -c -k build/launcher/Dictare build/launcher/Dictare.zip
-          xcrun notarytool submit build/launcher/Dictare.zip \
+          ditto -c -k build/bundle/Dictare.app build/bundle/Dictare.app.zip
+          xcrun notarytool submit build/bundle/Dictare.app.zip \
             --key "$RUNNER_TEMP/AuthKey.p8" \
             --key-id "$APPLE_NOTARIZATION_DICTARE_KEY_ID" \
             --issuer "$APPLE_NOTARIZATION_ISSUER_ID" \
             --wait --timeout 10m
 
-      # Create draft release + upload signed launcher (only on tag push)
-      - name: Create draft release
-        if: startsWith(github.ref, 'refs/tags/')
+      # Staple the notarization ticket to the bundle
+      - name: Staple
+        run: |
+          xcrun stapler staple build/bundle/Dictare.app
+          echo "==> Notarization ticket stapled"
+
+      # Upload to the fixed "launcher" release tag (version-independent)
+      - name: Upload to launcher release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          ZIP="Dictare-launcher-${VERSION}-universal.zip"
-          ditto -c -k build/launcher/Dictare "$ZIP"
-          # Create draft release (or upload to existing)
-          gh release create "$GITHUB_REF_NAME" "$ZIP" \
-            --draft \
-            --title "v${VERSION}" \
-            --generate-notes \
+          ZIP="Dictare-launcher-universal.zip"
+          ditto -c -k build/bundle/Dictare.app "$ZIP"
+          # Create or update the fixed "launcher" release
+          gh release create "launcher" "$ZIP" \
+            --title "Signed Launcher" \
+            --notes "Pre-built signed + notarized Dictare.app bundle. Downloaded automatically by install.sh." \
             2>/dev/null \
-          || gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
+          || gh release upload "launcher" "$ZIP" --clobber
+          echo "==> Uploaded $ZIP to 'launcher' release"
 
       # Upload as artifact (always, for manual builds)
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Dictare-launcher-universal
-          path: build/launcher/Dictare
+          path: build/bundle/Dictare.app
