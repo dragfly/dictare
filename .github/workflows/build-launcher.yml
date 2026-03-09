@@ -173,12 +173,15 @@ jobs:
         run: |
           ZIP="Dictare-launcher-universal.zip"
           ditto -c -k build/bundle/Dictare.app "$ZIP"
-          # Create or update the fixed "launcher" release
-          gh release create "launcher" "$ZIP" \
-            --title "Signed Launcher" \
-            --notes "Pre-built signed + notarized Dictare.app bundle. Downloaded automatically by install.sh." \
-            2>/dev/null \
-          || gh release upload "launcher" "$ZIP" --clobber
+          # Create or update the fixed "launcher" release.
+          # First try to upload to existing release; if it doesn't exist, create it.
+          if gh release view "launcher" &>/dev/null; then
+            gh release upload "launcher" "$ZIP" --clobber
+          else
+            gh release create "launcher" "$ZIP" \
+              --title "Signed Launcher (Developer ID)" \
+              --notes "Pre-built signed + notarized Dictare.app bundle. Downloaded automatically by install.sh."
+          fi
           echo "==> Uploaded $ZIP to 'launcher' release"
 
       # Upload as artifact (always, for manual builds)
