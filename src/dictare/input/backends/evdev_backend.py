@@ -10,6 +10,7 @@ Requirements:
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 import time
@@ -17,6 +18,8 @@ from collections.abc import Callable
 from typing import Any
 
 from dictare.input.backends.base import DeviceBackend
+
+logger = logging.getLogger(__name__)
 
 
 class EvdevBackend(DeviceBackend):
@@ -91,8 +94,7 @@ class EvdevBackend(DeviceBackend):
         try:
             import evdev
         except ImportError:
-            if self._verbose:
-                print("[evdev] evdev not installed")
+            logger.debug("evdev not installed")
             return False
 
         self._bindings = bindings
@@ -119,8 +121,7 @@ class EvdevBackend(DeviceBackend):
                 continue
 
         if not device:
-            if self._verbose:
-                print(f"[evdev] Device not found: {device_id}")
+            logger.debug("Device not found: %s", device_id)
             return False
 
         self._device = device
@@ -128,11 +129,9 @@ class EvdevBackend(DeviceBackend):
         # Grab device for exclusive access
         try:
             self._device.grab()
-            if self._verbose:
-                print(f"[evdev] Grabbed device: {device.name}")
+            logger.debug("Grabbed device: %s", device.name)
         except Exception as e:
-            if self._verbose:
-                print(f"[evdev] Failed to grab (continuing anyway): {e}")
+            logger.warning("Failed to grab (continuing anyway): %s", e)
 
         self._running = True
         self._stop_event.clear()
@@ -140,8 +139,7 @@ class EvdevBackend(DeviceBackend):
         self._thread = threading.Thread(target=self._listen_loop, daemon=True)
         self._thread.start()
 
-        if self._verbose:
-            print(f"[evdev] Listening on {device.name}")
+        logger.info("Listening on %s", device.name)
 
         return True
 
@@ -173,13 +171,12 @@ class EvdevBackend(DeviceBackend):
                 command = self._bindings.get(key_name)
                 if command and self._on_command:
                     self._last_command_time = now
-                    if self._verbose:
-                        print(f"[evdev] {key_name} -> {command}")
+                    logger.debug("%s -> %s", key_name, command)
                     self._on_command(command, {})
 
         except Exception as e:
-            if self._verbose and self._running:
-                print(f"[evdev] Error: {e}")
+            if self._running:
+                logger.error("Error: %s", e)
 
     def stop(self) -> None:
         """Stop listening."""
