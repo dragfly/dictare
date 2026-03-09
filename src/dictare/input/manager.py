@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from dictare.input.base import InputEvent, InputSource
 from dictare.input.device import DeviceInputSource, DeviceProfile, HIDDeviceInputSource
@@ -74,8 +77,7 @@ class InputManager:
         if bindings:
             source = KeyboardShortcutSource(bindings)
             self._sources.append(source)
-            if self._verbose:
-                print(f"[input] Loaded {len(bindings)} keyboard shortcuts")
+            logger.debug("Loaded %d keyboard shortcuts", len(bindings))
 
     def load_device_profiles(self, devices_dir: Path | None = None) -> None:
         """Load device profiles from directory.
@@ -109,16 +111,14 @@ class InputManager:
 
             if source:
                 self._sources.append(source)
-                if self._verbose:
-                    print(f"[input] Loaded device profile: {profile.name}")
+                logger.debug("Loaded device profile: %s", profile.name)
 
     def start(self) -> None:
         """Start all input sources."""
         for source in self._sources:
             success = source.start(self._handle_input)
-            if self._verbose:
-                status = "started" if success else "failed"
-                print(f"[input] {source.source_name}: {status}")
+            status = "started" if success else "failed"
+            logger.debug("%s: %s", source.source_name, status)
 
     def stop(self) -> None:
         """Stop all input sources."""
@@ -127,8 +127,7 @@ class InputManager:
 
     def _handle_input(self, event: InputEvent) -> None:
         """Handle input event from any source."""
-        if self._verbose:
-            print(f"[input] {event.source}: {event.command}")
+        logger.debug("%s: %s", event.source, event.command)
 
         # Try to execute as app command first
         success = self._app_commands.execute(event.command, event.args)
@@ -139,8 +138,8 @@ class InputManager:
         # Not an app command - route to target
         if self._on_target_command:
             self._on_target_command(event)
-        elif self._verbose:
-            print(f"[input] Unknown command: {event.command}")
+        else:
+            logger.debug("Unknown command: %s", event.command)
 
     @property
     def source_count(self) -> int:
