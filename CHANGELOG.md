@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140] - 2026-03-09
+
+### Changed
+- CI builds complete signed+notarized+stapled `.app` bundle (not just the binary)
+- `python_path` moved to `~/.dictare/python_path` — signed bundle stays immutable across brew upgrades
+- `install.sh` downloads and installs the complete `.app` bundle from GitHub Release
+- Swift launcher reads `python_path` from `~/.dictare/` first, falls back to bundle (backward compat)
+
 ## [0.1.139] - 2026-03-08
 
 ### Added
