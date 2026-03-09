@@ -72,8 +72,16 @@ def create_app_bundle(
     launcher_hash = _get_launcher_source_hash()
     if app_path.exists():
         existing_launcher = macos_dir / APP_NAME
-        existing_hash_file = macos_dir / "launcher_hash"
-        existing_signed = macos_dir / "launcher_signed"
+        # CI puts metadata in Resources/ (codesign requires MacOS/ to contain
+        # only signed Mach-O binaries).  Local builds use MacOS/ (legacy).
+        existing_hash_file = (
+            resources_dir / "launcher_hash" if (resources_dir / "launcher_hash").exists()
+            else macos_dir / "launcher_hash"
+        )
+        existing_signed = (
+            resources_dir / "launcher_signed" if (resources_dir / "launcher_signed").exists()
+            else macos_dir / "launcher_signed"
+        )
         if existing_launcher.exists():
             same_launcher = (
                 existing_hash_file.exists()
