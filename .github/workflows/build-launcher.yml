@@ -130,10 +130,11 @@ jobs:
           # Icon
           cp src/dictare/resources/Dictare.icns "$RESOURCES_DIR/Dictare.icns"
 
-          # Launcher metadata (sealed inside the signed bundle)
+          # Launcher metadata — stored in Resources/ (not MacOS/) because
+          # codesign requires all files in MacOS/ to be signed Mach-O binaries.
           HASH=$(shasum -a 256 src/dictare/resources/launcher.swift | cut -c1-16)
-          echo "$HASH" > "$MACOS_DIR/launcher_hash"
-          echo "true" > "$MACOS_DIR/launcher_signed"
+          echo "$HASH" > "$RESOURCES_DIR/launcher_hash"
+          echo "true" > "$RESOURCES_DIR/launcher_signed"
 
           echo "==> Bundle assembled: $BUNDLE (version $VERSION)"
           ls -laR "$BUNDLE"
