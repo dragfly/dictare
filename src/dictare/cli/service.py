@@ -50,7 +50,7 @@ def service_install(
 
     console.print("[dim]Installing service...[/]")
     try:
-        kwargs = {}
+        kwargs: dict[str, Path] = {}
         if prebuilt_launcher and sys.platform == "darwin":
             kwargs["prebuilt_launcher"] = Path(prebuilt_launcher)
         backend.install(**kwargs)
