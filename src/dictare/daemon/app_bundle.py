@@ -170,7 +170,11 @@ def _write_external_python_path(python_path: str) -> None:
     """
     config_dir = Path.home() / ".dictare"
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "python_path").write_text(python_path)
+    target = config_dir / "python_path"
+    # Remove first — macOS com.apple.provenance xattr on existing file
+    # can cause EPERM when a different process tries to overwrite it.
+    target.unlink(missing_ok=True)
+    target.write_text(python_path)
 
 
 def _install_prebuilt_launcher(prebuilt: Path, dest: Path) -> bool:
