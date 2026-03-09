@@ -64,22 +64,20 @@ def create_app_bundle(
     macos_dir = contents / "MacOS"
     resources_dir = contents / "Resources"
 
-    # Skip recreation if the bundle already exists with same Python path AND
-    # same launcher source.  Recreating the binary invalidates macOS TCC trust
-    # (Accessibility / Input Monitoring), forcing re-grant.
-    # Signed launchers (Developer ID) have stable TCC via Team ID — even
-    # replacing the binary preserves permissions across updates.
+    # Always write python_path externally — the signed bundle must not be
+    # modified (any change invalidates the code signature).
+    _write_external_python_path(python_path)
+
+    # Skip recreation if the bundle already exists with same launcher source.
+    # Recreating the binary invalidates macOS TCC trust (Accessibility / Input
+    # Monitoring), forcing re-grant.  Signed launchers (Developer ID) have
+    # stable TCC via Team ID — even replacing the binary preserves permissions.
     launcher_hash = _get_launcher_source_hash()
     if app_path.exists():
-        existing_python_file = macos_dir / "python_path"
         existing_launcher = macos_dir / APP_NAME
         existing_hash_file = macos_dir / "launcher_hash"
         existing_signed = macos_dir / "launcher_signed"
         if existing_launcher.exists():
-            same_python = (
-                existing_python_file.exists()
-                and existing_python_file.read_text().strip() == python_path
-            )
             same_launcher = (
                 existing_hash_file.exists()
                 and existing_hash_file.read_text().strip() == launcher_hash
@@ -87,19 +85,13 @@ def create_app_bundle(
             # If prebuilt provided but current launcher isn't signed, don't skip —
             # we want to upgrade from ad-hoc to Developer ID signed.
             upgrade_to_signed = prebuilt_launcher and not existing_signed.exists()
-            if same_python and same_launcher and not upgrade_to_signed:
+            if same_launcher and not upgrade_to_signed:
                 logger.debug("App bundle already up to date, skipping recreation")
-                return app_path
-            if same_launcher and not same_python and not upgrade_to_signed:
-                # Only python_path changed — update without recompiling
-                existing_python_file.write_text(python_path)
-                logger.debug("Updated python_path in existing bundle")
                 return app_path
             if existing_signed.exists() and not prebuilt_launcher:
                 # Signed launcher installed, no new prebuilt provided —
-                # keep existing signed binary, just update python_path.
-                existing_python_file.write_text(python_path)
-                logger.debug("Keeping existing signed launcher, updated python_path")
+                # keep existing signed binary, python_path is external.
+                logger.debug("Keeping existing signed launcher")
                 return app_path
             # Launcher source changed — must rebuild (TCC re-grant needed)
             logger.info("Launcher source changed — rebuilding app bundle")
@@ -134,9 +126,6 @@ def create_app_bundle(
     with open(plist_path, "wb") as f:
         plistlib.dump(info_plist, f)
 
-    # Write python_path config file (read by the native launcher)
-    (macos_dir / "python_path").write_text(python_path)
-
     # Install launcher binary.
     # Priority: pre-built signed binary → compile from source → bash fallback.
     launcher_path = macos_dir / APP_NAME
@@ -165,6 +154,17 @@ def remove_app_bundle() -> None:
             subprocess.run(["rm", "-rf", str(path)], check=False, capture_output=True)
 
 
+def _write_external_python_path(python_path: str) -> None:
+    """Write python_path to ~/.dictare/python_path (external to the bundle).
+
+    The Swift launcher reads from here first, so the signed .app bundle
+    remains immutable — no code signature invalidation on brew upgrades.
+    """
+    config_dir = Path.home() / ".dictare"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "python_path").write_text(python_path)
+
+
 def _install_prebuilt_launcher(prebuilt: Path, dest: Path) -> bool:
     """Install a pre-built signed launcher binary.
 
@@ -184,6 +184,12 @@ def _install_prebuilt_launcher(prebuilt: Path, dest: Path) -> bool:
         return False
     shutil.copy2(prebuilt, dest)
     dest.chmod(dest.stat().st_mode | stat.S_IEXEC)
+    # Remove quarantine — gh release download sets com.apple.quarantine on
+    # downloaded files. Without this, macOS shows "damaged" on first launch.
+    subprocess.run(
+        ["xattr", "-d", "com.apple.quarantine", str(dest)],
+        check=False, capture_output=True,
+    )
     return True
 
 
