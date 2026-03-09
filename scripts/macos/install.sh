@@ -79,9 +79,20 @@ start_services() {
             --repo dragfly/dictare \
             --pattern "Dictare-launcher-universal.zip" \
             --output "$RELEASE_ZIP" 2>/dev/null; then
-            # Extract .app bundle from zip
-            ditto -x -k "$RELEASE_ZIP" "$RELEASE_DIR"
+            # Extract .app bundle from zip.
+            # --keepParent zips yield Dictare.app/Contents/..., old zips
+            # yield Contents/... directly — handle both.
+            EXTRACT_DIR="${RELEASE_DIR}/extract"
+            mkdir -p "$EXTRACT_DIR"
+            ditto -x -k "$RELEASE_ZIP" "$EXTRACT_DIR"
             rm -f "$RELEASE_ZIP"
+            if [[ -d "${EXTRACT_DIR}/Dictare.app" ]]; then
+                mv "${EXTRACT_DIR}/Dictare.app" "${RELEASE_DIR}/Dictare.app"
+            elif [[ -d "${EXTRACT_DIR}/Contents" ]]; then
+                mkdir -p "${RELEASE_DIR}/Dictare.app"
+                mv "${EXTRACT_DIR}/Contents" "${RELEASE_DIR}/Dictare.app/Contents"
+            fi
+            rmdir "$EXTRACT_DIR" 2>/dev/null || true
             if [[ -d "${RELEASE_DIR}/Dictare.app" ]]; then
                 mkdir -p "$HOME/Applications"
                 if [[ -d "$APP_DEST" ]]; then
