@@ -15,9 +15,9 @@ import threading
 import time
 from pathlib import Path
 
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-
 from dictare import __version__
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 def _format_cwd(path: Path, max_chars: int = 25) -> str:
     """Format a directory path for the status bar.

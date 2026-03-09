@@ -493,6 +493,8 @@ class DictareEngine:
         from dictare.pipeline.filters.mute_filter import MuteFilter
 
         words: set[str] = set()
+        if self._pipeline is None:
+            return words
         for step in self._pipeline._steps:
             if isinstance(step, InputFilter):
                 for patterns in step.triggers.values():
