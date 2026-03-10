@@ -27,3 +27,67 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  update-tap:
+    name: Update Homebrew tap
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from source
+        id: version
+        run: |
+          VERSION=$(grep -E '^__version__' src/dictare/__init__.py | sed 's/.*"\(.*\)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for PyPI to index the package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          for i in $(seq 1 30); do
+            if curl -sf "https://pypi.org/pypi/dictare/${VERSION}/json" > /dev/null 2>&1; then
+              echo "Package available on PyPI"
+              break
+            fi
+            echo "Waiting for PyPI to index ${VERSION}... (attempt $i/30)"
+            sleep 10
+          done
+
+      - name: Get tarball URL and SHA256 from PyPI
+        id: pypi
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          JSON=$(curl -sf "https://pypi.org/pypi/dictare/${VERSION}/json")
+          URL=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); urls=[u for u in d['urls'] if u['filename'].endswith('.tar.gz')]; print(urls[0]['url'])")
+          SHA=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); urls=[u for u in d['urls'] if u['filename'].endswith('.tar.gz')]; print(urls[0]['digests']['sha256'])")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formula
+        uses: actions/checkout@v4
+        with:
+          repository: dragfly/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Write updated formula
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          URL="${{ steps.pypi.outputs.url }}"
+          SHA="${{ steps.pypi.outputs.sha256 }}"
+          FORMULA="homebrew-tap/Formula/dictare.rb"
+          sed -i \
+            -e "s|url \".*\"|url \"${URL}\"|" \
+            -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" \
+            -e "s|dictare#{extras}==[^\"]*\"|dictare#{extras}==${VERSION}\"|" \
+            -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
+            "$FORMULA"
+
+      - name: Push to tap
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/dictare.rb
+          git commit -m "chore: bump dictare to ${{ steps.version.outputs.version }}"
+          git push
