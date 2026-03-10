@@ -178,9 +178,16 @@ fi
     -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" \
     -e "s|dictare_tarball = \".*\"|dictare_tarball = \"${TARBALL}\"|" \
     -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
+    -e "s|dictare#{extras}==[^\"]*\"|dictare#{extras}==${VERSION}\"|" \
     "$FORMULA"
 
-# ---------- 5b. Inject local SDK if available (set by full-install.sh) ----------
+# ---------- 5b. Inject --find-links for local dist ----------
+"${SED_INPLACE[@]}" \
+    "/\"--prerelease=allow\"/a\\
+           \"--find-links\", \"${DIST_DIR}\"," \
+    "$FORMULA"
+
+# ---------- 5c. Inject local SDK if available (set by full-install.sh) ----------
 if [[ -n "${OPENVIP_SDK_DIST:-}" ]]; then
     echo "==> Injecting local SDK from ${OPENVIP_SDK_DIST}"
     "${SED_INPLACE[@]}" \
