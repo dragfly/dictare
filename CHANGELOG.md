@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc5] - 2026-03-10
+
+### Changed
+- CI: auto-update Homebrew tap after PyPI publish (deployment pipeline test)
+
 ## [0.1.140rc4] - 2026-03-10
 
 ### Changed
