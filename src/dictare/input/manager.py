@@ -8,11 +8,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
-
 from dictare.input.base import InputEvent, InputSource
 from dictare.input.device import DeviceInputSource, DeviceProfile, HIDDeviceInputSource
 from dictare.input.keyboard import KeyBinding, KeyboardShortcutSource
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from typing import Protocol
