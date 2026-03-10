@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc4] - 2026-03-10
+
+### Changed
+- UI: hide incomplete keyboard shortcuts feature (work in progress)
+
 ## [0.1.140rc3] - 2026-03-10
 
 ### Added
