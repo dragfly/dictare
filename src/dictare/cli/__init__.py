@@ -24,6 +24,7 @@ from dictare.cli import (
     setup,
     speak,
     status,
+    transcribe,
     tray,
 )
 from dictare.cli._helpers import console
@@ -47,6 +48,7 @@ app.add_typer(service.app, name="service")
 
 # Top-level commands (register pattern)
 speak.register(app)
+transcribe.register(app)
 agent.register(app)
 setup.register(app)
 status.register(app)
