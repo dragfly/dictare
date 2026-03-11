@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc10] - 2026-03-11
+
+### Changed
+- GitHub Actions pipeline testing — Infisical secrets integration
+
 ## [0.1.140rc8] - 2026-03-11
 
 ### Changed
