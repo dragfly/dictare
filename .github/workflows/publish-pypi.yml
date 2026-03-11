@@ -63,25 +63,91 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Update Homebrew formula
+      - name: Get launcher SHA256 from GitHub Release
+        id: launcher
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Download the launcher zip and compute its SHA256
+          gh release download "launcher" \
+            --pattern "Dictare-launcher-universal.zip" \
+            --output /tmp/launcher.zip
+          SHA=$(sha256sum /tmp/launcher.zip | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          rm -f /tmp/launcher.zip
+
+      - name: Checkout Homebrew tap
         uses: actions/checkout@v4
         with:
           repository: dragfly/homebrew-tap
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
           path: homebrew-tap
 
-      - name: Write updated formula
+      - name: Write formula
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          URL="${{ steps.pypi.outputs.url }}"
-          SHA="${{ steps.pypi.outputs.sha256 }}"
-          FORMULA="homebrew-tap/Formula/dictare.rb"
-          sed -i \
-            -e "s|url \".*\"|url \"${URL}\"|" \
-            -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" \
-            -e "s|dictare#{extras}==[^\"]*\"|dictare#{extras}==${VERSION}\"|" \
-            -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
-            "$FORMULA"
+          PYPI_URL="${{ steps.pypi.outputs.url }}"
+          PYPI_SHA="${{ steps.pypi.outputs.sha256 }}"
+          LAUNCHER_SHA="${{ steps.launcher.outputs.sha256 }}"
+
+          cat > homebrew-tap/Formula/dictare.rb << FORMULA
+          class Dictare < Formula
+            desc "Voice-first control for AI coding agents"
+            homepage "https://github.com/dragfly/dictare"
+            url "${PYPI_URL}"
+            sha256 "${PYPI_SHA}"
+            license "MIT"
+
+            depends_on "portaudio"
+            depends_on "uv"
+            depends_on :macos
+
+            resource "launcher" do
+              url "https://github.com/dragfly/dictare/releases/download/launcher/Dictare-launcher-universal.zip"
+              sha256 "${LAUNCHER_SHA}"
+            end
+
+            def install
+              extras = Hardware::CPU.arm? ? "[mlx]" : ""
+              dictare_pkg = "dictare#{extras}==${VERSION}"
+
+              ENV["UV_TOOL_DIR"] = (libexec/"uv-tools").to_s
+              ENV["UV_TOOL_BIN_DIR"] = (libexec/"bin").to_s
+              ENV["UV_PYTHON_INSTALL_DIR"] = (libexec/"uv-python").to_s
+
+              system "uv", "tool", "install",
+                     "--python", "3.11",
+                     "--prerelease=allow",
+                     dictare_pkg
+
+              bin.install_symlink (libexec/"bin/dictare") => "dictare"
+
+              # Install signed launcher bundle
+              resource("launcher").stage do
+                (libexec/"bundle").install "Dictare.app"
+              end
+            end
+
+            def caveats
+              <<~EOS
+                After install, start the service:
+
+                  dictare service install
+
+                On first launch, macOS will ask for Input Monitoring permission.
+                A system dialog will appear — click "Open System Settings" and
+                enable the toggle for Dictare. That's it.
+
+                If you installed on Apple Silicon, the MLX backend is included
+                for hardware-accelerated on-device speech recognition.
+              EOS
+            end
+
+            test do
+              assert_match "${VERSION}", shell_output("#{bin}/dictare --version")
+            end
+          end
+          FORMULA
 
       - name: Push to tap
         run: |

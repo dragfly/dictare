@@ -135,8 +135,17 @@ def create_app_bundle(
         plistlib.dump(info_plist, f)
 
     # Install launcher binary.
-    # Priority: pre-built signed binary → compile from source → bash fallback.
+    # Priority: Cellar bundle → pre-built binary → compile from source → bash fallback.
     launcher_path = macos_dir / APP_NAME
+
+    # Auto-detect signed bundle from Homebrew Cellar
+    if not prebuilt_launcher:
+        cellar_bundle = _find_cellar_bundle()
+        if cellar_bundle:
+            logger.info("Found signed bundle in Cellar: %s", cellar_bundle)
+            _install_cellar_bundle(cellar_bundle, app_path)
+            return app_path
+
     if prebuilt_launcher and _install_prebuilt_launcher(prebuilt_launcher, launcher_path):
         logger.info("Using pre-built signed launcher")
         (macos_dir / "launcher_signed").write_text("true")
@@ -175,6 +184,42 @@ def _write_external_python_path(python_path: str) -> None:
     # can cause EPERM when a different process tries to overwrite it.
     target.unlink(missing_ok=True)
     target.write_text(python_path)
+
+
+def _find_cellar_bundle() -> Path | None:
+    """Find a pre-built signed .app bundle installed by Homebrew.
+
+    When installed via `brew install`, the formula puts the bundle at
+    libexec/bundle/Dictare.app.  We find it by resolving the `dictare`
+    binary symlink back to the Cellar.
+    """
+    try:
+        dictare_bin = shutil.which("dictare")
+        if not dictare_bin:
+            return None
+        # /opt/homebrew/bin/dictare → .../libexec/bin/dictare
+        real_bin = Path(dictare_bin).resolve()
+        libexec = real_bin.parent.parent
+        candidate = libexec / "bundle" / f"{APP_NAME}.app"
+        if candidate.is_dir() and (candidate / "Contents" / "MacOS" / APP_NAME).exists():
+            return candidate
+    except Exception:
+        pass
+    return None
+
+
+def _install_cellar_bundle(src_bundle: Path, dest_bundle: Path) -> None:
+    """Copy a complete signed .app bundle from the Cellar to ~/Applications."""
+    if dest_bundle.exists():
+        subprocess.run(["rm", "-rf", str(dest_bundle)], check=False, capture_output=True)
+    dest_bundle.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src_bundle, dest_bundle, symlinks=True)
+    # Remove quarantine xattr
+    subprocess.run(
+        ["xattr", "-dr", "com.apple.quarantine", str(dest_bundle)],
+        check=False, capture_output=True,
+    )
+    logger.info("Installed signed bundle: %s → %s", src_bundle, dest_bundle)
 
 
 def _install_prebuilt_launcher(prebuilt: Path, dest: Path) -> bool:
