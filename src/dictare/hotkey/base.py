@@ -14,6 +14,7 @@ class HotkeyListener(ABC):
         on_press: Callable[[], None],
         on_release: Callable[[], None],
         on_other_key: Callable[[], None] | None = None,
+        on_combo: Callable[[], None] | None = None,
     ) -> None:
         """Start listening for hotkey events.
 
@@ -21,6 +22,7 @@ class HotkeyListener(ABC):
             on_press: Callback when hotkey is pressed.
             on_release: Callback when hotkey is released.
             on_other_key: Callback when any OTHER key is pressed (for combo detection).
+            on_combo: Callback when modifier + hotkey combo is pressed (mode switch).
         """
         pass
 

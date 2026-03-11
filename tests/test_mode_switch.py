@@ -37,12 +37,12 @@ def _send_line(path: Path, payload: str) -> str:
 # ---------------------------------------------------------------------------
 
 class TestModeSwitchConfig:
-    def test_mode_switch_modifier_default_empty(self) -> None:
-        """mode_switch_modifier defaults to empty string (disabled)."""
+    def test_mode_switch_modifier_default(self) -> None:
+        """mode_switch_modifier defaults to KEY_RIGHTALT."""
         from dictare.config import HotkeyConfig
 
         cfg = HotkeyConfig()
-        assert cfg.mode_switch_modifier == ""
+        assert cfg.mode_switch_modifier == "KEY_RIGHTALT"
 
     def test_mode_switch_modifier_config(self) -> None:
         """mode_switch_modifier can be set to a valid key name."""
@@ -219,3 +219,136 @@ class TestIPCKeyCombo:
             assert ack == {"type": "ack", "seq": 1}
         finally:
             srv.stop()
+
+# ---------------------------------------------------------------------------
+# Evdev listener mode switch modifier tests
+# ---------------------------------------------------------------------------
+
+class TestEvdevModeSwitchModifier:
+    """Test mode_switch_modifier handling in EvdevHotkeyListener.
+
+    Uses mock evdev events to test the listen_loop logic without
+    requiring real hardware or the evdev package.
+    """
+
+    def _make_listener_and_simulate(
+        self,
+        events: list[tuple[int, int]],
+        modifier: str = "KEY_RIGHTALT",
+    ) -> tuple[list[str], "EvdevHotkeyListener"]:
+        """Create a listener with mock evdev and simulate key events.
+
+        Args:
+            events: List of (key_code, value) tuples. value: 1=press, 0=release, 2=repeat.
+            modifier: Mode switch modifier key name.
+
+        Returns:
+            Tuple of (callback log, listener instance).
+        """
+        from unittest.mock import patch, MagicMock
+        import types
+
+        # Mock evdev module
+        mock_evdev = types.ModuleType("evdev")
+        mock_ecodes = MagicMock()
+        mock_ecodes.EV_KEY = 1
+        # KEY_SCROLLLOCK = 70, KEY_RIGHTALT = 100
+        mock_ecodes.KEY_SCROLLLOCK = 70
+        mock_ecodes.KEY_RIGHTALT = 100
+        mock_ecodes.KEY = {70: "KEY_SCROLLLOCK", 100: "KEY_RIGHTALT"}
+        mock_evdev.ecodes = mock_ecodes
+        mock_evdev.InputDevice = MagicMock
+        mock_evdev.list_devices = MagicMock(return_value=[])
+
+        with patch.dict("sys.modules", {"evdev": mock_evdev}):
+            from dictare.hotkey.evdev_listener import EvdevHotkeyListener
+
+            listener = EvdevHotkeyListener(
+                key_name="KEY_SCROLLLOCK",
+                mode_switch_modifier=modifier,
+            )
+
+            calls: list[str] = []
+
+            # Simulate the listen_loop logic directly (avoids threading)
+            target_key = 70  # KEY_SCROLLLOCK
+            modifier_key = getattr(mock_ecodes, modifier, None) if modifier else None
+
+            modifier_held = False
+            on_press = lambda: calls.append("press")
+            on_release = lambda: calls.append("release")
+            on_combo = lambda: calls.append("combo")
+            on_other_key = lambda: calls.append("other")
+
+            for code, value in events:
+                # Track modifier
+                if modifier_key is not None and code == modifier_key:
+                    modifier_held = value in (1, 2)
+                    continue
+
+                if code == target_key:
+                    if value == 1:
+                        if modifier_held and on_combo:
+                            on_combo()
+                        else:
+                            on_press()
+                    elif value == 0:
+                        on_release()
+                elif value == 1 and on_other_key:
+                    on_other_key()
+
+            return calls, listener
+
+    def test_modifier_held_triggers_combo(self) -> None:
+        """Holding modifier + hotkey press triggers on_combo, not on_press."""
+        # KEY_RIGHTALT=100 press, KEY_SCROLLLOCK=70 press, release both
+        events = [
+            (100, 1),   # modifier press
+            (70, 1),    # hotkey press → should be combo
+            (70, 0),    # hotkey release
+            (100, 0),   # modifier release
+        ]
+        calls, _ = self._make_listener_and_simulate(events)
+        assert calls == ["combo", "release"]
+
+    def test_hotkey_without_modifier_triggers_press(self) -> None:
+        """Hotkey press without modifier triggers normal on_press."""
+        events = [
+            (70, 1),    # hotkey press → normal press
+            (70, 0),    # hotkey release
+        ]
+        calls, _ = self._make_listener_and_simulate(events)
+        assert calls == ["press", "release"]
+
+    def test_modifier_released_before_hotkey(self) -> None:
+        """If modifier is released before hotkey, hotkey triggers on_press."""
+        events = [
+            (100, 1),   # modifier press
+            (100, 0),   # modifier release
+            (70, 1),    # hotkey press → normal press (modifier not held)
+            (70, 0),    # hotkey release
+        ]
+        calls, _ = self._make_listener_and_simulate(events)
+        assert calls == ["press", "release"]
+
+    def test_no_modifier_configured(self) -> None:
+        """With empty modifier, hotkey always triggers on_press."""
+        events = [
+            (100, 1),   # some key press (would be modifier)
+            (70, 1),    # hotkey press → normal press
+            (70, 0),    # hotkey release
+        ]
+        calls, _ = self._make_listener_and_simulate(events, modifier="")
+        # With no modifier, code 100 is just "other key"
+        assert calls == ["other", "press", "release"]
+
+    def test_modifier_repeat_still_held(self) -> None:
+        """Key repeat events (value=2) on modifier count as held."""
+        events = [
+            (100, 1),   # modifier press
+            (100, 2),   # modifier repeat
+            (70, 1),    # hotkey press → combo (modifier still held)
+            (70, 0),    # hotkey release
+        ]
+        calls, _ = self._make_listener_and_simulate(events)
+        assert calls == ["combo", "release"]

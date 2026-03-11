@@ -173,12 +173,22 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 else
     SED_INPLACE=(sed -i)
 fi
+# Replace formula url/sha256 with local tarball.
+# Use 2-space indent anchor to avoid replacing the launcher resource (4-space).
 "${SED_INPLACE[@]}" \
-    -e "s|url \".*\"|url \"file://${TARBALL}\"|" \
-    -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" \
+    -e "s|^  url \".*\"|  url \"file://${TARBALL}\"|" \
+    -e "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" \
     -e "s|dictare_tarball = \".*\"|dictare_tarball = \"${TARBALL}\"|" \
     -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
     -e "s|dictare#{extras}==[^\"]*\"|dictare#{extras}==${VERSION}\"|" \
+    "$FORMULA"
+
+# ---------- 5a. Strip launcher resource (private repo, can't download) ----------
+# The launcher is installed later by start_services via gh (which has auth).
+# Remove the resource block and its stage block from the local formula copy.
+"${SED_INPLACE[@]}" \
+    -e '/resource "launcher" do/,/^  end/d' \
+    -e '/resource("launcher").stage do/,/^    end/d' \
     "$FORMULA"
 
 # ---------- 5b. Inject --find-links for local dist ----------
@@ -201,6 +211,8 @@ stop_services
 
 # ---------- 7. Reinstall ----------
 echo "==> brew reinstall dictare..."
+# Clear uv cache so the same version gets rebuilt from the new sdist.
+uv cache clean dictare 2>/dev/null || true
 # Note: brew may exit 1 due to dylib linkage warnings (e.g. PyAV) — not fatal
 brew reinstall dictare 2>&1 || true
 
