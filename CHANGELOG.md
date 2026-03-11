@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc7] - 2026-03-11
+
+### Changed
+- Homebrew formula now includes signed launcher as resource (no external scripts needed)
+- `dictare service install` auto-detects launcher from Homebrew Cellar
+
 ## [0.1.140rc6] - 2026-03-11
 
 ### Added
