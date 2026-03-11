@@ -131,6 +131,10 @@ def register(app: typer.Typer) -> None:
             bool,
             typer.Option("--list-voices", help="List available voices for the current TTS engine"),
         ] = False,
+        verbose: Annotated[
+            bool,
+            typer.Option("--verbose", help="Echo spoken text to stderr (useful in pipes)"),
+        ] = False,
     ) -> None:
         """Speak text using text-to-speech via the running engine.
 
@@ -244,6 +248,8 @@ def register(app: typer.Typer) -> None:
                 kwargs["language"] = language
             if tts_config.voice:
                 kwargs["voice"] = tts_config.voice
+            if verbose:
+                print(f"[speak] {text}", file=sys.stderr)
             response = client.speak(text, **kwargs)
             if not quiet:
                 duration = response.duration_ms or "?"

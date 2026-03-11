@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc6] - 2026-03-11
+
+### Added
+- `dictare transcribe` command — registers as OpenVIP agent, prints transcriptions to stdout
+- Accumulate mode (default): buffers text, prints on submit, then exits (one-shot)
+- `--auto-submit` mode: prints each transcription immediately (Ctrl+C to stop)
+- `--verbose` / `-v` flag on `transcribe` and `speak` — echo text to stderr (useful in pipes)
+- Pipe-friendly: `dictare transcribe | llm | dictare speak`
+
 ## [0.1.140rc5] - 2026-03-10
 
 ### Changed
