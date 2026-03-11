@@ -20,6 +20,30 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Load secrets from Infisical
+        env:
+          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+        run: |
+          curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash
+          sudo apt-get install -y infisical
+          infisical export \
+            --domain "https://eu.infisical.com" \
+            --projectId "7d6c2573-e67b-4243-9911-0a9ddaed58b8" \
+            --path "/work/dictare/app/ci" \
+            --env prod \
+            --format json | \
+            jq -c '.[]' | while read -r item; do
+              key=$(echo "$item" | jq -r '.key')
+              value=$(echo "$item" | jq -r '.value')
+              while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "::add-mask::$line"
+              done <<< "$value"
+              EOF_MARKER="EOF_$(head -c 8 /dev/urandom | xxd -p)"
+              echo "$key<<$EOF_MARKER" >> "$GITHUB_ENV"
+              echo "$value" >> "$GITHUB_ENV"
+              echo "$EOF_MARKER" >> "$GITHUB_ENV"
+            done
+
       - name: Run Claude Code for PR Review
         timeout-minutes: 10
         uses: anthropics/claude-code-action@v1
@@ -28,7 +52,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           claude_args: "--model claude-sonnet-4-6"
           prompt: |
             Review this pull request for the dictare project.
