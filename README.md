@@ -6,8 +6,6 @@
 
 **Voice layer for AI coding agents.**
 
-Speak to your agent. No window focus required. 100% local.
-
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://python.org)
 
