@@ -13,6 +13,10 @@ import json
 import os
 import socket
 import uuid
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from dictare.hotkey.evdev_listener import EvdevHotkeyListener
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -241,7 +245,7 @@ class TestEvdevModeSwitchModifier:
         self,
         events: list[tuple[int, int]],
         modifier: str = "KEY_RIGHTALT",
-    ) -> tuple[list[str], "EvdevHotkeyListener"]:
+    ) -> tuple[list[str], EvdevHotkeyListener]:
         """Create a listener with mock evdev and simulate key events.
 
         Args:
@@ -251,8 +255,8 @@ class TestEvdevModeSwitchModifier:
         Returns:
             Tuple of (callback log, listener instance).
         """
-        from unittest.mock import patch, MagicMock
         import types
+        from unittest.mock import MagicMock, patch
 
         # Mock evdev module
         mock_evdev = types.ModuleType("evdev")
@@ -281,10 +285,17 @@ class TestEvdevModeSwitchModifier:
             modifier_key = getattr(mock_ecodes, modifier, None) if modifier else None
 
             modifier_held = False
-            on_press = lambda: calls.append("press")
-            on_release = lambda: calls.append("release")
-            on_combo = lambda: calls.append("combo")
-            on_other_key = lambda: calls.append("other")
+            def on_press():
+                calls.append("press")
+
+            def on_release():
+                calls.append("release")
+
+            def on_combo():
+                calls.append("combo")
+
+            def on_other_key():
+                calls.append("other")
 
             for code, value in events:
                 # Track modifier
