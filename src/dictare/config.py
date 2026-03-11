@@ -210,8 +210,8 @@ class HotkeyConfig(BaseModel):
         description="Keyboard device name for hotkey (empty = auto-detect)",
     )
     mode_switch_modifier: str = Field(
-        default="",
-        description="Modifier key that, when held while tapping the hotkey, switches between agent and keyboard mode (e.g. KEY_RIGHTALT). Empty = disabled.",
+        default="KEY_RIGHTALT",
+        description="Modifier key that, when held while tapping the hotkey, switches between agent and keyboard mode. Empty = disabled.",
     )
 
 
@@ -1014,6 +1014,7 @@ def create_default_config() -> Path:
 [hotkey]
 # key = "{hotkey}"                # {hotkey_comment} (toggle listening)
 # device = ""                     # Keyboard device (empty = auto-detect)
+mode_switch_modifier = "KEY_RIGHTALT"  # Hold + hotkey to switch agent/keyboard mode ("" = disabled)
 
 [output]
 # mode = "agents"                 # agents (default, OpenVIP SSE) or keyboard (type into focused window)

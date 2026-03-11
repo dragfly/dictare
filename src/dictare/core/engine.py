@@ -435,9 +435,11 @@ class DictareEngine:
                 # Get target device from config (if user specified one)
                 target_device = self.config.hotkey.device or None
 
+                modifier = self.config.hotkey.mode_switch_modifier
                 evdev_listener: HotkeyListener = EvdevHotkeyListener(
                     self.config.hotkey.key,
                     target_device=target_device,
+                    mode_switch_modifier=modifier,
                 )
 
                 # Check if key is available, suggest fallback if not
@@ -447,6 +449,7 @@ class DictareEngine:
                         evdev_listener = EvdevHotkeyListener(
                             fallback,
                             target_device=target_device,
+                            mode_switch_modifier=modifier,
                         )
 
                 return evdev_listener
@@ -1574,6 +1577,7 @@ class DictareEngine:
                 on_press=self._tap_detector.on_key_down,
                 on_release=self._tap_detector.on_key_up,
                 on_other_key=self._tap_detector.on_other_key,
+                on_combo=self.toggle_mode,
             )
 
         # Start audio streaming (always needed for VAD to work)

@@ -25,12 +25,15 @@ class EvdevHotkeyListener(HotkeyListener):
         self,
         key_name: str = "KEY_SCROLLLOCK",
         target_device: str | None = None,
+        mode_switch_modifier: str = "",
     ) -> None:
         """Initialize evdev hotkey listener.
 
         Args:
             key_name: evdev key name (e.g., KEY_SCROLLLOCK, KEY_F12).
             target_device: Device name substring to prefer (e.g., specific keyboard).
+            mode_switch_modifier: evdev key name for mode switch modifier
+                (e.g., KEY_RIGHTALT). Empty = disabled.
 
         Raises:
             ImportError: If evdev is not installed.
@@ -40,6 +43,7 @@ class EvdevHotkeyListener(HotkeyListener):
 
         self.key_name = key_name
         self.target_device = target_device
+        self._mode_switch_modifier = mode_switch_modifier
         self._running = False
         self._thread: threading.Thread | None = None
         self._device: evdev.InputDevice | None = None
@@ -148,6 +152,7 @@ class EvdevHotkeyListener(HotkeyListener):
         on_press: Callable[[], None],
         on_release: Callable[[], None],
         on_other_key: Callable[[], None] | None = None,
+        on_combo: Callable[[], None] | None = None,
     ) -> None:
         """Start listening for hotkey events.
 
@@ -155,6 +160,7 @@ class EvdevHotkeyListener(HotkeyListener):
             on_press: Callback when hotkey is pressed.
             on_release: Callback when hotkey is released.
             on_other_key: Callback when any OTHER key is pressed (for combo detection).
+            on_combo: Callback when modifier + hotkey combo is pressed (mode switch).
         """
         import evdev
 
@@ -166,6 +172,21 @@ class EvdevHotkeyListener(HotkeyListener):
         self._stop_event.clear()
         self._on_other_key = on_other_key
 
+        # Resolve modifier key code (if configured)
+        modifier_key: int | None = None
+        if self._mode_switch_modifier and on_combo:
+            modifier_key = getattr(evdev.ecodes, self._mode_switch_modifier, None)
+            if modifier_key is not None:
+                logger.info(
+                    "Evdev mode_switch_modifier=%s (code=%d)",
+                    self._mode_switch_modifier, modifier_key,
+                )
+            else:
+                logger.warning(
+                    "Unknown mode_switch_modifier key: %s — disabled",
+                    self._mode_switch_modifier,
+                )
+
         logger.info(
             "Evdev hotkey started: key=%s, device=%s (%s)",
             self.key_name, self._device.path, self._device.name,
@@ -173,6 +194,7 @@ class EvdevHotkeyListener(HotkeyListener):
 
         def listen_loop() -> None:
             assert self._device is not None
+            modifier_held = False
             try:
                 logger.debug("Evdev read_loop starting on %s", self._device.path)
                 for event in self._device.read_loop():
@@ -189,9 +211,17 @@ class EvdevHotkeyListener(HotkeyListener):
                                 cap.set()
                             continue
 
+                        # Track modifier key state
+                        if modifier_key is not None and event.code == modifier_key:
+                            modifier_held = event.value in (1, 2)  # pressed or repeat
+                            continue
+
                         if event.code == target_key:
                             if event.value == 1:  # Key pressed
-                                on_press()
+                                if modifier_held and on_combo:
+                                    on_combo()
+                                else:
+                                    on_press()
                             elif event.value == 0:  # Key released
                                 on_release()
                             # value == 2 is key repeat, ignored

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc11] - 2026-03-11
+
+### Added
+- Linux mode switch modifier: hold KEY_RIGHTALT + hotkey to toggle agent/keyboard mode (parity with macOS)
+- `mode_switch_modifier = "KEY_RIGHTALT"` enabled by default in new config.toml
+
+### Fixed
+- Homebrew install: local dev script no longer breaks on private repo (strips launcher resource, uses gh auth)
+- Homebrew install: sed no longer overwrites launcher resource URL
+- Homebrew install: `uv cache clean` before reinstall (no version bump needed for local changes)
+
+### Changed
+- UI: improved dark mode input/select border visibility (28% vs 10% lightness)
+
 ## [0.1.140rc10] - 2026-03-11
 
 ### Changed
