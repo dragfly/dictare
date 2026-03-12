@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc12] - 2026-03-12
+
+### Changed
+- Refined agent CLI logging: banner moved to log file, removed `--quiet`, session truncation 50→20 chars
+- Agent logs: `~/.local/share/dictare/logs/agent.{name}.jsonl` (via `dictare logs --name agent.{name}`)
+- Improved test suite performance (10.4s → 5.8s): configurable timeouts in IPC server, responsive poll loop shutdown
+- Fixed tray test that mocked unused `subscribe_status` instead of `get_status`
+- Added pipeline ordering tests (mute → agent → submit)
+
 ## [0.1.140rc11] - 2026-03-11
 
 ### Added
