@@ -50,13 +50,9 @@ def register(app: typer.Typer) -> None:
             str | None,
             typer.Argument(help="Agent session name — identifies this instance (e.g., 'frontend', 'Pippo')"),
         ] = None,
-        quiet: Annotated[
-            bool,
-            typer.Option("--quiet", "-q", help="Suppress info messages"),
-        ] = False,
         verbose: Annotated[
             bool,
-            typer.Option("--verbose", "-v", help="Log full text in session file (not truncated)"),
+            typer.Option("--verbose", "-v", help="Verbose agent logging and full text in session file"),
         ] = False,
         server: Annotated[
             str | None,
@@ -107,9 +103,6 @@ def register(app: typer.Typer) -> None:
             if arg in ("--verbose", "-v"):
                 verbose = True
                 own_flags_to_remove.add(i)
-            elif arg in ("--quiet", "-q"):
-                quiet = True
-                own_flags_to_remove.add(i)
             elif arg == "--no-status-bar":
                 show_status_bar = False
                 own_flags_to_remove.add(i)
@@ -139,7 +132,7 @@ def register(app: typer.Typer) -> None:
             unknown_flags = [a for a in command_override if a.startswith("-")]
             if unknown_flags:
                 console.print(f"[red]Error: unrecognized option(s): {' '.join(unknown_flags)}[/]")
-                console.print("[dim]dictare agent options: --type/-t <type>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose, --quiet, --no-status-bar[/]")
+                console.print("[dim]dictare agent options: --type/-t <type>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose, --no-status-bar[/]")
                 console.print("[dim]To pass flags to the agent command:  dictare agent <name> -- <command> [flags][/]")
                 raise typer.Exit(1)
 
@@ -192,8 +185,7 @@ def register(app: typer.Typer) -> None:
 
         # Try to auto-start the engine if not reachable.
         if not _check_engine(server):
-            if not quiet:
-                console.print("[dim]Engine not running, starting service...[/]")
+            console.print("[dim]Engine not running, starting service...[/]")
             _try_start_service()
             # Wait up to 10s for engine to become reachable
             import time
@@ -216,7 +208,7 @@ def register(app: typer.Typer) -> None:
             agent_label = type_key
 
         exit_code = run_agent(
-            agent_id, command, quiet=quiet, verbose=verbose,
+            agent_id, command, verbose=verbose,
             base_url=server, status_bar=show_status_bar,
             clear_on_start=config.client.clear_on_start,
             claim_key=config.client.claim_key,
