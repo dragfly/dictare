@@ -43,6 +43,7 @@ class HotkeyIPCServer:
         on_other_key: Callable[[], None] | None = None,
         on_combo: Callable[[], None] | None = None,
         socket_path: Path | None = None,
+        accept_timeout: float = 0.5,
     ) -> None:
         self._on_tap = on_tap
         self._on_key_down = on_key_down
@@ -50,6 +51,7 @@ class HotkeyIPCServer:
         self._on_other_key = on_other_key
         self._on_combo = on_combo
         self._socket_path = socket_path or DEFAULT_SOCKET_PATH
+        self._accept_timeout = accept_timeout
         self._server_sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._running = threading.Event()
@@ -80,7 +82,7 @@ class HotkeyIPCServer:
         server.bind(str(self._socket_path))
         os.chmod(self._socket_path, 0o600)
         server.listen(16)
-        server.settimeout(0.5)
+        server.settimeout(self._accept_timeout)
         self._server_sock = server
 
         self._running.set()

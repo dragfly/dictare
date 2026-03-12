@@ -175,6 +175,7 @@ class TestIPCKeyCombo:
             on_tap=lambda: calls.append("tap"),
             on_combo=lambda: calls.append("combo"),
             socket_path=path,
+            accept_timeout=0.01,
         )
         srv.start()
         try:
@@ -194,6 +195,7 @@ class TestIPCKeyCombo:
             on_tap=lambda: None,
             on_combo=None,
             socket_path=path,
+            accept_timeout=0.01,
         )
         srv.start()
         try:
@@ -214,6 +216,7 @@ class TestIPCKeyCombo:
             on_key_down=lambda: calls.append("down"),
             on_combo=lambda: calls.append("combo"),
             socket_path=path,
+            accept_timeout=0.01,
         )
         srv.start()
         try:

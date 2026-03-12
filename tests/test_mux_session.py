@@ -273,14 +273,14 @@ class TestRunAgentPreFlight:
         """If the engine is not running, return exit code 1 without spawning."""
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.get_status.side_effect = ConnectionRefusedError
-            code = run_agent("claude", ["echo", "hi"], quiet=True)
+            code = run_agent("claude", ["echo", "hi"], status_bar=False)
         assert code == 1
 
     def test_duplicate_agent_returns_1(self) -> None:
         """If an agent with the same name is already connected, return 1."""
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.get_status.return_value = _make_status(["claude"])
-            code = run_agent("claude", ["echo", "hi"], quiet=True)
+            code = run_agent("claude", ["echo", "hi"], status_bar=False)
         assert code == 1
 
     def test_different_agent_name_passes_preflight(self) -> None:
@@ -292,7 +292,7 @@ class TestRunAgentPreFlight:
             try:
                 run_agent(
                     "claude", ["__nonexistent_cmd__"],
-                    quiet=True, status_bar=False, clear_on_start=False,
+                    status_bar=False, clear_on_start=False,
                 )
             except (FileNotFoundError, OSError):
                 pass  # expected: command not found after pre-flight passed
@@ -304,7 +304,7 @@ class TestRunAgentPreFlight:
             try:
                 run_agent(
                     "claude", ["__nonexistent_cmd__"],
-                    quiet=True, status_bar=False, clear_on_start=False,
+                    status_bar=False, clear_on_start=False,
                 )
             except (FileNotFoundError, OSError):
                 pass  # expected: command not found after pre-flight passed
