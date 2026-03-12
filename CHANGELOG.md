@@ -7,31 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc13] - 2026-03-12
+
+### Fixed
+- Improved status bar stability for Codex and Gemini CLI
+- Status bar no longer disappears at Codex startup or after interactions
+- Eliminated spinner line accumulation and duplicate content in Gemini CLI
+- Homebrew install script reliability improvements
+
+### Changed
+- Improved status bar redraw strategy for better compatibility across agent CLIs
+- Gemini CLI: corrected `continue_args` to `["--resume", "latest"]`, added `--yolo` support
+- Added Aider to default agent types
+
 ## [0.1.140rc12] - 2026-03-12
 
 ### Fixed
 - Agent switch to already-current agent no longer triggers TTS announcement
 
 ### Changed
-- Refined agent CLI logging: banner moved to log file, removed `--quiet`, session truncation 50→20 chars
-- Agent logs: `~/.local/share/dictare/logs/agent.{name}.jsonl` (via `dictare logs --name agent.{name}`)
-- Improved test suite performance (10.4s → 5.8s): configurable timeouts in IPC server, responsive poll loop shutdown
-- Fixed tray test that mocked unused `subscribe_status` instead of `get_status`
-- Added pipeline ordering tests (mute → agent → submit)
+- Cleaner agent CLI logging (banner moved to log file, removed `--quiet`)
+- Agent logs available via `dictare logs --name agent.{name}`
+- Improved test suite performance and coverage
 
 ## [0.1.140rc11] - 2026-03-11
 
 ### Added
-- Linux mode switch modifier: hold KEY_RIGHTALT + hotkey to toggle agent/keyboard mode (parity with macOS)
-- `mode_switch_modifier = "KEY_RIGHTALT"` enabled by default in new config.toml
+- Linux mode switch modifier: hold Right Alt + hotkey to toggle agent/keyboard mode (parity with macOS)
 
 ### Fixed
-- Homebrew install: local dev script no longer breaks on private repo (strips launcher resource, uses gh auth)
-- Homebrew install: sed no longer overwrites launcher resource URL
-- Homebrew install: `uv cache clean` before reinstall (no version bump needed for local changes)
+- Homebrew install script reliability improvements
 
 ### Changed
-- UI: improved dark mode input/select border visibility (28% vs 10% lightness)
+- UI: improved dark mode input/select border visibility
 
 ## [0.1.140rc10] - 2026-03-11
 
@@ -85,9 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.139] - 2026-03-08
 
 ### Added
-- `mode_switch_modifier` hotkey config: hold a secondary modifier (e.g. `KEY_RIGHTALT`) while tapping the hotkey to toggle between agent and keyboard mode
-- Swift launcher detects modifier+hotkey combo and sends `key.combo` IPC event
-- `on_hotkey_combo` in controller and `toggle_mode` in engine wired end-to-end
+- Mode switch modifier: hold a secondary key while tapping the hotkey to toggle between agent and keyboard mode
 
 ## [0.1.138] - 2026-03-07
 
@@ -99,33 +105,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.137] - 2026-03-06
 
 ### Changed
-- Agent session summary now shows the same detailed stats as `dictare serve` (two-column layout with timing breakdown, effective WPM, time saved, lifetime stats)
-
-### Added
-- `transcription_seconds` and `injection_seconds` exposed in `/status` API stats
+- Agent session summary now shows detailed stats (timing breakdown, effective WPM, time saved, lifetime stats)
 
 
 ## [0.1.136] - 2026-03-06
 
 ### Added
-- Auto-populate STT hotwords from pipeline trigger words (submit, mute, agent filters)
+- Auto-populate STT hotwords from pipeline trigger words for better recognition
 
 ### Fixed
-- `PROJECT_DIR` path in all scripts after reorganization to subdirectories
-- CI notarization timeout (10 min) to prevent runner hanging indefinitely
-- Legacy TCC permissions reset (`com.dragfly.dictare`) in `reset-permissions.sh`
+- Script paths after reorganization
+- CI notarization timeout
 
 
 ## [0.1.135] - 2026-03-06
 
 ### Changed
-- Bundle ID renamed from `com.dragfly.dictare` to `dev.dragfly.dictare`
+- Bundle ID renamed to `dev.dragfly.dictare`
 
 ### Added
-- Pre-built signed launcher support: `--prebuilt-launcher` option in `service install`
-- `scripts/sign-launcher.sh` for building, signing, and notarizing the Swift launcher
-- GitHub Actions workflow for automated launcher signing and notarization
-- Hardened Runtime entitlements for microphone access
+- Signed and notarized macOS launcher (automated CI pipeline)
+- Pre-built launcher support in `service install`
 
 ## [0.1.134] - 2026-03-05
 
@@ -140,39 +140,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.132] - 2026-03-05
 
 ### Fixed
-- Double-tap submit deferred when VAD detects active speech, preventing premature submit during transcription gaps
-- Status bar and tray show "recording" state when VAD detects speech
-- SSE push for RECORDING state transition (was missing `on_state_change` callback)
-- Audio reconnect retry delay reduced from 30s to 3s for faster recovery after sleep/wake
-- Focus event triggers immediate audio reconnect when stream is dead (eliminates 15s+ delay)
-- Added reconnect lock to prevent concurrent reconnect attempts
+- Double-tap submit now waits for speech to finish before sending
+- Status bar and tray show "recording" state during active speech
+- Faster audio recovery after sleep/wake (~3s instead of 15s+)
 
 ## [0.1.130] - 2026-03-05
 
 ### Fixed
-- Tray app now shows "Muted" state correctly (was showing "Off")
-- Mute filter TOML section visible in Settings UI (was empty)
-- Centralized valid display states in `status.py` to prevent missing-state bugs
+- Tray app now shows "Muted" state correctly
+- Mute filter settings visible in Settings UI
 
 ## [0.1.129] - 2026-03-05
 
 ### Added
 - Voice mute/unmute commands: "OK mute" silences voice input, "OK listen" resumes
-- MuteFilter pipeline filter with configurable triggers and language support
-- MuteExecutor pipeline executor for mute/unmute actions
-- TTS feedback phrases on mute/unmute (random selection, pre-cached at startup)
-- `play` parameter on say/espeak TTS engines for cache-only generation
-- TTS precache support in TTSManager (background daemon thread)
+- TTS feedback phrases on mute/unmute
+- TTS precache for instant playback
 
 ### Changed
-- Renamed API state "idle" to "off" (AppState.OFF)
-- Voice-muted state reported as "muted" in status API (engine stays in LISTENING)
-- Extracted shared pattern matching to `pipeline/filters/_text.py` (reused by InputFilter and MuteFilter)
+- API state "idle" renamed to "off"
+- Voice-muted state reported as "muted" in status API
 
 ## [0.1.128] - 2026-03-05
 
 ### Changed
-- Double-tap during recording/transcription now defers submit until transcription completes, attaching submit to the transcribed message instead of sending an empty one
+- Double-tap during recording now waits for transcription to complete before submitting
 
 ## [0.1.127] - 2026-03-04
 
@@ -198,21 +190,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.124] - 2026-03-04
 
 ### Fixed
-- Audio recovery after Mac sleep/wake — detect system wake via NSWorkspaceDidWakeNotification, retry when audio object is dead
-- `dictare speak stop` no longer crashes with ValidationError when no TTS is playing (OpenVIP-compliant response)
-- Favicon now shows the actual Dictare icon (green microphone) instead of generic placeholder
+- Audio recovery after Mac sleep/wake
+- `dictare speak stop` no longer crashes when no TTS is playing
+- Favicon now shows the actual Dictare icon
 
 ## [0.1.123] - 2026-03-04
 
 ### Fixed
-- Focus-gated sounds (transcribed, submit) now survive engine restart — focus state persisted in session-state.json
-- Partial sound config in TOML no longer loses `focus_gated=true` default (config merge over defaults)
-- SSE connection exhaustion from multiple browser tabs — client-side tab takeover + server-side cap at 5 streams
-- EngineStatusBar: "disconnected" only shown after 3 consecutive poll failures from hidden state
+- Focus-gated sounds survive engine restart
+- Sound config defaults preserved when partially configured
+- Multiple browser tabs no longer exhaust SSE connections
 
 ### Changed
-- Submit sound simplified: single typewriter-burst (focus-gated), decoupled from carriage-return
-- Duplicate settings tabs show "Settings moved to another tab" instead of opening new SSE connections
+- Submit sound simplified to single typewriter burst
+- Only one Settings tab active at a time
 
 ## [0.1.122] - 2026-03-04
 
@@ -227,28 +218,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.121] - 2026-03-04
 
 ### Fixed
-- Audio device dropdowns now update live when macOS devices change (PortAudio cache invalidation)
-- Instant-save for audio device dropdowns (frontend was not compiled in v0.1.120)
-- SSE device list updates work on all settings tabs, not just Dashboard
-- Optimistic UI update when switching audio device from dropdown
-
-### Changed
-- PortAudio reinit on every device change reason (ensures fresh `sd.query_devices()` data for SSE push)
-- Extracted `_restart_input_stream()` from `reset_audio_input()` for reuse in device change handler
+- Audio device dropdowns now update live when devices change
+- Instant-save for audio device selection
+- Device list updates work across all settings tabs
 
 ## [0.1.120] - 2026-03-04
 
 ### Added
-- Audio device monitoring: detect add/remove events and default device changes (macOS CoreAudio + Linux polling)
-- Smart device change policy: auto-reset when using defaults, auto-fallback when fixed device disappears
-- `POST /api/audio/device` endpoint for instant audio device switching (no engine restart)
-- Device lists in SSE status push — UI dropdowns update live when devices change
-- Instant save for audio device dropdowns (no SaveBar, no engine restart needed)
-- UI cache-control middleware: immutable assets cached forever, index.html never cached (fixes stale UI after upgrade)
+- Live audio device monitoring: detect add/remove and default device changes
+- Instant audio device switching from Settings UI (no engine restart)
+- UI auto-updates when devices change
 
 ### Changed
-- DeviceMonitor callback now includes reason string (`default_input_changed`, `default_output_changed`, `devices_changed`)
-- macOS CoreAudio monitor listens for 3 properties (input default, output default, device list) instead of 1
+- UI assets properly cached (fixes stale UI after upgrade)
 
 ## [0.1.119] - 2026-03-04
 
@@ -258,34 +240,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.118] - 2026-03-04
 
 ### Changed
-- Settings UI: single in-memory model — one fetch loads everything (schema, TOML sections, shortcuts, presets), no cascading reloads
-- Backend `/api/settings/schema` now includes `toml_sections`, `shortcuts`, and `presets`
-- Shortcuts field integrated into global SaveBar (removed local Save/Reset buttons)
-- EngineStatusBar: loading state is amber/yellow, ready state uses brand purple
-- Dashboard: agent switch is instant (optimistic update)
+- Settings UI loads faster (single fetch for all data)
+- Dashboard: agent switch is instant
+- EngineStatusBar: loading state amber, ready state purple
 
 ### Fixed
-- Dashboard SSE path corrected (`/status/stream` → `/openvip/status/stream`) — was falling back to 5s polling
-- Save no longer flickers values back to pre-save state while engine restarts
-
-### Removed
-- Separate presets store (`presets.svelte.ts`) — merged into schema response
-- `engineReadyGen` / `notifyEngineReady()` / `clearSaveStatus()` — replaced by direct `load()` on engine ready
-- Settings reload on tab navigation — load once on mount
+- Dashboard live updates now work correctly
+- Save no longer flickers values during engine restart
 
 ## [0.1.117] - 2026-03-04
 
 ### Changed
-- Settings UI: unified save UX (BIOS-style) — any change (form fields, TOML editors, model selection) shows one SaveBar, Save auto-restarts engine
-- Removed per-editor Save/Reset buttons from TOML fields
-- Removed local save bar from Models page
-- Removed "Settings changed. Restart engine?" prompt — save always restarts
+- Settings UI: unified save UX — any change shows one SaveBar, Save auto-restarts engine
 
 ## [0.1.116] - 2026-03-04
 
 ### Fixed
-- Debounce focus-out to fix terminal focus flicker during text injection (500ms delay)
-- Assume focused on agent launch — mux sends initial focus-in report after enabling `?1004h`
+- Terminal focus detection no longer flickers during text injection
 
 ## [0.1.115] - 2026-03-03
 
@@ -343,898 +314,496 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.108] - 2026-03-03
 
 ### Added
-- **Focus-aware audio feedback** — new `AudioFeedbackPolicy` silences focus-gated
-  sounds when the active agent's terminal has focus (the user can already see the text).
-  Terminal focus reporting via `\033[?1004h` (xterm extension, widely supported).
-- **"transcribed" sound event** — subtle pencil-on-paper sound after each transcription
-  (volume 0.15, focus-gated by default). Configurable in `[audio.sounds.transcribed]`.
-- **"sent" sound wired** — carriage-return plays on text submission (double-tap and
-  pipeline submit). Configurable in `[audio.sounds.sent]`.
-- **`focus_gated` per-event config** — new `SoundConfig.focus_gated` field lets users
-  control which sounds are skipped when the terminal has focus.
-- **`POST /api/agents/{agent_id}/focus`** — HTTP endpoint for terminals to report
-  focus state to the engine.
+- **Focus-aware audio feedback** — sounds are silenced when the terminal has focus (you can already see the text)
+- **"transcribed" sound** — subtle pencil-on-paper after each transcription (focus-gated)
+- **"sent" sound** — carriage-return plays on text submission
+- Per-sound `focus_gated` config
 
 ### Changed
-- **Renamed `ready.wav` → `carriage-return.wav`** — sound file name now describes the
-  sound, not the event.
-- **"sent" default sound** — changed from `up-beep.wav` to `carriage-return.wav`.
+- Renamed `ready.wav` → `carriage-return.wav`
 
 ## [0.1.107] - 2026-03-03
 
 ### Fixed
-- **Yellow non-default dot only for dropdowns** — the non-default indicator (amber dot)
-  was incorrectly showing on all bool and number fields. The `""` sentinel comparison
-  now applies only to SelectField dropdowns; bool/number fields compare against the
-  Pydantic schema default instead.
+- Non-default indicator (amber dot) now only shows on dropdown fields where appropriate
 
 ## [0.1.106] - 2026-03-03
 
 ### Changed
-- **Hotkey gestures swapped** — double tap now submits (sends Enter to agent),
-  long press (≥0.8s) now toggles between agents and keyboard mode. Previously
-  double tap toggled mode and long press submitted.
+- Hotkey gestures swapped: double tap submits, long press toggles agent/keyboard mode
 
 ## [0.1.105] - 2026-03-03
 
 ### Fixed
-- **Agent pre-flight checks before spawning child process** — `dictare agent` now
-  validates engine reachability and agent name uniqueness BEFORE forking the child
-  process or touching the terminal. If the engine is down, prints a clear error and
-  exits. If the agent name is already taken (409), prints the error and exits cleanly.
-  Previously the child process was spawned first, and a duplicate agent would leave
-  the terminal stuck in raw mode with no way to Ctrl+C.
-- **Auto-start engine waits for readiness** — when the engine is not running,
-  `dictare agent` now waits up to 10s for the service to become reachable after
-  starting it, instead of fire-and-forget.
+- `dictare agent` now validates engine and agent name before launching (no more stuck terminals)
+- Auto-start engine waits for readiness before proceeding
 
 ## [0.1.104] - 2026-03-03
 
 ### Changed
-- **Default STT model is now parakeet-v3** — faster and lighter than Whisper,
-  with comparable accuracy across 25 languages.
-- **Removed obsolete STT models** — dropped whisper-tiny, whisper-base,
-  whisper-small, and whisper-medium from the model registry. Remaining models:
-  parakeet-v3, whisper-large-v3-turbo, whisper-large-v3.
+- Default STT model changed to parakeet-v3 (faster, lighter, comparable accuracy)
+- Removed obsolete STT models (tiny, base, small, medium)
 
 ## [0.1.103] - 2026-03-03
 
 ### Fixed
-- **Non-default indicator (yellow dot) incorrect for explicit values matching default** —
-  a value explicitly set in TOML that happened to match the schema default was not
-  flagged as non-default. Now any explicit value (non-empty, non-null) shows yellow,
-  regardless of whether it matches the schema default.
+- Non-default indicator now correctly shows for explicitly set values
 
 ## [0.1.102] - 2026-03-03
 
 ### Changed
-- **Standby status bar color reflects mic state** — when in standby, the status
-  bar is now gray (dim) when the microphone is inactive and yellow (warn) only
-  when the microphone is actively listening. Text remains "dictare standby".
+- Standby status bar color reflects mic state (gray when inactive, yellow when listening)
 
 ## [0.1.101] - 2026-03-03
 
 ### Fixed
-- **Non-default indicator (yellow dot) false positive** — fields at their backend
-  default (value `""` / absent from TOML) were incorrectly flagged as non-default
-  because `""` differs from the Pydantic default string. Now empty/null values are
-  never marked as non-default.
+- Non-default indicator no longer shows false positives for default values
 
 ## [0.1.100] - 2026-03-03
 
 ### Fixed
-- **Settings dropdown shows "Default" correctly after save** — `/api/settings/schema`
-  now returns `""` for string fields not explicitly set in TOML, instead of Pydantic-
-  resolved defaults. This lets the UI correctly distinguish "Default (en)" from an
-  explicit "English" selection.
-- **Settings dropdown label not reactive** — `$derived(() => ...)` creates a constant
-  function reference in Svelte 5; changed to `$derived.by(() => ...)` for reactive
-  computed values.
-- **Settings reload on section change** — switching between menu sections now reloads
-  values from the backend, so changes made externally (CLI, config file) are visible
-  without pressing Refresh.
+- Settings dropdowns show "Default" correctly after save
+- Settings values update when switching between sections
 
 ## [0.1.96] - 2026-03-02
 
 ### Fixed
-- **Tray "Start/Stop Service" based on engine state** — simplified: "Stop Service" shown
-  when engine is reachable via HTTP, "Start Service" when disconnected. Removed launchd
-  state checking — the engine is running or it isn't, regardless of how it was started.
-  Start/stop actions use `dictare service start/stop` CLI commands.
-- **Install script: tray survives reinstall** — fixed pkill pattern that failed to match
-  the actual tray process command, causing stale tray with missing icon files.
+- Tray "Start/Stop Service" now correctly reflects engine state
+- Tray survives reinstall without losing icon
 
 ## [0.1.95] - 2026-03-02
 
 ### Fixed
-- **Tray "Start/Stop Service" out of sync** — the Advanced menu now reflects the real
-  launchd/systemd state when the service is started or stopped externally (via CLI or
-  system restart). Previously the menu stayed stale until the tray was restarted.
+- Tray "Start/Stop Service" stays in sync when service is controlled externally
 
 ## [0.1.94] - 2026-03-02
 
 ### Changed
-- **Default STT model** — changed from `parakeet-v3` to `large-v3-turbo` (Whisper).
-  On Apple Silicon this uses MLX for GPU-accelerated inference. On Linux it uses
-  CTranslate2 via faster-whisper. Best quality + speed out of the box.
+- Default STT model changed to `large-v3-turbo` (GPU-accelerated on Apple Silicon)
 
 ## [0.1.93] - 2026-03-02
 
 ### Fixed
-- **VAD startup 400x faster** — load the silero ONNX model directly via onnxruntime
-  instead of importing `faster_whisper.vad` (which pulls in ctranslate2 — 20+ seconds
-  on first run after `brew reinstall`). VAD now loads in ~0.05s regardless of install
-  freshness.
+- VAD startup 400x faster (~0.05s instead of 20s+ on first run after install)
 
 ## [0.1.92] - 2026-03-02
 
 ### Added
-- **Granular timing logs in AudioManager** — `initialize()` now logs elapsed time for
-  AudioCapture, DeviceMonitor, and VAD model load at DEBUG level, making it easy to
-  diagnose slow startup without guessing.
+- Granular timing logs for audio startup diagnostics
 
 ## [0.1.91] - 2026-03-02
 
 ### Fixed
-- **Tray `launchctl unload` noise** — `install_tray()` now checks if the tray agent is
-  actually loaded before attempting unload, preventing the spurious "Unload failed: 5:
-  Input/output error" message during fresh installs or after the install script already
-  unloaded the agents.
+- Tray install no longer shows spurious "Unload failed" errors
 
 ## [0.1.90] - 2026-03-02
 
 ### Fixed
-- **`macos-install.sh` race condition** — `stop_services()` now calls `launchctl unload`
-  directly on the plist files instead of depending on the `dictare` binary (which lives in
-  the Cellar that `brew reinstall` is about to delete). This eliminates the KeepAlive restart
-  loop that caused the engine to cycle start/kill/start during installation. Orphan processes
-  are explicitly killed with `pkill` before Homebrew runs.
+- macOS install script no longer causes engine restart loop during Homebrew reinstall
 
 ## [0.1.89] - 2026-03-02
 
 ### Added
-- **`SelectField.svelte`** — unified select component replacing `PresetField`, `EnumField`, and
-  `DeviceField`. Three-way source discriminator: backend-driven (options from `/settings/presets`),
-  UI-hints-driven (from `FIELD_PRESETS`), and data-model-driven (Pydantic `Literal` enum).
-  "Custom…" entry available only for UI-hints fields.
-- **`presets.svelte.ts` store** — fetches `/api/settings/presets` once on settings load, provides
-  `getDefault(key)` and `getValues(key)` for `SelectField` to show "Default (x)" labels and
-  populate backend-driven option lists.
-- **`delete_config_value()`** — new function in `config.py` that removes a key from the TOML
-  file, reverting the field to its Pydantic default on next load.
-
-### Changed
-- **`POST /api/settings`** — `value: ""` now deletes the key from the TOML config (revert to
-  Pydantic default) instead of attempting to write an empty string. `value: null` returns 400.
-- **`FieldRenderer.svelte`** — routes all select-type fields (backend/enum/preset) through the
-  new unified `SelectField`. Imports `BACKEND_DRIVEN_FIELDS` instead of `DEVICE_FIELDS`.
-  The presets store is loaded alongside the settings schema in `SettingsLayout.svelte`.
+- Unified select component in Settings UI (replaces separate preset, enum, and device selectors)
+- Settings can now be reverted to default by clearing the value
 
 ### Removed
-- **`DeviceField.svelte`** — replaced by generic backend-driven behavior in `SelectField`.
-  Audio device direction is handled on the backend (pre-filtered in `/settings/presets`).
-- **`PresetField.svelte`**, **`EnumField.svelte`** — merged into `SelectField`.
+- Separate `DeviceField`, `PresetField`, `EnumField` components (merged into one)
 
 ## [0.1.88] - 2026-03-02
 
 ### Added
-- **`GET /api/settings/presets`** — new endpoint returning default values and backend-defined
-  option lists for all settings fields. Shape: `{key: {default, values?}}`. Audio device fields
-  include a `values` array with the runtime-available devices. Used by the UI to show
-  "Default (x)" labels and populate backend-driven dropdowns.
-- **`BACKEND_DRIVEN_FIELDS`** — new TypeScript constant (Set) exported from `field-config.ts`.
-  Lists fields whose values and defaults come from the backend at runtime (currently:
-  `audio.input_device`, `audio.output_device`).
+- Settings presets API: UI now shows "Default (value)" labels and backend-driven option lists
+- Settings UI field registry is now fully auto-generated
 
 ### Fixed
-- **`output.auto_enter` → `output.auto_submit`** in `field-config.ts` (registry was stale
-  after the `auto_enter` rename in a previous release).
-
-### Changed
-- **`field-config.ts` is now fully generated** by `ui-schema-generator` v0.4.0.
-  All 14 constants are produced by the generator — no more manual edits to the registry.
-  Run: `dump-schema.py` then `generate.py --outdir ui/src/lib/registry/`.
+- Stale `auto_enter` reference in UI field config (renamed to `auto_submit`)
 
 ## [0.1.87] - 2026-03-02
 
 ### Changed
-- **`x_input` schema**: replaced `submit`/`newline` boolean fields with `ops` array
-  (e.g. `{"ops": ["submit"]}`, `{"ops": ["newline"]}`, `{"ops": ["newline", "submit"]}`).
-  Allows multiple input operations in a single message.
-- **openvip SDK**: bumped to `>=1.0.0rc10` (PyPI). Local `[tool.uv.sources]` override removed —
-  SDK is now resolved exclusively from PyPI.
-- **`full-install.sh` simplified**: no longer regenerates the SDK from local spec or
-  manages `[tool.uv.sources]`. Now just builds the UI and runs `install.sh`.
+- Input operations now support multiple actions per message (e.g. newline + submit)
+- openvip SDK bumped to `>=1.0.0rc10` (resolved from PyPI)
 
 ### Fixed
-- `api.ts`: corrected `StatusResponse` TypeScript type to match actual engine response shape
-  (`openvip`, `stt`, `tts` at root; `state` inside `platform`).
-- `api.ts`: `setCurrentAgent`, `setOutputMode`, `restartEngine` were posting to `/control`
-  instead of `/openvip/control` — now use the `OPENVIP` constant.
+- Dashboard API calls pointed to wrong URL paths
 
 ## [0.1.86] - 2026-03-02
 
 ### Fixed
-- All `Client()` instantiations in CLI commands (`status`, `service`, `speak`) now include
-  the `/openvip` base path — resolves 404 errors on SSE and speech endpoints.
-- `ClientConfig.url` default updated to `http://127.0.0.1:8770/openvip`.
-- `full-install.sh`: corrected `../openvip-dev` path after repo reorganization.
-- `full-install.sh`: added missing UI build step (`pnpm install + pnpm run build`).
+- CLI commands (`status`, `service`, `speak`) now use correct API base path
+- Install script path corrections after repo reorganization
 
 ## [0.1.85] - 2026-03-02
 
 ### Changed
-- **URL structure refactor**: OpenVIP protocol endpoints now mounted at `/openvip/`
-  (e.g. `GET /openvip/status`, `POST /openvip/speech`, `GET /openvip/agents/{id}/messages`).
-  Dictare management endpoints now mounted at `/api/`
-  (e.g. `GET /api/settings/schema`, `GET /api/audio/devices`, `GET /api/capabilities`).
-  Root paths `/health`, `/ui`, and `/internal/` are unchanged.
-- **`GET /openvip/openapi.json`**: OpenVIP protocol spec now served at this endpoint
-  for API discovery.
-- **`OPENVIP_BASE_PATH` constant**: new constant in `dictare.__init__` used throughout
-  the codebase for consistent URL prefix construction.
-- **`auto_enter` renamed to `auto_submit`** in config model (`OutputConfig`) —
-  better describes the behavior (submitting a transcription, not pressing Enter).
-- TTS worker subprocess: `--url` now accepts the dictare engine root URL;
-  `/openvip` prefix is derived automatically from `OPENVIP_BASE_PATH`.
+- URL structure: OpenVIP protocol endpoints at `/openvip/`, management endpoints at `/api/`
+- OpenVIP spec served at `/openvip/openapi.json` for API discovery
+- `auto_enter` renamed to `auto_submit` in config
 
 ## [0.1.82] - 2026-03-01
 
 ### Changed
-- **Default output mode is now `agents`** (was `keyboard`). Agents mode (OpenVIP SSE)
-  is the primary use case; keyboard mode is a fallback for non-agent use.
-- **`typing_delay_ms` default lowered from 5 ms to 2 ms** for faster keyboard output.
-- **Settings UI**: keyboard-mode-only output fields (`typing_delay_ms`, `auto_enter`,
-  `submit_keys`, `newline_keys`) moved from the Output tab to the Keyboard tab.
-  Output tab now shows only the `mode` selector.
-
-### Fixed
-- `pyproject.toml`: fixed `openvip` local source path after repo reorganization
-  (`../../openvip-dev` → `../openvip-dev`).
+- Default output mode is now `agents` (was `keyboard`)
+- Keyboard typing delay lowered from 5ms to 2ms
+- Keyboard-only settings moved from Output tab to Keyboard tab
 
 ## [0.1.81] - 2026-02-28
 
 ### Added
-- **Stats in foreground panel**: `StatusPanel` now shows a `Stats:` row with
-  today's transcription count, word count, and audio duration. Data comes from
-  `platform.stats` already returned by `/status` — no new endpoint needed.
+- Session stats (transcriptions, words, audio duration) shown in foreground panel
 
 ## [0.1.80] - 2026-02-28
 
 ### Fixed
-- **Hotkey key capture**: settings UI now only accepts modifier keys (⌘ ⇧ ⌥ ⌃
-  and Caps Lock) when capturing a hotkey. Previously any key could be selected,
-  but only modifier keys are addressable by CGEventTap `flagsChanged` events.
-  Non-modifier presses are silently ignored during capture. Human-friendly labels
-  added for Left/Right Shift, Ctrl, and Alt.
+- Hotkey capture in settings now only accepts modifier keys (which is what macOS supports)
 
 ## [0.1.79] - 2026-02-28
 
 ### Changed
-- **Daily stats bucketing**: `stats.json` now tracks `current_day` separately
-  from `total_*` (historical up to yesterday midnight). On day rollover,
-  `current_day` is merged into historical and reset. The dashboard and exit
-  summary show today's full total (previous engine runs today + current session).
+- Daily stats now tracked separately from historical totals, with automatic day rollover
 
 ## [0.1.78] - 2026-02-28
 
 ### Added
-- **Session stats at agent exit**: when the agent session ends, a summary is
-  printed to stderr with transcription count, word count, audio duration, and
-  a fun rotating phrase (e.g. "Your fingers are getting jealous.").
-- **Session stats in dashboard**: the Engine card now shows a "Session" row
-  with the same stats (tx · words · audio) and the fun phrase whenever at
-  least one transcription has been made.
+- Session stats summary printed when agent session ends
+- Session stats shown in dashboard Engine card
 
 ## [0.1.77] - 2026-02-28
 
 ### Fixed
-- **IPC delivery metrics consistency**: `key.up` events now update
-  `_delivered_count`, `_last_delivered_ts`, and runtime status just like
-  `key.down` events do. Previously only `key.down` was tracked.
+- Hotkey delivery metrics now tracked consistently for all event types
 
 ## [0.1.76] - 2026-02-28
 
 ### Fixed
-- **Long press now works from any app in agents mode**: instead of injecting
-  Return into the focused window (which only worked if the terminal was in
-  front), `_submit_action` now sends `x_input={"submit": True, "trigger":
-  "<long_press>"}` to the connected agent — identical to what the submit
-  filter does when a trigger word is spoken. Keyboard mode is unaffected
-  (long press is agents-mode only).
+- Long press submit now works from any app in agents mode (not just terminal)
 
 ## [0.1.75] - 2026-02-28
 
 ### Fixed
-- **Long press fires on key_up, not on timeout**: the submit action (Return injection)
-  now fires when the modifier key is released, not 0.8 s after it was pressed.
-  Previously the Return was injected while Right Cmd was still physically held,
-  which could cause macOS to treat it as Cmd+Return instead of plain Return.
+- Long press submit fires on key release instead of timeout (prevents Cmd+Return conflicts)
 
 ## [0.1.74] - 2026-02-28
 
 ### Fixed
-- **Input Monitoring permissions regression** (v0.1.71): removed `tccutil reset
-  ListenEvent` from the install flow. On macOS Sequoia with ad-hoc-signed
-  binaries, resetting the TCC entry caused Dictare to disappear from the Input
-  Monitoring list permanently — `CGRequestListenEventAccess()` returns `true`
-  without actually adding a new entry, so the reset was net-harmful for
-  production users. Accumulated stale TCC entries (the original motivation for
-  the reset) are harmless in practice since production users don't reinstall
-  frequently.
+- Input Monitoring permissions no longer lost after reinstall on macOS Sequoia
 
 ## [0.1.73] - 2026-02-28
 
 ### Changed
-- **Hotkey architecture**: launcher is now a pure key-event forwarder.
-  It reads `hotkey.key` from `~/.config/dictare/config.toml` at startup and
-  maps all supported modifier keys (Right/Left Cmd, Shift, Option, Control, Fn)
-  to their macOS keycodes — hotkey changes now take effect after a service
-  restart without rebuilding the launcher binary.
-- **IPC protocol**: launcher sends `key.down` / `key.up` events instead of a
-  single `hotkey.tap`; Python's `TapDetector` handles all gesture logic.
-  Legacy `hotkey.tap` (SIGUSR1 fallback) remains fully supported.
-- **Long press (≥ 0.8 s)**: injects a Return keypress into the active window
-  (submit action). Useful for submitting to Claude Code / terminal prompts
-  without lifting hands from the keyboard.
-- **Double tap**: unchanged — still toggles output mode (agents ↔ keyboard).
-- **Single tap**: unchanged — toggles mute on/off.
-- `AppState.OFF` now displays as **"muted"** instead of "Off".
+- Hotkey is now configurable without rebuilding the launcher — reads from config at startup
+- Launcher sends key down/up events; gesture detection (tap, double-tap, long press) handled in Python
+- Long press (≥ 0.8s): submits to agent. Double tap: toggles mode. Single tap: toggles mute.
 
 ## [0.1.72] - 2026-02-28
 
 ### Changed
-- Dashboard Engine card: STT, TTS, Hotkey rows now appear first, State and
-  Uptime below — aligns the three status indicators with the Permissions column.
+- Dashboard: reordered Engine card rows for better alignment with Permissions column
 
 ## [0.1.71] - 2026-02-28
 
 ### Fixed
-- Auto-reset TCC `ListenEvent` entries on launcher binary change during
-  `dictare service install`: prevents accumulated stale TCC entries from
-  blocking the CGEventTap after reinstalls or Homebrew upgrades.
+- Auto-cleanup of stale permission entries after launcher binary changes
 
 ## [0.1.70] - 2026-02-28
 
 ### Fixed
-- Keyboard-mode injection success reporting is now real, not queue-level:
-  `KeyboardAgent.send()` waits for worker completion and returns the actual
-  injector result (`type_text` / `send_submit` / `send_newline`), eliminating
-  false-positive `"success": true` injection logs when typing did not occur.
+- Keyboard mode now reports actual injection success instead of false positives
 
 ## [0.1.69] - 2026-02-28
 
 ### Fixed
-- Accessibility permission false negatives in macOS doctor/status flow:
-  launcher `--check-permissions` now remains authoritative and is no longer
-  downgraded by stale runtime `~/.dictare/accessibility_status` values.
+- Accessibility permission status no longer shows false negatives
 
 ## [0.1.68] - 2026-02-28
 
 ### Added
-- New hard-reset script for macOS permissions/runtime state:
-  - `scripts/macos-reset-permissions.sh`
-  - stops service/tray, clears local runtime markers, resets TCC grants, and
-    reinstalls/restarts Dictare service.
+- Hard-reset script for macOS permissions and runtime state
 
 ### Fixed
-- Accessibility permission status now prefers a runtime signal from the active
-  launcher process (`~/.dictare/accessibility_status`) to reduce false
-  negatives caused by subprocess identity mismatches.
+- More reliable accessibility permission detection
 
 ## [0.1.67] - 2026-02-28
 
 ### Fixed
-- Permission Doctor probe endpoint no longer blocks the HTTP event loop.
-  `POST /permissions/doctor/probe` now runs in a worker thread, preventing
-  transient "engine disconnected/restarting" UI errors while probing.
-- Permission Doctor diagnosis now prioritizes the hotkey path signal
-  (`input_monitoring` + runtime delivery) over Accessibility as a primary
-  hotkey failure cause.
+- Permission Doctor no longer causes brief "engine disconnected" UI errors
+- Better diagnosis prioritization for hotkey issues
 
 ### Changed
-- Permissions Doctor UI copy now includes a short guided intro and
-  auto-refreshes every second while the page is open.
-- Added explicit `Restart Dictare` action inside the doctor flow and
-  improved per-permission status layout for readability.
+- Permission Doctor UI: guided intro, auto-refresh, explicit restart action
 
 ## [0.1.66] - 2026-02-28
 
 ### Added
-- Permission Doctor now returns a deterministic diagnosis payload:
-  - `code`
-  - `summary`
-  - `steps`
-  - `recommended_target`
-- New tests for diagnosis behavior:
-  - `tests/test_permission_doctor.py`
-
-### Changed
-- Permission Doctor UI is now guided, not just status-only:
-  - diagnosis banner with actionable explanation
-  - recommended one-click settings action
-  - probe result card with follow-up steps on failure
-
-### Fixed
-- Clarified the critical macOS edge case where permissions are granted but
-  hotkey events are still not delivered: the doctor now explicitly surfaces
-  this state (`granted_but_no_delivery`) and provides a deterministic recovery
-  sequence for the user.
+- Permission Doctor: structured diagnosis with actionable steps and one-click fixes
+- Tests for permission diagnosis
 
 ## [0.1.65] - 2026-02-28
 
-### Changed
-- macOS daemon hotkey path is now IPC-first end-to-end (launcher -> engine),
-  with runtime health persisted in `~/.dictare/hotkey_runtime_status`.
-- Input Monitoring permission and runtime capture health are now treated as
-  separate signals: permission comes from launcher status, runtime health comes
-  from delivered tap events.
-
 ### Added
-- `src/dictare/hotkey/runtime_status.py` for runtime hotkey status persistence
-  (`~/.dictare/hotkey_runtime_status`).
-- `src/dictare/platform/permission_doctor.py` as single source of truth for
-  permission diagnosis and guided runtime probing.
-- New HTTP endpoints:
-  - `GET /permissions/doctor`
-  - `POST /permissions/doctor/open`
-  - `POST /permissions/doctor/probe`
-- `/hotkey/status` now returns runtime-derived fields when available
-  (`active_provider`, `capture_healthy`).
-- Settings UI now exposes a single Permission Doctor entrypoint in
-  `Advanced -> Permissions`.
-- Dashboard now links failed permission/hotkey states directly to the
-  Permission Doctor.
+- Permission Doctor: guided troubleshooting for hotkey and permission issues
+- Dashboard links failed permissions directly to Permission Doctor
+- Hotkey status API with runtime health information
 
-### Fixed
-- Input Monitoring permission UI no longer reports false negatives when the
-  launcher reports `active` but runtime confirmation has not happened yet.
+### Changed
+- Hotkey uses IPC (Unix socket) as primary transport, with signal fallback
 
 ## [0.1.64] - 2026-02-28
 
-### Fixed
-- macOS hotkey delivery is now IPC-first: the Swift launcher sends tap events
-  to the engine over a local Unix socket with per-event ACK, and falls back to
-  `SIGUSR1` if IPC delivery fails.
-- Swift launcher `CGEventTap` callback no longer retains events (`passUnretained`
-  instead of `passRetained`), preventing ownership leaks in the hotkey path.
-- Hotkey health semantics are stricter: only `hotkey_status = "confirmed"` is
-  considered healthy (`active` no longer counts as bound/healthy).
-
 ### Added
-- New hotkey IPC server module (`src/dictare/hotkey/ipc.py`) and integration in
-  `dictare serve` (`DICTARE_HOTKEY_TRANSPORT=auto|ipc|signal`).
-- Tests for the IPC hotkey transport and ACK behavior.
-- Technical postmortem/design document: `codex-hotkey-fix.md`.
+- Hotkey IPC transport (Unix socket with ACK) — more reliable than signals
+
+### Fixed
+- Hotkey delivery now confirmed by actual events, not just tap creation
 
 ## [0.1.63] - 2026-02-28
 
 ### Fixed
-- App bundle Info.plist was missing `NSInputMonitoringUsageDescription` — on
-  Sequoia, without this key macOS can register the TCC permission but silently
-  refuse to deliver CGEventTap events, causing `hotkey_status` to stay stuck at
-  "active" (never "confirmed") even with Input Monitoring granted.
-- Swift launcher: call `CGRequestListenEventAccess()` before every
-  `CGEvent.tapCreate()` call to prime TCC authorization in the current process
-  context (no-op if permission already granted).
+- Hotkey not working on macOS Sequoia despite Input Monitoring being granted (missing plist key)
 
 ## [0.1.62] - 2026-02-28
 
 ### Added
-- Settings → Keyboard: hotkey status indicator (confirmed/active/failed) with
-  "Fix Input Monitoring" button that opens System Settings → Input Monitoring.
-  Useful when CGEventTap is silently broken on Sequoia.
-- `GET /hotkey/status` and `POST /hotkey/fix` HTTP endpoints.
+- Settings → Keyboard: hotkey status indicator with "Fix Input Monitoring" button
 
 ## [0.1.61] - 2026-02-28
 
 ### Fixed
-- Swift launcher: when macOS disables the CGEventTap (`tapDisabledByTimeout` /
-  `tapDisabledByUserInput`), recreate the tap from scratch instead of calling
-  `CGEvent.tapEnable`. On Sequoia, re-enabling an existing tap after a system
-  disable leaves it silently delivering no events; destroying and recreating it
-  reliably restores hotkey functionality.
+- Hotkey recovery after macOS disables the event tap (recreate instead of re-enable)
 
 ## [0.1.60] - 2026-02-28
 
 ### Fixed
-- Tray always showed "Disconnected" when launched via launchd: `lifecycle.py`
-  `start_tray(foreground=True)` was creating a bare `TrayApp().run()` with no
-  poll thread — it now delegates to `app.main()` which does the full setup
-  (status polling, callbacks, logging).
+- Tray always showed "Disconnected" when launched as a service
 
 ### Added
-- `dictare logs --tray`: shows tray stdout/stderr logs instead of engine logs.
+- `dictare logs --tray` to view tray logs
 
 ## [0.1.59] - 2026-02-28
 
 ### Fixed
-- `install_tray()`: unload plist before recreating to prevent `launchctl load`
-  failing with Error 5 when the service is already registered.
-- `install()`: always reinstall tray plist (not only when missing) so the
-  python_path stays in sync after `brew upgrade dictare`.
+- Tray service install/upgrade reliability improvements
 
 ## [0.1.58] - 2026-02-28
 
 ### Added
-- `service install` now also installs and starts the tray LaunchAgent on macOS
-  (idempotent — safe to run multiple times).
-- Homebrew formula: `post_install` hook runs `dictare service install`
-  automatically after `brew install`, so new users get engine + tray running
-  without any terminal interaction.
-- Settings → Advanced → Daemon: "Launch at login" toggle — enables or disables
-  auto-start of engine and tray at login (macOS only, hidden on Linux).
-- `GET /system` and `POST /system` HTTP endpoints for reading and writing
-  system-level settings (currently: `launch_at_login`).
-- `launchd.py`: `launch_at_login_enabled()`, `enable_launch_at_login()`,
-  `disable_launch_at_login()` helpers controlling both engine and tray plists.
-
-### Changed
-- `macos-install.sh`: removed the "Use 'dictare tray start'" hint since the
-  tray is now started automatically by `service install`.
+- `service install` now sets up both engine and tray automatically
+- Homebrew `post_install` runs `service install` — zero-config for new users
+- Settings → Advanced: "Launch at login" toggle
 
 ## [0.1.57] - 2026-02-28
 
 ### Changed
-- Launcher: `Dictare.app` now calls `launchctl start com.dragfly.dictare.tray`
-  on startup — ensures the tray is running even if launchd did not auto-start
-  it (idempotent: no-op if already running).
-- Daemon: `install_tray()` uses the stable Homebrew symlink
-  (`/opt/homebrew/opt/dictare/…`) instead of the versioned `sys.executable`
-  path, so the tray LaunchAgent survives `brew upgrade dictare` without
-  needing to re-run `dictare service install`.
+- Launcher ensures tray is running on startup
+- Tray LaunchAgent survives `brew upgrade` without re-running `service install`
 
 ## [0.1.56] - 2026-02-27
 
 ### Changed
-- Dashboard: removed "agents mode" badge from Engine card header (redundant
-  with Keyboard/Agents toggle buttons already in the card).
-- Dashboard: TTS and Hotkey rows no longer show "active" label when healthy;
-  only display an error indicator when unavailable or misconfigured.
-- Dashboard: Permissions items stacked vertically; grid adjusted to
-  `3fr 2fr` giving Engine card more horizontal space.
-- Dashboard: agent pills are now clickable — click switches the active agent
-  via `output.set_agent`.
-- Dashboard: "active" label removed from agent pills (fill colour is
-  sufficient to indicate the selected agent).
-- Settings nav: selected theme icon now has a visible ring border to
-  distinguish it from the other two.
+- Dashboard UI refinements: clickable agent pills, cleaner status indicators, better layout
 
 ## [0.1.55] - 2026-02-27
 
 ### Added
-- Models page: unified trash button to remove downloaded files (HuggingFace
-  model cache and/or isolated venv). Shown for any non-builtin, non-selected
-  capability that has something installed (`venv_installed || model_cached`).
-  `DELETE /capabilities/{id}/install` now cleans up both venv and HF cache.
+- Models page: delete button to remove downloaded model files and venvs
 
 ## [0.1.54] - 2026-02-27
 
 ### Added
-- UI: light/dark/system theme toggle in the sidebar, persisted to
-  `localStorage`. Default is "system" (follows OS preference). No flash on
-  load (inline script in `<head>` applies the class before first paint).
-- UI: wordmark updated to match dictare.io — "DICTA" bold + "re" in purple
-  (#6d5ce6).
+- Light/dark/system theme toggle in settings sidebar
+- Updated wordmark to match dictare.io branding
 
 ## [0.1.53] - 2026-02-27
 
 ### Fixed
-- Engine crash on hotkey press during startup: SIGUSR1 signal handler was
-  installed *after* `controller.start()` (model loading ~20 s). An unhandled
-  SIGUSR1 during that window terminated the process (default UNIX behaviour).
-  All signal handlers (SIGTERM, SIGINT, SIGUSR1) are now installed before
-  `controller.start()`.
+- Engine crash when pressing hotkey during startup (model loading phase)
 
 ## [0.1.52] - 2026-02-27
 
 ### Changed
-- Tray: replaced SSE-based status streaming with simple HTTP polling every 1 s
-  (`client.get_status()`). Eliminates all stuck-state bugs (e.g. stuck
-  "Restarting…" after engine restart) caused by SSE reconnection edge cases.
-- Tray: removed `_restarting` state/flag entirely. Valid states are now:
-  `disconnected`, `loading`, `off`, `listening`.
-- Tray: disconnected icon renamed from `dictare_muted` to `dictare_disconnected`
-  for clarity; new icon asset added.
+- Tray uses HTTP polling instead of SSE — eliminates stuck state bugs after engine restart
 
 ## [0.1.51] - 2026-02-27
 
 ### Fixed
-- Dashboard: `accessibility_url` and `microphone_url` keys no longer appear
-  as fake permission toggles — filtered client-side.
-- Dashboard: Hotkey row shows "confirmed" (green), "confirming…" (yellow), or
-  "no permission" (red) based on `hotkey.status` from the engine.
-- Engine: `hotkey.bound` now reads `~/.dictare/hotkey_status` written by the
-  Swift launcher instead of always returning `False` in daemon mode.
-  New `hotkey.status` field in `/status` for fine-grained diagnostics.
+- Dashboard: correct hotkey status colors and permission display
+- Engine correctly reads hotkey status from launcher in daemon mode
 
 ## [0.1.50] - 2026-02-27
 
 ### Fixed
-- MLX Whisper: corrected HuggingFace repo IDs for tiny/base/small/medium —
-  use `-mlx` suffix repos (`whisper-tiny-mlx` etc.) which are the native MLX
-  format. The bare names were removed or are transformers-only.
+- MLX Whisper: corrected model repository IDs for all sizes
 
 ## [0.1.49] - 2026-02-27
 
 ### Fixed
-- MLX Whisper: fallback repo pattern also uses `-mlx` suffix.
+- MLX Whisper: fallback model repository also corrected
 
 ## [0.1.48] - 2026-02-27
 
 ### Fixed
-- Permissions: `input_monitoring` was reported as `false` (tray icon red) even
-  when the hotkey was fully working. `_check_input_monitoring()` now accepts
-  both `"active"` and `"confirmed"` hotkey_status values.
-- Permissions: `accessibility` was hardcoded to `true` — keyboard mode showed
-  green even without the Accessibility grant. Now read from the launcher's
-  `--check-permissions` output.
+- Permission status now correctly reflects actual hotkey and accessibility state
 
 ## [0.1.47] - 2026-02-27
 
 ### Fixed
-- Install: `service install` no longer blocks for 30 s when the Input
-  Monitoring permission dialog doesn't appear. Removed `--wait-apps` from
-  the `open` call — the dialog appears in the background without holding up
-  the install sequence.
+- `service install` no longer blocks waiting for permission dialog
 
 ## [0.1.46] - 2026-02-27
 
 ### Added
-- Swift launcher: log `Right Cmd DOWN/UP`, tap accepted/rejected, and
-  `SIGUSR1 sent to PID` to stderr for hotkey diagnostics.
-  (`tail -f ~/Library/Logs/dictare/stderr.log`)
-- Swift launcher: CGEventTap now writes `hotkey_status = "confirmed"` only
-  after the first real event is received. On Sequoia, `CGEvent.tapCreate()`
-  can succeed while the tap silently delivers nothing; "confirmed" is the only
-  reliable signal.
+- Launcher diagnostic logging for hotkey events
+- Hotkey status confirmed only after real event delivery (not just tap creation)
 
 ## [0.1.45] - 2026-02-27
 
 ### Changed
-- Swift launcher: log engine exit code and termination reason when the Python
-  child exits unexpectedly (`Engine exited: status=X reason=Y` in stderr).
-  Helps diagnose silent restarts during install (status=9/reason=2 = SIGKILL,
-  status=0/reason=1 = clean exit).
+- Launcher logs engine exit details for easier debugging
 
 ## [0.1.44] - 2026-02-27
 
 ### Changed
-- Models page: replaced vertical cards with two compact tables (STT / TTS),
-  columns: Name · Description · Size · Status · Actions.
-- Engine status bar: health poll interval 2s → 1s, timeout 2s → 1s
-  (health endpoint is synchronous, responds in <1 ms).
+- Models page: compact table layout (STT/TTS) replacing vertical cards
+- Faster engine status polling (1s instead of 2s)
 
 ## [0.1.43] - 2026-02-27
 
 ### Fixed
-- CSS 404 on Linux: `.gitignore` had `assets/` (unanchored) which matched
-  `src/dictare/ui/dist/_app/immutable/assets/`, causing CSS chunks to be
-  untracked and missing after `git pull`. Changed to `/assets/` (root-only).
-  Added the previously-excluded `0.ZEYxg2Jv.css` to the repository.
+- CSS missing on Linux after `git pull` (gitignore was too broad)
 
 ## [0.1.42] - 2026-02-27
 
 ### Fixed
-- Linux: `systemctl stop` hung for 90s (systemd default) when the process
-  didn't respond to SIGTERM. Added `TimeoutStopSec=10` and `KillMode=control-group`
-  to the unit file so the engine is force-killed after 10s.
-- Linux install script: `stop` step now falls back to `systemctl kill` if the
-  stop command times out, preventing the install from blocking.
+- Linux: service stop no longer hangs for 90s (10s timeout + force-kill fallback)
 
 ## [0.1.41] - 2026-02-27
 
 ### Changed
-- Dashboard: Engine (left) | Permissions (right), Agents full-width below.
+- Dashboard: Engine (left) | Permissions (right), Agents full-width below
 
 ## [0.1.40] - 2026-02-27
 
 ### Changed
-- Rebuilt UI dist with purple squircle icon in settings nav header.
+- Rebuilt UI with updated icon
 
 ## [0.1.39] - 2026-02-27
 
 ### Changed
-- Settings UI nav: added purple squircle icon next to "Dictare" label (top-left).
+- Settings nav: added Dictare icon
 
 ## [0.1.38] - 2026-02-27
 
 ### Changed
-- Replaced all tray icons with new official Dictare brand icons (purple mic).
-- State→icon mapping: idle=gray, active=purple, loading=yellow, disconnected=red.
-- Updated `Dictare.icns` with new purple squircle app icon.
-- `restarting` state now shows yellow (loading) icon instead of gray.
-- Added `assets/` to `.gitignore`.
+- New official brand icons for tray and app (purple mic/squircle)
 
 ## [0.1.37] - 2026-02-27
 
 ### Changed
-- `speak_text()` checks `_tts_error` before `_tts_engine is None` for clearer
-  error messages when TTS failed to load.
-- Replaced f-string logging with `%s` placeholders in `http_server.py`,
-  `engine.py`, `controller.py` (5 call sites).
+- Improved TTS error messages and logging
 
 ## [0.1.36] - 2026-02-27
 
 ### Changed
-- Tightened bare `except Exception` to specific types: `ValueError` for JSON
-  parse, `subprocess.TimeoutExpired` for worker stop, `OSError` for file I/O,
-  `json.JSONDecodeError` for config parsing.
-- Extracted magic numbers to named constants: `_PLAYBACK_DEADLINE_S`,
-  `_TTS_WORKER_CONNECT_TIMEOUT`, `_QUEUE_POLL_S`, `_JOB_CLEANUP_DELAY`, etc.
-- Audio device query failures now log `debug` instead of silently returning None.
-- `metaphone()` docstring documents CC=62 as intentional (avoids jellyfish dep).
-
-### Added
-- 13 regression tests covering exception type tightening, magic number constants,
-  audio capture logging, and metaphone documentation.
+- Code quality: tighter exception handling, named constants, better logging
 
 ## [0.1.35] - 2026-02-27
 
 ### Changed
-- `request_id` → `message_id` throughout TTS flow (proxy, worker, manager, server,
-  tests) to align with OpenVIP spec `id` field naming.
-- Removed auto-restart on model selection — `POST /capabilities/{cap_id}/select`
-  now returns `restart_required: true` and lets the user decide when to restart.
-- Replaced nested `getattr` chain for TTS completion with public `complete_tts()`
-  methods on Engine → TTSManager → WorkerTTSEngine.
-- Event queue in `StateController` is now unlimited (was `maxsize=100`) — events
-  are small and consumed fast; dropping them silently was a worse failure mode.
+- TTS flow aligned with OpenVIP spec naming (`message_id`)
+- Model selection no longer auto-restarts engine — user decides when to restart
+- Event queue no longer drops events silently
 
 ## [0.1.34] - 2026-02-27
 
 ### Added
-- Tray menu: Start/Stop Service under Advanced, using `is_loaded()` from the
-  native service backend (launchd/systemd) to show the correct action. Menu
-  updates automatically after each start/stop.
-
-### Changed
-- Tray menu: `isinstance` type narrowing for SSE message dispatch instead of
-  `getattr` hack.
+- Tray menu: Start/Stop Service under Advanced
 
 ## [0.1.33] - 2026-02-27
 
 ### Fixed
-- Newline regression: transcriptions no longer went to new lines between
-  sentences. Root cause: SDK regeneration produced Pydantic v2 models that
-  silently dropped `x_input` extension fields. Fixed via openvip SDK rc7
-  (`extra="allow"` + `from_dict` pass-through).
-- `dictare speak stop` / `--timeout` now uses openvip SDK (`Client.stop_speech()`)
-  instead of raw urllib calls.
+- Newline regression: transcriptions no longer broke across lines (SDK extension field issue)
+- `dictare speak stop` / `--timeout` now uses openvip SDK properly
 
 ### Added
-- `scripts/full-install.sh`: dev install script that regenerates SDK from local
-  spec, builds SDK sdist, and installs dictare with the local SDK.
-- `scripts/install.sh`: app-only install, auto-detects platform.
-- `scripts/macos-install.sh`: when `OPENVIP_SDK_DIST` is set (by full-install.sh),
-  injects `--find-links` into the Homebrew formula so `uv tool install` uses the
-  local SDK instead of PyPI.
-- 11 regression tests (`test_sdk_extension_fields.py`) verifying extension fields
-  survive the full SDK deserialization path (JSON → `from_dict()` → `to_dict()` →
-  `InputExecutor`).
+- Install scripts: `full-install.sh` (dev), `install.sh` (app), platform auto-detect
 
 ## [0.1.32] - 2026-02-26
 
 ### Fixed
-- `dictare speak -t N`: on timeout, audio is now stopped automatically and the
-  error message reads "Timed out after Ns — audio stopped." instead of the
-  misleading "Engine not running." A timeout means the engine is running but
-  playback exceeded the limit; a refused connection means the engine is down.
+- `dictare speak --timeout`: correct error message on timeout vs engine down
 
 ## [0.1.31] - 2026-02-26
 
 ### Added
-- `dictare speak stop` — interrupts the currently playing TTS audio immediately.
-  Sends SIGUSR2 to the TTS worker subprocess (kokoro/piper/etc.), which kills
-  the audio player (`afplay`/`paplay`/`aplay`) mid-playback. Works for
-  in-process engines (say/espeak) too via `stop_audio_native()`.
-- `dictare speak --timeout` (`-t`) — configurable request timeout (default 300s,
-  was previously hard-coded to 30s). Avoids "Engine not running" errors when
-  piping long texts.
+- `dictare speak stop` — interrupt TTS audio mid-playback
+- `dictare speak --timeout` — configurable request timeout (default 300s)
 
 ## [0.1.30] - 2026-02-26
 
 ### Fixed
-- TTS worker crash on startup: `secrets.token_urlsafe()` can produce tokens
-  starting with `-`, which argparse interprets as a flag instead of a value.
-  Switched to `token_hex(32)` (hex-only, never starts with `-`).
+- TTS worker crash on startup (auth token format issue)
 
 ## [0.1.29] - 2026-02-26
 
 ### Fixed
-- `dictare speak -v if_sara -l fr` now respects the explicit `-l` override.
-  Priority: explicit `-l` > voice prefix > worker default language.
-  The CLI no longer passes `language="en"` by default (would silently override
-  voice-inferred language); the worker already knows its configured language.
+- `dictare speak -l` language override now respected correctly
 
 ## [0.1.28] - 2026-02-26
 
 ### Fixed
-- Kokoro TTS: Italian (and other non-English) voices now use correct phonetics.
-  Previously `dictare speak "ciao" -v if_sara` would pronounce with English
-  phonetics because `language="en"` from config overrode the voice's language.
-  Voice prefix now determines phonetics: `if_`/`im_` → Italian, `af_`/`am_` →
-  American English, `bf_`/`bm_` → British English, etc.
+- Kokoro TTS: non-English voices now use correct phonetics (voice prefix determines language)
 
 ## [0.1.27] - 2026-02-26
 
 ### Fixed
-- `POST /speech` response now includes `openvip: "1.0"` field, satisfying
-  the `SpeechResponse` model validation in the openvip SDK client.
+- Speech API response now passes SDK validation
 
 ## [0.1.26] - 2026-02-26
 
 ### Fixed
-- TTS worker no longer crashes on `SpeechRequest` messages: removed use of
-  `additional_properties` (old SDK pattern) in favour of native model fields.
-  `proxy.py` now uses the OpenVIP message `id` as the completion tracking key
-  (instead of an out-of-band `request_id` extension field). `voice` is now a
-  first-class field in the OpenVIP spec and SDK (openvip>=1.0.0rc4).
+- TTS worker no longer crashes on speech requests (SDK compatibility fix)
 
 ## [0.1.25] - 2026-02-26
 
 ### Fixed
-- `dictare speak` (and `llm "..." | dictare speak`) now works correctly — the
-  openvip SDK `create_speech_request()` was not generating `id` and `timestamp`
-  fields, causing HTTP 422 "Not OpenVIP v1.0 compliant" errors. Fixed by
-  regenerating the SDK from the spec (`SpeechRequest` inherits from `Message`
-  which requires both fields) and updating `create_speech_request()` to
-  auto-fill them. Requires openvip>=1.0.0rc3.
+- `dictare speak` now works correctly (SDK was missing required message fields)
 
 ## [0.1.24] - 2026-02-26
 
 ### Fixed
-- Tray icon stays red ("Status: Disconnected") on fresh install even after engine starts:
-  the SSE `on_disconnect` callback now only switches the tray to red if it has previously
-  had a successful connection (`_connected_once` flag). On first startup, connection
-  failures are silent retries — the tray only updates once the engine is reachable.
+- Tray no longer shows "Disconnected" on first startup before engine is ready
 
 ## [0.1.23] - 2026-02-26
 
 ### Changed
-- `openvip` dependency now resolved from PyPI (`>=1.0.0rc1`) — no more local tarball
-- Removed `[tool.uv.sources]` local path override for openvip
-- `macos-install.sh`: removed openvip build step and `--find-links` flag
-- Homebrew formula: removed `openvip_tarball` and `--find-links` (openvip on PyPI)
+- openvip SDK now resolved from PyPI — no more local tarball needed
 
 ## [0.1.22] - 2026-02-26
 
 ### Fixed
-- App bundle icon: rename `Voxtype.icns` → `Dictare.icns` so TCC (Input Monitoring,
-  Privacy) shows the correct icon instead of a blank square
-- `service install` permission message: remove incorrect "Click + → select" instruction;
-  macOS shows the permission dialog automatically when the launcher runs
-- `macos-install.sh` service start: `grep "not installed"` instead of `"installed"` to
-  correctly detect uninstalled state (prevented auto-start after fresh install)
+- App icon shows correctly in macOS permission dialogs
+- Install script now auto-starts service on fresh install
 
 ## [0.1.21] - 2026-02-26
 
 ### Added
-- Test coverage for session helpers: `KeystrokeCounter`, session log path
-  format, `_write_session_start`/`_write_session_end`, `_log_event` error
-  handling, and `_write_all` short-write loop (29 new tests)
-- Test coverage for stats persistence: `load_stats`/`save_stats` round-trip,
-  `update_keystrokes`, `update_stats`, `get_model_load_time`,
-  `save_model_load_time` warm-load guard (17 new tests)
+- Test coverage for session helpers and stats persistence (46 new tests)
 
 ## [0.1.20] - 2026-02-26
 
 ### Added
-- Test coverage for status bar: `_format_cwd`, right-side label construction,
-  `_write_to_pty` error handling, agent label computation (17 new tests)
+- Test coverage for status bar (17 new tests)
 
 ## [0.1.19] - 2026-02-26
 
 ### Added
-- OpenVIP v1.0 message validation on `/agents/{id}/messages` and `/speech`
-  endpoints — non-compliant payloads are rejected with 422 and a clear
-  "Not OpenVIP v1.0 compliant" error message
+- OpenVIP v1.0 message validation — non-compliant payloads rejected with clear error
 
 ## [0.1.18] - 2026-02-26
 
 ### Added
-- Current directory shown in status bar right side — `~/repos/proj · [opus] · dictare 0.1.18`;
-  home prefix replaced with `~`, long paths truncated from the left with `…`
+- Current directory shown in status bar
 
 ### Changed
 - Alignment with OpenVIP v1.0 spec
@@ -1242,20 +811,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.17] - 2026-02-26
 
 ### Added
-- Agent type or command shown in status bar right side — `[opus] · dictare 0.1.17`
-  when launched with a type, or first 30 chars of the command when using `--`
+- Agent type or command shown in status bar
 
 ## [0.1.16] - 2026-02-26
 
 ### Fixed
-- Hotkey capture in settings now works on macOS — clicking Capture and pressing
-  a key correctly updates the hotkey instead of reverting immediately
+- Hotkey capture in settings now works on macOS
 
 ## [0.1.15] - 2026-02-26
 
 ### Fixed
-- Launching the same agent session twice now exits immediately with an error
-  instead of opening a broken terminal that receives no voice input
+- Launching the same agent session twice now exits with a clear error
 
 ## [0.1.14] - 2026-02-25
 

@@ -1152,10 +1152,16 @@ description = "OpenAI Codex"
 
 [agent_types.gemini]
 command = ["gemini"]
+continue_args = ["--resume", "latest"]
+live_dangerously_args = ["--yolo"]
 description = "Google Gemini CLI"
 
 [agent_types.gemini.terminal]
 scroll_region = false
+
+[agent_types.aider]
+command = ["aider"]
+description = "Aider (AI pair programming)"
 """
 
     with open(config_path, "w") as f:

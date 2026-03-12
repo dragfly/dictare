@@ -755,15 +755,34 @@ def run_agent(
     # Open dump file for raw PTY output (append mode, binary)
     _dump_file = open(dump_path, "ab") if dump_path else None  # noqa: SIM115
 
+    # Escape sequences that trigger a reactive status bar redraw:
+    # - ESC[2J  = erase screen (Claude Code Ctrl+O, resize)
+    # - ESC[J   = erase below cursor (Codex startup: cursor at row 1 → wipes all)
+    # - ESC[r   = DECSTBM reset (Codex resets our scroll region)
+    _SCREEN_CLEAR = b"\x1b[2J"
+    _ERASE_BELOW = b"\x1b[J"
+    _DECSTBM_RESET = b"\x1b[r"
+
     def on_output(data: bytes) -> None:
         if _dump_file:
             _dump_file.write(data)
             _dump_file.flush()
         for find, replace in _redact_rules:
             data = data.replace(find, replace)
+        # Rewrite bare DECSTBM reset so child can't destroy our scroll region.
+        # Child sends ESC[r meaning "reset to full screen" but on the real
+        # terminal that includes our status bar row.  Replace with ESC[1;Nr
+        # to keep row N+1 protected.
+        if sbar and scroll_region and _DECSTBM_RESET in data:
+            safe_region = f"\x1b[1;{sbar._rows - 1}r".encode()
+            data = data.replace(_DECSTBM_RESET, safe_region)
         os.write(sys.stdout.fileno(), data)
         if sbar and scroll_region:
             sbar.after_child_output()
+        if sbar and (_SCREEN_CLEAR in data or _ERASE_BELOW in data):
+            sbar.request_redraw()
+        if sbar and not scroll_region:
+            sbar.mark_child_output()
 
     def on_resize(r: int, c: int) -> None:
         if sbar:

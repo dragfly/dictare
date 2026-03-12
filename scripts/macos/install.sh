@@ -182,7 +182,7 @@ fi
     -e "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" \
     -e "s|dictare_tarball = \".*\"|dictare_tarball = \"${TARBALL}\"|" \
     -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
-    -e "s|dictare#{extras}==[^\"]*\"|dictare#{extras}==${VERSION}\"|" \
+    -e "s|dictare#{extras}==[^\"]*\"|dictare#{extras} @ file://${TARBALL}\"|" \
     "$FORMULA"
 
 # ---------- 5a. Strip launcher resource (private repo, can't download) ----------
@@ -193,11 +193,11 @@ fi
     -e '/resource("launcher").stage do/,/^    end/d' \
     "$FORMULA"
 
-# ---------- 5b. Inject --find-links and --reinstall for local dist ----------
+# ---------- 5b. Force reinstall from local tarball ----------
+# --reinstall ensures uv rebuilds even if version string matches.
 "${SED_INPLACE[@]}" \
     "/\"--prerelease=allow\"/a\\
-           \"--reinstall\",\\
-           \"--find-links\", \"${DIST_DIR}\"," \
+           \"--reinstall\"," \
     "$FORMULA"
 
 # ---------- 5c. Inject local SDK if available (set by full-install.sh) ----------
