@@ -346,6 +346,27 @@ class AgentFilterConfig(BaseModel):
     )
 
 
+class AgentTerminalConfig(BaseModel):
+    """Per-agent terminal/PTY behaviour overrides.
+
+    These settings control how dictare's PTY proxy interacts with the child
+    process output.  Different agents (Claude Code, Gemini CLI, Codex, …)
+    use different terminal rendering strategies, so some need tweaks.
+    """
+
+    scroll_region: bool = Field(
+        default=True,
+        description=(
+            "Use DECSTBM scroll region to protect the status bar row. "
+            "When false, the status bar is still drawn on the last row "
+            "using absolute cursor positioning, but no scroll region is "
+            "set — the child's cursor movement is unrestricted. Useful for "
+            "agents like Gemini CLI whose Ink renderer uses cursor-up "
+            "sequences that conflict with scroll region constraints."
+        ),
+    )
+
+
 class AgentTypeConfig(BaseModel):
     """Agent type configuration (defines a named agent preset and its launch command)."""
 
@@ -363,6 +384,10 @@ class AgentTypeConfig(BaseModel):
     live_dangerously_args: list[str] = Field(
         default_factory=list,
         description="Args inserted after argv[0] when --live-dangerously is passed (e.g. [\"--dangerously-skip-permissions\"] for Claude Code)",
+    )
+    terminal: AgentTerminalConfig = Field(
+        default_factory=AgentTerminalConfig,
+        description="Terminal/PTY behaviour overrides for this agent type",
     )
 
 
@@ -1124,6 +1149,13 @@ command = ["codex"]
 continue_args = ["resume", "--last"]
 live_dangerously_args = ["--dangerously-bypass-approvals-and-sandbox"]
 description = "OpenAI Codex"
+
+[agent_types.gemini]
+command = ["gemini"]
+description = "Google Gemini CLI"
+
+[agent_types.gemini.terminal]
+scroll_region = false
 """
 
     with open(config_path, "w") as f:

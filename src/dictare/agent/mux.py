@@ -667,6 +667,8 @@ def run_agent(
     clear_on_start: bool = True,
     claim_key: str = "ctrl+\\",
     agent_label: str | None = None,
+    scroll_region: bool = True,
+    dump_path: Path | None = None,
 ) -> int:
     """Run a command with multiplexed input from stdin and dictare SSE.
 
@@ -681,6 +683,7 @@ def run_agent(
         status_bar: Show persistent status bar on last terminal row.
         clear_on_start: Clear terminal before launching child process.
         claim_key: Key combo to claim this agent (e.g. "ctrl+\\", "ctrl+]").
+        dump_path: If set, append all raw PTY output bytes to this file.
 
     Returns:
         Exit code of the process.
@@ -726,6 +729,7 @@ def run_agent(
         "server": base_url,
         "session": str(session_path),
         "command": " ".join(command),
+        "dump_path": str(dump_path) if dump_path else None,
     })
 
     # Load redact rules (list of [find, replace] byte pairs)
@@ -746,13 +750,19 @@ def run_agent(
         old_settings = termios.tcgetattr(sys.stdin.fileno())
 
     rows, cols = _get_winsize()
-    sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd()) if status_bar else None
+    sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd(), use_scroll_region=scroll_region) if status_bar else None
+
+    # Open dump file for raw PTY output (append mode, binary)
+    _dump_file = open(dump_path, "ab") if dump_path else None  # noqa: SIM115
 
     def on_output(data: bytes) -> None:
+        if _dump_file:
+            _dump_file.write(data)
+            _dump_file.flush()
         for find, replace in _redact_rules:
             data = data.replace(find, replace)
         os.write(sys.stdout.fileno(), data)
-        if sbar:
+        if sbar and scroll_region:
             sbar.after_child_output()
 
     def on_resize(r: int, c: int) -> None:
@@ -763,7 +773,7 @@ def run_agent(
         command, rows, cols,
         on_output=on_output,
         on_resize=on_resize,
-        reserve_rows=1 if sbar else 0,
+        reserve_rows=1 if sbar and scroll_region else 0,
     )
 
     try:
@@ -867,6 +877,10 @@ def run_agent(
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
 
         session.cleanup()
+
+        # Close dump file
+        if _dump_file:
+            _dump_file.close()
 
         _print_session_summary(base_url)
 

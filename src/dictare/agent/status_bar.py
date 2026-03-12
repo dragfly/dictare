@@ -57,11 +57,13 @@ class StatusBar:
         agent_id: str,
         agent_label: str | None = None,
         cwd: Path | None = None,
+        use_scroll_region: bool = True,
     ) -> None:
         self._text = f"\u25cb {agent_id} \u00b7 connecting..."
         self._style = "warn"
         self._agent_label = agent_label
         self._cwd_label = _format_cwd(cwd) if cwd is not None else None
+        self._use_scroll_region = use_scroll_region
         self._lock = threading.Lock()
         self._rows = 0             # cached terminal size
         self._cols = 0
@@ -77,11 +79,12 @@ class StatusBar:
     # -- public API -----------------------------------------------------------
 
     def init(self, rows: int, cols: int) -> None:
-        """Set up scroll region and draw initial status bar."""
+        """Set up scroll region (if enabled) and draw initial status bar."""
         self._rows = rows
         self._cols = cols
-        self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
-        self._init_scroll_region(rows, cols)
+        if self._use_scroll_region:
+            self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
+            self._init_scroll_region(rows, cols)
         with self._lock:
             self._draw(rows, cols, self._text, self._style)
         self._next_periodic = time.monotonic() + self._periodic_interval
@@ -98,8 +101,9 @@ class StatusBar:
         """Handle terminal resize — re-init scroll region, schedule redraws."""
         self._rows = rows
         self._cols = cols
-        self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
-        self._init_scroll_region(rows, cols)
+        if self._use_scroll_region:
+            self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
+            self._init_scroll_region(rows, cols)
         # Keep redrawing for 1s to survive child full-screen redraws
         self._redraw_until = time.monotonic() + 1.0
         self._last_redraw = 0.0
@@ -151,9 +155,14 @@ class StatusBar:
     def cleanup(self) -> None:
         """Reset scroll region and clear status bar line."""
         rows, cols = self._get_winsize()
-        sys.stdout.buffer.write(
-            f"\x1b[r\x1b[{rows};1H\x1b[2K\n".encode()
-        )
+        if self._use_scroll_region:
+            sys.stdout.buffer.write(
+                f"\x1b[r\x1b[{rows};1H\x1b[2K\n".encode()
+            )
+        else:
+            sys.stdout.buffer.write(
+                f"\x1b[{rows};1H\x1b[2K\n".encode()
+            )
         sys.stdout.buffer.flush()
 
     @property

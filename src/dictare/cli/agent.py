@@ -98,6 +98,7 @@ def register(app: typer.Typer) -> None:
         agent_type_name: str | None = None
         continue_session: bool = False
         live_dangerously: bool = False
+        dump_output: bool = False
         has_double_dash = False  # tracks whether '--' separator was used
         for i, arg in enumerate(args):
             if arg in ("--verbose", "-v"):
@@ -111,6 +112,9 @@ def register(app: typer.Typer) -> None:
                 own_flags_to_remove.add(i)
             elif arg == "--live-dangerously":
                 live_dangerously = True
+                own_flags_to_remove.add(i)
+            elif arg == "--dump":
+                dump_output = True
                 own_flags_to_remove.add(i)
             elif arg in ("--server", "-s") and i + 1 < len(args):
                 server = args[i + 1]
@@ -132,7 +136,7 @@ def register(app: typer.Typer) -> None:
             unknown_flags = [a for a in command_override if a.startswith("-")]
             if unknown_flags:
                 console.print(f"[red]Error: unrecognized option(s): {' '.join(unknown_flags)}[/]")
-                console.print("[dim]dictare agent options: --type/-t <type>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose, --no-status-bar[/]")
+                console.print("[dim]dictare agent options: --type/-t <type>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose, --no-status-bar, --dump[/]")
                 console.print("[dim]To pass flags to the agent command:  dictare agent <name> -- <command> [flags][/]")
                 raise typer.Exit(1)
 
@@ -198,6 +202,10 @@ def register(app: typer.Typer) -> None:
         # CLI flags override config
         if show_status_bar is None:
             show_status_bar = config.client.status_bar
+        # Terminal overrides from agent type config (if resolved)
+        terminal_config = (
+            resolved_agent_type.terminal if resolved_agent_type else None
+        )
 
         # Status bar right-side label: type name or first 30 chars of command
         agent_label: str | None = None
@@ -207,11 +215,21 @@ def register(app: typer.Typer) -> None:
         elif type_key:
             agent_label = type_key
 
+        # Resolve dump path: write raw PTY output to ./agent_id.dump.txt
+        from pathlib import Path as _Path
+
+        dump_path = _Path.cwd() / f"{agent_id}.dump.txt" if dump_output else None
+
         exit_code = run_agent(
             agent_id, command, verbose=verbose,
             base_url=server, status_bar=show_status_bar,
             clear_on_start=config.client.clear_on_start,
             claim_key=config.client.claim_key,
             agent_label=agent_label,
+            scroll_region=(
+                terminal_config.scroll_region
+                if terminal_config else True
+            ),
+            dump_path=dump_path,
         )
         raise typer.Exit(exit_code)
