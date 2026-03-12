@@ -67,3 +67,50 @@ class TestAgentSwitchExecutor:
         msg = {"text": "", "x_agent_switch": {"confidence": 0.5}}
         result = ex.process(msg)
         assert result.action == PipelineAction.PASS
+
+    def test_same_agent_skipped(self) -> None:
+        """Switch to the already-current agent is consumed without calling switch_fn."""
+        called = []
+        ex = AgentSwitchExecutor(
+            switch_fn=lambda t: (called.append(t), True)[1],
+            current_agent_fn=lambda: "voice",
+        )
+        msg = {"text": "", "x_agent_switch": {"target": "voice", "confidence": 0.9}}
+        result = ex.process(msg)
+        assert result.action == PipelineAction.CONSUME
+        assert called == [], "switch_fn should NOT be called for same agent"
+
+    def test_same_agent_case_insensitive(self) -> None:
+        """Same-agent check is case-insensitive."""
+        called = []
+        ex = AgentSwitchExecutor(
+            switch_fn=lambda t: (called.append(t), True)[1],
+            current_agent_fn=lambda: "Voice",
+        )
+        msg = {"text": "", "x_agent_switch": {"target": "voice", "confidence": 0.9}}
+        result = ex.process(msg)
+        assert result.action == PipelineAction.CONSUME
+        assert called == []
+
+    def test_different_agent_switches(self) -> None:
+        """Switch to a different agent calls switch_fn normally."""
+        called = []
+        ex = AgentSwitchExecutor(
+            switch_fn=lambda t: (called.append(t), True)[1],
+            current_agent_fn=lambda: "voice",
+        )
+        msg = {"text": "", "x_agent_switch": {"target": "claude", "confidence": 0.9}}
+        result = ex.process(msg)
+        assert result.action == PipelineAction.CONSUME
+        assert called == ["claude"]
+
+    def test_no_current_agent_fn_always_switches(self) -> None:
+        """Without current_agent_fn, switch always proceeds (backward compat)."""
+        called = []
+        ex = AgentSwitchExecutor(
+            switch_fn=lambda t: (called.append(t), True)[1],
+        )
+        msg = {"text": "", "x_agent_switch": {"target": "voice", "confidence": 0.9}}
+        result = ex.process(msg)
+        assert result.action == PipelineAction.CONSUME
+        assert called == ["voice"]
