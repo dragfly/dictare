@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
 import queue
@@ -26,9 +27,12 @@ from dictare.agent.pty_session import (
     _write_all,
 )
 from dictare.agent.status_bar import StatusBar
+from dictare.logging.setup import setup_logging
 from dictare.pipeline.base import PipelineAction
 from dictare.pipeline.executors import InputExecutor
 from dictare.utils.stats import update_keystrokes
+
+logger = logging.getLogger(__name__)
 
 # Session logs directory
 SESSIONS_DIR = Path.home() / ".local" / "share" / "dictare" / "sessions"
@@ -425,7 +429,7 @@ def _read_from_sse(
                 text = msg.text or ""
                 _log_event(session_path, "msg_read", {
                     "seq": msg_count,
-                    "text": text if verbose else text[:50],
+                    "text": text if verbose else (text[:20] + "[...]" if len(text) > 20 else text),
                     "openvip_id": msg_id,
                     "keystrokes": keystroke_counter.count if keystroke_counter else 0,
                 })
@@ -528,7 +532,7 @@ def _write_to_pty(
                     text = data.get("text", "")
                     _log_event(session_path, "msg_sent", {
                         "seq": msg_count,
-                        "text": text if verbose else text[:50],
+                        "text": text if verbose else (text[:20] + "[...]" if len(text) > 20 else text),
                         "bytes": bytes_written,
                         "openvip_id": data.get("openvip_id"),
                         "openvip_ts": data.get("openvip_ts"),
@@ -639,7 +643,6 @@ def _print_session_summary(base_url: str) -> None:
 def run_agent(
     agent_id: str,
     command: list[str],
-    quiet: bool = False,
     verbose: bool = False,
     base_url: str = DEFAULT_BASE_URL,
     status_bar: bool = True,
@@ -655,8 +658,7 @@ def run_agent(
     Args:
         agent_id: Agent identifier (e.g., 'claude').
         command: Command and arguments to run.
-        quiet: Suppress info messages.
-        verbose: Log full text in session file (not truncated to 50 chars).
+        verbose: Enable verbose agent logging and full text in session file.
         base_url: Engine HTTP server base URL.
         status_bar: Show persistent status bar on last terminal row.
         clear_on_start: Clear terminal before launching child process.
@@ -692,19 +694,21 @@ def run_agent(
     session_path = _get_session_log_path(agent_id)
     _write_session_start(session_path, agent_id, command, base_url)
 
-    if not quiet:
-        print(f"[dictare {__version__}] Agent: {agent_id}", file=sys.stderr)
-        print(f"[dictare {__version__}] Server: {base_url}", file=sys.stderr)
-        print(f"[dictare {__version__}] Session: {session_path}", file=sys.stderr)
-        print(f"[dictare {__version__}] Running: {' '.join(command)}", file=sys.stderr)
+    # Set up agent log file (standard logging)
+    _agent_log_handler = setup_logging(
+        log_path=Path.home() / ".local" / "share" / "dictare" / "logs" / f"agent.{agent_id}.jsonl",
+        level=logging.DEBUG if verbose else logging.INFO,
+        version=__version__,
+        source=f"agent.{agent_id}",
+    )
 
-    # Save original terminal settings
-    old_settings = None
-    if sys.stdin.isatty():
-        old_settings = termios.tcgetattr(sys.stdin.fileno())
-
-    rows, cols = _get_winsize()
-    sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd()) if status_bar else None
+    # Log banner info (instead of printing to stderr)
+    logger.info("agent_start", extra={
+        "agent_id": agent_id,
+        "server": base_url,
+        "session": str(session_path),
+        "command": " ".join(command),
+    })
 
     # Load redact rules (list of [find, replace] byte pairs)
     from dictare.config import load_config
@@ -717,6 +721,14 @@ def run_agent(
                 _redact_rules.append((rule[0].encode(), rule[1].encode()))
     except Exception:
         pass
+
+    # Save original terminal settings
+    old_settings = None
+    if sys.stdin.isatty():
+        old_settings = termios.tcgetattr(sys.stdin.fileno())
+
+    rows, cols = _get_winsize()
+    sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd()) if status_bar else None
 
     def on_output(data: bytes) -> None:
         for find, replace in _redact_rules:
@@ -838,5 +850,9 @@ def run_agent(
 
         session.cleanup()
 
-        if not quiet:
-            _print_session_summary(base_url)
+        _print_session_summary(base_url)
+
+        # Clean up agent log handler
+        if _agent_log_handler:
+            logging.getLogger("dictare").removeHandler(_agent_log_handler)
+            _agent_log_handler.close()

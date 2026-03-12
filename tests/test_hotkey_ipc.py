@@ -24,7 +24,7 @@ def _send_line(path: Path, payload: str) -> str:
 def test_hotkey_ipc_ack_and_callback() -> None:
     calls: list[str] = []
     path = _short_socket_path()
-    srv = HotkeyIPCServer(on_tap=lambda: calls.append("tap"), socket_path=path)
+    srv = HotkeyIPCServer(on_tap=lambda: calls.append("tap"), socket_path=path, accept_timeout=0.01)
     srv.start()
     try:
         response = _send_line(path, '{"type":"hotkey.tap","seq":7,"ts":1.23}\n')
@@ -37,7 +37,7 @@ def test_hotkey_ipc_ack_and_callback() -> None:
 def test_hotkey_ipc_ignores_invalid_payload() -> None:
     calls: list[str] = []
     path = _short_socket_path()
-    srv = HotkeyIPCServer(on_tap=lambda: calls.append("tap"), socket_path=path)
+    srv = HotkeyIPCServer(on_tap=lambda: calls.append("tap"), socket_path=path, accept_timeout=0.01)
     srv.start()
     try:
         # Unknown type: no callback, no ACK required.

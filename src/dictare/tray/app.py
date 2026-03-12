@@ -182,7 +182,9 @@ class TrayApp:
 
         # Status polling
         self._polling = False
+        self._poll_stop = threading.Event()
         self._poll_thread: threading.Thread | None = None
+        self._poll_interval: float = 1.0
 
     def _load_output_mode(self) -> None:
         """Load output mode from config."""
@@ -707,9 +709,9 @@ class TrayApp:
         if self._polling:
             return
 
-        def poll() -> None:
-            import time as _time
+        self._poll_stop.clear()
 
+        def poll() -> None:
             from openvip import Client
 
             from dictare.status import resolve_display_state
@@ -750,7 +752,8 @@ class TrayApp:
                     logger.debug("poll: engine unreachable: %s", _exc)
                     self.set_state("disconnected")
 
-                _time.sleep(1)
+                if self._poll_stop.wait(self._poll_interval):
+                    break
 
         self._polling = True
         self._poll_thread = threading.Thread(target=poll, daemon=True)
@@ -759,6 +762,7 @@ class TrayApp:
     def stop_status_polling(self) -> None:
         """Stop status polling."""
         self._polling = False
+        self._poll_stop.set()
 
     def run(self) -> None:
         """Run the tray application (blocking)."""

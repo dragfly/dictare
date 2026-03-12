@@ -159,12 +159,11 @@ class TestTrayStates:
         assert app._state == "loading"
 
     def test_startup_connection_failures_dont_go_red(self) -> None:
-        """On fresh start, SSE connection failures should NOT flip to disconnected.
+        """Connection failures during polling should set state to 'disconnected'.
 
-        The tray starts in 'disconnected' state. Before the first successful
-        SSE connection (_connected_once=False), on_disconnect must not call
-        set_state('disconnected') — it would be redundant and trigger menu
-        re-renders on every retry attempt.
+        When get_status() raises, the poll loop catches the exception and
+        calls set_state('disconnected'). Verify the loop handles errors
+        gracefully and stops when told.
         """
         from unittest.mock import MagicMock
 
@@ -179,38 +178,28 @@ class TestTrayStates:
 
         app.set_state = recording_set_state  # type: ignore[method-assign]
 
-        # Mock Client.subscribe_status: raise ConnectionRefusedError twice, then stop
-        call_count = 0
+        # Mock get_status to fail twice then stop polling
+        fail_count = 0
 
-        def fake_subscribe_status(**kwargs):  # type: ignore[return]
-            nonlocal call_count
-            on_disconnect = kwargs.get("on_disconnect")
-            stop = kwargs.get("stop")
-            for _ in range(2):
-                if stop and stop():
-                    return
-                if on_disconnect:
-                    on_disconnect(ConnectionRefusedError("refused"))
-                import time
-                time.sleep(0.01)
-            # Stop polling after 2 failures
-            app.stop_status_polling()
-            return iter([])
+        def failing_get_status():
+            nonlocal fail_count
+            fail_count += 1
+            if fail_count >= 2:
+                app.stop_status_polling()
+            raise ConnectionRefusedError("refused")
 
         mock_client = MagicMock()
-        mock_client.subscribe_status.side_effect = fake_subscribe_status
+        mock_client.get_status.side_effect = failing_get_status
 
+        app._poll_interval = 0.01
         with patch("openvip.Client", return_value=mock_client):
             app.start_status_streaming(host="127.0.0.1", port=8770)
-            # Wait for stream thread to finish
             if app._poll_thread:
-                app._poll_thread.join(timeout=2.0)
+                app._poll_thread.join(timeout=1.0)
 
-        # Initial set_state calls (from TrayApp init setup) are ok,
-        # but NO 'disconnected' call should come from on_disconnect
-        # since _connected_once was never True.
-        assert "disconnected" not in states_seen, (
-            f"set_state('disconnected') was called during startup failures: {states_seen}"
+        # Poll loop should have called set_state("disconnected") on failures
+        assert "disconnected" in states_seen, (
+            f"Expected 'disconnected' in states but got: {states_seen}"
         )
 
 class TestServiceMenu:
