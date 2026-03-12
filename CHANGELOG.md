@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.140rc12] - 2026-03-12
 
+### Fixed
+- Agent switch to already-current agent no longer triggers TTS announcement
+
 ### Changed
 - Refined agent CLI logging: banner moved to log file, removed `--quiet`, session truncation 50→20 chars
 - Agent logs: `~/.local/share/dictare/logs/agent.{name}.jsonl` (via `dictare logs --name agent.{name}`)
