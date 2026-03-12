@@ -34,6 +34,14 @@ from dictare.utils.stats import update_keystrokes
 
 logger = logging.getLogger(__name__)
 
+# Escape sequences that trigger a reactive status bar redraw:
+# - ESC[2J  = erase screen (Claude Code Ctrl+O, resize)
+# - ESC[J   = erase below cursor (Codex startup: cursor at row 1 → wipes all)
+# - ESC[r   = DECSTBM reset (Codex resets our scroll region)
+_SCREEN_CLEAR = b"\x1b[2J"
+_ERASE_BELOW = b"\x1b[J"
+_DECSTBM_RESET = b"\x1b[r"
+
 # Session logs directory
 SESSIONS_DIR = Path.home() / ".local" / "share" / "dictare" / "sessions"
 
@@ -754,14 +762,6 @@ def run_agent(
 
     # Open dump file for raw PTY output (append mode, binary)
     _dump_file = open(dump_path, "ab") if dump_path else None  # noqa: SIM115
-
-    # Escape sequences that trigger a reactive status bar redraw:
-    # - ESC[2J  = erase screen (Claude Code Ctrl+O, resize)
-    # - ESC[J   = erase below cursor (Codex startup: cursor at row 1 → wipes all)
-    # - ESC[r   = DECSTBM reset (Codex resets our scroll region)
-    _SCREEN_CLEAR = b"\x1b[2J"
-    _ERASE_BELOW = b"\x1b[J"
-    _DECSTBM_RESET = b"\x1b[r"
 
     def on_output(data: bytes) -> None:
         if _dump_file:
