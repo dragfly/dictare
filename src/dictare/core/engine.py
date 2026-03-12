@@ -544,6 +544,7 @@ class DictareEngine:
         """
         services = {
             "switch_fn": self._switch_to_agent_by_name_internal,
+            "current_agent_fn": lambda: self._agent_mgr.current_agent,
             "mute_fn": self.mute,
             "unmute_fn": self.unmute,
         }

@@ -102,6 +102,9 @@ class AgentManager:
 
     def _set_current(self, agent_id: str, idx: int = 0) -> None:
         """Set current agent, emit event, and push status update."""
+        if agent_id == self._current_agent_id:
+            logger.debug("_set_current_agent: already %s, skipping", agent_id)
+            return
         logger.info("_set_current_agent: %s (idx=%d)", agent_id, idx)
         self._current_agent_id = agent_id
         if self._on_agent_change:

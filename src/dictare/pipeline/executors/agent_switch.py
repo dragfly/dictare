@@ -30,9 +30,12 @@ class AgentSwitchExecutor:
     Attributes:
         switch_fn: Callable that performs the actual agent switch.
                    Signature: switch_fn(agent_name: str) -> bool
+        current_agent_fn: Callable that returns the current agent name.
+                          Used to skip no-op switches.
     """
 
     switch_fn: Any  # Callable[[str], bool]
+    current_agent_fn: Any = None  # Callable[[], str | None]
 
     @property
     def name(self) -> str:
@@ -58,6 +61,16 @@ class AgentSwitchExecutor:
         target = x_switch.get("target") if isinstance(x_switch, dict) else None
         if not target:
             return PipelineResult.passed(message)
+
+        # Skip if already on the target agent
+        if self.current_agent_fn is not None:
+            current = self.current_agent_fn()
+            if current and current.lower() == target.lower():
+                logger.info(
+                    "agent_switch_skipped",
+                    extra={"target": target, "reason": "already_current"},
+                )
+                return PipelineResult.consumed()
 
         success = self.switch_fn(target)
         if success:
