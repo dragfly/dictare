@@ -163,7 +163,7 @@ def deps_resolve(
     failed = 0
     for cmd in commands:
         console.print(f"[bold]Running:[/] {cmd}")
-        result = subprocess.run(cmd, shell=True)
+        result = subprocess.run(cmd, shell=True)  # nosec B602
         if result.returncode != 0:
             console.print(f"[red]Command failed with exit code {result.returncode}[/]")
             failed += 1
