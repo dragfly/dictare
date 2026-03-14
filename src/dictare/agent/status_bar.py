@@ -65,6 +65,7 @@ class StatusBar:
         self._lock = threading.Lock()
         self._rows = 0             # cached terminal size
         self._cols = 0
+        self._stale_row = 0        # old status bar row to clear on next redraw
         # Reactive redraw: set by request_redraw() when child clears screen
         self._redraw_requested = False
         # After resize, schedule a single deferred redraw
@@ -99,12 +100,17 @@ class StatusBar:
         self._draw(rows, cols, text, style)
 
     def on_resize(self, rows: int, cols: int) -> None:
-        """Handle terminal resize — re-init scroll region, schedule one redraw."""
+        """Handle terminal resize — schedule a deferred redraw.
+
+        Called from SIGWINCH handler — must NOT write to stdout (reentrant).
+        All actual drawing is deferred to check_redraw().
+        """
+        old_rows = self._rows
         self._rows = rows
         self._cols = cols
+        self._stale_row = old_rows if old_rows and old_rows != rows else 0
         if self._use_scroll_region:
             self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
-            self._init_scroll_region(rows, cols)
         # Single deferred redraw 200ms after last resize event (debounce).
         self._resize_redraw_at = time.monotonic() + 0.2
 
@@ -147,6 +153,13 @@ class StatusBar:
         No periodic timer — zero interference with child rendering.
         """
         now = time.monotonic()
+
+        # Clear stale status bar row left behind after resize
+        if self._stale_row:
+            stale = self._stale_row
+            self._stale_row = 0
+            sys.stdout.buffer.write(f"\x1b7\x1b[{stale};1H\x1b[2K\x1b8".encode())
+            sys.stdout.buffer.flush()
 
         # Deferred resize redraw (single, after debounce)
         if self._resize_redraw_at and now >= self._resize_redraw_at:

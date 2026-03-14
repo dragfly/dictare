@@ -7,6 +7,7 @@ import logging
 import os
 import platform
 import queue
+import re as _re
 import select
 import sys
 import termios
@@ -41,6 +42,9 @@ logger = logging.getLogger(__name__)
 _SCREEN_CLEAR = b"\x1b[2J"
 _ERASE_BELOW = b"\x1b[J"
 _DECSTBM_RESET = b"\x1b[r"
+# Regex to detect child-initiated DECSTBM set (ESC[N;Mr) — NOT the bare reset (ESC[r).
+# If the child sets its own scroll region, we must back off.
+_DECSTBM_SET_RE = _re.compile(rb'\x1b\[\d+;\d+r')
 
 # Session logs directory
 SESSIONS_DIR = Path.home() / ".local" / "share" / "dictare" / "sessions"
@@ -672,6 +676,7 @@ def run_agent(
         status_bar: Show persistent status bar on last terminal row.
         clear_on_start: Clear terminal before launching child process.
         claim_key: Key combo to claim this agent (e.g. "ctrl+\\", "ctrl+]").
+
     Returns:
         Exit code of the process.
     """
@@ -716,6 +721,7 @@ def run_agent(
         "server": base_url,
         "session": str(session_path),
         "command": " ".join(command),
+        "scroll_region": scroll_region,
     })
 
     # Load redact rules (list of [find, replace] byte pairs)
@@ -738,22 +744,44 @@ def run_agent(
     rows, cols = _get_winsize()
     sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd(), use_scroll_region=scroll_region) if status_bar else None
 
+    # Auto-detection: if the child sends its own DECSTBM set sequences,
+    # we must disable our scroll region to avoid conflicts.
+    _sr_active = scroll_region  # mutable — can be disabled at runtime
+
+    def _disable_scroll_region() -> None:
+        nonlocal _sr_active
+        if not _sr_active:
+            return
+        _sr_active = False
+        # Remove our scroll region and let the child manage its own
+        if sbar:
+            sbar._use_scroll_region = False
+            sbar._region_esc = b""
+        # Reset scroll region to full screen
+        sys.stdout.buffer.write(b"\x1b[r")
+        sys.stdout.buffer.flush()
+        logger.info("scroll_region_auto_disabled", extra={
+            "reason": "child uses own DECSTBM sequences",
+        })
+
     def on_output(data: bytes) -> None:
         for find, replace in _redact_rules:
             data = data.replace(find, replace)
+
+        # Auto-detect: child sets its own scroll region → disable ours
+        if _sr_active and _DECSTBM_SET_RE.search(data):
+            _disable_scroll_region()
+
         # Rewrite bare DECSTBM reset so child can't destroy our scroll region.
-        # Child sends ESC[r meaning "reset to full screen" but on the real
-        # terminal that includes our status bar row.  Replace with ESC[1;Nr
-        # to keep row N+1 protected.
-        if sbar and scroll_region and _DECSTBM_RESET in data:
+        if sbar and _sr_active and _DECSTBM_RESET in data:
             safe_region = f"\x1b[1;{sbar._rows - 1}r".encode()
             data = data.replace(_DECSTBM_RESET, safe_region)
         os.write(sys.stdout.fileno(), data)
-        if sbar and scroll_region:
+        if sbar and _sr_active:
             sbar.after_child_output()
-        if sbar and (_SCREEN_CLEAR in data or _ERASE_BELOW in data):
+        if sbar and _sr_active and (_SCREEN_CLEAR in data or _ERASE_BELOW in data):
             sbar.request_redraw()
-        if sbar and not scroll_region:
+        if sbar and not _sr_active:
             sbar.mark_child_output()
 
     def on_resize(r: int, c: int) -> None:

@@ -972,7 +972,7 @@ def create_default_config() -> Path:
 # [audio.sounds.sent]             # Standalone carriage-return  (carriage-return.wav)
 # enabled = true
 # volume = 0.25
-# [audio.sounds.agent_announce]   # TTS announces agent name on switch
+# [audio.sounds.agent_announce]   # TTS announces agent name on switch (volume not applicable)
 # enabled = true
 
 [stt]
@@ -1089,21 +1089,15 @@ mode_switch_modifier = "KEY_RIGHTALT"  # Hold + hotkey to switch agent/keyboard 
 # match_threshold = 0.5
 
 [agent_types]
-default = "sonnet"
+default = "claude"
 
-[agent_types.sonnet]
-command = ["claude", "--model", "claude-sonnet-4-6", "--max-turns", "1000"]
+[agent_types.claude]
+command = ["claude"]
 continue_args = ["-c"]
 live_dangerously_args = ["--dangerously-skip-permissions"]
-description = "Claude Sonnet 4.6"
+description = "Claude"
 
-[agent_types.opus]
-command = ["claude", "--model", "claude-opus-4-6", "--max-turns", "1000"]
-continue_args = ["-c"]
-live_dangerously_args = ["--dangerously-skip-permissions"]
-description = "Claude Opus 4.6"
-
-[agent_types.chatgpt]
+[agent_types.codex]
 command = ["codex"]
 continue_args = ["resume", "--last"]
 live_dangerously_args = ["--dangerously-bypass-approvals-and-sandbox"]
@@ -1113,10 +1107,7 @@ description = "OpenAI Codex"
 command = ["gemini"]
 continue_args = ["--resume", "latest"]
 live_dangerously_args = ["--yolo"]
-description = "Google Gemini CLI"
-
-[agent_types.gemini.terminal]
-scroll_region = false
+description = "Google Gemini"
 
 [agent_types.aider]
 command = ["aider"]

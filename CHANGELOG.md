@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.140rc16] - 2026-03-14
+
+### Added
+- Scroll region auto-detection: agents that use their own DECSTBM sequences
+  (Codex, Gemini) are automatically switched to `scroll_region=false` at
+  runtime — no manual `[agent_types.*.terminal]` config needed
+
+### Fixed
+- Status bar no longer duplicated on terminal resize (stale row cleanup)
+- `on_resize()` no longer writes to stdout from SIGWINCH handler
+  (fixes `RuntimeError: reentrant call` crash)
+- `request_redraw()` now only fires in scroll_region mode — prevents
+  cursor save/restore interference with agents during rapid resize
+
+### Changed
+- Simplified default agent types: Claude, Codex, Gemini, Aider
+- Removed hardcoded `scroll_region=false` from Codex/Gemini defaults
+  (handled by auto-detection)
+
 ## [0.1.140rc13] - 2026-03-12
 
 ### Fixed
