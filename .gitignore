@@ -85,6 +85,8 @@ docs/
 *.private.md
 private/
 
+scripts/dev/
+
 # Brand assets (logos, icons — kept private, except public icon)
 /assets/*
 !/assets/icon.svg

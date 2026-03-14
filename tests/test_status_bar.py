@@ -127,6 +127,141 @@ class TestStatusBarRightLabel:
         assert f"dictare {__version__}" in plain
 
 # ---------------------------------------------------------------------------
+# on_resize: stale row cleanup
+# ---------------------------------------------------------------------------
+
+class TestResizeStaleRowCleanup:
+    """Test that resizing clears the old status bar row."""
+
+    def test_resize_sets_stale_row(self) -> None:
+        sbar = StatusBar("test")
+        sbar._rows = 50
+        with patch("sys.stdout"):
+            sbar.on_resize(51, 120)
+        assert sbar._stale_row == 50
+
+    def test_same_size_no_stale_row(self) -> None:
+        sbar = StatusBar("test")
+        sbar._rows = 50
+        with patch("sys.stdout"):
+            sbar.on_resize(50, 120)
+        assert sbar._stale_row == 0
+
+    def test_initial_resize_no_stale_row(self) -> None:
+        """First resize (from _rows=0) should not set stale row."""
+        sbar = StatusBar("test")
+        assert sbar._rows == 0
+        with patch("sys.stdout"):
+            sbar.on_resize(50, 120)
+        assert sbar._stale_row == 0
+
+    def test_check_redraw_clears_stale_row(self) -> None:
+        import io
+        sbar = StatusBar("test")
+        sbar._rows = 50
+        sbar._cols = 120
+        sbar._stale_row = 45  # simulate leftover from resize
+
+        buf = io.BytesIO()
+        with patch("sys.stdout") as mock_stdout:
+            mock_stdout.buffer = buf
+            sbar.check_redraw()
+
+        output = buf.getvalue().decode()
+        # Should contain cursor move to row 45 and erase line
+        assert "\x1b[45;1H" in output
+        assert "\x1b[2K" in output
+        assert sbar._stale_row == 0
+
+    def test_stale_row_works_without_scroll_region(self) -> None:
+        sbar = StatusBar("test", use_scroll_region=False)
+        sbar._rows = 50
+        with patch("sys.stdout"):
+            sbar.on_resize(51, 120)
+        assert sbar._stale_row == 50
+
+    def test_on_resize_does_not_write_stdout(self) -> None:
+        """on_resize is called from SIGWINCH — must not write to stdout."""
+        import io
+        sbar = StatusBar("test")
+        sbar._rows = 50
+        buf = io.BytesIO()
+        with patch("sys.stdout") as mock_stdout:
+            mock_stdout.buffer = buf
+            sbar.on_resize(51, 120)
+        # on_resize should NOT have written anything (no reentrant flush)
+        assert buf.getvalue() == b""
+
+# ---------------------------------------------------------------------------
+# on_output: scroll region auto-detection
+# ---------------------------------------------------------------------------
+
+class TestScrollRegionAutoDetection:
+    """Test that _sr_active is disabled when child sends own DECSTBM."""
+
+    def test_child_decstbm_set_disables_scroll_region(self) -> None:
+        """ESC[1;7r from child should trigger auto-disable."""
+        import re
+        _DECSTBM_SET_RE = re.compile(rb'\x1b\[\d+;\d+r')
+        data = b"\x1b[1;7r"  # Codex-style DECSTBM set
+        assert _DECSTBM_SET_RE.search(data) is not None
+
+    def test_bare_decstbm_reset_does_not_trigger(self) -> None:
+        """ESC[r (bare reset) should NOT trigger auto-disable."""
+        import re
+        _DECSTBM_SET_RE = re.compile(rb'\x1b\[\d+;\d+r')
+        data = b"\x1b[r"  # bare reset
+        assert _DECSTBM_SET_RE.search(data) is None
+
+    def test_decstbm_set_regex_matches_various_formats(self) -> None:
+        """Regex should match ESC[1;7r, ESC[1;30r, etc."""
+        import re
+        _DECSTBM_SET_RE = re.compile(rb'\x1b\[\d+;\d+r')
+        assert _DECSTBM_SET_RE.search(b"\x1b[1;7r")
+        assert _DECSTBM_SET_RE.search(b"\x1b[1;30r")
+        assert _DECSTBM_SET_RE.search(b"\x1b[1;49r")
+        assert not _DECSTBM_SET_RE.search(b"\x1b[r")
+        assert not _DECSTBM_SET_RE.search(b"\x1b[2J")
+
+    def test_disable_scroll_region_updates_status_bar(self) -> None:
+        """When scroll region is auto-disabled, StatusBar flags update."""
+        sbar = StatusBar("test", use_scroll_region=True)
+        sbar._rows = 50
+        # Simulate what _disable_scroll_region does
+        sbar._use_scroll_region = False
+        sbar._region_esc = b""
+        assert sbar._use_scroll_region is False
+        assert sbar._region_esc == b""
+
+    def test_mark_child_output_used_when_sr_disabled(self) -> None:
+        """In non-scroll-region mode, mark_child_output sets the flag."""
+        sbar = StatusBar("test", use_scroll_region=False)
+        sbar._rows = 50
+        assert sbar._output_since_redraw is False
+        sbar.mark_child_output()
+        assert sbar._output_since_redraw is True
+
+# ---------------------------------------------------------------------------
+# request_redraw only in scroll_region mode
+# ---------------------------------------------------------------------------
+
+class TestRequestRedrawScrollRegionOnly:
+    """Verify request_redraw behavior differs by scroll_region mode."""
+
+    def test_request_redraw_sets_flag(self) -> None:
+        sbar = StatusBar("test", use_scroll_region=True)
+        assert sbar._redraw_requested is False
+        sbar.request_redraw()
+        assert sbar._redraw_requested is True
+
+    def test_mark_child_output_sets_idle_flag(self) -> None:
+        sbar = StatusBar("test", use_scroll_region=False)
+        assert sbar._output_since_redraw is False
+        sbar.mark_child_output()
+        assert sbar._output_since_redraw is True
+        assert sbar._last_output_at > 0
+
+# ---------------------------------------------------------------------------
 # _write_to_pty: "error" message sets stop_event and exits
 # ---------------------------------------------------------------------------
 
