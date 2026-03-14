@@ -1389,7 +1389,10 @@ class TestTTSIntegration:
         # The callable passed to play_audio should call tts.speak
         fn = mock_play_audio.call_args[0][0]
         fn()
-        mock_tts.speak.assert_called_once_with("hello world")
+        mock_tts.speak.assert_called_once()
+        call_args = mock_tts.speak.call_args
+        assert call_args[0][0] == "hello world"
+        assert "volume" in call_args[1]
 
     @patch("dictare.audio.beep.play_audio")
     def test_speak_text_skips_when_tts_unavailable(

@@ -327,20 +327,22 @@ class TTSManager:
             logger.warning("speak_text(%r): TTS engine not loaded", text)
             return
 
-        from dictare.audio.beep import get_sound_for_event
+        from dictare.audio.beep import get_sound_for_event, get_volume_for_event
 
         enabled, _ = get_sound_for_event(self._config.audio, "agent_announce")
         if not enabled:
             return
 
+        vol = get_volume_for_event(self._config.audio, "agent_announce")
+
         from dictare.audio.beep import play_audio
 
         tts = self._tts_engine
-        logger.info("TTS: %r", text)
+        logger.info("TTS: %r (volume=%.2f)", text, vol)
 
         def _do_tts() -> None:
             try:
-                ok = tts.speak(text)
+                ok = tts.speak(text, volume=vol)
                 if not ok:
                     logger.warning("TTS speak(%r) returned False", text)
             except Exception:

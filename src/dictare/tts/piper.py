@@ -157,6 +157,7 @@ class PiperTTS(TTSEngine):
         *,
         voice: str | None = None,
         language: str | None = None,
+        volume: float = 1.0,
     ) -> bool:
         """Speak text using Piper.
 
@@ -176,7 +177,7 @@ class PiperTTS(TTSEngine):
             cached = cache_hit(key)
             if cached:
                 logger.debug("TTS cache hit: %s", key[:12])
-                play_audio_native(cached, timeout=120.0)
+                play_audio_native(cached, timeout=120.0, volume=volume)
                 return True
 
             # Cache miss → generate
@@ -202,7 +203,7 @@ class PiperTTS(TTSEngine):
             # Save to cache → play → evict
             try:
                 cached_path = cache_save(key, wav_path)
-                play_audio_native(cached_path, timeout=120.0)
+                play_audio_native(cached_path, timeout=120.0, volume=volume)
                 cache_evict()
             finally:
                 wav_path.unlink(missing_ok=True)

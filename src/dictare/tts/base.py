@@ -34,7 +34,7 @@ def stop_audio_native() -> bool:
         pass
     return True
 
-def play_audio_native(path: str | Path, *, timeout: float = 120.0) -> None:
+def play_audio_native(path: str | Path, *, timeout: float = 120.0, volume: float = 1.0) -> None:
     """Play an audio file using the native system player.
 
     Uses afplay on macOS, paplay/aplay on Linux.  All three read file
@@ -43,16 +43,18 @@ def play_audio_native(path: str | Path, *, timeout: float = 120.0) -> None:
     Args:
         path: Path to audio file (WAV, AIFF, etc.).
         timeout: Maximum playback time in seconds.
+        volume: Playback volume (0.0–1.0). Applied via player flags.
     """
     global _current_audio_proc
     path_str = str(path)
 
     if sys.platform == "darwin":
-        cmd = ["afplay", path_str]
+        cmd = ["afplay", "-v", str(volume), path_str]
     elif shutil.which("paplay"):
-        cmd = ["paplay", path_str]
+        # paplay volume: 0–65536 (100% = 65536)
+        cmd = ["paplay", f"--volume={int(volume * 65536)}", path_str]
     elif shutil.which("aplay"):
-        cmd = ["aplay", "-q", path_str]
+        cmd = ["aplay", "-q", path_str]  # aplay has no volume flag
     else:
         logger.warning("No native audio player found (paplay/aplay)")
         return
@@ -80,6 +82,7 @@ class TTSEngine(ABC):
         *,
         voice: str | None = None,
         language: str | None = None,
+        volume: float = 1.0,
     ) -> bool:
         """Speak text aloud.
 
@@ -87,6 +90,7 @@ class TTSEngine(ABC):
             text: Text to speak.
             voice: Per-request voice override (engine-dependent, optional).
             language: Per-request language override (engine-dependent, optional).
+            volume: Playback volume (0.0–1.0).
 
         Returns:
             True if successful.
