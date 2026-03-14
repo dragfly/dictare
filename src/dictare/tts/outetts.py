@@ -163,6 +163,7 @@ class OuteTTS(TTSEngine):
         *,
         voice: str | None = None,
         language: str | None = None,
+        volume: float = 1.0,
     ) -> bool:
         """Speak text using OuteTTS via mlx-audio.
 
@@ -185,17 +186,17 @@ class OuteTTS(TTSEngine):
             cached = cache_hit(key)
             if cached:
                 logger.debug("TTS cache hit: %s", key[:12])
-                play_audio_native(cached, timeout=120.0)
+                play_audio_native(cached, timeout=120.0, volume=volume)
                 return True
 
             # Cache miss → generate and cache
-            return self._generate_and_cache(text, key)
+            return self._generate_and_cache(text, key, volume=volume)
 
         except Exception as e:
             logging.error(f"TTS exception: {e}")
             return False
 
-    def _generate_and_cache(self, text: str, key: str) -> bool:
+    def _generate_and_cache(self, text: str, key: str, *, volume: float = 1.0) -> bool:
         """Generate audio, save to cache, and play."""
         try:
             with warnings.catch_warnings():
@@ -231,7 +232,7 @@ class OuteTTS(TTSEngine):
 
                     # Save to cache → play → evict
                     cached_path = cache_save(key, audio_files[0])
-                    play_audio_native(cached_path, timeout=120.0)
+                    play_audio_native(cached_path, timeout=120.0, volume=volume)
                     cache_evict()
                     return True
 

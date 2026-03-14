@@ -66,6 +66,7 @@ class EspeakTTS(TTSEngine):
         voice: str | None = None,
         language: str | None = None,
         play: bool = True,
+        volume: float = 1.0,
     ) -> bool:
         """Speak text using espeak.
 
@@ -92,7 +93,7 @@ class EspeakTTS(TTSEngine):
             if cached:
                 logger.debug("TTS cache hit: %s", key[:12])
                 if play:
-                    play_audio_native(cached, timeout=120.0)
+                    play_audio_native(cached, timeout=120.0, volume=volume)
                 return True
 
             # Cache miss → generate WAV file
@@ -123,7 +124,7 @@ class EspeakTTS(TTSEngine):
             try:
                 cached_path = cache_save(key, wav_path)
                 if play:
-                    play_audio_native(cached_path, timeout=120.0)
+                    play_audio_native(cached_path, timeout=120.0, volume=volume)
                 cache_evict()
             finally:
                 wav_path.unlink(missing_ok=True)

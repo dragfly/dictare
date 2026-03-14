@@ -228,6 +228,7 @@ class KokoroTTS(TTSEngine):
         *,
         voice: str | None = None,
         language: str | None = None,
+        volume: float = 1.0,
     ) -> bool:
         """Speak text using Kokoro.
 
@@ -253,7 +254,7 @@ class KokoroTTS(TTSEngine):
             cached = cache_hit(key)
             if cached:
                 logger.debug("TTS cache hit: %s", key[:12])
-                play_audio_native(cached, timeout=120.0)
+                play_audio_native(cached, timeout=120.0, volume=volume)
                 return True
 
             # Cache miss — generate
@@ -285,7 +286,7 @@ class KokoroTTS(TTSEngine):
                 key = _cache_key("kokoro", text, lang, resolved_voice)
                 cached = cache_hit(key)
                 if cached:
-                    play_audio_native(cached, timeout=120.0)
+                    play_audio_native(cached, timeout=120.0, volume=volume)
                     return True
                 samples, sample_rate = kokoro.create(  # type: ignore[attr-defined]
                     text,
@@ -301,7 +302,7 @@ class KokoroTTS(TTSEngine):
             sf.write(str(tmp_path), samples, sample_rate)
             try:
                 cached_path = cache_save(key, tmp_path)
-                play_audio_native(cached_path, timeout=120.0)
+                play_audio_native(cached_path, timeout=120.0, volume=volume)
                 cache_evict()
             finally:
                 tmp_path.unlink(missing_ok=True)

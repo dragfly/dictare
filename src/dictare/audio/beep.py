@@ -217,7 +217,7 @@ def get_sound_for_event(audio_config: Any, name: str) -> tuple[bool, str]:
         return False, ""
 
     if name == "agent_announce":
-        return True, ""  # TTS, no file path
+        return True, ""  # TTS, no file path — volume read via get_volume_for_event()
 
     if sound_cfg.path:
         path = sound_cfg.path
@@ -226,6 +226,13 @@ def get_sound_for_event(audio_config: Any, name: str) -> tuple[bool, str]:
     else:
         path = str(_DEFAULT_SOUNDS.get(name, ""))
     return True, path
+
+def get_volume_for_event(audio_config: Any, name: str) -> float:
+    """Return the configured volume for a sound event (0.0–1.0)."""
+    sound_cfg = audio_config.sounds.get(name)
+    if sound_cfg is None:
+        return 1.0
+    return sound_cfg.volume
 
 def get_sound_path(name: str) -> Path:
     """Get path to a bundled sound file.
@@ -382,6 +389,7 @@ def play_audio(
     *,
     pause_mic: bool = True,
     controller: Any = None,
+    volume: float = 1.0,
 ) -> None:
     """Play audio, optionally pausing the microphone during playback.
 
@@ -433,13 +441,13 @@ def play_audio(
     _path: str | Path = source  # type: ignore[assignment]
 
     if not pause_mic or controller is None:
-        play_sound_file(_path)
+        play_sound_file(_path, volume=volume)
         return
 
     from dictare.core.fsm import AppState
 
     if controller.state == AppState.OFF:
-        play_sound_file(_path)
+        play_sound_file(_path, volume=volume)
         return
 
     from dictare.core.fsm import PlayCompleted, PlayStarted
@@ -452,7 +460,7 @@ def play_audio(
         except Exception:
             pass
 
-    play_sound_file(_path, on_complete=on_complete)
+    play_sound_file(_path, volume=volume, on_complete=on_complete)
 
 def warmup_audio() -> None:
     """No-op, kept for API compatibility."""

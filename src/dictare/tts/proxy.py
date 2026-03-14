@@ -49,6 +49,7 @@ class WorkerTTSEngine(TTSEngine):
         *,
         voice: str | None = None,
         language: str | None = None,
+        volume: float = 1.0,
     ) -> bool:
         """Send *text* to the worker and wait for completion."""
         message_id = str(uuid4())
@@ -74,6 +75,8 @@ class WorkerTTSEngine(TTSEngine):
             msg["voice"] = voice
         if language:
             msg["language"] = language
+        if volume != 1.0:
+            msg["volume"] = volume
 
         delivered = self._server.put_message(
             DictareEngine.TTS_AGENT_ID,
