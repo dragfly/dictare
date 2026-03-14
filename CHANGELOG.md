@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0b3] - 2026-03-14
 
+### Changed
+- `agent_types` renamed to `agent_profiles` across config, CLI, UI, and docs
+- CLI: `--profile` is the primary flag, `--type` kept as alias for backward compatibility
+- Default STT model: parakeet-v3 → large-v3-turbo (wider language support, better known)
+- Models UI: trimmed to large-v3-turbo, large-v3, parakeet-v3
+
 ### Fixed
 - FSM race condition: TTS announcements during RECORDING/TRANSCRIBING no longer deadlock the engine
 
