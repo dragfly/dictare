@@ -1,7 +1,7 @@
 export type PresetOption = string | { value: string; label: string };
 
 /** Fields hidden from the UI form (still configurable via config file) */
-export const HIDDEN_FORM_FIELDS = new Set(["daemon.socket_path", "editor", "hotkey.device", "logging.log_file", "output.auto_submit", "output.newline_keys", "output.submit_keys", "output.typing_delay_ms", "redact", "stats.typing_wpm", "stt.model", "tts.engine", "tts.speed"]);
+export const HIDDEN_FORM_FIELDS = new Set(["audio.silence_ms", "daemon.socket_path", "editor", "hotkey.device", "logging.log_file", "output.auto_submit", "output.newline_keys", "output.submit_keys", "output.typing_delay_ms", "redact", "stats.typing_wpm", "stt.model", "stt.translate", "tts.engine", "tts.speed"]);
 
 /** Fields whose text input should be right-aligned */
 export const RIGHT_ALIGN_FIELDS = new Set(["server.host"]);

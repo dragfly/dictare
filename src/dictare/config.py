@@ -78,7 +78,7 @@ class AudioConfig(BaseModel):
         description="Master switch: enable all audio feedback (individual sounds configured in [audio.sounds.*])",
     )
     silence_ms: int = Field(
-        default=1200,
+        default=850,
         description="VAD silence duration to end speech in milliseconds",
     )
     headphones_mode: bool = Field(
@@ -935,7 +935,7 @@ def create_default_config() -> Path:
 # output_device = ""              # Output device name (empty = system default)
 # max_duration = 60               # Max recording duration (seconds)
 # audio_feedback = true           # Master switch for all audio feedback
-# silence_ms = 1200               # VAD silence to end speech (ms)
+# silence_ms = 850                # VAD silence to end speech (ms)
 # headphones_mode = false         # TTS won't pause listening when true
 
 # [audio.advanced]                # Low-level tuning — edit via Settings > Advanced Audio
