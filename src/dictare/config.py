@@ -215,7 +215,7 @@ class OutputConfig(BaseModel):
 
     mode: Literal["agents", "keyboard"] = Field(
         default="agents",
-        description="Output mode: agents (OpenVIP SSE, default) or keyboard (type into focused window)",
+        description="Default output mode",
     )
     typing_delay_ms: int = Field(
         default=2,
