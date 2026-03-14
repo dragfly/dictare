@@ -278,7 +278,7 @@ class TrayApp:
             ]
             target_display = self._current_target or "None"
             items.append(
-                pystray.MenuItem(f"Target: {target_display}", pystray.Menu(*target_items))
+                pystray.MenuItem(f"Current: {target_display}", pystray.Menu(*target_items))
             )
 
         items.append(pystray.Menu.SEPARATOR)
