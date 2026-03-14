@@ -109,15 +109,15 @@ class TestAgentContinue:
     """Tests for --continue / -C flag on 'dictare agent'."""
 
     def _make_config(self, continue_args: list[str] | None = None) -> object:
-        from dictare.config import AgentTypeConfig, AgentTypesConfig, ClientConfig, Config
+        from dictare.config import AgentProfileConfig, AgentProfilesConfig, ClientConfig, Config
 
-        at = AgentTypeConfig(
+        at = AgentProfileConfig(
             command=["claude", "--model", "claude-sonnet-4-6"],
             continue_args=continue_args or [],
         )
         cfg = Config()
         cfg = cfg.model_copy(update={
-            "agent_types": AgentTypesConfig(default="sonnet", sonnet=at),
+            "agent_profiles": AgentProfilesConfig(default="sonnet", sonnet=at),
             "client": ClientConfig(url="http://127.0.0.1:8770", status_bar=False),
         })
         return cfg
@@ -173,19 +173,19 @@ class TestAgentContinue:
         # Command override wins; -c not inserted
         assert captured == [["aider", "--model", "gpt-4"]]
 
-    def test_agent_type_config_parses_continue_args(self) -> None:
-        """AgentTypeConfig correctly parses continue_args from TOML data."""
-        from dictare.config import AgentTypeConfig
+    def test_agent_profile_config_parses_continue_args(self) -> None:
+        """AgentProfileConfig correctly parses continue_args from TOML data."""
+        from dictare.config import AgentProfileConfig
 
-        at = AgentTypeConfig.model_validate({
+        at = AgentProfileConfig.model_validate({
             "command": ["claude"],
             "continue_args": ["-c"],
         })
         assert at.continue_args == ["-c"]
 
-    def test_agent_type_config_continue_args_defaults_empty(self) -> None:
+    def test_agent_profile_config_continue_args_defaults_empty(self) -> None:
         """continue_args defaults to [] when not specified."""
-        from dictare.config import AgentTypeConfig
+        from dictare.config import AgentProfileConfig
 
-        at = AgentTypeConfig.model_validate({"command": ["claude"]})
+        at = AgentProfileConfig.model_validate({"command": ["claude"]})
         assert at.continue_args == []

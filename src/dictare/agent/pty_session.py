@@ -91,7 +91,7 @@ class PTYSession:
                 raise FileNotFoundError(
                     f"Command not found: {binary!r}\n"
                     f"Make sure it is installed and in PATH, or use the full path "
-                    f"in [agent_types.<name>].command"
+                    f"in [agent_profiles.<name>].command"
                 )
             if not os.path.exists(resolved):
                 raise FileNotFoundError(

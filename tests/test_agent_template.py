@@ -9,24 +9,24 @@ from unittest.mock import MagicMock, patch
 from typer.testing import CliRunner
 
 from dictare.cli.agent import _check_engine, _try_start_service
-from dictare.config import AgentTypesConfig, Config, load_config
+from dictare.config import AgentProfilesConfig, Config, load_config
 
 _runner = CliRunner()
 
 # ---------------------------------------------------------------------------
-# AgentTypeConfig parsing
+# AgentProfileConfig parsing
 # ---------------------------------------------------------------------------
 
-class TestAgentTypeConfig:
-    def test_config_with_agent_types(self):
+class TestAgentProfileConfig:
+    def test_config_with_agent_profiles(self):
         toml_content = """
-[agent_types]
+[agent_profiles]
 default = "claude"
 
-[agent_types.claude]
+[agent_profiles.claude]
 command = ["claude"]
 
-[agent_types.aider]
+[agent_profiles.aider]
 command = ["aider", "--model", "claude-3-opus"]
 """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
@@ -35,19 +35,19 @@ command = ["aider", "--model", "claude-3-opus"]
 
         try:
             config = load_config(temp_path)
-            assert config.agent_types.default == "claude"
-            assert "claude" in config.agent_types
-            assert config.agent_types.get("claude").command == ["claude"]
-            assert config.agent_types.get("aider").command == ["aider", "--model", "claude-3-opus"]
+            assert config.agent_profiles.default == "claude"
+            assert "claude" in config.agent_profiles
+            assert config.agent_profiles.get("claude").command == ["claude"]
+            assert config.agent_profiles.get("aider").command == ["aider", "--model", "claude-3-opus"]
         finally:
             temp_path.unlink()
 
-    def test_config_without_agent_types(self):
+    def test_config_without_agent_profiles(self):
         config = Config()
-        assert not config.agent_types
-        assert config.agent_types.default is None
+        assert not config.agent_profiles
+        assert config.agent_profiles.default is None
 
-    def test_config_partial_no_agent_types(self):
+    def test_config_partial_no_agent_profiles(self):
         toml_content = """
 [stt]
 model = "tiny"
@@ -58,35 +58,35 @@ model = "tiny"
 
         try:
             config = load_config(temp_path)
-            assert not config.agent_types
+            assert not config.agent_profiles
             assert config.stt.model == "tiny"
         finally:
             temp_path.unlink()
 
-    def test_agent_type_lookup_hit(self):
-        config = Config(agent_types=AgentTypesConfig(claude={"command": ["claude"]}))
-        agent_type = config.agent_types.get("claude")
-        assert agent_type is not None
-        assert agent_type.command == ["claude"]
+    def test_agent_profile_lookup_hit(self):
+        config = Config(agent_profiles=AgentProfilesConfig(claude={"command": ["claude"]}))
+        agent_profile = config.agent_profiles.get("claude")
+        assert agent_profile is not None
+        assert agent_profile.command == ["claude"]
 
-    def test_agent_type_lookup_miss(self):
-        config = Config(agent_types=AgentTypesConfig(claude={"command": ["claude"]}))
-        assert config.agent_types.get("unknown") is None
+    def test_agent_profile_lookup_miss(self):
+        config = Config(agent_profiles=AgentProfilesConfig(claude={"command": ["claude"]}))
+        assert config.agent_profiles.get("unknown") is None
 
-    def test_agent_type_with_description(self):
-        config = Config(agent_types=AgentTypesConfig(**{
+    def test_agent_profile_with_description(self):
+        config = Config(agent_profiles=AgentProfilesConfig(**{
             "sonnet-4.6": {"command": ["claude", "--model", "claude-sonnet-4-6"], "description": "Claude Sonnet 4.6"}
         }))
-        at = config.agent_types.get("sonnet-4.6")
+        at = config.agent_profiles.get("sonnet-4.6")
         assert at.command == ["claude", "--model", "claude-sonnet-4-6"]
         assert at.description == "Claude Sonnet 4.6"
 
-    def test_default_agent_type(self):
+    def test_default_agent_profile(self):
         config = Config(
-            agent_types=AgentTypesConfig(default="claude", claude={"command": ["claude"]}),
+            agent_profiles=AgentProfilesConfig(default="claude", claude={"command": ["claude"]}),
         )
-        assert config.agent_types.default == "claude"
-        default_at = config.agent_types.get(config.agent_types.default)
+        assert config.agent_profiles.default == "claude"
+        default_at = config.agent_profiles.get(config.agent_profiles.default)
         assert default_at is not None
         assert default_at.command == ["claude"]
 
@@ -139,50 +139,50 @@ class TestTryStartService:
 def _resolve_command(
     config: Config,
     command_override: list[str],
-    agent_type_name: str | None = None,
+    agent_profile_name: str | None = None,
 ) -> list[str] | None:
     """Replicate the CLI command resolution logic for testing."""
     if command_override:
         return command_override
-    type_key = agent_type_name or config.agent_types.default
+    type_key = agent_profile_name or config.agent_profiles.default
     if type_key is None:
         return None
-    agent_type = config.agent_types.get(type_key)
-    return agent_type.command if agent_type else None
+    agent_profile = config.agent_profiles.get(type_key)
+    return agent_profile.command if agent_profile else None
 
 class TestCommandResolution:
-    """Test the command resolution: override > --type > agent_types.default > error."""
+    """Test the command resolution: override > --type > agent_profiles.default > error."""
 
     def test_explicit_type_provides_command(self):
-        """--type picks command from agent_types regardless of session name."""
-        config = Config(agent_types=AgentTypesConfig(**{"claude-sonnet": {"command": ["claude", "--model", "sonnet"]}}))
-        command = _resolve_command(config, [], agent_type_name="claude-sonnet")
+        """--type picks command from agent_profiles regardless of session name."""
+        config = Config(agent_profiles=AgentProfilesConfig(**{"claude-sonnet": {"command": ["claude", "--model", "sonnet"]}}))
+        command = _resolve_command(config, [], agent_profile_name="claude-sonnet")
         assert command == ["claude", "--model", "sonnet"]
 
-    def test_default_agent_type_used_when_no_type_flag(self):
-        """Without --type, agent_types.default is the fallback."""
+    def test_default_agent_profile_used_when_no_type_flag(self):
+        """Without --type, agent_profiles.default is the fallback."""
         config = Config(
-            agent_types=AgentTypesConfig(default="claude-sonnet", **{"claude-sonnet": {"command": ["claude", "--model", "sonnet"]}}),
+            agent_profiles=AgentProfilesConfig(default="claude-sonnet", **{"claude-sonnet": {"command": ["claude", "--model", "sonnet"]}}),
         )
-        command = _resolve_command(config, [], agent_type_name=None)
+        command = _resolve_command(config, [], agent_profile_name=None)
         assert command == ["claude", "--model", "sonnet"]
 
     def test_override_beats_type(self):
         """Explicit command override wins over --type."""
-        config = Config(agent_types=AgentTypesConfig(claude={"command": ["claude"]}))
-        command = _resolve_command(config, ["claude", "--model", "opus"], agent_type_name="claude")
+        config = Config(agent_profiles=AgentProfilesConfig(claude={"command": ["claude"]}))
+        command = _resolve_command(config, ["claude", "--model", "opus"], agent_profile_name="claude")
         assert command == ["claude", "--model", "opus"]
 
     def test_no_type_no_default_returns_none(self):
-        """No --type and no agent_types.default → error (None)."""
-        config = Config(agent_types=AgentTypesConfig(claude={"command": ["claude"]}))
-        command = _resolve_command(config, [], agent_type_name=None)
+        """No --type and no agent_profiles.default → error (None)."""
+        config = Config(agent_profiles=AgentProfilesConfig(claude={"command": ["claude"]}))
+        command = _resolve_command(config, [], agent_profile_name=None)
         assert command is None
 
     def test_type_not_in_config_returns_none(self):
         """--type pointing to unknown key → error (None)."""
-        config = Config(agent_types=AgentTypesConfig(claude={"command": ["claude"]}))
-        command = _resolve_command(config, [], agent_type_name="nonexistent")
+        config = Config(agent_profiles=AgentProfilesConfig(claude={"command": ["claude"]}))
+        command = _resolve_command(config, [], agent_profile_name="nonexistent")
         assert command is None
 
 # ---------------------------------------------------------------------------
@@ -244,14 +244,14 @@ class TestAgentCLIContract:
 
     def setup_method(self):
         self.config = _make_config("""
-[agent_types]
+[agent_profiles]
 default = "claude-sonnet"
 
-[agent_types.claude-sonnet]
+[agent_profiles.claude-sonnet]
 command = ["claude", "--model", "claude-sonnet-4-6"]
 description = "Claude Sonnet"
 
-[agent_types.claude-opus]
+[agent_profiles.claude-opus]
 command = ["claude", "--model", "claude-opus-4-6"]
 description = "Claude Opus"
 """)
@@ -284,7 +284,7 @@ description = "Claude Opus"
         assert launched[0] == ("Pippo", ["claude", "--model", "claude-opus-4-6"])
 
     def test_agent_id_without_type_uses_default(self):
-        """dictare agent Pippo (no --type) → uses agent_types.default command."""
+        """dictare agent Pippo (no --type) → uses agent_profiles.default command."""
         launched: list[list[str]] = []
 
         def fake_run_agent(agent_id, command, **_kw):
@@ -308,9 +308,9 @@ description = "Claude Opus"
         assert result.exit_code != 0
 
     def test_no_default_no_type_exits_nonzero(self):
-        """No --type and no agent_types.default → exit 1."""
+        """No --type and no agent_profiles.default → exit 1."""
         config = _make_config("""
-[agent_types.claude-sonnet]
+[agent_profiles.claude-sonnet]
 command = ["claude"]
 """)
         try:

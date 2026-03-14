@@ -26,7 +26,7 @@ import re
 _TOML_HEADER_RE = re.compile(r"^\[{1,2}\s*[A-Za-z_]")
 
 SUPPORTED_SECTIONS = frozenset([
-    "agent_types",
+    "agent_profiles",
     "keyboard.shortcuts",
     "audio.advanced",
     "audio.sounds",
@@ -37,22 +37,22 @@ SUPPORTED_SECTIONS = frozenset([
 ])
 
 _AGENT_TYPES_HEADER = """\
-[agent_types]
+[agent_profiles]
 default = "sonnet"
 
-[agent_types.sonnet]
+[agent_profiles.sonnet]
 command = ["claude", "--model", "claude-sonnet-4-6", "--max-turns", "1000"]
 continue_args = ["-c"]
 live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude Sonnet 4.6"
 
-[agent_types.opus]
+[agent_profiles.opus]
 command = ["claude", "--model", "claude-opus-4-6", "--max-turns", "1000"]
 continue_args = ["-c"]
 live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude Opus 4.6"
 
-[agent_types.chatgpt]
+[agent_profiles.chatgpt]
 command = ["codex"]
 continue_args = ["resume", "--last"]
 live_dangerously_args = ["--dangerously-bypass-approvals-and-sandbox"]
@@ -206,7 +206,7 @@ _AGENT_FILTER_HEADER = """\
 """
 
 _SECTION_HEADERS: dict[str, str] = {
-    "agent_types": _AGENT_TYPES_HEADER,
+    "agent_profiles": _AGENT_TYPES_HEADER,
     "keyboard.shortcuts": _SHORTCUTS_HEADER,
     "audio.advanced": _AUDIO_ADVANCED_HEADER,
     "audio.sounds": _SOUNDS_HEADER,
@@ -291,7 +291,7 @@ def _extract_section_lines(text: str, section: str) -> str | None:
       when the header is found; discarded when a non-owned header appears).
     """
     owned_map: dict[str, tuple[str, ...]] = {
-        "agent_types": ("[agent_types",),
+        "agent_profiles": ("[agent_profiles",),
         "keyboard.shortcuts": ("[[keyboard.shortcuts",),
         "audio.advanced": ("[audio.advanced",),
         "audio.sounds": ("[audio.sounds",),
@@ -362,7 +362,7 @@ def _strip_section_lines(text: str, section: str) -> str:
     together with it, so they never accumulate on repeated saves.
     """
     owned_map: dict[str, tuple[str, ...]] = {
-        "agent_types": ("[agent_types",),
+        "agent_profiles": ("[agent_profiles",),
         "keyboard.shortcuts": ("[[keyboard.shortcuts",),
         "audio.advanced": ("[audio.advanced",),
         "audio.sounds": ("[audio.sounds",),
@@ -446,16 +446,16 @@ def _validate_section(section: str, content: str) -> None:
     except Exception as exc:
         raise ValueError(f"TOML parse error: {exc}") from exc
 
-    if section == "agent_types":
-        from dictare.config import AgentTypeConfig
+    if section == "agent_profiles":
+        from dictare.config import AgentProfileConfig
 
-        raw = dict(doc.get("agent_types", {}))
+        raw = dict(doc.get("agent_profiles", {}))
         for _name, entry in raw.items():
             if _name == "default":
                 if not isinstance(entry, str):
-                    raise ValueError("agent_types.default must be a string")
+                    raise ValueError("agent_profiles.default must be a string")
             elif isinstance(entry, dict):
-                AgentTypeConfig.model_validate(dict(entry))
+                AgentProfileConfig.model_validate(dict(entry))
 
     elif section == "keyboard.shortcuts":
         from pydantic import BaseModel, field_validator

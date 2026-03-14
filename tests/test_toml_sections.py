@@ -20,25 +20,25 @@ def _roundtrip(text: str, section: str) -> None:
     _strip_section_lines(text, section)  # verify no crash
     # Just verify no content was silently lost
     assert extracted or not any(
-        line.startswith("[agent_types") for line in text.splitlines()
+        line.startswith("[agent_profiles") for line in text.splitlines()
     )
 
 class TestStripSectionLines:
     """_strip_section_lines removes owned lines; _extract_section_lines recovers them."""
 
-    def test_strip_agent_types_removes_header_and_entries(self) -> None:
+    def test_strip_agent_profiles_removes_header_and_entries(self) -> None:
         text = """\
 [stt]
 model = "large-v3-turbo"
 
-[agent_types.claude]
+[agent_profiles.claude]
 command = ["claude"]
 
 [tts]
 engine = "espeak"
 """
-        stripped = _strip_section_lines(text, "agent_types")
-        assert "[agent_types" not in stripped
+        stripped = _strip_section_lines(text, "agent_profiles")
+        assert "[agent_profiles" not in stripped
         assert 'command = ["claude"]' not in stripped
         assert "[stt]" in stripped
         assert "[tts]" in stripped
@@ -50,15 +50,15 @@ engine = "espeak"
 model = "base"
 
 # This comment is after [stt], belongs to stt
-[agent_types.claude]
+[agent_profiles.claude]
 command = ["claude"]
 """
-        stripped = _strip_section_lines(text, "agent_types")
+        stripped = _strip_section_lines(text, "agent_profiles")
         # Comment belongs to [stt] section, so it's kept
         assert "# This comment is after [stt], belongs to stt" in stripped
         assert "[stt]" in stripped
         # Owned content is stripped
-        assert "[agent_types" not in stripped
+        assert "[agent_profiles" not in stripped
 
     def test_strip_preserves_unrelated_comments(self) -> None:
         """Comments NOT preceding an owned header must be kept."""
@@ -69,35 +69,35 @@ command = ["claude"]
 # stt comment
 model = "base"
 
-[agent_types.claude]
+[agent_profiles.claude]
 command = ["claude"]
 """
-        stripped = _strip_section_lines(text, "agent_types")
+        stripped = _strip_section_lines(text, "agent_profiles")
         assert "# Top-level comment" in stripped
         assert "# stt comment" in stripped
 
-    def test_strip_removes_agent_types_default_inside_section(self) -> None:
+    def test_strip_removes_agent_profiles_default_inside_section(self) -> None:
         text = """\
-[agent_types]
+[agent_profiles]
 default = "claude"
 
-[agent_types.claude]
+[agent_profiles.claude]
 command = ["claude"]
 
 [stt]
 model = "base"
 """
-        stripped = _strip_section_lines(text, "agent_types")
-        assert "[agent_types]" not in stripped
+        stripped = _strip_section_lines(text, "agent_profiles")
+        assert "[agent_profiles]" not in stripped
         assert "default" not in stripped
         assert "[stt]" in stripped
 
     def test_strip_empty_file(self) -> None:
-        assert _strip_section_lines("", "agent_types") == ""
+        assert _strip_section_lines("", "agent_profiles") == ""
 
     def test_strip_section_absent(self) -> None:
         text = "[stt]\nmodel = \"base\"\n"
-        assert _strip_section_lines(text, "agent_types") == text
+        assert _strip_section_lines(text, "agent_profiles") == text
 
     def test_strip_audio_advanced(self) -> None:
         text = """\
@@ -129,15 +129,15 @@ class TestSaveIdempotency:
         p.write_text(initial, encoding="utf-8")
         return p
 
-    def test_agent_types_no_duplicate_on_resave(self, tmp_path: Path) -> None:
+    def test_agent_profiles_no_duplicate_on_resave(self, tmp_path: Path) -> None:
         initial = """\
 [stt]
 model = "large-v3-turbo"
 
-[agent_types]
+[agent_profiles]
 default = "sonnet"
 
-[agent_types.sonnet]
+[agent_profiles.sonnet]
 command = ["claude", "--model", "claude-sonnet-4-6"]
 description = "Claude Sonnet"
 """
@@ -148,21 +148,21 @@ description = "Claude Sonnet"
         from dictare.core.toml_sections import serialize_section
 
         config = Config()
-        section_text = serialize_section("agent_types", config)
+        section_text = serialize_section("agent_profiles", config)
 
         # Save once
-        apply_section("agent_types", section_text, config_path)
+        apply_section("agent_profiles", section_text, config_path)
         after_first = config_path.read_text(encoding="utf-8")
 
         # Save same text again (idempotent)
-        apply_section("agent_types", section_text, config_path)
+        apply_section("agent_profiles", section_text, config_path)
         after_second = config_path.read_text(encoding="utf-8")
 
         assert after_first == after_second, (
             "File grew after second identical save — duplicate content bug"
         )
 
-    def test_agent_types_no_comment_accumulation(self, tmp_path: Path) -> None:
+    def test_agent_profiles_no_comment_accumulation(self, tmp_path: Path) -> None:
         """Comments in the header template must not accumulate across saves."""
         initial = "[stt]\nmodel = \"base\"\n"
         config_path = self._make_config(tmp_path, initial)
@@ -172,12 +172,12 @@ description = "Claude Sonnet"
 
         config = Config()
         # serialize_section returns the template (comment-only) since section absent
-        section_text = serialize_section("agent_types", config)
+        section_text = serialize_section("agent_profiles", config)
 
-        apply_section("agent_types", section_text, config_path)
+        apply_section("agent_profiles", section_text, config_path)
         size_after_1 = len(config_path.read_text(encoding="utf-8"))
 
-        apply_section("agent_types", section_text, config_path)
+        apply_section("agent_profiles", section_text, config_path)
         size_after_2 = len(config_path.read_text(encoding="utf-8"))
 
         assert size_after_1 == size_after_2, (
@@ -219,7 +219,7 @@ class TestTomlHeaderRegex:
         assert _TOML_HEADER_RE.match("[ stt ]")
 
     def test_section_with_underscore(self) -> None:
-        assert _TOML_HEADER_RE.match("[agent_types]")
+        assert _TOML_HEADER_RE.match("[agent_profiles]")
 
 # ---------------------------------------------------------------------------
 # Multi-line array values inside sections
@@ -240,7 +240,7 @@ model = "parakeet-v3"
     ["ok", "manda"],
 ]
 
-[agent_types]
+[agent_profiles]
 default = "sonnet"
 """
         extracted = _extract_section_lines(text, "pipeline.submit_filter")
@@ -248,7 +248,7 @@ default = "sonnet"
         assert "[pipeline.submit_filter.triggers]" in extracted
         assert '["ok", "invia"]' in extracted
         assert '["ok", "manda"]' in extracted
-        assert "[agent_types]" not in extracted
+        assert "[agent_profiles]" not in extracted
         assert "[stt]" not in extracted
 
     def test_strip_submit_filter_with_multiline_arrays(self) -> None:
@@ -263,14 +263,14 @@ model = "parakeet-v3"
     ["ok", "manda"],
 ]
 
-[agent_types]
+[agent_profiles]
 default = "sonnet"
 """
         stripped = _strip_section_lines(text, "pipeline.submit_filter")
         assert "[pipeline.submit_filter" not in stripped
         assert '["ok", "invia"]' not in stripped
         assert "[stt]" in stripped
-        assert "[agent_types]" in stripped
+        assert "[agent_profiles]" in stripped
 
     def test_extract_with_multiple_language_keys(self) -> None:
         """Section with multiple language keys and multi-line arrays."""
@@ -328,10 +328,10 @@ model = "parakeet-v3"
 [pipeline.submit_filter.triggers]
 "*" = [["ok", "send"], ["ok", "submit"]]
 
-[agent_types]
+[agent_profiles]
 default = "sonnet"
 """
         extracted = _extract_section_lines(text, "pipeline.submit_filter")
         assert extracted is not None
         assert '[["ok", "send"], ["ok", "submit"]]' in extracted
-        assert "[agent_types]" not in extracted
+        assert "[agent_profiles]" not in extracted

@@ -20,10 +20,10 @@ export const KEY_CAPTURE_FIELDS: Record<string, "evdev" | "shortcut"> = {
 };
 
 /** Fields rendered as read-only 'Edit in config file' */
-export const COMPLEX_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.mute_filter", "pipeline.submit_filter", "stt.advanced"]);
+export const COMPLEX_KEYS = new Set(["agent_profiles", "audio.advanced", "audio.sounds", "keyboard.shortcuts", "pipeline.agent_filter", "pipeline.mute_filter", "pipeline.submit_filter", "stt.advanced"]);
 
 /** Fields rendered as TOML textarea with syntax highlighting */
-export const TOML_EDITABLE_KEYS = new Set(["agent_types", "audio.advanced", "audio.sounds", "pipeline.agent_filter", "pipeline.mute_filter", "pipeline.submit_filter", "stt.advanced"]);
+export const TOML_EDITABLE_KEYS = new Set(["agent_profiles", "audio.advanced", "audio.sounds", "pipeline.agent_filter", "pipeline.mute_filter", "pipeline.submit_filter", "stt.advanced"]);
 
 /** Fields with preset dropdown + custom input */
 export const FIELD_PRESETS: Record<string, PresetOption[]> = {
@@ -69,7 +69,7 @@ export const LABEL_OVERRIDES: Record<string, string> = {
 };
 
 /** TOML fields rendered without accordion (always visible, no toggle header) */
-export const TOML_NO_ACCORDION = new Set(["agent_types", "audio.advanced", "audio.sounds", "stt.advanced"]);
+export const TOML_NO_ACCORDION = new Set(["agent_profiles", "audio.advanced", "audio.sounds", "stt.advanced"]);
 
 /** Custom field ordering: fields listed here appear first, in this order */
 export const FIELD_ORDER: Record<string, string[]> = {
@@ -79,7 +79,7 @@ export const FIELD_ORDER: Record<string, string[]> = {
 
 /** Extra fields to show alongside a section (cross-section visibility) */
 export const SECTION_EXTRA_FIELDS: Record<string, string[]> = {
-  "agent_types": [],
+  "agent_profiles": [],
   "hotkey": ["output.typing_delay_ms", "output.auto_submit", "output.submit_keys", "output.newline_keys"],
 };
 
