@@ -65,6 +65,7 @@ export const LABEL_OVERRIDES: Record<string, string> = {
   "hotkey.key": "Hotkey",
   "stt.language": "Speech language hint",
   "tts.language": "Voice accent",
+  "tts.voice": "Speaker",
 };
 
 /** TOML fields rendered without accordion (always visible, no toggle header) */
