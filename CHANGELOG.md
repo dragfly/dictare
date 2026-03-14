@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Settings UI: cleaner layout — added General tab, removed Output/Logging/Daemon/General sub-tabs
+- Settings UI: hidden non-essential fields (redact, socket_path, log_file, editor, typing_wpm, silence_ms, translate, tts.speed)
+- Settings UI: clearer labels — "Speech language hint", "Voice accent", "Speaker", "Default output mode"
+- Config defaults: silence_ms 1200→850, sound volumes 0.3, claude --max-turns 1000
+- Config defaults: mute/listen triggers enabled with mate/buddy variants
+- Config defaults: agent_filter enabled, claim_key explicit
+
 ## [1.0.0b1] - 2026-03-14
 
 First public beta. Voice layer for AI coding agents — the reference implementation
