@@ -152,6 +152,8 @@ echo "==> Brew prefix: ${BREW_PREFIX}"
 # ---------- 3. Build sdist ----------
 echo "==> Building sdist..."
 cd "$PROJECT_DIR"
+# Always rebuild from working tree — remove stale tarball so uv doesn't skip
+rm -f "$TARBALL"
 uv build --sdist --quiet
 if [[ ! -f "$TARBALL" ]]; then
     echo "ERROR: expected tarball not found: $TARBALL" >&2
@@ -180,7 +182,7 @@ fi
     -e "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" \
     -e "s|dictare_tarball = \".*\"|dictare_tarball = \"${TARBALL}\"|" \
     -e "s|assert_match \"[^\"]*\", shell_output|assert_match \"${VERSION}\", shell_output|" \
-    -e "s|dictare#{extras}==[^\"]*\"|dictare#{extras}==${VERSION}\"|" \
+    -e "s|dictare#{extras}==[^\"]*\"|dictare#{extras} @ file://${TARBALL}\"|" \
     "$FORMULA"
 
 # ---------- 5a. Strip launcher resource (private repo, can't download) ----------
@@ -191,10 +193,11 @@ fi
     -e '/resource("launcher").stage do/,/^    end/d' \
     "$FORMULA"
 
-# ---------- 5b. Inject --find-links for local dist ----------
+# ---------- 5b. Force reinstall from local tarball ----------
+# --reinstall ensures uv rebuilds even if version string matches.
 "${SED_INPLACE[@]}" \
     "/\"--prerelease=allow\"/a\\
-           \"--find-links\", \"${DIST_DIR}\"," \
+           \"--reinstall\"," \
     "$FORMULA"
 
 # ---------- 5c. Inject local SDK if available (set by full-install.sh) ----------
@@ -211,8 +214,9 @@ stop_services
 
 # ---------- 7. Reinstall ----------
 echo "==> brew reinstall dictare..."
-# Clear uv cache so the same version gets rebuilt from the new sdist.
-uv cache clean dictare 2>/dev/null || true
+# Clear Homebrew download cache for dictare so it fetches the new tarball.
+brew --cache dictare 2>/dev/null | xargs rm -f 2>/dev/null || true
+find "$(brew --cache)/downloads/" -name "*dictare*" -delete 2>/dev/null || true
 # Note: brew may exit 1 due to dylib linkage warnings (e.g. PyAV) — not fatal
 brew reinstall dictare 2>&1 || true
 

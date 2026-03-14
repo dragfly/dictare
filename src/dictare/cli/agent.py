@@ -195,6 +195,10 @@ def register(app: typer.Typer) -> None:
         # CLI flags override config
         if show_status_bar is None:
             show_status_bar = config.client.status_bar
+        # Terminal overrides from agent type config (if resolved)
+        terminal_config = (
+            resolved_agent_type.terminal if resolved_agent_type else None
+        )
 
         # Status bar right-side label: type name or first 30 chars of command
         agent_label: str | None = None
@@ -210,5 +214,9 @@ def register(app: typer.Typer) -> None:
             clear_on_start=config.client.clear_on_start,
             claim_key=config.client.claim_key,
             agent_label=agent_label,
+            scroll_region=(
+                terminal_config.scroll_region
+                if terminal_config else True
+            ),
         )
         raise typer.Exit(exit_code)
