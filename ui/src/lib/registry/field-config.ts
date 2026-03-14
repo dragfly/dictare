@@ -63,6 +63,8 @@ export const LABEL_OVERRIDES: Record<string, string> = {
   "audio.input_device": "Input Device",
   "audio.output_device": "Output Device",
   "hotkey.key": "Hotkey",
+  "stt.language": "Speech language hint",
+  "tts.language": "Voice accent",
 };
 
 /** TOML fields rendered without accordion (always visible, no toggle header) */
