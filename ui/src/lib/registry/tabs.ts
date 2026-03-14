@@ -75,12 +75,9 @@ export const tabs: TabDef[] = [
     sections: ["", "client", "logging", "stats", "daemon", "pipeline", "server"],
     desc: "Server, client, logging, daemon, and pipeline settings",
     children: [
-      { id: "advanced-general", label: "General", sections: ["", "stats"], desc: "Editor, verbose, and statistics" },
       { id: "advanced-client", label: "Client", sections: ["client"], desc: "Agent client settings" },
       { id: "advanced-server", label: "Server", sections: ["server"], desc: "HTTP server host and port" },
-      { id: "advanced-logging", label: "Logging", sections: ["logging"], desc: "Log file and level" },
       { id: "advanced-permissions", label: "Permissions", sections: [], desc: "Guided permission doctor" },
-      { id: "advanced-daemon", label: "Daemon", sections: ["daemon"], desc: "Background service" },
       { id: "advanced-pipeline", label: "Pipeline", sections: ["pipeline"], desc: "Message pipeline filters" },
     ],
   },
