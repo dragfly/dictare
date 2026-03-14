@@ -419,19 +419,87 @@ class TestPlayEvents:
         controller.start()
 
         try:
-            # Play starts while in TRANSCRIBING
+            # Play starts while in TRANSCRIBING → forces PLAYING
             controller.send(PlayStarted(text="Agent 2", source="tts"))
             _wait_until(lambda: controller.play_in_progress is True)
 
-            assert sm.state == AppState.TRANSCRIBING
+            assert sm.state == AppState.PLAYING
 
             # Transcription completes while audio playing → deferred
             controller.send(TranscriptionCompleted(text="test", source="stt"))
-            _wait_until(lambda: controller._pending_transcription is not None)
+            _drain(controller)
 
-            assert sm.state == AppState.TRANSCRIBING
+            assert sm.state == AppState.PLAYING
 
             # Play completes → should transition to LISTENING
+            controller.send(PlayCompleted(source="tts"))
+            _wait_until(lambda: sm.state == AppState.LISTENING)
+
+            assert sm.state == AppState.LISTENING
+            assert controller.play_in_progress is False
+        finally:
+            controller.stop()
+
+    def test_play_during_recording_returns_to_listening(self) -> None:
+        """PlayStarted during RECORDING must not deadlock.
+
+        Reproduces the race condition: user is recording (RECORDING state),
+        agent switch triggers TTS announce (PlayStarted), but since state
+        is not LISTENING, the transition to PLAYING is skipped. When
+        PlayCompleted arrives, it can't find PLAYING state and skips the
+        transition back — engine is stuck forever.
+
+        The fix must ensure PLAYING is reached from any state, and
+        PlayCompleted always returns to LISTENING.
+        """
+        sm = StateManager(initial_state=AppState.RECORDING)
+        engine = MockEngine()
+        controller = StateController(sm)
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            # TTS announce fires during RECORDING (agent switch)
+            controller.send(PlayStarted(text="agent roger", source="tts"))
+            _wait_until(lambda: controller.play_in_progress is True)
+
+            # State MUST be PLAYING (not stuck in RECORDING)
+            assert sm.state == AppState.PLAYING, (
+                f"Expected PLAYING after PlayStarted during RECORDING, got {sm.state}"
+            )
+
+            # TTS finishes
+            controller.send(PlayCompleted(source="tts"))
+            _wait_until(lambda: sm.state == AppState.LISTENING)
+
+            # Must return to LISTENING (not stuck in PLAYING)
+            assert sm.state == AppState.LISTENING
+            assert controller.play_in_progress is False
+        finally:
+            controller.stop()
+
+    def test_play_during_transcribing_returns_to_listening(self) -> None:
+        """PlayStarted during TRANSCRIBING must not deadlock.
+
+        Same race condition as RECORDING but from TRANSCRIBING state.
+        """
+        sm = StateManager(initial_state=AppState.TRANSCRIBING)
+        engine = MockEngine()
+        controller = StateController(sm)
+        controller.set_engine(engine)
+        controller.start()
+
+        try:
+            # TTS announce fires during TRANSCRIBING
+            controller.send(PlayStarted(text="agent roger", source="tts"))
+            _wait_until(lambda: controller.play_in_progress is True)
+
+            # State MUST be PLAYING
+            assert sm.state == AppState.PLAYING, (
+                f"Expected PLAYING after PlayStarted during TRANSCRIBING, got {sm.state}"
+            )
+
+            # TTS finishes
             controller.send(PlayCompleted(source="tts"))
             _wait_until(lambda: sm.state == AppState.LISTENING)
 
