@@ -34,6 +34,14 @@ from dictare.utils.stats import update_keystrokes
 
 logger = logging.getLogger(__name__)
 
+# Escape sequences that trigger a reactive status bar redraw:
+# - ESC[2J  = erase screen (Claude Code Ctrl+O, resize)
+# - ESC[J   = erase below cursor (Codex startup: cursor at row 1 → wipes all)
+# - ESC[r   = DECSTBM reset (Codex resets our scroll region)
+_SCREEN_CLEAR = b"\x1b[2J"
+_ERASE_BELOW = b"\x1b[J"
+_DECSTBM_RESET = b"\x1b[r"
+
 # Session logs directory
 SESSIONS_DIR = Path.home() / ".local" / "share" / "dictare" / "sessions"
 
@@ -649,6 +657,7 @@ def run_agent(
     clear_on_start: bool = True,
     claim_key: str = "ctrl+\\",
     agent_label: str | None = None,
+    scroll_region: bool = True,
 ) -> int:
     """Run a command with multiplexed input from stdin and dictare SSE.
 
@@ -663,7 +672,6 @@ def run_agent(
         status_bar: Show persistent status bar on last terminal row.
         clear_on_start: Clear terminal before launching child process.
         claim_key: Key combo to claim this agent (e.g. "ctrl+\\", "ctrl+]").
-
     Returns:
         Exit code of the process.
     """
@@ -728,14 +736,25 @@ def run_agent(
         old_settings = termios.tcgetattr(sys.stdin.fileno())
 
     rows, cols = _get_winsize()
-    sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd()) if status_bar else None
+    sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd(), use_scroll_region=scroll_region) if status_bar else None
 
     def on_output(data: bytes) -> None:
         for find, replace in _redact_rules:
             data = data.replace(find, replace)
+        # Rewrite bare DECSTBM reset so child can't destroy our scroll region.
+        # Child sends ESC[r meaning "reset to full screen" but on the real
+        # terminal that includes our status bar row.  Replace with ESC[1;Nr
+        # to keep row N+1 protected.
+        if sbar and scroll_region and _DECSTBM_RESET in data:
+            safe_region = f"\x1b[1;{sbar._rows - 1}r".encode()
+            data = data.replace(_DECSTBM_RESET, safe_region)
         os.write(sys.stdout.fileno(), data)
-        if sbar:
+        if sbar and scroll_region:
             sbar.after_child_output()
+        if sbar and (_SCREEN_CLEAR in data or _ERASE_BELOW in data):
+            sbar.request_redraw()
+        if sbar and not scroll_region:
+            sbar.mark_child_output()
 
     def on_resize(r: int, c: int) -> None:
         if sbar:
@@ -745,7 +764,7 @@ def run_agent(
         command, rows, cols,
         on_output=on_output,
         on_resize=on_resize,
-        reserve_rows=1 if sbar else 0,
+        reserve_rows=1 if sbar and scroll_region else 0,
     )
 
     try:

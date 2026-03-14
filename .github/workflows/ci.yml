@@ -27,8 +27,11 @@ jobs:
       - name: Run linter
         run: ruff check src/ tests/
 
+      - name: Run security scan
+        run: bandit -r src/ -lll -q
+
       - name: Run tests with coverage
-        run: xvfb-run pytest tests/ -v -m '' --cov=dictare --cov-report=term-missing
+        run: xvfb-run pytest tests/ -v -m '' --cov=dictare --cov-report=term-missing --cov-fail-under=45
 
   typecheck:
     runs-on: ubuntu-latest

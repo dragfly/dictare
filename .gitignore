@@ -81,12 +81,7 @@ ui/.svelte-kit/
 *.local.md
 WORKFLOW.md
 
-# Internal docs — not for public repo
-docs/notes/
-docs/design/
-docs/specs/
-docs/templates/
-docs/tdd-schools.md
+docs/
 *.private.md
 private/
 

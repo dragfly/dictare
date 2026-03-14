@@ -55,34 +55,40 @@ class StatusBar:
         agent_id: str,
         agent_label: str | None = None,
         cwd: Path | None = None,
+        use_scroll_region: bool = True,
     ) -> None:
         self._text = f"\u25cb {agent_id} \u00b7 connecting..."
         self._style = "warn"
         self._agent_label = agent_label
         self._cwd_label = _format_cwd(cwd) if cwd is not None else None
+        self._use_scroll_region = use_scroll_region
         self._lock = threading.Lock()
         self._rows = 0             # cached terminal size
         self._cols = 0
-        # After resize, keep redrawing for a window to survive child redraws
-        self._redraw_until = 0.0   # stop redrawing after this timestamp
-        self._last_redraw = 0.0    # last redraw timestamp (throttle)
-        # Periodic redraw to survive child full-screen redraws (Ctrl+O etc.)
-        self._next_periodic = 0.0  # next scheduled periodic redraw
-        self._periodic_interval = 2.0  # seconds between periodic redraws
+        # Reactive redraw: set by request_redraw() when child clears screen
+        self._redraw_requested = False
+        # After resize, schedule a single deferred redraw
+        self._resize_redraw_at = 0.0  # timestamp for deferred resize redraw
+        # Idle-based redraw for no-scroll-region mode: redraw status bar
+        # only after child output has been quiet for a short period, to
+        # avoid interleaving save/restore cursor with the child's own
+        # cursor movement (which corrupts relative cursor-up agents).
+        self._output_since_redraw = False
+        self._last_output_at = 0.0
         # Pre-built scroll region escape (updated on resize)
         self._region_esc = b""
 
     # -- public API -----------------------------------------------------------
 
     def init(self, rows: int, cols: int) -> None:
-        """Set up scroll region and draw initial status bar."""
+        """Set up scroll region (if enabled) and draw initial status bar."""
         self._rows = rows
         self._cols = cols
-        self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
-        self._init_scroll_region(rows, cols)
+        if self._use_scroll_region:
+            self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
+            self._init_scroll_region(rows, cols)
         with self._lock:
             self._draw(rows, cols, self._text, self._style)
-        self._next_periodic = time.monotonic() + self._periodic_interval
 
     def update(self, text: str, style: str = "ok") -> None:
         """Update status text (callable from any thread)."""
@@ -93,14 +99,23 @@ class StatusBar:
         self._draw(rows, cols, text, style)
 
     def on_resize(self, rows: int, cols: int) -> None:
-        """Handle terminal resize — re-init scroll region, schedule redraws."""
+        """Handle terminal resize — re-init scroll region, schedule one redraw."""
         self._rows = rows
         self._cols = cols
-        self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
-        self._init_scroll_region(rows, cols)
-        # Keep redrawing for 1s to survive child full-screen redraws
-        self._redraw_until = time.monotonic() + 1.0
-        self._last_redraw = 0.0
+        if self._use_scroll_region:
+            self._region_esc = f"\x1b7\x1b[1;{rows - 1}r\x1b8".encode()
+            self._init_scroll_region(rows, cols)
+        # Single deferred redraw 200ms after last resize event (debounce).
+        self._resize_redraw_at = time.monotonic() + 0.2
+
+    def request_redraw(self) -> None:
+        """Request a status bar redraw on next check_redraw() cycle.
+
+        Called from on_output() when the child emits a screen-clear
+        sequence (e.g. \\x1b[2J). This replaces the old periodic timer
+        with a deterministic, reactive trigger.
+        """
+        self._redraw_requested = True
 
     def after_child_output(self) -> None:
         """Re-establish scroll region after relaying child output.
@@ -113,45 +128,73 @@ class StatusBar:
         if self._region_esc:
             sys.stdout.buffer.write(self._region_esc)
 
-    def check_redraw(self) -> None:
-        """Called from main loop — repaint status bar.
+    def mark_child_output(self) -> None:
+        """Record that child produced output (no scroll region mode).
 
-        During resize window: fast redraws every 150ms for 1s.
-        Normal operation: periodic redraw every 2s to survive child
-        full-screen redraws (e.g. Ctrl+O in Claude Code).
+        Instead of redrawing immediately (which injects save/restore cursor
+        sequences that corrupt relative-cursor agents like Gemini),
+        this sets a flag so that ``check_redraw()`` can repaint the status
+        bar after a brief idle period (~150 ms of no output).
+        """
+        self._output_since_redraw = True
+        self._last_output_at = time.monotonic()
+
+    def check_redraw(self) -> None:
+        """Called from main loop — repaint status bar when needed.
+
+        Reactive approach: redraw only when explicitly requested
+        (child screen clear) or after a resize debounce.
+        No periodic timer — zero interference with child rendering.
         """
         now = time.monotonic()
 
-        # Resize window: fast redraws
-        if self._redraw_until:
-            if now >= self._redraw_until:
-                # Final redraw at end of window
-                self._redraw_until = 0.0
+        # Deferred resize redraw (single, after debounce)
+        if self._resize_redraw_at and now >= self._resize_redraw_at:
+            self._resize_redraw_at = 0.0
+            rows, cols = self._get_winsize()
+            if self._use_scroll_region:
+                self._init_scroll_region(rows, cols)
+            with self._lock:
+                self._draw(rows, cols, self._text, self._style)
+            return
+
+        # Reactive redraw: child cleared the screen
+        if self._redraw_requested:
+            self._redraw_requested = False
+            if self._use_scroll_region:
                 rows, cols = self._get_winsize()
                 self._init_scroll_region(rows, cols)
                 with self._lock:
                     self._draw(rows, cols, self._text, self._style)
-                self._next_periodic = now + self._periodic_interval
-                return
-            # Throttle visual repaint to every 150ms
-            if now - self._last_redraw >= 0.15:
-                self._last_redraw = now
+            else:
                 with self._lock:
                     self._draw(self._rows, self._cols, self._text, self._style)
             return
 
-        # Periodic redraw: keep status bar alive after child redraws
-        if now >= self._next_periodic:
-            self._next_periodic = now + self._periodic_interval
+        # Idle-based redraw for no-scroll-region mode: repaint once after
+        # child output has been quiet for 150ms.  This avoids injecting
+        # save/restore cursor during active output (which corrupts agents
+        # that use relative cursor movement like Gemini CLI).
+        if (
+            not self._use_scroll_region
+            and self._output_since_redraw
+            and now - self._last_output_at >= 0.15
+        ):
+            self._output_since_redraw = False
             with self._lock:
                 self._draw(self._rows, self._cols, self._text, self._style)
 
     def cleanup(self) -> None:
         """Reset scroll region and clear status bar line."""
         rows, cols = self._get_winsize()
-        sys.stdout.buffer.write(
-            f"\x1b[r\x1b[{rows};1H\x1b[2K\n".encode()
-        )
+        if self._use_scroll_region:
+            sys.stdout.buffer.write(
+                f"\x1b[r\x1b[{rows};1H\x1b[2K\n".encode()
+            )
+        else:
+            sys.stdout.buffer.write(
+                f"\x1b[{rows};1H\x1b[2K\n".encode()
+            )
         sys.stdout.buffer.flush()
 
     @property
