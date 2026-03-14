@@ -65,7 +65,7 @@ export const tabs: TabDef[] = [
     id: "agents",
     label: "Agents",
     icon: Bot,
-    sections: ["agent_types"],
+    sections: ["agent_profiles"],
     desc: "Agent presets and default agent",
   },
   {

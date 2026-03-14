@@ -11,8 +11,8 @@
 
 	let { sections, isGeneral, schema }: Props = $props();
 
-	// default_agent_type is embedded in the agent_types TOML editor
-	const SKIP_KEYS = new Set(["default_agent_type"]);
+	// default_agent_profile is embedded in the agent_profiles TOML editor
+	const SKIP_KEYS = new Set(["default_agent_profile"]);
 
 	const fields = $derived(
 		(() => {

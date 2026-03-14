@@ -347,15 +347,15 @@ class AgentTerminalConfig(BaseModel):
         ),
     )
 
-class AgentTypeConfig(BaseModel):
-    """Agent type configuration (defines a named agent preset and its launch command)."""
+class AgentProfileConfig(BaseModel):
+    """Agent profile configuration (defines a named agent preset and its launch command)."""
 
     command: list[str] = Field(
         description="Command and arguments to launch the agent",
     )
     description: str = Field(
         default="",
-        description="Human-readable description of this agent type",
+        description="Human-readable description of this agent profile",
     )
     continue_args: list[str] = Field(
         default_factory=list,
@@ -367,21 +367,21 @@ class AgentTypeConfig(BaseModel):
     )
     terminal: AgentTerminalConfig = Field(
         default_factory=AgentTerminalConfig,
-        description="Terminal/PTY behaviour overrides for this agent type",
+        description="Terminal/PTY behaviour overrides for this agent profile",
     )
 
-class AgentTypesConfig(BaseModel):
-    """Container for agent type presets.
+class AgentProfilesConfig(BaseModel):
+    """Container for agent profile presets.
 
     ``default`` names the preset used when running ``dictare agent`` without
-    ``--type``.  All other keys are named presets (``AgentTypeConfig``).
+    ``--profile``.  All other keys are named presets (``AgentProfileConfig``).
 
     TOML structure::
 
-        [agent_types]
+        [agent_profiles]
         default = "claude"
 
-        [agent_types.claude]
+        [agent_profiles.claude]
         command = ["claude"]
         continue_args = ["-c"]
     """
@@ -390,23 +390,23 @@ class AgentTypesConfig(BaseModel):
 
     default: str | None = Field(
         default=None,
-        description="Default agent type used when running 'dictare agent' without --type",
+        description="Default agent profile used when running 'dictare agent' without --profile",
     )
 
-    def get(self, name: str) -> AgentTypeConfig | None:
+    def get(self, name: str) -> AgentProfileConfig | None:
         """Return the named preset, or None if not found."""
         extras = self.model_extra or {}
         if name not in extras:
             return None
-        return AgentTypeConfig.model_validate(extras[name])
+        return AgentProfileConfig.model_validate(extras[name])
 
-    def entries(self) -> dict[str, AgentTypeConfig]:
+    def entries(self) -> dict[str, AgentProfileConfig]:
         """Return all named presets as a validated dict."""
         result = {}
         for k, v in (self.model_extra or {}).items():
-            if isinstance(v, (dict, AgentTypeConfig)):
+            if isinstance(v, (dict, AgentProfileConfig)):
                 try:
-                    result[k] = AgentTypeConfig.model_validate(v)
+                    result[k] = AgentProfileConfig.model_validate(v)
                 except Exception:
                     pass
         return result
@@ -547,9 +547,9 @@ class Config(BaseModel):
     stats: StatsConfig = Field(default_factory=StatsConfig)
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
-    agent_types: AgentTypesConfig = Field(
-        default_factory=AgentTypesConfig,
-        description='Agent type presets. Set default = "claude" for default type. Names with dots must be quoted: [agent_types."sonnet-4.6"].',
+    agent_profiles: AgentProfilesConfig = Field(
+        default_factory=AgentProfilesConfig,
+        description='Agent profile presets. Set default = "claude" for default profile. Names with dots must be quoted: [agent_profiles."sonnet-4.6"].',
     )
 
     redact: list[list[str]] = Field(
@@ -844,8 +844,8 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
     config = Config()
 
     # Derive sections from Config fields: any field whose type is a BaseModel subclass
-    # (except agent_types which is dynamic)
-    _skip_sections = {"agent_types"}
+    # (except agent_profiles which is dynamic)
+    _skip_sections = {"agent_profiles"}
     sections: list[tuple[str, type]] = []
     for field_name, field_info in Config.model_fields.items():
         field_type = field_info.annotation
@@ -889,15 +889,15 @@ def list_config_keys() -> list[tuple[str, str, Any, str, str]]:
                 env_var,
             ))
 
-    # agent_types has dynamic entries — expose as a single "dict" field
+    # agent_profiles has dynamic entries — expose as a single "dict" field
     # so the UI renders it as a TOML editor
-    agent_types_field = Config.model_fields["agent_types"]
+    agent_profiles_field = Config.model_fields["agent_profiles"]
     result.append((
-        "agent_types",
+        "agent_profiles",
         "dict",
         {},
-        agent_types_field.description or "Agent type presets",
-        _key_to_env_var("agent_types"),
+        agent_profiles_field.description or "Agent profile presets",
+        _key_to_env_var("agent_profiles"),
     ))
 
     return result
@@ -1096,28 +1096,28 @@ enabled = true
 # triggers = ["agent"]
 # match_threshold = 0.5
 
-[agent_types]
+[agent_profiles]
 default = "claude"
 
-[agent_types.claude]
+[agent_profiles.claude]
 command = ["claude", "--max-turns", "1000"]
 continue_args = ["-c"]
 live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude"
 
-[agent_types.codex]
+[agent_profiles.codex]
 command = ["codex"]
 continue_args = ["resume", "--last"]
 live_dangerously_args = ["--dangerously-bypass-approvals-and-sandbox"]
 description = "OpenAI Codex"
 
-[agent_types.gemini]
+[agent_profiles.gemini]
 command = ["gemini"]
 continue_args = ["--resume", "latest"]
 live_dangerously_args = ["--yolo"]
 description = "Google Gemini"
 
-[agent_types.aider]
+[agent_profiles.aider]
 command = ["aider"]
 description = "Aider (AI pair programming)"
 """

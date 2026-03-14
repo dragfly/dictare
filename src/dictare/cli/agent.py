@@ -58,15 +58,15 @@ def register(app: typer.Typer) -> None:
     ) -> None:
         """Launch an agent with dictare voice input.
 
-        AGENT_ID is the session name (project, role, etc.) — not the model type.
-        Use --type to pick which agent_types template to run. Without --type,
-        default_agent_type from config is used.
+        AGENT_ID is the session name (project, role, etc.) — not the model profile.
+        Use --profile to pick which agent_profiles template to run. Without --profile,
+        default agent profile from config is used.
 
         Examples:
 
-            dictare agent frontend                         # Use default_agent_type
-            dictare agent frontend --type claude-sonnet    # Explicit type from config
-            dictare agent frontend -- claude --model opus  # Explicit command override
+            dictare agent frontend                            # Use default profile
+            dictare agent frontend --profile claude-sonnet    # Explicit profile from config
+            dictare agent frontend -- claude --model opus     # Explicit command override
         """
         from dictare.agent import run_agent
         from dictare.config import load_config
@@ -80,10 +80,10 @@ def register(app: typer.Typer) -> None:
             import click
 
             click.echo(ctx.get_help())
-            if config.agent_types:
+            if config.agent_profiles:
                 console.print()
-                console.print("[dim]Available agent types:[/]")
-                for name, at in config.agent_types.items():
+                console.print("[dim]Available agent profiles:[/]")
+                for name, at in config.agent_profiles.items():
                     desc = f"  {at.description}" if at.description else ""
                     console.print(f"[dim]  {name}{desc}[/]")
             raise typer.Exit(1)
@@ -92,7 +92,7 @@ def register(app: typer.Typer) -> None:
         args = list(ctx.args)
         own_flags_to_remove: set[int] = set()
         show_status_bar: bool | None = None
-        agent_type_name: str | None = None
+        agent_profile_name: str | None = None
         continue_session: bool = False
         live_dangerously: bool = False
         has_double_dash = False  # tracks whether '--' separator was used
@@ -113,8 +113,8 @@ def register(app: typer.Typer) -> None:
                 server = args[i + 1]
                 own_flags_to_remove.add(i)
                 own_flags_to_remove.add(i + 1)
-            elif arg in ("--type", "-t") and i + 1 < len(args):
-                agent_type_name = args[i + 1]
+            elif arg in ("--profile", "--type", "-t") and i + 1 < len(args):
+                agent_profile_name = args[i + 1]
                 own_flags_to_remove.add(i)
                 own_flags_to_remove.add(i + 1)
             elif arg == "--":
@@ -129,55 +129,55 @@ def register(app: typer.Typer) -> None:
             unknown_flags = [a for a in command_override if a.startswith("-")]
             if unknown_flags:
                 console.print(f"[red]Error: unrecognized option(s): {' '.join(unknown_flags)}[/]")
-                console.print("[dim]dictare agent options: --type/-t <type>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose, --no-status-bar[/]")
+                console.print("[dim]dictare agent options: --profile/-t <profile>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose, --no-status-bar[/]")
                 console.print("[dim]To pass flags to the agent command:  dictare agent <name> -- <command> [flags][/]")
                 raise typer.Exit(1)
 
         # Resolve command: explicit override > --type > default_agent_type > error
-        resolved_agent_type = None
+        resolved_profile = None
         if command_override:
             command = command_override
         else:
-            type_key = agent_type_name or config.agent_types.default
+            type_key = agent_profile_name or config.agent_profiles.default
             if type_key is None:
-                console.print("[red]Error: no --type given and no agent_types.default set[/]")
-                console.print(f"[dim]  dictare agent {agent_id} --type <type>[/]")
+                console.print("[red]Error: no --profile given and no agent_profiles.default set[/]")
+                console.print(f"[dim]  dictare agent {agent_id} --profile <profile>[/]")
                 console.print(f"[dim]  dictare agent {agent_id} -- <command> [args...][/]")
-                if config.agent_types:
+                if config.agent_profiles:
                     console.print()
-                    console.print("[dim]Available types:[/]")
-                    for name, at in config.agent_types.items():
+                    console.print("[dim]Available profiles:[/]")
+                    for name, at in config.agent_profiles.items():
                         desc = f"  {at.description}" if at.description else ""
                         console.print(f"[dim]  {name}{desc}[/]")
                 raise typer.Exit(1)
 
-            resolved_agent_type = config.agent_types.get(type_key)
-            if resolved_agent_type is None:
-                console.print(f"[red]Error: agent type '{type_key}' not found in config[/]")
-                if config.agent_types:
+            resolved_profile = config.agent_profiles.get(type_key)
+            if resolved_profile is None:
+                console.print(f"[red]Error: agent profile '{type_key}' not found in config[/]")
+                if config.agent_profiles:
                     console.print()
-                    console.print("[dim]Available types:[/]")
-                    for name, at in config.agent_types.items():
+                    console.print("[dim]Available profiles:[/]")
+                    for name, at in config.agent_profiles.items():
                         desc = f"  {at.description}" if at.description else ""
                         console.print(f"[dim]  {name}{desc}[/]")
                 raise typer.Exit(1)
 
-            command = list(resolved_agent_type.command)
+            command = list(resolved_profile.command)
 
         # Apply --continue: insert continue_args after argv[0]
         if continue_session:
-            if resolved_agent_type is not None and resolved_agent_type.continue_args:
-                command = [command[0]] + resolved_agent_type.continue_args + command[1:]
-            elif resolved_agent_type is not None:
-                console.print("[yellow]Warning: --continue given but agent type has no continue_args configured[/]")
+            if resolved_profile is not None and resolved_profile.continue_args:
+                command = [command[0]] + resolved_profile.continue_args + command[1:]
+            elif resolved_profile is not None:
+                console.print("[yellow]Warning: --continue given but agent profile has no continue_args configured[/]")
             # With command override (--), --continue is silently ignored — user controls the full command
 
         # Apply --live-dangerously: insert live_dangerously_args after argv[0]
         if live_dangerously:
-            if resolved_agent_type is not None and resolved_agent_type.live_dangerously_args:
-                command = [command[0]] + resolved_agent_type.live_dangerously_args + command[1:]
-            elif resolved_agent_type is not None:
-                console.print("[yellow]Warning: --live-dangerously given but agent type has no live_dangerously_args configured[/]")
+            if resolved_profile is not None and resolved_profile.live_dangerously_args:
+                command = [command[0]] + resolved_profile.live_dangerously_args + command[1:]
+            elif resolved_profile is not None:
+                console.print("[yellow]Warning: --live-dangerously given but agent profile has no live_dangerously_args configured[/]")
             # With command override (--), --live-dangerously is silently ignored
 
         # Try to auto-start the engine if not reachable.
@@ -195,9 +195,9 @@ def register(app: typer.Typer) -> None:
         # CLI flags override config
         if show_status_bar is None:
             show_status_bar = config.client.status_bar
-        # Terminal overrides from agent type config (if resolved)
+        # Terminal overrides from agent profile config (if resolved)
         terminal_config = (
-            resolved_agent_type.terminal if resolved_agent_type else None
+            resolved_profile.terminal if resolved_profile else None
         )
 
         # Status bar right-side label: type name or first 30 chars of command
