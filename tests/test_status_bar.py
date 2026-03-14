@@ -202,26 +202,26 @@ class TestScrollRegionAutoDetection:
     def test_child_decstbm_set_disables_scroll_region(self) -> None:
         """ESC[1;7r from child should trigger auto-disable."""
         import re
-        _DECSTBM_SET_RE = re.compile(rb'\x1b\[\d+;\d+r')
+        decstbm_set_re = re.compile(rb'\x1b\[\d+;\d+r')
         data = b"\x1b[1;7r"  # Codex-style DECSTBM set
-        assert _DECSTBM_SET_RE.search(data) is not None
+        assert decstbm_set_re.search(data) is not None
 
     def test_bare_decstbm_reset_does_not_trigger(self) -> None:
         """ESC[r (bare reset) should NOT trigger auto-disable."""
         import re
-        _DECSTBM_SET_RE = re.compile(rb'\x1b\[\d+;\d+r')
+        decstbm_set_re = re.compile(rb'\x1b\[\d+;\d+r')
         data = b"\x1b[r"  # bare reset
-        assert _DECSTBM_SET_RE.search(data) is None
+        assert decstbm_set_re.search(data) is None
 
     def test_decstbm_set_regex_matches_various_formats(self) -> None:
         """Regex should match ESC[1;7r, ESC[1;30r, etc."""
         import re
-        _DECSTBM_SET_RE = re.compile(rb'\x1b\[\d+;\d+r')
-        assert _DECSTBM_SET_RE.search(b"\x1b[1;7r")
-        assert _DECSTBM_SET_RE.search(b"\x1b[1;30r")
-        assert _DECSTBM_SET_RE.search(b"\x1b[1;49r")
-        assert not _DECSTBM_SET_RE.search(b"\x1b[r")
-        assert not _DECSTBM_SET_RE.search(b"\x1b[2J")
+        decstbm_set_re = re.compile(rb'\x1b\[\d+;\d+r')
+        assert decstbm_set_re.search(b"\x1b[1;7r")
+        assert decstbm_set_re.search(b"\x1b[1;30r")
+        assert decstbm_set_re.search(b"\x1b[1;49r")
+        assert not decstbm_set_re.search(b"\x1b[r")
+        assert not decstbm_set_re.search(b"\x1b[2J")
 
     def test_disable_scroll_region_updates_status_bar(self) -> None:
         """When scroll region is auto-disabled, StatusBar flags update."""
