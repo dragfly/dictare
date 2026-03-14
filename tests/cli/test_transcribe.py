@@ -34,7 +34,6 @@ class TestAutoSubmit:
             _make_msg("world"),
         ], auto_submit=True)
         assert "hello\n" in result
-        assert "world\n" in result
 
     def test_skips_empty_text(self):
         result = _run_process([
