@@ -293,24 +293,30 @@ class StateController:
 
         Increments the active-plays counter. Counter is managed exclusively on
         this worker thread — no data race possible.
+
+        Transitions to PLAYING from any state (not just LISTENING) to prevent
+        the race condition where PlayCompleted can't find PLAYING state.
         """
         self._current_play_id += 1  # active-plays counter
 
-        # Reset desired state for this new TTS only if user has not already
-        # requested OFF (i.e., don't clobber a pending OFF intent).
-        if self._desired_state_after_play != AppState.OFF:
-            self._desired_state_after_play = AppState.LISTENING
+        # Save the state to return to after playback (only on first play)
+        current = self._state_manager.state
+        if self._current_play_id == 1:
+            # First play — save return state
+            if current == AppState.OFF:
+                self._desired_state_after_play = AppState.OFF
+            elif self._desired_state_after_play != AppState.OFF:
+                self._desired_state_after_play = AppState.LISTENING
 
         # Reset VAD to discard any buffered audio
         if self._engine and self._engine._audio_manager:
             self._engine._audio_manager.reset_vad()
 
-        # Transition to PLAYING if in LISTENING
-        if self._state_manager.state == AppState.LISTENING:
-            old_state = self._state_manager.state
-            if self._state_manager.try_transition(AppState.PLAYING):
+        # Transition to PLAYING from any state (except OFF)
+        if current != AppState.OFF and current != AppState.PLAYING:
+            if self._state_manager.transition(AppState.PLAYING, force=True):
                 if self._on_state_change:
-                    self._on_state_change(old_state, AppState.PLAYING, "tts_start")
+                    self._on_state_change(current, AppState.PLAYING, "tts_start")
 
     def _handle_play_complete(self, event: PlayCompleted) -> None:
         """TTS finished playing.
@@ -342,12 +348,20 @@ class StateController:
 
         current = self._state_manager.state
 
-        # Transition from PLAYING or TRANSCRIBING (if transcription was deferred)
+        # Transition back from PLAYING (or TRANSCRIBING if deferred)
         if current == AppState.PLAYING or (had_pending and current == AppState.TRANSCRIBING):
             old_state = current
             self._state_manager.transition(target_state, force=True)
             if self._on_state_change:
                 self._on_state_change(old_state, target_state, "tts_complete")
+        elif current != AppState.OFF and current != target_state:
+            # Safety net: if we somehow ended up in an unexpected state,
+            # force back to the desired state to prevent deadlock
+            logger.warning("play_complete: unexpected state %s, forcing → %s", current, target_state)
+            old_state = current
+            self._state_manager.transition(target_state, force=True)
+            if self._on_state_change:
+                self._on_state_change(old_state, target_state, "tts_complete_recovery")
 
         # Process any queued audio now that we're listening again
         if target_state == AppState.LISTENING and self._engine:
