@@ -72,11 +72,15 @@ class _ControllerEvents(EngineEvents):
         if new == AppState.LISTENING and old == AppState.OFF:
             enabled, path = get_sound_for_event(config.audio, "start")
             if enabled:
-                play_audio(path, pause_mic=pause, controller=ctrl)
+                scfg = config.audio.sounds.get("start")
+                vol = scfg.volume if scfg is not None else 1.0
+                play_audio(path, pause_mic=pause, controller=ctrl, volume=vol)
         elif new == AppState.OFF:
             enabled, path = get_sound_for_event(config.audio, "stop")
             if enabled:
-                play_audio(path, pause_mic=False)
+                scfg = config.audio.sounds.get("stop")
+                vol = scfg.volume if scfg is not None else 1.0
+                play_audio(path, pause_mic=False, volume=vol)
         elif new == AppState.TRANSCRIBING:
             # Only play typewriter loop for long recordings (>= 8 s of audio).
             audio_ms = 0.0
