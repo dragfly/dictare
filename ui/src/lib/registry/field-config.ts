@@ -1,7 +1,7 @@
 export type PresetOption = string | { value: string; label: string };
 
 /** Fields hidden from the UI form (still configurable via config file) */
-export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device", "output.newline_keys", "output.submit_keys", "output.typing_delay_ms", "stt.model", "tts.engine"]);
+export const HIDDEN_FORM_FIELDS = new Set(["hotkey.device", "output.auto_submit", "output.newline_keys", "output.submit_keys", "output.typing_delay_ms", "redact", "stt.model", "tts.engine"]);
 
 /** Fields whose text input should be right-aligned */
 export const RIGHT_ALIGN_FIELDS = new Set(["server.host"]);
@@ -36,7 +36,7 @@ export const FIELD_PRESETS: Record<string, PresetOption[]> = {
 export const SIZE_HINTS: Record<string, string> = {
   "audio.max_duration": "narrow",
   "audio.silence_ms": "narrow",
-  "client.url": "normal",
+  "client.url": "wide",
   "daemon.socket_path": "normal",
   "hotkey.device": "medium",
   "hotkey.key": "medium",
@@ -75,7 +75,7 @@ export const FIELD_ORDER: Record<string, string[]> = {
 
 /** Extra fields to show alongside a section (cross-section visibility) */
 export const SECTION_EXTRA_FIELDS: Record<string, string[]> = {
-  "agent_types": ["client.claim_key"],
+  "agent_types": [],
   "hotkey": ["output.typing_delay_ms", "output.auto_submit", "output.submit_keys", "output.newline_keys"],
 };
 

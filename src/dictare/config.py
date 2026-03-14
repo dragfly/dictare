@@ -259,7 +259,7 @@ class ClientConfig(BaseModel):
 
     url: str = Field(
         default="http://127.0.0.1:8770/openvip",
-        description="Default engine OpenVIP URL for 'dictare agent' command",
+        description="Engine OpenVIP URL",
     )
     status_bar: bool = Field(
         default=True,
@@ -1020,7 +1020,7 @@ mode_switch_modifier = "KEY_RIGHTALT"  # Hold + hotkey to switch agent/keyboard 
 # url = "http://127.0.0.1:8770/openvip"
 # status_bar = true
 # clear_on_start = true
-# claim_key = "ctrl+\\\\"           # Hotkey to claim this agent (ctrl+\\, ctrl+], etc.)
+claim_key = "ctrl+\\\\"              # Hotkey to claim this agent (ctrl+\\, ctrl+], etc.)
 
 # [logging]
 # log_file = ""                   # JSONL structured log path
@@ -1045,14 +1045,20 @@ mode_switch_modifier = "KEY_RIGHTALT"  # Hold + hotkey to switch agent/keyboard 
 # listen_phrases = ["I'm all ears.", "Ready when you are.", "Listening.", "At your service."]
 
 # Mute triggers — say these to mute voice input (engine keeps running, text discarded)
-# [pipeline.mute_filter.mute_triggers]
-# "*" = [["ok|okay|mate", "mute|stop"]]
+[pipeline.mute_filter.mute_triggers]
+"*" = [
+    ["ok|okay|mate|buddy", "mute|stop"],
+    ["ok|okay|mate|buddy", "hold", "on"],
+]
 # es = [["ok|okay", "silencio|para"]]
 # de = [["ok|okay", "stumm|stopp"]]
 
 # Listen triggers — say these to unmute and resume normal voice input
-# [pipeline.mute_filter.listen_triggers]
-# "*" = [["ok|okay|mate", "listen"]]
+[pipeline.mute_filter.listen_triggers]
+"*" = [
+    ["ok|okay|mate|buddy", "listen"],
+    ["ok|okay|mate|buddy", "listen", "up"],
+]
 # es = [["ok|okay", "escucha"]]
 # de = [["ok|okay", "hoer|zuhoeren"]]
 
