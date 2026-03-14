@@ -96,7 +96,7 @@ def test_engine_status_venv_fields():
     from dictare.utils.platform import check_all_tts_engines
 
     engines = check_all_tts_engines()
-    assert len(engines) >= 6  # say, espeak, piper, coqui, outetts, kokoro
+    assert len(engines) >= 5  # say, espeak, piper, outetts, kokoro
 
     # System engines don't need venvs
     for eng in engines:
