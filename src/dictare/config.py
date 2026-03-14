@@ -168,7 +168,7 @@ class STTConfig(BaseModel):
     )
     language: str = Field(
         default="auto",
-        description="Language code or 'auto' for auto-detection",
+        description="Expected speech language (helps accuracy). Use 'auto' to detect automatically.",
     )
     translate: bool = Field(
         default=False,
@@ -521,7 +521,7 @@ class TTSConfig(BaseModel):
     )
     language: str = Field(
         default="en",
-        description="Language code (en, es, de, it, fr, etc.)",
+        description="Voice accent and pronunciation",
     )
     speed: int = Field(
         default=175,
