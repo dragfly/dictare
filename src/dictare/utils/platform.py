@@ -587,25 +587,6 @@ def check_all_tts_engines(configured_engine: str = "") -> list[dict]:
         venv_installed=piper_venv,
     ))
 
-    # --- coqui ---
-    coqui_venv = is_venv_installed("coqui")
-    coqui_venv_bin = get_venv_bin_dir("coqui")
-    coqui_available = (
-        shutil.which("tts") is not None
-        or _find_in_python_bin("tts")
-        or (coqui_venv_bin is not None and (coqui_venv_bin / "tts").exists())
-    )
-    results.append(EngineStatus(
-        name="coqui",
-        available=coqui_available,
-        description="Coqui XTTS neural TTS",
-        platform_ok=True,
-        install_hint="" if coqui_available else get_install_command("TTS"),
-        configured=configured_engine == "coqui",
-        needs_venv="coqui" in VENV_ENGINES,
-        venv_installed=coqui_venv,
-    ))
-
     # --- outetts (Apple Silicon only) ---
     from dictare.utils.hardware import is_apple_silicon
 

@@ -126,7 +126,7 @@ Default hotkey: **Right ⌘** (macOS) / **Scroll Lock** (Linux).
 |---------|--------|
 | **Single tap** | Toggle listening on/off |
 | **Double tap** | Submit (send Enter to agent) |
-| **Long press** (≥0.8s) | Switch mode: agents ↔ keyboard |
+| **Right Alt + hotkey** | Switch mode: agents ↔ keyboard |
 
 ## Service Management
 
