@@ -346,6 +346,8 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         // nil when permission is missing, non-nil when granted.
         let eventMask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
                                    | (1 << CGEventType.keyDown.rawValue)
+                                   | (1 << CGEventType.leftMouseDown.rawValue)
+                                   | (1 << CGEventType.rightMouseDown.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -385,7 +387,7 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
                     delegate.writeHotkeyStatus("confirmed")
                     fputs("CGEventTap confirmed: first event received\n", stderr)
                 }
-                if type == .keyDown {
+                if type == .keyDown || type == .leftMouseDown || type == .rightMouseDown {
                     delegate.handleKeyDown(event: event)
                 } else {
                     delegate.handleFlagsChanged(event: event)
