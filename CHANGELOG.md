@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0b3] - 2026-03-14
+
+### Fixed
+- FSM race condition: TTS announcements during RECORDING/TRANSCRIBING no longer deadlock the engine
+
 ## [1.0.0b2] - 2026-03-14
 
 ### Added
