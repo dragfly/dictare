@@ -32,14 +32,14 @@ class SoundConfig(BaseModel):
 def _default_sounds() -> dict[str, SoundConfig]:
     """Default sound configurations for all audio feedback events."""
     return {
-        "start": SoundConfig(),
-        "stop": SoundConfig(),
+        "start": SoundConfig(volume=0.3),
+        "stop": SoundConfig(volume=0.3),
         "transcribing": SoundConfig(enabled=False, volume=0.15),
         "ready": SoundConfig(),
         "transcribed": SoundConfig(volume=1.0, focus_gated=True),
         "submit": SoundConfig(volume=0.25, focus_gated=True),
         "sent": SoundConfig(volume=0.25),
-        "agent_announce": SoundConfig(),
+        "agent_announce": SoundConfig(volume=0.3),
     }
 
 class AudioAdvancedConfig(BaseModel):
@@ -950,10 +950,11 @@ def create_default_config() -> Path:
 # [audio.sounds.start]            # OFF → LISTENING  (up-beep.wav)
 # enabled = true
 # path = ""                       # Empty = bundled default
-# volume = 1.0                    # 0.0–1.0
+# volume = 0.3                    # 0.0–1.0
 # focus_gated = false             # Skip when agent terminal has focus
 # [audio.sounds.stop]             # LISTENING → OFF  (down-beep.wav)
 # enabled = true
+# volume = 0.3
 # [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING  (typewriter.wav, looped)
 # enabled = false                  # Disabled by default
 # volume = 0.15                   # Subtle background typewriter during STT processing
@@ -972,8 +973,9 @@ def create_default_config() -> Path:
 # [audio.sounds.sent]             # Standalone carriage-return  (carriage-return.wav)
 # enabled = true
 # volume = 0.25
-# [audio.sounds.agent_announce]   # TTS announces agent name on switch (volume not applicable)
+# [audio.sounds.agent_announce]   # TTS announces agent name on switch
 # enabled = true
+# volume = 0.3
 
 [stt]
 # model = "large-v3-turbo"        # Default: Whisper large-v3-turbo (fast + accurate, MLX on Mac)
@@ -1044,13 +1046,13 @@ mode_switch_modifier = "KEY_RIGHTALT"  # Hold + hotkey to switch agent/keyboard 
 
 # Mute triggers — say these to mute voice input (engine keeps running, text discarded)
 # [pipeline.mute_filter.mute_triggers]
-# "*" = [["ok|okay", "mute|stop"]]
+# "*" = [["ok|okay|mate", "mute|stop"]]
 # es = [["ok|okay", "silencio|para"]]
 # de = [["ok|okay", "stumm|stopp"]]
 
 # Listen triggers — say these to unmute and resume normal voice input
 # [pipeline.mute_filter.listen_triggers]
-# "*" = [["ok|okay", "listen"]]
+# "*" = [["ok|okay|mate", "listen"]]
 # es = [["ok|okay", "escucha"]]
 # de = [["ok|okay", "hoer|zuhoeren"]]
 
@@ -1084,7 +1086,7 @@ mode_switch_modifier = "KEY_RIGHTALT"  # Hold + hotkey to switch agent/keyboard 
 # ]
 
 [pipeline.agent_filter]
-# enabled = false
+enabled = true
 # triggers = ["agent"]
 # match_threshold = 0.5
 
@@ -1092,7 +1094,7 @@ mode_switch_modifier = "KEY_RIGHTALT"  # Hold + hotkey to switch agent/keyboard 
 default = "claude"
 
 [agent_types.claude]
-command = ["claude"]
+command = ["claude", "--max-turns", "1000"]
 continue_args = ["-c"]
 live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude"

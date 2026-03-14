@@ -16,7 +16,7 @@ RESET='\033[0m'
 ALL_DISTROS=(ubuntu debian fedora arch)
 DISTROS=()
 TEST_LEVEL="smoke"
-OPENVIP_SDK="/home/user/repos/openvip-dev/sdks/python"
+OPENVIP_SDK="${OPENVIP_SDK:-}"
 
 # Help
 usage() {

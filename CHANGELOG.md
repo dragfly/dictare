@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0b1] - 2026-03-14
+
+First public beta. Voice layer for AI coding agents — the reference implementation
+of the [OpenVIP](https://github.com/openvip-dev/protocol) open protocol.
+
+### Highlights
+
+- **Voice-to-Agent delivery** — speak to Claude Code, Codex, Gemini, Aider, or any
+  CLI tool. Transcriptions are routed via the OpenVIP protocol, not keystrokes.
+- **No focus required** — your agent receives voice even when its window is in the
+  background. No alt-tab needed.
+- **100% local** — STT and TTS run entirely on your machine. Zero data leaves your
+  computer. No cloud, no API keys, no subscription.
+- **Multi-engine STT** — Whisper (MLX on Apple Silicon, CTranslate2 on Linux/Intel),
+  Parakeet v3 (ONNX, 25 languages). Hardware-accelerated, zero cold-start.
+- **Multi-agent** — switch agents by voice (*"agent claude"*, *"agent codex"*).
+  Each agent in its own terminal, all connected simultaneously.
+- **Bidirectional** — TTS feedback (agent announcements, mute/unmute confirmation).
+  Engines: espeak, macOS say, Piper, Kokoro.
+- **Pipeline architecture** — composable filters and executors for submit detection,
+  voice mute, agent switching. Fully configurable triggers.
+- **System service** — runs at login via launchd (macOS) / systemd (Linux). Preloads
+  models for instant response.
+- **Signed + notarized macOS launcher** — proper Input Monitoring support, no
+  Accessibility permission needed.
+- **Web dashboard** — browser-based settings UI served from the engine.
+- **CLI** — `dictare agent`, `dictare speak`, `dictare transcribe`, `dictare service`,
+  `dictare status`, `dictare logs`, `dictare models`.
+- **Pipe-friendly** — `dictare transcribe | llm | dictare speak`.
+- **Cross-platform** — macOS (Intel + Apple Silicon) and Linux (X11 + Wayland).
+
+### Changed (since 0.1.x series)
+
+- Version scheme: moved from 0.1.x rapid iteration to 1.0.0 semver
+- macOS hotkey: Cmd+click no longer false-triggers dictare
+
 ## [0.1.140rc17] - 2026-03-14
 
 ### Fixed
