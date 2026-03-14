@@ -5,7 +5,7 @@ import {
   HardDrive,
   Keyboard,
   Mic,
-  MonitorSpeaker,
+  Settings,
   SlidersHorizontal,
   Volume2,
 } from "lucide-svelte";
@@ -25,6 +25,13 @@ export const tabs: TabDef[] = [
     icon: HardDrive,
     sections: [],
     desc: "Download and manage STT & TTS models",
+  },
+  {
+    id: "general",
+    label: "General",
+    icon: Settings,
+    sections: ["", "output"],
+    desc: "Basic settings",
   },
   {
     id: "audio",
@@ -53,13 +60,6 @@ export const tabs: TabDef[] = [
     icon: Keyboard,
     sections: ["hotkey", "keyboard"],
     desc: "Hotkey and keyboard shortcuts",
-  },
-  {
-    id: "output",
-    label: "Output",
-    icon: MonitorSpeaker,
-    sections: ["output"],
-    desc: "Send transcriptions to your AI agent or type into any window",
   },
   {
     id: "agents",
