@@ -348,8 +348,7 @@ class TTSManager:
             except Exception:
                 logger.warning("TTS speak failed for %r", text, exc_info=True)
 
-        pause = not self._config.audio.headphones_mode
-        play_audio(_do_tts, pause_mic=pause, controller=self._controller)
+        play_audio(_do_tts, pause_mic=False, controller=self._controller)
 
     def speak_agent(self, agent_name: str) -> None:
         """Speak agent name using OS TTS.
