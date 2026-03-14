@@ -98,9 +98,9 @@ def _render_engine_table(title: str, engines: list[dict]) -> None:
         if configured:
             suffix += "  [cyan]*[/]"
         if not available and hint:
-            suffix += f"\n{'':14}[yellow]{hint}[/]"
+            suffix += f"\n{'':18}[yellow]{hint}[/]"
 
-        console.print(f"  {name:12} {icon}{suffix}")
+        console.print(f"  {name:16} {icon}{suffix}")
 
 def _render_offline() -> None:
     """Render status when engine is not running."""
