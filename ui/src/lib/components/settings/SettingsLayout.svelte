@@ -199,9 +199,9 @@
 					<h2 class="text-xl font-semibold mb-1.5">{activeLabel}</h2>
 					<p class="text-sm text-muted-foreground">{activeDesc}</p>
 				</div>
-			{#if activeNavId === "advanced-daemon"}
-					<div class="px-4 mb-6 space-y-3">
-						{#if launchAtLogin !== null}
+			{#if activeNavId === "general"}
+					{#if launchAtLogin !== null}
+						<div class="px-4 mb-6">
 							<div class="flex items-center justify-between rounded-lg border px-4 py-3">
 								<div>
 									<div class="text-sm font-medium">Launch at login</div>
@@ -217,14 +217,8 @@
 									<span class="pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform {launchAtLogin ? 'translate-x-4' : 'translate-x-0'}"></span>
 								</button>
 							</div>
-						{/if}
-						<div>
-							<Button variant="destructive" onclick={handleRestart} disabled={restarting}>
-								<RotateCcw class="size-3.5 mr-1.5 {restarting ? 'animate-spin' : ''}" />
-								{restarting ? "Restarting…" : "Restart Engine"}
-							</Button>
 						</div>
-					</div>
+					{/if}
 				{/if}
 				{#if activeNavId === "advanced-permissions"}
 					<div class="px-4 mb-6">
