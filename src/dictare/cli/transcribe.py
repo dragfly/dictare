@@ -50,6 +50,7 @@ def process_messages(
                     print(text, file=output, flush=True)
                     if verbose:
                         print(f"[transcribe] {text}", file=sys.stderr)
+                    return
             else:
                 if text:
                     buffer.append(text)
@@ -120,7 +121,7 @@ def register(app: typer.Typer) -> None:
 
         # Info on stderr so stdout stays clean for piping
         if auto_submit:
-            print(f"Listening as agent '{agent_id}'... (Ctrl+C to stop)", file=sys.stderr)
+            print(f"Listening as agent '{agent_id}'... (speak, then auto-sends)", file=sys.stderr)
         else:
             print(f"Listening as agent '{agent_id}'... (submit to send)", file=sys.stderr)
 
