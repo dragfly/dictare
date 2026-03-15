@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 
+
 def sanitize_text_for_injection(text: str) -> str:
     """Remove ANSI escape sequences and control characters from text.
 

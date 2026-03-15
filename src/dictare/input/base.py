@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+
 @dataclass
 class InputEvent:
     """An input event that triggers a command."""

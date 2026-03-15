@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+
 def get_runtime_status_path() -> Path:
     return Path.home() / ".dictare" / "hotkey_runtime_status"
 

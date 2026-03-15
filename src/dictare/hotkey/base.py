@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
+
 class HotkeyListener(ABC):
     """Abstract base class for hotkey listeners."""
 

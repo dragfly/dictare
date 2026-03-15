@@ -9,6 +9,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+
 def get_runtime_dir() -> Path:
     """Get the runtime directory for sockets and ephemeral files.
 

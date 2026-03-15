@@ -8,6 +8,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
+
 class LogLevel(IntEnum):
     """Log levels for structured logging."""
 

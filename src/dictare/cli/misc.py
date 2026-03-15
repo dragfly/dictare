@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 
+
 def check_python_environment() -> None:
     """Check if running in the correct Python environment."""
     import os

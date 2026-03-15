@@ -10,6 +10,7 @@ import typer
 
 from dictare.cli._helpers import console
 
+
 def process_messages(
     messages: Iterator,
     *,

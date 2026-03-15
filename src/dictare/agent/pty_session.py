@@ -13,6 +13,7 @@ import termios
 from collections.abc import Callable
 from fcntl import ioctl
 
+
 def _set_winsize(fd: int, rows: int, cols: int) -> None:
     """Set terminal window size."""
     try:

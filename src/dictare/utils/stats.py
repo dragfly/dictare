@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
+
 class StatsData(TypedDict, total=False):
     """Structure for persistent stats.
 

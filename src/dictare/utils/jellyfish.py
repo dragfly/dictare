@@ -29,6 +29,7 @@ No other code changes are needed.
 
 from __future__ import annotations
 
+
 def metaphone(word: str) -> str:
     """Compute the Metaphone phonetic code for a word.
 

@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+
 def get_data_dir() -> Path:
     """Get the dictare data directory."""
     data_dir = Path.home() / ".local" / "share" / "dictare"
