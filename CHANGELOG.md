@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0b3] - 2026-03-14
+## [0.2.0b3] - 2026-03-14
 
 ### Changed
 - `agent_types` renamed to `agent_profiles` across config, CLI, UI, and docs
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - FSM race condition: TTS announcements during RECORDING/TRANSCRIBING no longer deadlock the engine
 
-## [1.0.0b2] - 2026-03-14
+## [0.2.0b2] - 2026-03-14
 
 ### Added
 - "Launch at login" toggle moved to General tab (more discoverable)
@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dictare transcribe --auto-submit` now exits after first transcription (one-shot, pipe-friendly)
 - Hotkey: Cmd+click no longer false-triggers on macOS (mouse events added to CGEventTap)
 
-## [1.0.0b1] - 2026-03-14
+## [0.2.0b1] - 2026-03-14
 
 First public beta. Voice layer for AI coding agents — the reference implementation
 of the [OpenVIP](https://github.com/openvip-dev/protocol) open protocol.
