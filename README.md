@@ -37,30 +37,33 @@ of window focus**. Your coding agent can be behind 3 other windows — it still 
 
 ## Install
 
-**macOS:**
+**macOS** — [full guide](https://dictare.io/docs/installation/)
 
 ```bash
-git clone https://github.com/dragfly/dictare && cd dictare
-./scripts/macos/install.sh
+brew install dragfly/tap/dictare
 ```
 
-**Linux:**
+**Linux** — [full guide](https://dictare.io/docs/installation/)
 
 ```bash
-pip install dictare
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/scripts/linux/install.sh | bash
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Install as system service (auto-starts at login)
-dictare service install
-
-# 2. Connect your agent
-dictare agent myproject --profile coding
+dictare agent freddie       # starts the default profile (Claude Code)
 ```
 
-The service starts automatically. Speak — your agent receives the transcription.
+That's it. The service starts automatically. Speak — your agent receives the transcription.
+
+If you prefer a different coding agent:
+
+```bash
+dictare agent ozzy --profile codex      # OpenAI Codex
+dictare agent gilmour --profile gemini  # Google Gemini CLI
+dictare agent bowie --profile aider     # Aider
+```
 
 ## How It Works
 
@@ -71,7 +74,7 @@ The service starts automatically. Speak — your agent receives the transcriptio
   STT Module       Whisper (MLX / CTranslate2) or Parakeet (ONNX)
       │             all local, zero cold-start
       ▼
-  Pipeline         submit detection, agent switching, language filter
+  Pipeline         submit detection, agent switching
       │
       ▼
   OpenVIP          HTTP / SSE — open protocol
@@ -85,28 +88,32 @@ STT models are preloaded at startup. Each agent connects in its own terminal.
 
 ## Agent Profiles
 
-Define agent profiles in `~/.config/dictare/config.toml`:
+Profiles are predefined in `~/.config/dictare/config.toml`:
 
 ```toml
-[agent_profiles.coding]
+[agent_profiles]
+default = "claude"
+
+[agent_profiles.claude]
 command = ["claude"]
-description = "AI coding assistant"
+description = "Claude Code"
 
-[agent_profiles.review]
-command = ["aider", "--model", "claude-sonnet-4-6"]
-description = "Code review"
+[agent_profiles.codex]
+command = ["codex"]
+description = "OpenAI Codex"
 
-[agent_profiles.writing]
-command = ["claude", "--model", "claude-opus-4-6"]
-description = "Writing and documentation"
+[agent_profiles.pi]
+command = ["pi", "--provider", "ollama", "--model", "qwen3:8b"]
+continue_args = ["-c"]
+description = "Pi + Ollama local, agentic with tools"
 ```
 
-Then connect using `--profile` (or `--type`):
+Then connect:
 
 ```bash
-dictare agent myproject --profile coding     # session "myproject", type "coding"
-dictare agent frontend --profile review      # session "frontend", type "review"
-dictare agent -- claude --model opus      # explicit command override
+dictare agent freddie                      # default profile (claude)
+dictare agent ozzy --profile codex         # use codex profile
+dictare agent -- claude --model opus       # explicit command override
 ```
 
 ## Voice Commands
@@ -182,8 +189,8 @@ Full configuration reference at [dictare.io/docs/configuration](https://dictare.
 - **Python 3.11**
 - **macOS** or **Linux**
 
-**macOS**: Grant **Input Monitoring** permission when prompted during `dictare service install`.
-System Settings → Privacy & Security → Input Monitoring → enable Dictare.
+**macOS**: Grant **Microphone** and **Input Monitoring** permissions when prompted.
+System Settings → Privacy & Security → enable Dictare.
 
 **Linux**: Join input group: `sudo usermod -aG input $USER` (log out/in).
 

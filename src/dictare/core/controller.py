@@ -346,11 +346,11 @@ class StateController:
         if self._pending_transcription:
             self._pending_transcription = None
 
-        current = self._state_manager.state
+        current: AppState = self._state_manager.state
 
         # Transition back from PLAYING (or TRANSCRIBING if deferred)
         if current == AppState.PLAYING or (had_pending and current == AppState.TRANSCRIBING):
-            old_state = current
+            old_state: AppState = current
             self._state_manager.transition(target_state, force=True)
             if self._on_state_change:
                 self._on_state_change(old_state, target_state, "tts_complete")
