@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from dictare.input.base import InputEvent
 from dictare.input.keyboard import KeyBinding, KeyboardShortcutSource
 
 
