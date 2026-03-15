@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from dictare import __version__
@@ -232,16 +233,19 @@ class OpenVIPServer:
             try:
                 body = await request.json()
             except (ValueError, UnicodeDecodeError):
-                raise HTTPException(
-                    status_code=422,
-                    detail="Not OpenVIP v1.0 compliant: invalid JSON body",
+                return JSONResponse(
+                    status_code=400,
+                    content={"openvip": "1.0", "error": "Invalid JSON body", "code": "INVALID_FORMAT"},
                 )
             try:
                 validate_message(body)
             except OpenVIPValidationError as exc:
-                raise HTTPException(status_code=422, detail=str(exc))
+                return JSONResponse(
+                    status_code=400,
+                    content={"openvip": "1.0", "error": str(exc), "code": "INVALID_FORMAT"},
+                )
             queue.put_nowait(body)
-            return {"status": "ok"}
+            return {"openvip": "1.0", "status": "ok"}
 
         @app.post("/openvip/speech")
         async def speech_request(request: Request):
@@ -249,20 +253,26 @@ class OpenVIPServer:
             try:
                 body = await request.json()
             except (ValueError, UnicodeDecodeError):
-                raise HTTPException(
-                    status_code=422,
-                    detail="Not OpenVIP v1.0 compliant: invalid JSON body",
+                return JSONResponse(
+                    status_code=400,
+                    content={"openvip": "1.0", "error": "Invalid JSON body", "code": "INVALID_FORMAT"},
                 )
             try:
                 validate_message(body)
             except OpenVIPValidationError as exc:
-                raise HTTPException(status_code=422, detail=str(exc))
+                return JSONResponse(
+                    status_code=400,
+                    content={"openvip": "1.0", "error": str(exc), "code": "INVALID_FORMAT"},
+                )
             try:
                 result = await asyncio.to_thread(
                     self._engine.handle_speech, body
                 )
                 if result.get("status") == "error":
-                    raise HTTPException(status_code=422, detail=result["error"])
+                    return JSONResponse(
+                        status_code=400,
+                        content={"openvip": "1.0", "error": result["error"], "code": "INVALID_FORMAT"},
+                    )
                 return result
             except HTTPException:
                 raise
@@ -283,10 +293,10 @@ class OpenVIPServer:
             try:
                 body = await request.json()
             except (ValueError, UnicodeDecodeError):
-                raise HTTPException(status_code=422, detail="Invalid JSON body")
+                raise HTTPException(status_code=400, detail="Invalid JSON body")
             focused = body.get("focused")
             if not isinstance(focused, bool):
-                raise HTTPException(status_code=422, detail="'focused' must be a boolean")
+                raise HTTPException(status_code=400, detail="'focused' must be a boolean")
             self._engine.set_agent_focus(agent_id, focused)
             return {"status": "ok"}
 
@@ -386,7 +396,7 @@ class OpenVIPServer:
                     )
                     return result
 
-                return {"status": "error", "error": f"Unknown command: {command}"}
+                return {"openvip": "1.0", "status": "error", "error": f"Unknown command: {command}"}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
@@ -481,7 +491,7 @@ class OpenVIPServer:
             body = await request.json()
             target = str(body.get("target", "input_monitoring"))
             if target not in ("input_monitoring", "accessibility", "microphone"):
-                raise HTTPException(status_code=422, detail="Invalid target")
+                raise HTTPException(status_code=400, detail="Invalid target")
 
             from dictare.platform.permission_doctor import PermissionDoctor
 
@@ -749,7 +759,7 @@ class OpenVIPServer:
             except KeyError as e:
                 raise HTTPException(status_code=404, detail=str(e))
             except (ValueError, ValidationError) as e:
-                raise HTTPException(status_code=422, detail=str(e))
+                raise HTTPException(status_code=400, detail=str(e))
 
         @app.get("/api/settings/shortcuts")
         async def get_shortcuts():
@@ -777,14 +787,14 @@ class OpenVIPServer:
             for s in shortcuts:
                 if not s.get("keys") or not s.get("command"):
                     raise HTTPException(
-                        status_code=422, detail="Each shortcut must have 'keys' and 'command'"
+                        status_code=400, detail="Each shortcut must have 'keys' and 'command'"
                     )
             toml_content = shortcuts_to_toml(shortcuts)
             try:
                 apply_section("keyboard.shortcuts", toml_content, get_config_path())
                 load_config()
             except (ValueError, ValidationError) as e:
-                raise HTTPException(status_code=422, detail=str(e))
+                raise HTTPException(status_code=400, detail=str(e))
             return {"status": "ok"}
 
         @app.get("/api/settings/toml-section/{section}")
@@ -819,7 +829,7 @@ class OpenVIPServer:
             except KeyError:
                 raise HTTPException(status_code=404, detail=f"Unknown section: {section}")
             except (ValueError, ValidationError) as e:
-                raise HTTPException(status_code=422, detail=str(e))
+                raise HTTPException(status_code=400, detail=str(e))
             return {"status": "ok", "section": section}
 
         # ----- Models API -----
@@ -1149,7 +1159,7 @@ class OpenVIPServer:
                     set_config_value("stt.model", model_value)
                     logger.info("capabilities.select stt.model=%s", model_value)
                 except (KeyError, ValueError) as e:
-                    raise HTTPException(status_code=422, detail=str(e))
+                    raise HTTPException(status_code=400, detail=str(e))
 
             elif cap_type == "tts":
                 # Map registry key to tts.engine value
@@ -1159,7 +1169,7 @@ class OpenVIPServer:
                     set_config_value("tts.engine", engine_value)
                     logger.info("capabilities.select tts.engine=%s", engine_value)
                 except (KeyError, ValueError) as e:
-                    raise HTTPException(status_code=422, detail=str(e))
+                    raise HTTPException(status_code=400, detail=str(e))
 
             else:
                 raise HTTPException(status_code=400, detail=f"Unknown type: {cap_type}")

@@ -386,7 +386,7 @@ class TTSManager:
         """
         text = body.get("text", "")
         if not text:
-            return {"status": "error", "error": "No text provided"}
+            return {"openvip": "1.0", "status": "error", "error": "No text provided"}
 
         # Reject engine mismatch early
         requested_engine = body.get("engine")
@@ -399,7 +399,7 @@ class TTSManager:
 
         if self._tts_engine is None:
             error = self._tts_error or "TTS engine not loaded"
-            return {"status": "error", "error": error}
+            return {"openvip": "1.0", "status": "error", "error": error}
 
         tts = self._tts_engine
 
@@ -429,7 +429,7 @@ class TTSManager:
         duration_ms = int((time.time() - start) * 1000)
 
         if not ok:
-            return {"status": "error", "error": "TTS engine failed to speak"}
+            return {"openvip": "1.0", "status": "error", "error": "TTS engine failed to speak"}
 
         return {"openvip": "1.0", "status": "ok", "duration_ms": duration_ms}
 

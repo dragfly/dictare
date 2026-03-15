@@ -228,7 +228,7 @@ class TestPostSettings:
         r = client.post("/api/settings", json={"value": "foo"})
         assert r.status_code == 400
 
-    def test_invalid_value_returns_422(self, client, tmp_path):
+    def test_invalid_value_returns_400(self, client, tmp_path):
         config_file = tmp_path / "config.toml"
         config_file.write_text("[output]\nmode = \"keyboard\"\n")
         with patch("dictare.config.get_config_path", return_value=config_file):
@@ -236,7 +236,7 @@ class TestPostSettings:
                 "/api/settings",
                 json={"key": "output.mode", "value": "invalid_mode"},
             )
-            assert r.status_code == 422
+            assert r.status_code == 400
 
 class TestTomlSectionGet:
     """GET /settings/toml-section/{section}"""
@@ -365,14 +365,14 @@ description = "Claude Sonnet"
         assert r.status_code == 200
         assert "my custom comment" in r.json()["content"]
 
-    def test_invalid_toml_returns_422(self, client):
+    def test_invalid_toml_returns_400(self, client):
         r = client.post(
             "/api/settings/toml-section/agent_profiles",
             json={"content": "[[[ invalid toml ==="},
         )
-        assert r.status_code == 422
+        assert r.status_code == 400
 
-    def test_missing_command_returns_422(self, client, tmp_path):
+    def test_missing_command_returns_400(self, client, tmp_path):
         config_file = tmp_path / "config.toml"
         config_file.write_text("")
         toml_content = """
@@ -384,7 +384,7 @@ description = "Missing command field"
                 "/api/settings/toml-section/agent_profiles",
                 json={"content": toml_content},
             )
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     def test_empty_content_returns_400(self, client):
         r = client.post(

@@ -1497,34 +1497,34 @@ class DictareEngine:
 
         if command == "stt.start":
             self.set_listening(True)
-            return {"status": "ok", "listening": True}
+            return {"openvip": "1.0", "status": "ok", "listening": True}
         elif command == "stt.stop":
             self.set_listening(False)
-            return {"status": "ok", "listening": False}
+            return {"openvip": "1.0", "status": "ok", "listening": False}
         elif command == "stt.toggle":
             self.toggle_listening()
-            return {"status": "ok"}
+            return {"openvip": "1.0", "status": "ok"}
         elif command == "engine.shutdown":
             self.save_session_before_shutdown()
             self._running = False
             # Watchdog: force-exit if graceful stop() hangs (e.g. audio deadlock).
             # Exit code 1 so both Restart=always and Restart=on-failure trigger a restart.
             self._start_exit_watchdog(exit_code=1)
-            return {"status": "ok"}
+            return {"openvip": "1.0", "status": "ok"}
         elif command == "engine.restart":
             # Persist state, then exit — the service manager (Restart=always) restarts us.
             self.save_session_before_shutdown()
             self._running = False
             self._start_exit_watchdog(exit_code=0)
-            return {"status": "ok"}
+            return {"openvip": "1.0", "status": "ok"}
         elif command == "ping":
-            return {"status": "ok", "pong": True}
+            return {"openvip": "1.0", "status": "ok", "pong": True}
         elif command == "hotkey.capture":
             timeout = float(body.get("timeout", 10.0))
             key = self.capture_next_hotkey(timeout=timeout)
-            return {"status": "ok", "key": key}
+            return {"openvip": "1.0", "status": "ok", "key": key}
 
-        return {"status": "error", "error": f"Unknown protocol command: {command}"}
+        return {"openvip": "1.0", "status": "error", "error": f"Unknown protocol command: {command}"}
 
     def capture_next_hotkey(self, timeout: float = 10.0) -> str | None:
         """Capture the next physical key press and return its evdev name.
