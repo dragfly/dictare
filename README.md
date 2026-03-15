@@ -12,7 +12,7 @@ Speak to your agent. No window focus required. 100% local.
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://python.org)
 [![CI](https://github.com/dragfly/dictare/actions/workflows/ci.yml/badge.svg)](https://github.com/dragfly/dictare/actions)
 
-[dictare.io](https://dictare.io) · [OpenVIP Protocol](https://github.com/openvip-dev/protocol)
+[dictare.io](https://dictare.io) · [OpenVIP Protocol](https://openvip.dev)
 
 </div>
 
@@ -32,7 +32,7 @@ of window focus**. Your coding agent can be behind 3 other windows — it still 
 - **Agent-native** — transcriptions go to the agent protocol, not a text field
 - **100% local** — STT runs on-device, zero data leaves your machine
 - **Multi-agent** — switch agents by voice: *"agent coding"*, *"agent review"*
-- **Open protocol** — [OpenVIP](https://github.com/openvip-dev/protocol) — any tool can implement the SSE endpoint
+- **Open protocol** — [OpenVIP](https://openvip.dev) — any tool can implement the SSE endpoint
 - **Bidirectional** — STT (voice in) + TTS (voice out)
 
 ## Install
@@ -46,7 +46,7 @@ brew install dragfly/tap/dictare
 **Linux** — [full guide](https://dictare.io/docs/installation/)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/scripts/linux/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
 ```
 
 ## Quick Start
@@ -74,7 +74,7 @@ dictare agent bowie --profile aider     # Aider
   STT Module       Whisper (MLX / CTranslate2) or Parakeet (ONNX)
       │             all local, zero cold-start
       ▼
-  Pipeline         submit detection, agent switching
+  Pipeline         submit detection, mute control, agent switching
       │
       ▼
   OpenVIP          HTTP / SSE — open protocol
@@ -121,6 +121,8 @@ dictare agent -- claude --model opus       # explicit command override
 | Say | Action |
 |---|---|
 | *"ok, submit"* / *"ok, send"* / *"ok, invia"* / *"ja, senden"* | Submit to agent (Enter) |
+| *"ok, mute"* / *"ok, hold on"* | Mute (stop listening) |
+| *"ok, listen"* / *"ok, listen up"* | Unmute (resume listening) |
 | *"agent coding"* / *"agent review"* | Switch active agent |
 
 Submit triggers are multilingual (en, it, es, de, fr) and fully configurable.
@@ -219,7 +221,7 @@ uv run --python 3.11 pytest tests/ -x -n auto
 
 ## Protocol
 
-dictare is the reference implementation of [OpenVIP](https://github.com/openvip-dev/protocol) — an open protocol for
+dictare is the reference implementation of [OpenVIP](https://openvip.dev) — an open protocol for
 voice input to AI agents. Any tool can implement the SSE endpoint and receive
 voice transcriptions from dictare.
 
