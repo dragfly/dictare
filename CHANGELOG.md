@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 First public beta. Voice layer for AI coding agents — the reference implementation
 of the [OpenVIP](https://github.com/openvip-dev/protocol) open protocol.
 
+**Why 0.2.0?** The 0.1.x series (0.1.0 through 0.1.140, 1200+ commits) was
+internal development and dogfooding — used daily for real work, but never
+publicly released. Starting from 0.2.0, Dictare follows strict semver:
+features bump minor, fixes bump patch, breaking changes bump major.
+We'll go to 1.0.0 when the API is stable and battle-tested by the community.
+
 ### Highlights
 
 - **Voice-to-Agent delivery** — speak to Claude Code, Codex, Gemini, Aider, or any
