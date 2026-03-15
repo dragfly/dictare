@@ -7,6 +7,7 @@ from dictare.core.openvip_messages import (
     create_message,
 )
 
+
 class TestCreateMessage:
     """Test create_message() factory."""
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+
 class TestCheckAllTTSEngines:
     """Test check_all_tts_engines()."""
 

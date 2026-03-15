@@ -9,6 +9,7 @@ from pathlib import Path
 
 from dictare.hotkey.ipc import HotkeyIPCServer
 
+
 def _short_socket_path() -> Path:
     # macOS AF_UNIX has a short path limit (~104 bytes including terminator).
     return Path("/tmp") / f"dictare-hk-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"

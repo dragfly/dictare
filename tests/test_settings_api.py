@@ -13,6 +13,7 @@ from starlette.testclient import TestClient
 
 from dictare.config import Config
 
+
 @pytest.fixture
 def settings_app():
     """Create a minimal FastAPI app with settings routes for testing."""

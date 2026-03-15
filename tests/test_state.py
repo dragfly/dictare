@@ -11,6 +11,7 @@ import pytest
 
 from dictare.utils.state import SESSION_TIMEOUT_S, clear_state, load_state, save_state
 
+
 @pytest.fixture
 def state_dir(tmp_path: Path) -> Path:
     """Redirect state file to a temp directory."""

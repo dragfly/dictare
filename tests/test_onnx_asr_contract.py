@@ -16,6 +16,7 @@ import inspect
 from onnx_asr import load_model
 from onnx_asr.adapters import TextResultsAsrAdapter
 
+
 class TestTextResultsAsrAdapterContract:
     """Verify the API surface of the object returned by load_model()."""
 

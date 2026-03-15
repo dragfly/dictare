@@ -11,6 +11,7 @@ from dictare.utils.hardware import (
     get_best_device,
 )
 
+
 class TestAutoDetectAcceleration:
     """Test auto_detect_acceleration()."""
 

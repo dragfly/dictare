@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from dictare.core.http_server import OpenVIPServer
 
+
 class MockEngine:
     """Mock engine for HTTP server tests."""
 

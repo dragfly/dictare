@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dictare.cli.panel import StatusPanel
 
+
 def _make_status(*, state: str = "off", device: str = "cpu", model: str = "large-v3-turbo") -> dict:
     """Build a realistic /status response for testing."""
     return {

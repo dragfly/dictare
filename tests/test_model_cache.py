@@ -16,6 +16,7 @@ from dictare.stt.faster_whisper import (
     _is_turbo_model_cached,
 )
 
+
 class TestGetCachedModelPath:
     """Test _get_cached_model_path()."""
 

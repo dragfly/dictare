@@ -7,6 +7,7 @@ import threading
 from dictare.audio.feedback_policy import AudioFeedbackPolicy
 from dictare.config import AudioConfig, SoundConfig
 
+
 def _audio_config(**overrides: SoundConfig) -> AudioConfig:
     """Build AudioConfig with custom per-event SoundConfig."""
     sounds = {

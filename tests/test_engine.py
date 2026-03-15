@@ -14,6 +14,7 @@ from dictare.config import TTSConfig
 from dictare.core.engine import DictareEngine
 from dictare.core.fsm import AppState
 
+
 class MockAgent:
     """Mock agent for testing."""
 

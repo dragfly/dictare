@@ -11,6 +11,7 @@ from dictare.core.fsm import (
     StateManager,
 )
 
+
 class TestAppState:
     """Test AppState enum."""
 

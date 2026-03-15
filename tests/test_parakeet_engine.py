@@ -9,6 +9,7 @@ import pytest
 
 from dictare.stt.parakeet import ParakeetEngine, is_parakeet_model
 
+
 class TestIsParakeetModel:
     def test_parakeet_v3(self):
         assert is_parakeet_model("parakeet-v3") is True

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+
 def test_kokoro_tts_get_name():
     """KokoroTTS.get_name() returns 'kokoro'."""
     from dictare.tts.kokoro import KokoroTTS

@@ -3,6 +3,7 @@
 from dictare.pipeline import PipelineAction
 from dictare.pipeline.executors import InputExecutor
 
+
 class TestInputExecutor:
     """Test InputExecutor behavior."""
 
