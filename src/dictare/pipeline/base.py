@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
+
 class PipelineAction(StrEnum):
     """Action taken by a pipeline step on a message."""
 

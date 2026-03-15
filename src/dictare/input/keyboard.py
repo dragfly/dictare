@@ -8,6 +8,7 @@ from typing import Any
 
 from dictare.input.base import InputCallback, InputEvent, InputSource
 
+
 @dataclass
 class KeyBinding:
     """A keyboard shortcut binding."""

@@ -8,6 +8,7 @@ import typer
 
 from dictare.cli._helpers import console
 
+
 def _is_brew_service_active() -> bool:
     """Check if Homebrew is managing the dictare service."""
     import subprocess

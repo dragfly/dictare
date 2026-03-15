@@ -9,6 +9,7 @@ import typer
 
 from dictare.cli._helpers import console
 
+
 def _format_uptime(seconds: float) -> str:
     """Format seconds into human-readable uptime."""
     seconds = int(seconds)

@@ -8,6 +8,7 @@ import typer
 
 from dictare.cli._helpers import console
 
+
 def _check_engine(url: str) -> bool:
     """Return True if the engine is reachable at *url*."""
     from openvip import Client

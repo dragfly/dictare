@@ -7,6 +7,7 @@ from typing import Any
 
 from dictare.config import get_config_path, load_config
 
+
 def _capture_shortcut() -> str | None:
     """Capture a shortcut using pynput. Returns shortcut string or None if cancelled."""
     try:

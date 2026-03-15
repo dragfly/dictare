@@ -29,6 +29,7 @@ import threading
 from collections.abc import Callable
 from enum import Enum, auto
 
+
 class TapState(Enum):
     """Tap detector states."""
 

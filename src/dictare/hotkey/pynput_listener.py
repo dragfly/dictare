@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from dictare.hotkey.base import HotkeyListener
 
+
 class PynputHotkeyListener(HotkeyListener):
     """Cross-platform hotkey listener using pynput.
 

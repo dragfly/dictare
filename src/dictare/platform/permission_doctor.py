@@ -14,6 +14,7 @@ from dictare.platform.permissions import (
     open_microphone_settings,
 )
 
+
 @dataclass
 class DoctorStatus:
     accessibility: bool
