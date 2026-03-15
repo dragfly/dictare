@@ -69,13 +69,16 @@ class TestGetSettingsSchema:
         assert "TTSConfig" in schema["$defs"]
         assert "AudioConfig" in schema["$defs"]
 
-    def test_non_string_values_keep_pydantic_defaults(self, client):
+    def test_non_string_values_keep_pydantic_defaults(self, client, tmp_path):
         """Bool/number fields keep their Pydantic-resolved defaults."""
-        r = client.get("/api/settings/schema")
-        values = r.json()["values"]
-        config = Config()
-        assert values["audio"]["advanced"]["sample_rate"] == config.audio.advanced.sample_rate
-        assert values["audio"]["audio_feedback"] == config.audio.audio_feedback
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("")  # empty TOML — pure Pydantic defaults
+        with patch("dictare.config.get_config_path", return_value=config_file):
+            r = client.get("/api/settings/schema")
+            values = r.json()["values"]
+            config = Config()
+            assert values["audio"]["advanced"]["sample_rate"] == config.audio.advanced.sample_rate
+            assert values["audio"]["audio_feedback"] == config.audio.audio_feedback
 
     def test_string_values_empty_when_not_in_toml(self, client, tmp_path):
         """String fields not set in TOML are returned as "" (use default)."""
