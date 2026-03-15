@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from dictare.input.base import InputEvent, InputSource
 from dictare.input.manager import InputManager
