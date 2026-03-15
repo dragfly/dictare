@@ -599,11 +599,11 @@ class TestValidMessages:
             assert received["parent_id"] == message["parent_id"]
 
 # =============================================================================
-# 9. Invalid Message Validation — Server Must Reject with 422
+# 9. Invalid Message Validation — Server Must Reject with 400
 # =============================================================================
 #
 # The HTTP transport layer validates incoming messages against the OpenVIP
-# v1.0 JSON Schema and returns 422 for non-compliant payloads.
+# v1.0 JSON Schema and returns 400 for non-compliant payloads.
 
 INVALID_MESSAGES_POST = [
     # --- Missing required fields ---
@@ -867,7 +867,7 @@ INVALID_MESSAGES_POST = [
 ]
 
 class TestInvalidMessageRejection:
-    """OpenVIP: Invalid messages must be rejected with 422.
+    """OpenVIP: Invalid messages must be rejected with 400.
 
     The server validates all incoming messages against the OpenVIP v1.0
     JSON Schema. Non-compliant payloads are rejected before processing.
@@ -884,13 +884,15 @@ class TestInvalidMessageRejection:
         conn.stop()
 
     @pytest.mark.parametrize("message", INVALID_MESSAGES_POST)
-    def test_post_message_invalid_returns_422(
+    def test_post_message_invalid_returns_400(
         self, e2e_client, message,
     ) -> None:
-        """Invalid message posted to /openvip/agents/{id}/messages returns 422."""
+        """Invalid message posted to /openvip/agents/{id}/messages returns 400."""
         r = e2e_client.post(self._agent_url, json=message)
-        assert r.status_code == 422
-        assert "Not OpenVIP v1.0 compliant" in r.json()["detail"]
+        assert r.status_code == 400
+        body = r.json()
+        assert body["openvip"] == "1.0"
+        assert body["code"] == "INVALID_FORMAT"
 
 INVALID_SPEECH_MESSAGES = [
     pytest.param(
@@ -943,15 +945,15 @@ INVALID_SPEECH_MESSAGES = [
 ]
 
 class TestInvalidSpeechRejection:
-    """OpenVIP: Invalid speech requests must be rejected with 422."""
+    """OpenVIP: Invalid speech requests must be rejected with 400."""
 
     @pytest.mark.parametrize("message", INVALID_SPEECH_MESSAGES)
-    def test_post_speech_invalid_returns_422(
+    def test_post_speech_invalid_returns_400(
         self, e2e_client, message,
     ) -> None:
-        """Invalid speech message posted to /openvip/speech returns 422."""
+        """Invalid speech message posted to /openvip/speech returns 400."""
         r = e2e_client.post("/openvip/speech", json=message)
-        assert r.status_code == 422
+        assert r.status_code == 400
 
 class TestValidationErrorMessages:
     """OpenVIP: Validation error responses are informative."""
@@ -967,19 +969,20 @@ class TestValidationErrorMessages:
         conn.stop()
 
     def test_missing_field_mentions_field_name(self, e2e_client) -> None:
-        """422 detail mentions which required field is missing."""
+        """400 error mentions which required field is missing."""
         msg = {"type": "transcription", "id": _uuid(),
                "timestamp": _timestamp(), "text": "hello"}
         r = e2e_client.post(self._agent_url, json=msg)
-        assert r.status_code == 422
-        detail = r.json()["detail"]
-        assert "Not OpenVIP v1.0 compliant" in detail
+        assert r.status_code == 400
+        body = r.json()
+        assert body["openvip"] == "1.0"
+        assert "Not OpenVIP v1.0 compliant" in body["error"]
 
     def test_wrong_version_rejected(self, e2e_client) -> None:
         """Wrong protocol version is rejected with clear error."""
         msg = _transcription(openvip="2.0")
         r = e2e_client.post(self._agent_url, json=msg)
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     def test_valid_message_still_accepted(self, e2e_client) -> None:
         """Valid messages pass validation and return 200."""
@@ -1044,9 +1047,9 @@ class TestEdgeCases:
         assert r.status_code in (200, 400, 500)
 
     def test_empty_speech_text(self, e2e_client) -> None:
-        """Empty speech text returns 422 error, not crash."""
+        """Empty speech text returns 400 error, not crash."""
         r = e2e_client.post("/openvip/speech", json={"text": ""})
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     def test_agent_id_with_special_chars(self, e2e_client) -> None:
         """Agent IDs with dashes and underscores work."""

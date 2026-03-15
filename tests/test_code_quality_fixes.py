@@ -75,22 +75,25 @@ def client(server: OpenVIPServer) -> TestClient:
 # ---------------------------------------------------------------------------
 
 class TestJSONParseExceptionType:
-    """Verify that invalid JSON returns 422 (tightened from except Exception)."""
+    """Verify that invalid JSON returns 400 with OpenVIP error format."""
 
-    def test_invalid_json_speech_returns_422(self, client: TestClient) -> None:
-        """POST /openvip/speech with invalid JSON body → 422."""
+    def test_invalid_json_speech_returns_400(self, client: TestClient) -> None:
+        """POST /openvip/speech with invalid JSON body → 400."""
         response = client.post(
             "/openvip/speech",
             content=b"not json at all {{{",
             headers={"Content-Type": "application/json"},
         )
-        assert response.status_code == 422
-        assert "invalid JSON" in response.json()["detail"]
+        assert response.status_code == 400
+        body = response.json()
+        assert body["openvip"] == "1.0"
+        assert "Invalid JSON" in body["error"]
+        assert body["code"] == "INVALID_FORMAT"
 
-    def test_invalid_json_agent_message_returns_422(
+    def test_invalid_json_agent_message_returns_400(
         self, client: TestClient, server: OpenVIPServer, token: str,
     ) -> None:
-        """POST /openvip/agents/{id}/messages with invalid JSON → 422."""
+        """POST /openvip/agents/{id}/messages with invalid JSON → 400."""
         import asyncio
 
         # Create agent queue so endpoint doesn't 404
@@ -103,8 +106,11 @@ class TestJSONParseExceptionType:
             content=b"<<<not json>>>",
             headers={"Content-Type": "application/json"},
         )
-        assert response.status_code == 422
-        assert "invalid JSON" in response.json()["detail"]
+        assert response.status_code == 400
+        body = response.json()
+        assert body["openvip"] == "1.0"
+        assert "Invalid JSON" in body["error"]
+        assert body["code"] == "INVALID_FORMAT"
 
 # ---------------------------------------------------------------------------
 # I2: Bare except tightening — TTS manager
