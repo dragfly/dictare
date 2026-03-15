@@ -57,7 +57,7 @@ pip install dictare
 dictare service install
 
 # 2. Connect your agent
-dictare agent myproject --type coding
+dictare agent myproject --profile coding
 ```
 
 The service starts automatically. Speak — your agent receives the transcription.
@@ -88,24 +88,24 @@ STT models are preloaded at startup. Each agent connects in its own terminal.
 Define agent types in `~/.config/dictare/config.toml`:
 
 ```toml
-[agent_types.coding]
+[agent_profiles.coding]
 command = ["claude"]
 description = "AI coding assistant"
 
-[agent_types.review]
+[agent_profiles.review]
 command = ["aider", "--model", "claude-sonnet-4-6"]
 description = "Code review"
 
-[agent_types.writing]
+[agent_profiles.writing]
 command = ["claude", "--model", "claude-opus-4-6"]
 description = "Writing and documentation"
 ```
 
-Then connect using `--type`:
+Then connect using `--profile` (or `--type`):
 
 ```bash
-dictare agent myproject --type coding     # session "myproject", type "coding"
-dictare agent frontend --type review      # session "frontend", type "review"
+dictare agent myproject --profile coding     # session "myproject", type "coding"
+dictare agent frontend --profile review      # session "frontend", type "review"
 dictare agent -- claude --model opus      # explicit command override
 ```
 
