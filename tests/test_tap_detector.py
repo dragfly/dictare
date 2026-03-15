@@ -5,6 +5,7 @@ import time
 
 from dictare.hotkey.tap_detector import TapDetector, TapState
 
+
 def _wait_until(predicate, timeout: float = 2.0) -> None:
     """Poll until predicate is true (1ms interval)."""
     deadline = time.time() + timeout

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dictare.status import resolve_display_state
 
+
 class TestResolveDisplayState:
     """Test resolve_display_state()."""
 

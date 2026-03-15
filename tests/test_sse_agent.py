@@ -13,6 +13,7 @@ from dictare.agent.base import BaseAgent, OpenVIPMessage
 from dictare.agent.mux import _read_from_sse, _stream_active_agent
 from dictare.agent.sse import SSEAgent
 
+
 class MockServer:
     """Mock OpenVIPServer for testing SSEAgent."""
 

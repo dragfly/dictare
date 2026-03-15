@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from dictare.config import AudioConfig, load_config
 
+
 class TestAudioDeviceConfig:
     """Test AudioConfig input_device and output_device fields."""
 

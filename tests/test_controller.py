@@ -23,6 +23,7 @@ from dictare.core.fsm import (
     TranscriptionCompleted,
 )
 
+
 def _wait_until(predicate, timeout: float = 2.0) -> None:
     """Poll until predicate is true (1ms interval, no fixed sleep)."""
     deadline = time.time() + timeout

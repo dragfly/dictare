@@ -14,6 +14,7 @@ from dictare.logging.setup import (
     shutdown_logging,
 )
 
+
 class TestGetDefaultLogPath:
     """Tests for get_default_log_path."""
 

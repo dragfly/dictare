@@ -15,6 +15,7 @@ from dictare.utils.stats import (
     update_stats,
 )
 
+
 def _empty_stats():
     return {
         "first_use": "",

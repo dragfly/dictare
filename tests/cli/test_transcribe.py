@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 from dictare.cli.transcribe import process_messages
 
+
 def _make_msg(text: str, *, msg_type: str = "transcription", submit: bool = False):
     """Create a mock transcription message."""
     msg = MagicMock()

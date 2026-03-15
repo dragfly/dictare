@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from dictare.tray.app import TrayApp
 
+
 def _mock_pystray():
     """Create a mock pystray module for headless testing."""
 

@@ -11,6 +11,7 @@ import pytest
 from dictare.app.controller import AppController
 from dictare.config import Config
 
+
 def _make_controller() -> AppController:
     return AppController(config=MagicMock(spec=Config))
 

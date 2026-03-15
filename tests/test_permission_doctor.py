@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dictare.platform.permission_doctor import PermissionDoctor, status_to_dict
 
+
 def test_doctor_diagnosis_missing_input_monitoring(monkeypatch) -> None:
     monkeypatch.setattr(
         "dictare.platform.permissions.get_permissions",

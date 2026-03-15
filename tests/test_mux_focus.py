@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dictare.agent.mux import _strip_focus_events
 
+
 class TestStripFocusEvents:
     """Tests for _strip_focus_events()."""
 

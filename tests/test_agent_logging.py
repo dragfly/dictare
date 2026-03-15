@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from dictare.agent.mux import run_agent
 
+
 def _make_status(agents: list[str]):
     """Create a mock status object with connected_agents."""
     from unittest.mock import MagicMock

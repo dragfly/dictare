@@ -15,6 +15,7 @@ from dictare.agent.mux import (
     _strip_ctrl_backslash,
 )
 
+
 class TestParseClaimKey:
     """Test _parse_claim_key parsing."""
 

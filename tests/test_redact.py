@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dictare.config import Config
 
+
 class TestRedactConfig:
     """Test redact field in Config."""
 

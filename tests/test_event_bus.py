@@ -10,6 +10,7 @@ import pytest
 
 from dictare.core.bus import EventBus, bus
 
+
 @pytest.fixture(autouse=True)
 def reset_bus():
     """Reset global bus before each test."""

@@ -14,6 +14,7 @@ from dictare.config import (
     load_raw_values,
 )
 
+
 class TestConfigDefaults:
     """Test default configuration values."""
 
