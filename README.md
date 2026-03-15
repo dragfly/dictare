@@ -83,9 +83,9 @@ The service starts automatically. Speak — your agent receives the transcriptio
 The engine runs as a background service (launchd on macOS, systemd on Linux).
 STT models are preloaded at startup. Each agent connects in its own terminal.
 
-## Agent Templates
+## Agent Profiles
 
-Define agent types in `~/.config/dictare/config.toml`:
+Define agent profiles in `~/.config/dictare/config.toml`:
 
 ```toml
 [agent_profiles.coding]
@@ -114,7 +114,7 @@ dictare agent -- claude --model opus      # explicit command override
 | Say | Action |
 |---|---|
 | *"ok, submit"* / *"ok, send"* / *"ok, invia"* / *"ja, senden"* | Submit to agent (Enter) |
-| *"agent coding"* / *"agent review"* | Switch active agent type |
+| *"agent coding"* / *"agent review"* | Switch active agent |
 
 Submit triggers are multilingual (en, it, es, de, fr) and fully configurable.
 
