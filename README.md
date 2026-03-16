@@ -15,6 +15,12 @@ Speak to your agent. No window focus required. 100% local.
 
 </div>
 
+<div align="center">
+
+[![Watch the video](https://img.youtube.com/vi/8RThA4HRd8w/maxresdefault.jpg)](https://youtu.be/8RThA4HRd8w)
+
+</div>
+
 ---
 
 ## Why dictare
