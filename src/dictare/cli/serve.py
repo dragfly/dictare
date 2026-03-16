@@ -106,11 +106,11 @@ def _run_serve(
     from dictare import __version__
     from dictare.logging.setup import get_default_log_path, setup_logging
 
-    # Self-healing: update python_path so the launcher finds the current Python
-    # after brew upgrade (Cellar path changes on each version).
+    # Self-healing: ensure python_path matches the running Python.
+    # After brew upgrade, the Cellar path changes — this auto-corrects it.
     try:
-        from dictare.daemon.app_bundle import _write_external_python_path
-        _write_external_python_path(sys.executable)
+        from dictare.daemon.app_bundle import ensure_python_path
+        ensure_python_path(sys.executable)
     except Exception:
         pass  # Non-fatal — service still starts, just python_path may be stale
 
