@@ -100,9 +100,25 @@ def _run_serve(
     """
     import logging
     import signal
+    import sys
+    from datetime import UTC, datetime
 
     from dictare import __version__
     from dictare.logging.setup import get_default_log_path, setup_logging
+
+    # Timestamp all stderr output (catches crashes before logging is ready)
+    _original_stderr = sys.stderr
+    class _TimestampedStderr:
+        def write(self, msg: str) -> int:
+            if msg.strip():
+                ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+                _original_stderr.write(f"{ts}  {msg}")
+            else:
+                _original_stderr.write(msg)
+            return len(msg)
+        def flush(self) -> None:
+            _original_stderr.flush()
+    sys.stderr = _TimestampedStderr()  # type: ignore[assignment]
 
     _level_map = {"debug": logging.DEBUG, "info": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR}
     log_level = _level_map.get(config.log_level, logging.INFO) if not verbose else logging.DEBUG
@@ -191,8 +207,7 @@ def _run_serve(
                 with_bindings=False,
             )
         except Exception as e:
-            _logger.error("Engine startup failed: %s", e, exc_info=True)
-            console.print(f"[red]Failed to start engine: {e}[/]")
+            _logger.error("Failed to start engine: %s", e, exc_info=True)
             raise typer.Exit(1) from e
 
         _logger.info("Engine ready")
