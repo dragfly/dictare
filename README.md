@@ -50,6 +50,19 @@ curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | b
 sudo usermod -aG input $USER   # required for hotkey (log out/in after)
 ```
 
+### Permissions
+
+> **macOS** — grant when prompted:
+> 1. **Microphone** — prompted on first launch
+> 2. **Input Monitoring** — System Settings → Privacy & Security → enable Dictare
+> 3. **Accessibility** — needed for keyboard mode (typing into other apps)
+>
+> After granting all three: `dictare service restart`
+
+> **Linux** — two steps:
+> 1. **Input group** (hotkey, X11 + Wayland): `sudo usermod -aG input $USER` — log out/in
+> 2. **ydotool** (keyboard mode on Wayland): `sudo apt install ydotool`
+
 ## Quick Start
 
 ```bash
@@ -186,16 +199,6 @@ dictare config set stt.language it
 ```
 
 Full configuration reference at [dictare.io/docs/configuration](https://dictare.io/docs/configuration/).
-
-## Permissions
-
-**macOS** (prompted automatically, grant all three):
-- **Microphone** → **Input Monitoring** → **Accessibility** (keyboard mode)
-- After granting: `dictare service restart`
-
-**Linux**:
-- **Input group** — for hotkey (evdev, X11 + Wayland): `sudo usermod -aG input $USER`
-- **ydotool** — for keyboard mode on Wayland: `sudo apt install ydotool`
 
 ## Development
 
