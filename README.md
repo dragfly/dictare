@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/icon.svg" width="80" height="80" alt="dictare icon">
+<img src="https://raw.githubusercontent.com/dragfly/dictare/main/assets/icon.svg" width="80" height="80" alt="dictare icon">
 
 # DICTA**re**™
 
