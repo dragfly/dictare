@@ -148,7 +148,11 @@ jobs:
 
               # Install signed launcher bundle
               resource("launcher").stage do
-                (libexec/"bundle").install "Dictare.app"
+                # Homebrew auto-strips the single top-level dir (Dictare.app),
+                # so pwd is inside the .app bundle. Reconstruct it.
+                target = libexec/"bundle/Dictare.app"
+                target.mkpath
+                system "cp", "-R", *Dir.glob("*"), target.to_s
               end
             end
 
