@@ -41,7 +41,7 @@ class MockConfig:
     """Mock config for testing."""
 
     def __init__(self) -> None:
-        self.verbose = False
+        self.log_level = "info"
 
         # STT config
         self.stt = MagicMock()

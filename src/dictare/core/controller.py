@@ -183,6 +183,7 @@ class StateController:
     def _handle_speech_start(self, event: SpeechStarted) -> None:
         """VAD detected speech."""
         if self._state_manager.state != AppState.LISTENING:
+            logger.debug("SpeechStarted discarded — state is %s (not LISTENING)", self._state_manager.state)
             return
 
         if self._state_manager.try_transition(AppState.RECORDING):

@@ -414,7 +414,7 @@ class DictareEngine:
             device=self.config.stt.advanced.device,
             compute_type=self.config.stt.advanced.compute_type,
             console=None,  # No console in engine
-            verbose=self.config.verbose,
+            verbose=self.config.log_level == "debug",
             headless=headless,
         )
 
@@ -627,7 +627,7 @@ class DictareEngine:
         try:
             self._audio_manager = AudioManager(
                 config=self.config.audio,
-                verbose=self.config.verbose,
+                verbose=self.config.log_level == "debug",
             )
             self._audio_manager.initialize(
                 on_speech_start=self._on_vad_speech_start,
