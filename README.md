@@ -47,6 +47,7 @@ brew install dragfly/tap/dictare
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
+sudo usermod -aG input $USER   # required for hotkey (log out/in after)
 ```
 
 ## Quick Start
@@ -191,22 +192,13 @@ Full configuration reference at [dictare.io/docs/configuration](https://dictare.
 - **Python 3.11**
 - **macOS** or **Linux**
 
-**macOS** — three permissions needed:
-1. **Microphone** — prompted automatically on first launch
-2. **Input Monitoring** — enable in System Settings → Privacy & Security → Input Monitoring
-3. **Accessibility** — needed for keyboard mode (typing into other apps)
+**macOS permissions** (prompted automatically, grant all three):
+- **Microphone** → **Input Monitoring** → **Accessibility** (keyboard mode)
+- After granting: `dictare service restart`
 
-After granting permissions: `dictare service restart`
-
-**Linux** — hotkey + keyboard mode:
-1. **Input group** (hotkey via evdev, works on both X11 and Wayland):
-   ```bash
-   sudo usermod -aG input $USER   # log out/in after
-   ```
-2. **ydotool** (keyboard mode, Wayland):
-   ```bash
-   sudo apt install ydotool
-   ```
+**Linux permissions**:
+- **Input group** — for hotkey (evdev, X11 + Wayland): `sudo usermod -aG input $USER`
+- **ydotool** — for keyboard mode on Wayland: `sudo apt install ydotool`
 
 ## Development
 
