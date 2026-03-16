@@ -139,7 +139,7 @@ dictare agent -- claude --model opus       # explicit command override
 | *"ok, listen"* / *"ok, listen up"* | Unmute (resume listening) |
 | *"agent coding"* / *"agent review"* | Switch active agent |
 
-Submit triggers are multilingual (en, it, es, de, fr) and fully configurable.
+Submit triggers are multilingual (en, de, es, it, fr) and fully configurable.
 
 ## Hotkey Cheat Sheet
 
