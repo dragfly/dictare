@@ -2,7 +2,7 @@
 
 <img src="assets/icon.svg" width="80" height="80" alt="dictare icon">
 
-# DICTA**re**
+# DICTA**re**™
 
 **Voice layer for AI coding agents.**
 
@@ -11,7 +11,7 @@ Speak to your agent. No window focus required. 100% local.
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/dragfly/dictare/actions/workflows/ci.yml/badge.svg)](https://github.com/dragfly/dictare/actions)
 
-[dictare.io](https://dictare.io) · [OpenVIP Protocol](https://openvip.dev)
+[dictare.io](https://dictare.io) · [OpenVIP™ Protocol](https://openvip.dev)
 
 </div>
 
