@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-16
+
+First public release. Strict semver from this point forward.
+
+### Added
+- 556 new tests (1772 total, 58% coverage)
+- Permissions documentation for macOS (3 steps) and Linux (evdev + ydotool)
+- Mute/unmute voice commands in README
+
+### Changed
+- README rewritten for public launch
+- OpenVIP URLs standardized to openvip.dev
+- Language order: EN, DE, ES, IT, FR
+
+### Fixed
+- Regenerated up-beep.wav
+- mypy type annotation in controller.py
+- test_settings_api isolated from local config
+
 ## [0.2.0b3] - 2026-03-14
 
 ### Changed
