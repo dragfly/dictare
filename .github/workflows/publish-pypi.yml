@@ -148,17 +148,31 @@ jobs:
 
               # Install signed launcher bundle
               resource("launcher").stage do
-                # Homebrew auto-strips the single top-level dir (Dictare.app),
-                # so pwd is inside the .app bundle. Reconstruct it.
                 target = libexec/"bundle/Dictare.app"
                 target.mkpath
                 system "cp", "-R", *Dir.glob("*"), target.to_s
+              end
+
+              # Copy launcher to ~/Applications
+              app_dest = Pathname.new(Dir.home)/"Applications/Dictare.app"
+              system "rm", "-rf", app_dest.to_s if app_dest.exist?
+              system "cp", "-R", (libexec/"bundle/Dictare.app").to_s, app_dest.to_s
+            end
+
+            def post_install
+              dictare_bin = bin/"dictare"
+              if File.exist?(dictare_bin)
+                plist = Pathname.new(Dir.home)/"Library/LaunchAgents/dev.dragfly.dictare.plist"
+                if plist.exist?
+                  system "launchctl", "unload", plist.to_s rescue nil
+                  system dictare_bin, "service", "install"
+                end
               end
             end
 
             def caveats
               <<~EOS
-                After install, start the service:
+                After first install, start the service:
 
                   dictare service install
 
@@ -168,6 +182,8 @@ jobs:
 
                 If you installed on Apple Silicon, the MLX backend is included
                 for hardware-accelerated on-device speech recognition.
+
+                After upgrades, the service restarts automatically.
               EOS
             end
 
