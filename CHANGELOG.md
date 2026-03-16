@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Replace `verbose` config flag with `log_level` (debug/info/warning/error). `--verbose` CLI flag kept as alias.
 
+### Fixed
+- Service logs now include timestamps on all stderr output (including startup crashes)
+
 ## [0.2.0] - 2026-03-16
 
 First public release. Strict semver from this point forward.
