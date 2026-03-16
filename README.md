@@ -9,7 +9,6 @@
 Speak to your agent. No window focus required. 100% local.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://python.org)
 [![CI](https://github.com/dragfly/dictare/actions/workflows/ci.yml/badge.svg)](https://github.com/dragfly/dictare/actions)
 
 [dictare.io](https://dictare.io) · [OpenVIP Protocol](https://openvip.dev)
