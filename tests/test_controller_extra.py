@@ -15,7 +15,7 @@ from dictare.app.controller import AppController, _ControllerEvents
 def _make_config() -> MagicMock:
     """Build a minimal MockConfig for AppController."""
     config = MagicMock()
-    config.verbose = False
+    config.log_level = "info"
     config.server.host = "127.0.0.1"
     config.server.port = 0
     config.output.mode = "agents"

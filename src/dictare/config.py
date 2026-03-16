@@ -561,7 +561,10 @@ class Config(BaseModel):
         default="",
         description="Editor command for 'dictare config edit' (empty = $EDITOR or system default)",
     )
-    verbose: bool = Field(default=False, description="Enable verbose output")
+    log_level: Literal["debug", "info", "warning", "error"] = Field(
+        default="info",
+        description="Logging level (debug, info, warning, error)",
+    )
 
 def get_config_dir() -> Path:
     """Get the configuration directory path."""
@@ -606,7 +609,7 @@ def _apply_env_overrides(config: Config) -> Config:
                 if env_value is not None:
                     section[key] = _parse_value(env_value, type(value) if value is not None else str)
         else:
-            # Top-level keys like 'verbose'
+            # Top-level keys like 'log_level'
             env_var = _key_to_env_var(section_name)
             env_value = os.environ.get(env_var)
             if env_value is not None:
@@ -682,7 +685,7 @@ def get_config_value(key: str, config: Config | None = None) -> Any:
     """Get a config value by dot-notation key.
 
     Args:
-        key: Dot-notation key like 'stt.model' or 'verbose'
+        key: Dot-notation key like 'stt.model' or 'log_level'
         config: Config object (loads default if None)
 
     Returns:
@@ -722,7 +725,7 @@ def set_config_value(key: str, value: str, config_path: Path | None = None) -> N
     Uses tomlkit to preserve comments and formatting.
 
     Args:
-        key: Dot-notation key like 'stt.model' or 'verbose'
+        key: Dot-notation key like 'stt.model' or 'log_level'
         value: String value (will be converted to appropriate type)
         config_path: Path to config file (uses default if None)
 
@@ -790,7 +793,7 @@ def delete_config_value(key: str, config_path: Path | None = None) -> None:
     """Remove a config key from the TOML file, reverting to the Pydantic default.
 
     Args:
-        key: Dot-notation key like 'stt.model' or 'verbose'
+        key: Dot-notation key like 'stt.model' or 'log_level'
         config_path: Path to config file (uses default if None)
 
     Raises:
@@ -928,7 +931,7 @@ def create_default_config() -> Path:
 # Docs: dictare config list
 
 # editor = ""                     # Editor for 'dictare config edit' ($EDITOR if empty)
-# verbose = false
+# log_level = "info"              # Logging level: debug, info, warning, error
 
 [audio]
 # input_device = ""               # Input device name (empty = system default)

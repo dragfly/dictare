@@ -19,7 +19,7 @@ def _make_config():
     config.stt.advanced.beam_size = 5
     config.stt.advanced.max_repetitions = 5
     config.stt.advanced.hotwords = None
-    config.verbose = False
+    config.log_level = "info"
     return config
 
 

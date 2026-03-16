@@ -48,7 +48,7 @@ class KeyboardBindingManager:
         # Create InputManager with command handler
         self._input_manager = InputManager(
             app_commands=self._create_command_handler(),
-            verbose=self._config.verbose,
+            verbose=self._config.log_level == "debug",
         )
 
         # Load keyboard shortcuts from config
@@ -63,7 +63,7 @@ class KeyboardBindingManager:
 
         self._running = True
 
-        if self._config.verbose and self._input_manager.running_sources:
+        if self._config.log_level == "debug" and self._input_manager.running_sources:
             sources = ", ".join(self._input_manager.running_sources)
             logger.info(f"Input sources started: {sources}")
 

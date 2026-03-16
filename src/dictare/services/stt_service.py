@@ -77,7 +77,7 @@ class STTService(BaseService):
                 target_size,
                 device=self.config.stt.advanced.device,
                 compute_type=self.config.stt.advanced.compute_type,
-                verbose=self.config.verbose,
+                verbose=self.config.log_level == "debug",
                 headless=headless,
             )
             self._engine_model_size = target_size

@@ -57,6 +57,10 @@ def register(app: typer.Typer) -> None:
 
         config = load_config(config_file)
 
+        # --verbose CLI flag overrides config log_level
+        if verbose:
+            config.log_level = "debug"
+
         # Download missing models in background — engine starts immediately.
         # STT/TTS gracefully degrade until their model is ready.
         import threading
@@ -100,7 +104,8 @@ def _run_serve(
     from dictare import __version__
     from dictare.logging.setup import get_default_log_path, setup_logging
 
-    log_level = logging.DEBUG if verbose else logging.INFO
+    _level_map = {"debug": logging.DEBUG, "info": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR}
+    log_level = _level_map.get(config.log_level, logging.INFO) if not verbose else logging.DEBUG
 
     # File logging (JSON, used by `dictare logs -f`)
     log_path = get_default_log_path("engine")
