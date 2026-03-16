@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Service logs now include timestamps on all stderr output (including startup crashes)
+- Self-healing: engine auto-updates `python_path` on startup (fixes `brew upgrade` path mismatch)
+- Simplified Homebrew formula — no more sandbox permission errors on install/upgrade
 
 ## [0.2.0] - 2026-03-16
 
