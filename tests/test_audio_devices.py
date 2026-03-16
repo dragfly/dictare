@@ -132,7 +132,7 @@ class TestEngineStatusAudioDevices:
         from dictare.core.engine import DictareEngine
 
         config = MagicMock()
-        config.verbose = False
+        config.log_level = "info"
         config.stt.hw_accel = False
         config.stt.model = "tiny"
         config.stt.advanced.device = "cpu"
@@ -170,7 +170,7 @@ class TestEngineStatusAudioDevices:
         from dictare.core.engine import DictareEngine
 
         config = MagicMock()
-        config.verbose = False
+        config.log_level = "info"
         config.stt.hw_accel = False
         config.stt.model = "tiny"
         config.stt.advanced.device = "cpu"

@@ -119,11 +119,11 @@ class TestLoadRawValues:
 
     def test_flat_keys(self) -> None:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write("verbose = true\n")
+            f.write('log_level = "debug"\n')
             temp_path = Path(f.name)
         try:
             raw = load_raw_values(temp_path)
-            assert raw == {"verbose": True}
+            assert raw == {"log_level": "debug"}
         finally:
             temp_path.unlink()
 

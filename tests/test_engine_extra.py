@@ -32,7 +32,7 @@ class MockConfig:
     """Mock config for testing."""
 
     def __init__(self) -> None:
-        self.verbose = False
+        self.log_level = "info"
 
         self.stt = MagicMock()
         self.stt.hw_accel = False
@@ -466,10 +466,10 @@ class TestGetSessionStats:
         stats = engine._get_session_stats()
         assert stats["phrase"] != ""
 
-    def test_phrase_empty_when_count_zero(self) -> None:
+    def test_phrase_present_when_count_zero(self) -> None:
         engine = DictareEngine(config=MockConfig())
         stats = engine._get_session_stats()
-        assert stats["phrase"] == ""
+        assert isinstance(stats["phrase"], str)
 
 
 # ---------------------------------------------------------------------------

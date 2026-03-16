@@ -117,7 +117,7 @@ def _make_engine(output_mode: str = "agents"):
     from dictare.core.engine import DictareEngine
 
     config = MagicMock()
-    config.verbose = False
+    config.log_level = "info"
     config.stt = MagicMock()
     config.stt.hw_accel = False
     config.stt.model = "tiny"

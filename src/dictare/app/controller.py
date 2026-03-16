@@ -238,7 +238,8 @@ class AppController:
         from dictare import __version__
         from dictare.logging.jsonl import JSONLLogger, LogLevel, get_default_log_path
 
-        log_level = LogLevel.DEBUG if self._config.verbose else LogLevel.INFO
+        _jsonl_level_map = {"debug": LogLevel.DEBUG, "info": LogLevel.INFO, "warning": LogLevel.INFO, "error": LogLevel.ERROR}
+        log_level = _jsonl_level_map.get(self._config.log_level, LogLevel.INFO)
         log_path = get_default_log_path("engine")
         self._logger = JSONLLogger(
             log_path,
@@ -247,7 +248,7 @@ class AppController:
             params={
                 "mode": mode,
                 "output": self._config.output.mode,
-                "verbose": self._config.verbose,  # Include text in logs
+                "verbose": self._config.log_level == "debug",  # Include text in logs
             },
         )
 

@@ -385,6 +385,7 @@ class TestDaemonPidWrite:
             config = SimpleNamespace(
                 server=SimpleNamespace(host="127.0.0.1", port=9999),
                 daemon=SimpleNamespace(restore_listening=False),
+                log_level="info",
             )
             mock_os = MagicMock()
             mock_os.getpid.return_value = 12345
@@ -414,6 +415,7 @@ class TestDaemonPidWrite:
             config = SimpleNamespace(
                 server=SimpleNamespace(host="127.0.0.1", port=9999),
                 daemon=SimpleNamespace(restore_listening=False),
+                log_level="info",
             )
             mock_os = MagicMock()
             mock_os.getpid.return_value = 99999
