@@ -19,6 +19,8 @@ Speak to your agent. No window focus required. 100% local.
 
 [![Watch the video](https://img.youtube.com/vi/8RThA4HRd8w/maxresdefault.jpg)](https://youtu.be/8RThA4HRd8w)
 
+**[Watch on YouTube →](https://youtu.be/8RThA4HRd8w)**
+
 </div>
 
 ---
