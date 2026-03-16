@@ -191,10 +191,22 @@ Full configuration reference at [dictare.io/docs/configuration](https://dictare.
 - **Python 3.11**
 - **macOS** or **Linux**
 
-**macOS**: Grant **Microphone** and **Input Monitoring** permissions when prompted.
-System Settings → Privacy & Security → enable Dictare.
+**macOS** — three permissions needed:
+1. **Microphone** — prompted automatically on first launch
+2. **Input Monitoring** — enable in System Settings → Privacy & Security → Input Monitoring
+3. **Accessibility** — needed for keyboard mode (typing into other apps)
 
-**Linux**: Join input group: `sudo usermod -aG input $USER` (log out/in).
+After granting permissions: `dictare service restart`
+
+**Linux** — hotkey + keyboard mode:
+1. **Input group** (hotkey via evdev, works on both X11 and Wayland):
+   ```bash
+   sudo usermod -aG input $USER   # log out/in after
+   ```
+2. **ydotool** (keyboard mode, Wayland):
+   ```bash
+   sudo apt install ydotool
+   ```
 
 ## Development
 
