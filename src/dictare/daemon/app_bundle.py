@@ -166,6 +166,36 @@ def remove_app_bundle() -> None:
         if path.exists():
             subprocess.run(["rm", "-rf", str(path)], check=False, capture_output=True)
 
+def resolve_python_path(
+    current_executable: str,
+    stored_path: str | None,
+) -> tuple[str, bool]:
+    """Decide which Python path to use for the launcher.
+
+    Compares the currently running Python (sys.executable) with the
+    stored path in ~/.dictare/python_path.  Returns the path to use
+    and whether it changed (needs writing).
+
+    Args:
+        current_executable: The Python running right now (sys.executable).
+        stored_path: The path currently in ~/.dictare/python_path, or None
+                     if the file doesn't exist.
+
+    Returns:
+        (path, changed): The resolved path and whether it differs from stored.
+    """
+    if not stored_path or not stored_path.strip():
+        # First run or empty/corrupt file — no valid stored path
+        return current_executable, True
+
+    if stored_path.strip() == current_executable:
+        # Already correct — no change needed
+        return current_executable, False
+
+    # Path changed (brew upgrade, reinstall, etc.)
+    return current_executable, True
+
+
 def _write_external_python_path(python_path: str) -> None:
     """Write python_path to ~/.dictare/python_path (external to the bundle).
 
@@ -179,6 +209,23 @@ def _write_external_python_path(python_path: str) -> None:
     # can cause EPERM when a different process tries to overwrite it.
     target.unlink(missing_ok=True)
     target.write_text(python_path)
+
+
+def ensure_python_path(executable: str) -> None:
+    """Self-healing: ensure ~/.dictare/python_path matches the running Python.
+
+    Called on every engine startup. If the path is stale (e.g., after
+    brew upgrade changed the Cellar version), it's updated automatically.
+    """
+    config_dir = Path.home() / ".dictare"
+    target = config_dir / "python_path"
+
+    stored = target.read_text().strip() if target.exists() else None
+    resolved, changed = resolve_python_path(executable, stored)
+
+    if changed:
+        logger.info("Updating python_path: %s → %s", stored, resolved)
+        _write_external_python_path(resolved)
 
 def _find_cellar_bundle() -> Path | None:
     """Find a pre-built signed .app bundle installed by Homebrew.
