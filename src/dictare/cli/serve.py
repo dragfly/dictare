@@ -106,6 +106,14 @@ def _run_serve(
     from dictare import __version__
     from dictare.logging.setup import get_default_log_path, setup_logging
 
+    # Self-healing: update python_path so the launcher finds the current Python
+    # after brew upgrade (Cellar path changes on each version).
+    try:
+        from dictare.daemon.app_bundle import _write_external_python_path
+        _write_external_python_path(sys.executable)
+    except Exception:
+        pass  # Non-fatal — service still starts, just python_path may be stale
+
     # Timestamp all stderr output (catches crashes before logging is ready)
     _original_stderr = sys.stderr
     class _TimestampedStderr:
