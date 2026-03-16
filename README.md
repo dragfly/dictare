@@ -187,16 +187,13 @@ dictare config set stt.language it
 
 Full configuration reference at [dictare.io/docs/configuration](https://dictare.io/docs/configuration/).
 
-## Requirements
+## Permissions
 
-- **Python 3.11**
-- **macOS** or **Linux**
-
-**macOS permissions** (prompted automatically, grant all three):
+**macOS** (prompted automatically, grant all three):
 - **Microphone** → **Input Monitoring** → **Accessibility** (keyboard mode)
 - After granting: `dictare service restart`
 
-**Linux permissions**:
+**Linux**:
 - **Input group** — for hotkey (evdev, X11 + Wayland): `sudo usermod -aG input $USER`
 - **ydotool** — for keyboard mode on Wayland: `sudo apt install ydotool`
 
