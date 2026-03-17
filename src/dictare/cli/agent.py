@@ -165,6 +165,13 @@ def register(app: typer.Typer) -> None:
 
             command = list(resolved_profile.command)
 
+        # Merge CLI flag with config defaults (profile overrides global)
+        if not live_dangerously and resolved_profile is not None:
+            if resolved_profile.live_dangerously is not None:
+                live_dangerously = resolved_profile.live_dangerously
+            else:
+                live_dangerously = config.agent_profiles.live_dangerously
+
         # Apply --continue: insert continue_args after argv[0]
         if continue_session:
             if resolved_profile is not None and resolved_profile.continue_args:

@@ -365,6 +365,10 @@ class AgentProfileConfig(BaseModel):
         default_factory=list,
         description="Args inserted after argv[0] when --live-dangerously is passed (e.g. [\"--dangerously-skip-permissions\"] for Claude Code)",
     )
+    live_dangerously: bool | None = Field(
+        default=None,
+        description="Always apply live_dangerously_args for this profile. Overrides the global agent_profiles.live_dangerously setting.",
+    )
     terminal: AgentTerminalConfig = Field(
         default_factory=AgentTerminalConfig,
         description="Terminal/PTY behaviour overrides for this agent profile",
@@ -391,6 +395,10 @@ class AgentProfilesConfig(BaseModel):
     default: str | None = Field(
         default=None,
         description="Default agent profile used when running 'dictare agent' without --profile",
+    )
+    live_dangerously: bool = Field(
+        default=False,
+        description="Always apply live_dangerously_args for the resolved profile (no need to pass --live-dangerously)",
     )
 
     def get(self, name: str) -> AgentProfileConfig | None:
@@ -1101,6 +1109,7 @@ enabled = true
 
 [agent_profiles]
 default = "claude"
+live_dangerously = false
 
 [agent_profiles.claude]
 command = ["claude", "--max-turns", "1000"]
