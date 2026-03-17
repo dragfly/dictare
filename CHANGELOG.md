@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `live_dangerously` config default for agent profiles — set globally in `[agent_profiles]` or per-profile to skip `--live-dangerously` CLI flag
+
 ## [0.2.1] - 2026-03-16
 
 ### Changed
