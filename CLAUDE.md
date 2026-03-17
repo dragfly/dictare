@@ -34,6 +34,12 @@ uv run --python 3.11 mypy src/
 
 **Python 3.11 only** — always use `uv run --python 3.11`.
 
+## Branch Workflow
+
+**Always work on a branch, never commit directly to main.**
+Create a branch at the start of every task (`fix/`, `feat/`, `refactor/`, etc.).
+Only exception: the user explicitly says to work on main.
+
 ## Commit Conventions
 
 Prefixes: `feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`
