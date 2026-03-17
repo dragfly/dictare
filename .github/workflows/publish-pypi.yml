@@ -1,16 +1,48 @@
-name: "0 - release: publish to PyPI"
+name: "0 - release: publish"
 
 on:
   workflow_dispatch:
 
 jobs:
+  # ── Gate: extract version, detect pre-release, check duplicates ──
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version and detect pre-release
+        id: version
+        run: |
+          VERSION=$(grep -E '^__version__' src/dictare/__init__.py | sed 's/.*"\(.*\)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # PEP 440: stable = digits and dots only (e.g. 1.2.3)
+          if echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Pre-release version ${VERSION} — will publish to PyPI only (no tag, no GitHub Release, no Homebrew)"
+          fi
+
+      - name: Check if already released on PyPI
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if curl -sf "https://pypi.org/pypi/dictare/${VERSION}/json" > /dev/null 2>&1; then
+            echo "::error::Version ${VERSION} already exists on PyPI"
+            exit 1
+          fi
+
+  # ── PyPI: always (stable + pre-release) ──
   publish:
-    name: Build and publish to PyPI
+    name: Publish to PyPI
+    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write  # Required for Trusted Publisher (OIDC)
-
     steps:
       - uses: actions/checkout@v4
 
@@ -28,42 +60,38 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
+  # ── GitHub Release: stable only ──
   github-release:
     name: Create GitHub Release
-    needs: publish
+    needs: [prepare, publish]
+    if: needs.prepare.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get version from source
-        id: version
-        run: |
-          VERSION=$(grep -E '^__version__' src/dictare/__init__.py | sed 's/.*"\(.*\)"/\1/')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
       - name: Extract release notes from CHANGELOG
-        id: notes
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          # Extract the section between ## [VERSION] and the next ## [
-          NOTES=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md)
-          # Write to file to preserve newlines
-          echo "$NOTES" > /tmp/release-notes.md
+          VERSION="${{ needs.prepare.outputs.version }}"
+          sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md > /tmp/release-notes.md
 
-      - name: Create GitHub Release
+      - name: Tag and create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git tag "v${VERSION}"
+          git push origin "v${VERSION}"
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
             --notes-file /tmp/release-notes.md
 
+  # ── Homebrew tap: stable only ──
   update-tap:
     name: Update Homebrew tap
-    needs: publish
+    needs: [prepare, publish]
+    if: needs.prepare.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,15 +120,9 @@ jobs:
               echo "$EOF_MARKER" >> "$GITHUB_ENV"
             done
 
-      - name: Get version from source
-        id: version
-        run: |
-          VERSION=$(grep -E '^__version__' src/dictare/__init__.py | sed 's/.*"\(.*\)"/\1/')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
       - name: Wait for PyPI to index the package
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
           for i in $(seq 1 30); do
             if curl -sf "https://pypi.org/pypi/dictare/${VERSION}/json" > /dev/null 2>&1; then
               echo "Package available on PyPI"
@@ -113,7 +135,7 @@ jobs:
       - name: Get tarball URL and SHA256 from PyPI
         id: pypi
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
           JSON=$(curl -sf "https://pypi.org/pypi/dictare/${VERSION}/json")
           URL=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); urls=[u for u in d['urls'] if u['filename'].endswith('.tar.gz')]; print(urls[0]['url'])")
           SHA=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); urls=[u for u in d['urls'] if u['filename'].endswith('.tar.gz')]; print(urls[0]['digests']['sha256'])")
@@ -142,7 +164,7 @@ jobs:
 
       - name: Write formula
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
           PYPI_URL="${{ steps.pypi.outputs.url }}"
           PYPI_SHA="${{ steps.pypi.outputs.sha256 }}"
           LAUNCHER_SHA="${{ steps.launcher.outputs.sha256 }}"
@@ -227,5 +249,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/dictare.rb
-          git commit -m "chore: bump dictare to ${{ steps.version.outputs.version }}"
+          git commit -m "chore: bump dictare to ${{ needs.prepare.outputs.version }}"
           git push
