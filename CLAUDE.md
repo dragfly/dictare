@@ -41,7 +41,10 @@ Prefixes: `feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`
 Versioning: SemVer — MINOR for features, PATCH for bug fixes, MAJOR for breaking changes.
 
 After every change: run tests → lint → typecheck → bump version in
-`src/dictare/__init__.py` → update `CHANGELOG.md` → commit + tag + push.
+`src/dictare/__init__.py` → update `CHANGELOG.md` → commit.
+
+**Never push or tag without explicit user approval.** Release (tag + push + PyPI +
+Homebrew) is handled by the CI workflow — not by local commands.
 
 ## Language Policy
 
