@@ -189,3 +189,223 @@ class TestAgentContinue:
 
         at = AgentProfileConfig.model_validate({"command": ["claude"]})
         assert at.continue_args == []
+
+
+class TestAgentLiveDangerously:
+    """Tests for --live-dangerously flag and config defaults on 'dictare agent'."""
+
+    def _make_config(
+        self,
+        live_dangerously_args: list[str] | None = None,
+        global_live_dangerously: bool = False,
+        profile_live_dangerously: bool | None = None,
+    ) -> object:
+        from dictare.config import AgentProfileConfig, AgentProfilesConfig, ClientConfig, Config
+
+        profile_kwargs: dict = {
+            "command": ["claude", "--model", "claude-sonnet-4-6"],
+            "live_dangerously_args": live_dangerously_args or [],
+        }
+        if profile_live_dangerously is not None:
+            profile_kwargs["live_dangerously"] = profile_live_dangerously
+
+        at = AgentProfileConfig(**profile_kwargs)
+        cfg = Config()
+        cfg = cfg.model_copy(update={
+            "agent_profiles": AgentProfilesConfig(
+                default="sonnet", live_dangerously=global_live_dangerously, sonnet=at,
+            ),
+            "client": ClientConfig(url="http://127.0.0.1:8770", status_bar=False),
+        })
+        return cfg
+
+    def _invoke_agent(self, args: list[str], cfg: object) -> tuple[object, list]:
+        from unittest.mock import patch
+
+        captured: list[list[str]] = []
+
+        def fake_run_agent(agent_id: str, command: list[str], **kwargs: object) -> int:
+            captured.append(command)
+            return 0
+
+        with (
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.config.load_config", return_value=cfg),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+        ):
+            result = runner.invoke(app, ["agent"] + args)
+
+        return result, captured
+
+    # --- CLI flag ---
+
+    def test_cli_flag_inserts_live_dangerously_args(self) -> None:
+        """--live-dangerously inserts live_dangerously_args after argv[0]."""
+        cfg = self._make_config(live_dangerously_args=["--dangerously-skip-permissions"])
+        result, captured = self._invoke_agent(
+            ["myproject", "--type", "sonnet", "--live-dangerously"], cfg,
+        )
+        assert result.exit_code == 0
+        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+
+    def test_cli_flag_without_args_warns(self) -> None:
+        """--live-dangerously with no live_dangerously_args shows a warning."""
+        cfg = self._make_config(live_dangerously_args=[])
+        result, captured = self._invoke_agent(
+            ["myproject", "--type", "sonnet", "--live-dangerously"], cfg,
+        )
+        assert result.exit_code == 0
+        assert "Warning" in result.output
+        assert captured == [["claude", "--model", "claude-sonnet-4-6"]]
+
+    def test_cli_flag_with_command_override_ignored(self) -> None:
+        """--live-dangerously is silently ignored with explicit command override."""
+        cfg = self._make_config(live_dangerously_args=["--dangerously-skip-permissions"])
+        result, captured = self._invoke_agent(
+            ["myproject", "--live-dangerously", "--", "aider", "--model", "gpt-4"], cfg,
+        )
+        assert result.exit_code == 0
+        assert captured == [["aider", "--model", "gpt-4"]]
+
+    # --- Global default ---
+
+    def test_global_default_applies(self) -> None:
+        """agent_profiles.live_dangerously = true activates without CLI flag."""
+        cfg = self._make_config(
+            live_dangerously_args=["--dangerously-skip-permissions"],
+            global_live_dangerously=True,
+        )
+        result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
+        assert result.exit_code == 0
+        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+
+    def test_global_default_false_does_not_apply(self) -> None:
+        """agent_profiles.live_dangerously = false (default) does nothing."""
+        cfg = self._make_config(
+            live_dangerously_args=["--dangerously-skip-permissions"],
+            global_live_dangerously=False,
+        )
+        result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
+        assert result.exit_code == 0
+        assert captured == [["claude", "--model", "claude-sonnet-4-6"]]
+
+    # --- Per-profile override ---
+
+    def test_profile_override_true_over_global_false(self) -> None:
+        """Profile live_dangerously=true overrides global false."""
+        cfg = self._make_config(
+            live_dangerously_args=["--dangerously-skip-permissions"],
+            global_live_dangerously=False,
+            profile_live_dangerously=True,
+        )
+        result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
+        assert result.exit_code == 0
+        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+
+    def test_profile_override_false_over_global_true(self) -> None:
+        """Profile live_dangerously=false overrides global true."""
+        cfg = self._make_config(
+            live_dangerously_args=["--dangerously-skip-permissions"],
+            global_live_dangerously=True,
+            profile_live_dangerously=False,
+        )
+        result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
+        assert result.exit_code == 0
+        assert captured == [["claude", "--model", "claude-sonnet-4-6"]]
+
+    def test_profile_none_falls_through_to_global(self) -> None:
+        """Profile live_dangerously=None (unset) falls through to global."""
+        cfg = self._make_config(
+            live_dangerously_args=["--dangerously-skip-permissions"],
+            global_live_dangerously=True,
+            profile_live_dangerously=None,
+        )
+        result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
+        assert result.exit_code == 0
+        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+
+    # --- CLI flag always wins ---
+
+    def test_cli_flag_wins_over_profile_false(self) -> None:
+        """CLI --live-dangerously wins even when profile says false."""
+        cfg = self._make_config(
+            live_dangerously_args=["--dangerously-skip-permissions"],
+            profile_live_dangerously=False,
+        )
+        result, captured = self._invoke_agent(
+            ["myproject", "--type", "sonnet", "--live-dangerously"], cfg,
+        )
+        assert result.exit_code == 0
+        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+
+    # --- Config model ---
+
+    def test_agent_profile_config_live_dangerously_defaults_none(self) -> None:
+        """AgentProfileConfig.live_dangerously defaults to None."""
+        from dictare.config import AgentProfileConfig
+
+        at = AgentProfileConfig.model_validate({"command": ["claude"]})
+        assert at.live_dangerously is None
+
+    def test_agent_profiles_config_live_dangerously_defaults_false(self) -> None:
+        """AgentProfilesConfig.live_dangerously defaults to False."""
+        from dictare.config import AgentProfilesConfig
+
+        cfg = AgentProfilesConfig()
+        assert cfg.live_dangerously is False
+
+    def test_toml_with_global_live_dangerously(self) -> None:
+        """Global live_dangerously parses correctly from TOML."""
+        import tempfile
+        from pathlib import Path
+
+        from dictare.config import load_config
+
+        toml = """
+[agent_profiles]
+default = "claude"
+live_dangerously = true
+
+[agent_profiles.claude]
+command = ["claude"]
+live_dangerously_args = ["--dangerously-skip-permissions"]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml)
+            temp_path = Path(f.name)
+
+        try:
+            config = load_config(temp_path)
+            assert config.agent_profiles.live_dangerously is True
+            profile = config.agent_profiles.get("claude")
+            assert profile.live_dangerously is None  # not set at profile level
+        finally:
+            temp_path.unlink()
+
+    def test_toml_with_profile_live_dangerously(self) -> None:
+        """Per-profile live_dangerously parses correctly from TOML."""
+        import tempfile
+        from pathlib import Path
+
+        from dictare.config import load_config
+
+        toml = """
+[agent_profiles]
+default = "claude"
+
+[agent_profiles.claude]
+command = ["claude"]
+live_dangerously_args = ["--dangerously-skip-permissions"]
+live_dangerously = true
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(toml)
+            temp_path = Path(f.name)
+
+        try:
+            config = load_config(temp_path)
+            assert config.agent_profiles.live_dangerously is False  # global default
+            profile = config.agent_profiles.get("claude")
+            assert profile.live_dangerously is True
+        finally:
+            temp_path.unlink()
