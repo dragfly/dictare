@@ -190,6 +190,7 @@ class DictareEngine:
 
         # Guard against concurrent audio reconnect attempts
         self._reconnecting = threading.Lock()
+        self._last_focus_reconnect: float = 0.0  # monotonic timestamp
 
         # Tap detection (isolated state machine)
         # Single tap: toggle mute on/off
@@ -1099,9 +1100,19 @@ class DictareEngine:
         # Trigger immediate audio reconnect on focus-in if audio is dead.
         # After sleep/wake the main loop may be waiting on a retry timer —
         # this bypasses the wait so audio recovers in ~2-3s instead of 30s.
+        # Cooldown: skip if a reconnect was triggered in the last 10 seconds
+        # to prevent oscillation loops from rapid focus True/False cycling.
         if focused and self._audio_manager:
             reason = self._audio_manager.reconnect_reason
             if reason:
+                now = time.monotonic()
+                if now - self._last_focus_reconnect < 10.0:
+                    logger.debug(
+                        "Focus-reconnect skipped: cooldown (%.1fs ago)",
+                        now - self._last_focus_reconnect,
+                    )
+                    return
+                self._last_focus_reconnect = now
                 logger.info("Focus-triggered audio reconnect (reason=%s)", reason)
                 threading.Thread(
                     target=self._focus_reconnect,
