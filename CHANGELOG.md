@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-20
+
 ### Added
 - `live_dangerously` config default for agent profiles — set globally in `[agent_profiles]` or per-profile to skip `--live-dangerously` CLI flag
+
+### Fixed
+- Focus-triggered audio reconnect loop after sleep/wake — rapid focus cycling caused infinite reconnect attempts, leaving STT unresponsive despite agent showing as connected
 
 ## [0.2.1] - 2026-03-16
 
