@@ -576,13 +576,13 @@ class AppController:
             agent = command.split(":", 1)[1] if ":" in command else body.get("agent", "")
             logger.info("switch_to_agent: %s", agent)
             self.switch_to_agent(agent)
-            return {"status": "ok"}
+            return {"openvip": "1.0", "status": "ok"}
         elif command.startswith("output.set_mode:"):
             mode = command.split(":", 1)[1]
             self.set_output_mode(mode)
-            return {"status": "ok", "mode": mode}
+            return {"openvip": "1.0", "status": "ok", "mode": mode}
 
-        return {"status": "error", "error": f"Unknown command: {command}"}
+        return {"openvip": "1.0", "status": "error", "error": f"Unknown command: {command}"}
 
     def _display_session_stats(self, stats: Any = None) -> None:
         """Display session statistics on exit.

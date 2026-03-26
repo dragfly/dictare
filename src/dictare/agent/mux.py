@@ -135,7 +135,7 @@ class KeystrokeCounter:
 # Default claim key byte sequences (Ctrl+\).
 # Kept as module constants for backward-compatible test imports.
 _CTRL_BACKSLASH = b"\x1c"
-_CTRL_BACKSLASH_CSI_U = b"\x1b[92;5u"
+_CTRL_BACKSLASH_SEQS = [b"\x1b[92;5u", b"\x1b[27;5;92~"]
 
 # Terminal focus reporting escape sequences (xterm extension, widely supported)
 _FOCUS_ENABLE = b"\x1b[?1004h"
@@ -143,18 +143,21 @@ _FOCUS_DISABLE = b"\x1b[?1004l"
 _FOCUS_IN = b"\x1b[I"
 _FOCUS_OUT = b"\x1b[O"
 
-def _parse_claim_key(key_str: str) -> tuple[bytes, bytes]:
-    """Parse a claim key string into (raw_byte, csi_u_bytes).
+def _parse_claim_key(key_str: str) -> tuple[bytes, list[bytes]]:
+    """Parse a claim key string into (raw_byte, escape_sequences).
 
-    Supports ``ctrl+<char>`` format.  For any ``ctrl+X``:
+    Supports ``ctrl+<char>`` format.  For any ``ctrl+X``, terminals may
+    send one of three encodings depending on the active keyboard mode:
+
     - Raw mode byte: ``ord(X) & 0x1F``
     - Kitty CSI u:   ``ESC[{ord(X)};5u``
+    - xterm modifyOtherKeys: ``ESC[27;5;{ord(X)}~``
 
     Args:
         key_str: Key specification, e.g. ``"ctrl+\\\\"`` or ``"ctrl+]"``.
 
     Returns:
-        Tuple of (raw_byte, csi_u_bytes).
+        Tuple of (raw_byte, list_of_escape_sequences).
 
     Raises:
         ValueError: If the format is not recognized.
@@ -172,19 +175,23 @@ def _parse_claim_key(key_str: str) -> tuple[bytes, bytes]:
             "Expected a single character after 'ctrl+'"
         )
     raw = bytes([ord(char) & 0x1F])
-    csi_u = f"\x1b[{ord(char)};5u".encode()
-    return raw, csi_u
+    escape_seqs = [
+        f"\x1b[{ord(char)};5u".encode(),       # Kitty CSI u
+        f"\x1b[27;5;{ord(char)}~".encode(),     # xterm modifyOtherKeys
+    ]
+    return raw, escape_seqs
 
-def _strip_claim_key(data: bytes, raw: bytes, csi_u: bytes) -> tuple[bytes, bool]:
+def _strip_claim_key(data: bytes, raw: bytes, escape_seqs: list[bytes]) -> tuple[bytes, bool]:
     """Remove all claim key variants from *data*.
 
     Returns (cleaned_data, found) where *found* is True if any
     claim key sequence was present.
     """
     found = False
-    if csi_u in data:
-        data = data.replace(csi_u, b"")
-        found = True
+    for seq in escape_seqs:
+        if seq in data:
+            data = data.replace(seq, b"")
+            found = True
     if raw in data:
         data = data.replace(raw, b"")
         found = True
@@ -193,7 +200,7 @@ def _strip_claim_key(data: bytes, raw: bytes, csi_u: bytes) -> tuple[bytes, bool
 # Backward-compatible alias used by existing tests
 def _strip_ctrl_backslash(data: bytes) -> tuple[bytes, bool]:
     """Remove Ctrl+\\\\ from *data* (backward-compatible wrapper)."""
-    return _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_CSI_U)
+    return _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_SEQS)
 
 def _strip_focus_events(data: bytes) -> tuple[bytes, bool | None]:
     """Remove focus-in/out escape sequences from *data*.
@@ -242,7 +249,7 @@ def _read_from_stdin(
     base_url: str = DEFAULT_BASE_URL,
     session_path: Path | None = None,
     claim_key_raw: bytes = _CTRL_BACKSLASH,
-    claim_key_csi_u: bytes = _CTRL_BACKSLASH_CSI_U,
+    claim_key_seqs: list[bytes] | None = None,
 ) -> None:
     """Read from keyboard in raw mode and put data in queue.
 
@@ -251,9 +258,10 @@ def _read_from_stdin(
     terminal the active voice target.  The keystroke is consumed
     and never forwarded to the child process.
 
-    Supports both classic raw-mode byte and the kitty keyboard
-    protocol CSI u sequence.
+    Supports raw-mode byte, kitty CSI u, and xterm modifyOtherKeys.
     """
+    if claim_key_seqs is None:
+        claim_key_seqs = _CTRL_BACKSLASH_SEQS
     try:
         while not stop_event.is_set():
             r, _, _ = select.select([sys.stdin.fileno()], [], [], 0.1)
@@ -272,7 +280,7 @@ def _read_from_stdin(
 
                 # Intercept claim key to claim this agent as active
                 if agent_id:
-                    data, found = _strip_claim_key(data, claim_key_raw, claim_key_csi_u)
+                    data, found = _strip_claim_key(data, claim_key_raw, claim_key_seqs)
                     if found:
                         if session_path:
                             _log_event(session_path, "claim_key", {
@@ -701,7 +709,7 @@ def run_agent(
 
     # --- Pre-flight OK — proceed with session setup ---
     # Parse claim key once at startup
-    claim_raw, claim_csi_u = _parse_claim_key(claim_key)
+    claim_raw, claim_seqs = _parse_claim_key(claim_key)
 
     # Create session log
     session_path = _get_session_log_path(agent_id)
@@ -835,7 +843,7 @@ def run_agent(
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
             args=(write_queue, stop_event, keystroke_counter, agent_id, base_url, session_path),
-            kwargs={"claim_key_raw": claim_raw, "claim_key_csi_u": claim_csi_u},
+            kwargs={"claim_key_raw": claim_raw, "claim_key_seqs": claim_seqs},
             daemon=True,
         )
         # SSE-based IPC: connect to engine HTTP server

@@ -9,7 +9,7 @@ import pytest
 
 from dictare.agent.mux import (
     _CTRL_BACKSLASH,
-    _CTRL_BACKSLASH_CSI_U,
+    _CTRL_BACKSLASH_SEQS,
     _parse_claim_key,
     _print_session_summary,
     _report_focus,
@@ -27,12 +27,12 @@ class TestParseClaimKey:
     def test_ctrl_backslash(self) -> None:
         raw, csi = _parse_claim_key("ctrl+\\")
         assert raw == _CTRL_BACKSLASH
-        assert csi == _CTRL_BACKSLASH_CSI_U
+        assert csi == _CTRL_BACKSLASH_SEQS
 
     def test_ctrl_close_bracket(self) -> None:
-        raw, csi = _parse_claim_key("ctrl+]")
+        raw, seqs = _parse_claim_key("ctrl+]")
         assert raw == bytes([ord("]") & 0x1F])
-        assert csi == f"\x1b[{ord(']')};5u".encode()
+        assert f"\x1b[{ord(']')};5u".encode() in seqs
 
     def test_case_insensitive(self) -> None:
         raw1, csi1 = _parse_claim_key("CTRL+A")
@@ -62,25 +62,31 @@ class TestStripClaimKey:
 
     def test_no_claim_key(self) -> None:
         data = b"hello"
-        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_CSI_U)
+        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_SEQS)
         assert cleaned == b"hello"
         assert found is False
 
     def test_raw_claim_key(self) -> None:
         data = b"abc" + _CTRL_BACKSLASH + b"def"
-        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_CSI_U)
+        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_SEQS)
         assert cleaned == b"abcdef"
         assert found is True
 
     def test_csi_u_claim_key(self) -> None:
-        data = b"abc" + _CTRL_BACKSLASH_CSI_U + b"def"
-        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_CSI_U)
+        data = b"abc" + _CTRL_BACKSLASH_SEQS[0] + b"def"
+        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_SEQS)
+        assert cleaned == b"abcdef"
+        assert found is True
+
+    def test_modify_other_keys_claim_key(self) -> None:
+        data = b"abc" + _CTRL_BACKSLASH_SEQS[1] + b"def"
+        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_SEQS)
         assert cleaned == b"abcdef"
         assert found is True
 
     def test_both_variants(self) -> None:
-        data = _CTRL_BACKSLASH + _CTRL_BACKSLASH_CSI_U
-        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_CSI_U)
+        data = _CTRL_BACKSLASH + _CTRL_BACKSLASH_SEQS[0]
+        cleaned, found = _strip_claim_key(data, _CTRL_BACKSLASH, _CTRL_BACKSLASH_SEQS)
         assert cleaned == b""
         assert found is True
 
@@ -183,12 +189,12 @@ class TestCustomClaimKeys:
     def test_ctrl_a(self) -> None:
         raw, csi = _parse_claim_key("ctrl+a")
         assert raw == b"\x01"
-        assert csi == b"\x1b[97;5u"
+        assert b"\x1b[97;5u" in csi
 
     def test_ctrl_z(self) -> None:
         raw, csi = _parse_claim_key("ctrl+z")
         assert raw == b"\x1a"
-        assert csi == b"\x1b[122;5u"
+        assert b"\x1b[122;5u" in csi
 
     def test_ctrl_close_bracket_raw(self) -> None:
         raw, _ = _parse_claim_key("ctrl+]")
