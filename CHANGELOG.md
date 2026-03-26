@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-03-26
+
+### Fixed
+- Agent claim key (CTRL+\) now handles all terminal key encodings, fixing compatibility with recent Claude Code versions
+- Control endpoint responses now comply with the OpenVIP protocol (missing `openvip` field)
+
 ## [0.2.2] - 2026-03-20
 
 ### Added
