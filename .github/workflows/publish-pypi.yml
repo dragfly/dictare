@@ -12,7 +12,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       is_prerelease: ${{ steps.version.outputs.is_prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get version and detect pre-release
         id: version
@@ -44,7 +44,7 @@ jobs:
       contents: read
       id-token: write  # Required for Trusted Publisher (OIDC)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -69,7 +69,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Extract release notes from CHANGELOG
         run: |
@@ -94,7 +94,7 @@ jobs:
     if: needs.prepare.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Load secrets from Infisical
         env:
@@ -156,7 +156,7 @@ jobs:
           rm -f /tmp/launcher.zip
 
       - name: Checkout Homebrew tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: dragfly/homebrew-tap
           token: ${{ env.TAP_GITHUB_TOKEN }}
