@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-03-28
+
+### Fixed
+- macOS: `python_path` self-healing no longer overwrites a valid path when `python` and `python3.11` symlinks point to the same binary
+
+### Removed
+- Obsolete files: `TERMINAL_COMPATIBILITY.md`, `openapitools.json`, `setup-permissions.sh`, `remove-permissions.sh`
+
 ## [0.2.5] - 2026-03-28
 
 ### Changed
