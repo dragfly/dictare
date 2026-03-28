@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import plistlib
+import signal
 import subprocess
 import sys
 import time
@@ -160,23 +161,41 @@ def _wait_for_process_exit(pid: int, timeout: float = 3.0) -> bool:
     return False
 
 def _stop_service() -> None:
-    """Unload the LaunchAgent and verify the process actually dies.
+    """Unload the LaunchAgent and kill the engine process.
 
-    launchctl unload sends SIGTERM, but NSApplication-based processes may not
-    exit immediately.  If the process survives, we escalate to SIGKILL.
+    The launcher (Swift .app) and the engine (Python) are separate processes.
+    launchctl unload stops the launcher, but the engine (child process) may
+    survive as an orphan.  We kill both: launcher via launchctl, engine via
+    PID file.
     """
     plist_path = get_plist_path()
-    pid = _get_service_pid()
+    launcher_pid = _get_service_pid()
 
     subprocess.run(["launchctl", "unload", str(plist_path)], check=False)
 
-    if pid is not None:
-        if not _wait_for_process_exit(pid):
-            logger.warning("Service PID %d survived unload — sending SIGKILL", pid)
+    # Kill launcher if it survived unload
+    if launcher_pid is not None:
+        if not _wait_for_process_exit(launcher_pid):
+            logger.warning("Launcher PID %d survived unload — sending SIGKILL", launcher_pid)
             try:
-                os.kill(pid, 9)  # SIGKILL
+                os.kill(launcher_pid, 9)
             except ProcessLookupError:
-                pass  # Already gone
+                pass
+
+    # Kill engine via PID file (engine is a child of the launcher and may
+    # survive as an orphan after launchctl unload)
+    pid_file = Path.home() / ".dictare" / "engine.pid"
+    if pid_file.exists():
+        try:
+            engine_pid = int(pid_file.read_text().strip())
+            os.kill(engine_pid, 0)  # Check alive
+            logger.info("Stopping engine PID %d", engine_pid)
+            os.kill(engine_pid, signal.SIGTERM)
+            if not _wait_for_process_exit(engine_pid):
+                logger.warning("Engine PID %d survived SIGTERM — sending SIGKILL", engine_pid)
+                os.kill(engine_pid, 9)
+        except (ValueError, ProcessLookupError, OSError):
+            pass
 
 def _request_input_monitoring() -> None:
     """Request Input Monitoring permission for the global hotkey.

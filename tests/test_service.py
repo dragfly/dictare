@@ -239,12 +239,29 @@ class TestStopService:
         with patch("dictare.daemon.launchd._get_service_pid", return_value=42), \
              patch("subprocess.run"), \
              patch("dictare.daemon.launchd._wait_for_process_exit", return_value=False), \
+             patch("dictare.daemon.launchd.Path.home", return_value=Path("/nonexistent")), \
              patch("os.kill") as mock_kill:
             _stop_service()
             mock_kill.assert_called_once_with(42, 9)
 
+    def test_kills_engine_via_pid_file(self, tmp_path):
+        """_stop_service kills the engine process via PID file."""
+        dictare_dir = tmp_path / ".dictare"
+        dictare_dir.mkdir()
+        pid_file = dictare_dir / "engine.pid"
+        pid_file.write_text("5678\n")
+
+        with patch("dictare.daemon.launchd._get_service_pid", return_value=None), \
+             patch("subprocess.run"), \
+             patch("dictare.daemon.launchd._wait_for_process_exit", return_value=False), \
+             patch("dictare.daemon.launchd.Path.home", return_value=tmp_path), \
+             patch("os.kill") as mock_kill:
+            _stop_service()
+            mock_kill.assert_any_call(5678, 0)
+
     def test_handles_no_pid(self):
         with patch("dictare.daemon.launchd._get_service_pid", return_value=None), \
+             patch("dictare.daemon.launchd.Path.home", return_value=Path("/nonexistent")), \
              patch("subprocess.run") as mock_run:
             _stop_service()
             mock_run.assert_called_once()
