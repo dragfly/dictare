@@ -165,6 +165,25 @@ def register(app: typer.Typer) -> None:
 
             command = list(resolved_profile.command)
 
+        # Check that the agent binary is installed (only for profile-resolved commands)
+        import shutil
+
+        binary = command[0] if command else None
+        if binary and not command_override and not shutil.which(binary):
+            console.print(f"[yellow]The default agent profile is '{type_key}', but '{binary}' is not installed.[/]")
+            console.print()
+            if config.agent_profiles:
+                console.print("[dim]Available profiles:[/]")
+                for name, at in config.agent_profiles.items():
+                    bin_name = at.command[0] if at.command else "?"
+                    installed = "[green]installed[/]" if shutil.which(bin_name) else "[red]not found[/]"
+                    console.print(f"  [bold]{name}[/] ({bin_name} {installed})")
+                    console.print(f"    [dim]dictare agent {agent_id} --profile {name}[/]")
+                console.print()
+            console.print("[dim]Or run any command directly:[/]")
+            console.print(f"[dim]  dictare agent {agent_id} -- <command> [args...][/]")
+            raise typer.Exit(1)
+
         # Merge CLI flag with config defaults (profile overrides global)
         if not live_dangerously and resolved_profile is not None:
             if resolved_profile.live_dangerously is not None:

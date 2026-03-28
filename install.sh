@@ -80,7 +80,7 @@ if [[ "$OS" == "Darwin" ]]; then
 
     printf "\n"
     ok "Done! Voice-control your AI agent:"
-    printf "  ${BOLD}dictare agent claude${RESET}\n"
+    printf "  ${BOLD}dictare agent my-first-session${RESET}\n"
     printf "\n"
     exit 0
 fi
@@ -317,8 +317,12 @@ if [[ "$OS" == "Linux" ]]; then
 
     printf "\n"
     ok "Done! Voice-control your AI agent:"
-    printf "  ${BOLD}dictare agent claude${RESET}\n"
+    printf "  ${BOLD}dictare agent my-first-session${RESET}\n"
     printf "\n"
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        printf "  ${DIM}Remember to add ~/.local/bin to your PATH first (see above).${RESET}\n"
+        printf "\n"
+    fi
     exit 0
 fi
 

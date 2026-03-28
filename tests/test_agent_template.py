@@ -359,3 +359,62 @@ command = ["claude"]
         agent_id, command = launched[0]
         assert agent_id == "frontend"          # session name = what the user said
         assert "claude-opus-4-6" in command    # command from the type
+
+    def test_missing_binary_shows_profiles(self):
+        """When default profile binary is not installed, show available profiles."""
+        with (
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("shutil.which", return_value=None),
+            patch("dictare.config.get_config_path", return_value=self.config),
+        ):
+            from dictare.cli import app
+            result = _runner.invoke(app, ["agent", "my-session"], catch_exceptions=False)
+
+        assert result.exit_code != 0
+        assert "not installed" in result.output
+        assert "claude-sonnet" in result.output
+        assert "claude-opus" in result.output
+        assert "--profile" in result.output
+
+    def test_installed_binary_proceeds(self):
+        """When default profile binary IS installed, proceed normally."""
+        launched: list[tuple] = []
+
+        def fake_run_agent(agent_id, command, **_kw):
+            launched.append((agent_id, command))
+            return 0
+
+        with (
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.config.get_config_path", return_value=self.config),
+            patch("shutil.which", return_value="/usr/bin/claude"),
+        ):
+            from dictare.cli import app
+            result = _runner.invoke(app, ["agent", "my-session"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert len(launched) == 1
+
+    def test_command_override_skips_binary_check(self):
+        """-- command override doesn't check if binary exists via profiles."""
+        launched: list[tuple] = []
+
+        def fake_run_agent(agent_id, command, **_kw):
+            launched.append((agent_id, command))
+            return 0
+
+        with (
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.config.get_config_path", return_value=self.config),
+            # shutil.which returns None — but override should skip the check
+            patch("shutil.which", return_value=None),
+        ):
+            from dictare.cli import app
+            result = _runner.invoke(
+                app, ["agent", "test", "--", "my-custom-tool"], catch_exceptions=False
+            )
+
+        assert result.exit_code == 0
+        assert launched[0] == ("test", ["my-custom-tool"])
