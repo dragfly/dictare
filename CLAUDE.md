@@ -49,8 +49,21 @@ Versioning: SemVer — MINOR for features, PATCH for bug fixes, MAJOR for breaki
 After every change: run tests → lint → typecheck → bump version in
 `src/dictare/__init__.py` → update `CHANGELOG.md` → commit.
 
-**Never push or tag without explicit user approval.** Release (tag + push + PyPI +
-Homebrew) is handled by the CI workflow — not by local commands.
+**Never push or tag without explicit user approval.**
+
+## Release Procedure
+
+Release is **fully automated** by the CI workflow `0 - release: publish`.
+**Do NOT create tags locally.** The workflow creates the tag, GitHub Release,
+publishes to PyPI, and updates the Homebrew tap — all in one step.
+
+To release:
+1. Bump version in `src/dictare/__init__.py` + update `CHANGELOG.md`
+2. Merge to main via PR
+3. Trigger the workflow: `gh workflow run publish-pypi.yml -R dragfly/dictare --ref main`
+4. Done — the workflow handles everything else
+
+**Never** run `git tag` locally for releases. The workflow does it.
 
 ## Language Policy
 
