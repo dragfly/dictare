@@ -276,6 +276,7 @@ description = "Claude Opus"
             patch("dictare.cli.agent._check_engine", return_value=True),
             patch("dictare.agent.run_agent", side_effect=fake_run_agent),
             patch("dictare.config.get_config_path", return_value=self.config),
+            patch("dictare.cli.agent.shutil.which", return_value="/usr/bin/claude"),
         ):
             from dictare.cli import app
             result = _runner.invoke(app, ["agent", "Pippo", "--type", "claude-opus"], catch_exceptions=False)
@@ -295,6 +296,7 @@ description = "Claude Opus"
             patch("dictare.cli.agent._check_engine", return_value=True),
             patch("dictare.agent.run_agent", side_effect=fake_run_agent),
             patch("dictare.config.get_config_path", return_value=self.config),
+            patch("dictare.cli.agent.shutil.which", return_value="/usr/bin/claude"),
         ):
             from dictare.cli import app
             result = _runner.invoke(app, ["agent", "Pippo"], catch_exceptions=False)
@@ -352,6 +354,7 @@ command = ["claude"]
             patch("dictare.cli.agent._check_engine", return_value=True),
             patch("dictare.agent.run_agent", side_effect=fake_run_agent),
             patch("dictare.config.get_config_path", return_value=self.config),
+            patch("dictare.cli.agent.shutil.which", return_value="/usr/bin/claude"),
         ):
             from dictare.cli import app
             _runner.invoke(app, ["agent", "frontend", "--type", "claude-opus"], catch_exceptions=False)
