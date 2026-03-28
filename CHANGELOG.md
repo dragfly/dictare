@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-03-28
+
+### Changed
+- Linux install script rewritten with two-phase approach: checks prerequisites first (prints commands, exits), then installs user-space only (no sudo)
+- PyGObject added as optional `[tray]` dependency — survives upgrades, no manual pip install needed
+- `dictare status` shows "—" instead of "FAIL" for optional components (e.g. NVIDIA GPU on non-GPU machines)
+- `dictare setup` and install script say `my-first-session` instead of `claude`
+
+### Fixed
+- ydotool 0.1.x (Ubuntu 24.04) compatibility — works without ydotoold daemon
+- PyGObject install in uv tool venv — uses `uv pip install` instead of broken `python -m pip`
+- PATH warning now shows correctly after uv install
+- Agent CLI checks if profile binary is installed before launching, shows available profiles
+
 ## [0.2.4] - 2026-03-27
 
 ### Fixed
