@@ -255,6 +255,9 @@ if [[ "$OS" == "Linux" ]]; then
     # Phase 2: Install (user-space only, no sudo needed)
     # ══════════════════════════════════════════════════════════════════════════
 
+    # Save original PATH to check later (uv installer modifies it)
+    ORIGINAL_PATH="$PATH"
+
     # ── uv ───────────────────────────────────────────────────────────────────
     if ! command -v uv &>/dev/null; then
         info "Installing uv..."
@@ -273,8 +276,9 @@ if [[ "$OS" == "Linux" ]]; then
     uv tool install --python 3.11 "dictare[$EXTRAS]"
 
     # ── PATH check ───────────────────────────────────────────────────────────
+    # Check the ORIGINAL path (before uv installer modified it)
     mkdir -p "$HOME/.local/bin"
-    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    if [[ ":$ORIGINAL_PATH:" != *":$HOME/.local/bin:"* ]]; then
         printf "\n"
         warn "~/.local/bin is not in your PATH. Add it to your shell profile:"
         printf "\n"
