@@ -172,7 +172,7 @@ if [[ "$OS" == "Linux" ]]; then
 
     [[ ! -f "$UDEV_FILE" ]] && NEED_UDEV=true
     groups | grep -qw input || NEED_INPUT_GROUP=true
-    if command -v ydotoold &>/dev/null; then
+    if command -v ydotoold &>/dev/null && systemctl cat ydotoold.service &>/dev/null 2>&1; then
         systemctl is-active ydotoold &>/dev/null 2>&1 || NEED_YDOTOOLD=true
     fi
 
