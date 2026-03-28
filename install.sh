@@ -11,6 +11,7 @@ BOLD='\033[1m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
+DIM='\033[2m'
 RESET='\033[0m'
 
 info()  { printf "${GREEN}==>${RESET} ${BOLD}%s${RESET}\n" "$*"; }
@@ -89,12 +90,19 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 if [[ "$OS" == "Linux" ]]; then
     if [[ "$EUID" -eq 0 ]]; then
-        error "Do not run as root. The script will ask for sudo when needed."
+        error "Do not run as root. Run as your normal user."
     fi
 
-    # ── System packages ─────────────────────────────────────────────────────
-    if command -v apt-get &>/dev/null; then
-        info "Installing system packages (sudo required)..."
+    # ══════════════════════════════════════════════════════════════════════════
+    # Phase 1: Check prerequisites (no sudo, no changes)
+    # ══════════════════════════════════════════════════════════════════════════
+    MISSING_PKGS=()
+    PREREQ_CMDS=()
+    PREREQ_NOTES=()
+
+    # ── Check system packages ────────────────────────────────────────────────
+    if command -v dpkg &>/dev/null; then
+        # Debian/Ubuntu
         APPINDICATOR_PKG="gir1.2-appindicator3-0.1"
         if command -v lsb_release &>/dev/null; then
             _id=$(lsb_release -is 2>/dev/null || echo "")
@@ -103,36 +111,105 @@ if [[ "$OS" == "Linux" ]]; then
                 APPINDICATOR_PKG="gir1.2-ayatanaappindicator3-0.1"
             fi
         fi
-        sudo apt-get update -qq
-        sudo apt-get install -y \
-            libportaudio2 portaudio19-dev espeak-ng \
-            "$APPINDICATOR_PKG" libgirepository-2.0-dev libcairo2-dev \
-            build-essential pkg-config
 
-    elif command -v dnf &>/dev/null; then
-        info "Installing system packages (sudo required)..."
-        sudo dnf install -y \
-            portaudio portaudio-devel espeak-ng \
-            libappindicator-gtk3 gobject-introspection-devel cairo-devel \
+        REQUIRED_PKGS=(
+            libportaudio2 portaudio19-dev espeak-ng ydotool
+            "$APPINDICATOR_PKG" libgirepository-2.0-dev libcairo2-dev
+            build-essential pkg-config
+        )
+        for pkg in "${REQUIRED_PKGS[@]}"; do
+            if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+                MISSING_PKGS+=("$pkg")
+            fi
+        done
+
+        if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
+            PREREQ_CMDS+=("sudo apt-get update && sudo apt-get install -y ${MISSING_PKGS[*]}")
+        fi
+
+    elif command -v rpm &>/dev/null; then
+        # Fedora/RHEL
+        REQUIRED_PKGS=(
+            portaudio portaudio-devel espeak-ng ydotool
+            libappindicator-gtk3 gobject-introspection-devel cairo-devel
             gcc pkg-config
+        )
+        for pkg in "${REQUIRED_PKGS[@]}"; do
+            if ! rpm -q "$pkg" &>/dev/null; then
+                MISSING_PKGS+=("$pkg")
+            fi
+        done
+
+        if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
+            PREREQ_CMDS+=("sudo dnf install -y ${MISSING_PKGS[*]}")
+        fi
 
     elif command -v pacman &>/dev/null; then
-        info "Installing system packages (sudo required)..."
-        sudo pacman -S --noconfirm \
-            portaudio espeak-ng libappindicator-gtk3 \
+        # Arch
+        REQUIRED_PKGS=(
+            portaudio espeak-ng ydotool libappindicator-gtk3
             gobject-introspection cairo base-devel pkg-config
+        )
+        for pkg in "${REQUIRED_PKGS[@]}"; do
+            if ! pacman -Q "$pkg" &>/dev/null; then
+                MISSING_PKGS+=("$pkg")
+            fi
+        done
+
+        if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
+            PREREQ_CMDS+=("sudo pacman -S --noconfirm ${MISSING_PKGS[*]}")
+        fi
     else
-        warn "Unknown package manager — install portaudio and espeak-ng manually."
+        warn "Unknown package manager. You'll need to install dependencies manually."
+        warn "Required: portaudio, espeak-ng, ydotool, AppIndicator GI typelib"
     fi
 
-    # ── udev rule for hotkey ─────────────────────────────────────────────────
+    # ── Check udev rule (hotkey + ydotool access) ──────────────────────────
     UDEV_FILE="/etc/udev/rules.d/99-dictare.rules"
     if [[ ! -f "$UDEV_FILE" ]]; then
-        info "Installing udev rule for hotkey access..."
-        echo 'KERNEL=="event*", GROUP="input", MODE="0660"' | sudo tee "$UDEV_FILE" > /dev/null
-        sudo udevadm control --reload-rules && sudo udevadm trigger
-        ok "Hotkey udev rule installed"
+        PREREQ_CMDS+=("printf 'KERNEL==\"event*\", GROUP=\"input\", MODE=\"0660\"\nKERNEL==\"uinput\", GROUP=\"input\", MODE=\"0660\"\n' | sudo tee $UDEV_FILE > /dev/null && sudo udevadm control --reload-rules && sudo udevadm trigger")
+        PREREQ_NOTES+=("Udev rule: grants access to input devices (hotkey) and uinput (ydotool text injection).")
     fi
+
+    # ── Check input group ────────────────────────────────────────────────────
+    if ! groups | grep -qw input; then
+        PREREQ_CMDS+=("sudo usermod -aG input \$USER")
+        PREREQ_NOTES+=("Input group: required for the global hotkey (reads /dev/input via evdev). Log out and back in after adding.")
+    fi
+
+    # ── Check ydotoold daemon (ydotool 1.x+ only) ───────────────────────────
+    if command -v ydotoold &>/dev/null; then
+        if ! systemctl is-active ydotoold &>/dev/null 2>&1; then
+            PREREQ_CMDS+=("sudo systemctl enable ydotoold && sudo systemctl start ydotoold")
+            PREREQ_NOTES+=("ydotoold daemon: required for keyboard text injection on Wayland.")
+        fi
+    fi
+
+    # ── Report and exit if prerequisites are missing ─────────────────────────
+    if [[ ${#PREREQ_CMDS[@]} -gt 0 ]]; then
+        printf "\n"
+        warn "Some prerequisites are missing. Run these commands, then re-run this script:"
+        printf "\n"
+
+        for cmd in "${PREREQ_CMDS[@]}"; do
+            printf "  ${BOLD}%s${RESET}\n\n" "$cmd"
+        done
+
+        if [[ ${#PREREQ_NOTES[@]} -gt 0 ]]; then
+            for note in "${PREREQ_NOTES[@]}"; do
+                printf "  ${DIM}• %s${RESET}\n" "$note"
+            done
+            printf "\n"
+        fi
+
+        exit 1
+    fi
+
+    ok "All system prerequisites satisfied"
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Phase 2: Install (user-space only, no sudo needed)
+    # ══════════════════════════════════════════════════════════════════════════
 
     # ── uv ───────────────────────────────────────────────────────────────────
     if ! command -v uv &>/dev/null; then
@@ -153,21 +230,29 @@ if [[ "$OS" == "Linux" ]]; then
         uv tool install --python 3.11 dictare
     fi
 
-    # ── PATH ─────────────────────────────────────────────────────────────────
+    # ── PATH check ───────────────────────────────────────────────────────────
     mkdir -p "$HOME/.local/bin"
     if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-        warn "'~/.local/bin' not in PATH. Add to ~/.bashrc or ~/.zshrc:"
-        printf "    export PATH=\"\$HOME/.local/bin:\$PATH\"\n\n"
+        printf "\n"
+        warn "~/.local/bin is not in your PATH. Add it to your shell profile:"
+        printf "\n"
+        printf "  ${BOLD}export PATH=\"\$HOME/.local/bin:\$PATH\"${RESET}\n"
+        printf "\n"
+        printf "  ${DIM}Add this line to your ~/.bashrc or ~/.zshrc, then restart your shell.${RESET}\n"
+        printf "\n"
         export PATH="$HOME/.local/bin:$PATH"
     fi
 
-    # ── PyGObject (tray icon) ────────────────────────────────────────────────
+    # ── PyGObject (tray icon, required for Wayland) ──────────────────────────
     info "Installing PyGObject (tray icon)..."
     DICTARE_PYTHON="$(uv tool dir)/dictare/bin/python"
     if [[ -f "$DICTARE_PYTHON" ]]; then
-        "$DICTARE_PYTHON" -m pip install --quiet PyGObject pycairo 2>/dev/null || \
-            warn "PyGObject install failed — tray icon may not work."
-        ok "PyGObject installed"
+        if uv pip install --python "$DICTARE_PYTHON" PyGObject pycairo 2>/dev/null; then
+            ok "PyGObject installed"
+        else
+            warn "PyGObject install failed — tray icon may not work on Wayland."
+            printf "  ${DIM}On X11 the tray works without PyGObject.${RESET}\n"
+        fi
     fi
 
     # ── systemd service ──────────────────────────────────────────────────────

@@ -59,21 +59,13 @@ class YdotoolInjector(TextInjector):
         self._enter_sent: bool = False
 
     def is_available(self) -> bool:
-        """Check if ydotool is available and daemon is running."""
+        """Check if ydotool is available and ready to use."""
         self._ydotool_path = shutil.which("ydotool")
         if not self._ydotool_path:
             return False
 
-        # Check if ydotoold is running
-        try:
-            result = subprocess.run(
-                ["pgrep", "-x", "ydotoold"],
-                capture_output=True,
-                timeout=5,
-            )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+        from dictare.utils.platform import check_ydotool_ready
+        return check_ydotool_ready()
 
     def _has_non_ascii(self, text: str) -> bool:
         """Check if text contains non-ASCII characters."""

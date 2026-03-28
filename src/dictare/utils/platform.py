@@ -78,17 +78,29 @@ def check_command_exists(command: str) -> bool:
     """Check if a command exists in PATH."""
     return shutil.which(command) is not None
 
-def check_ydotoold_running() -> bool:
-    """Check if ydotoold daemon is running."""
-    try:
-        result = subprocess.run(
-            ["pgrep", "-x", "ydotoold"],
-            capture_output=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+def check_ydotool_ready() -> bool:
+    """Check if ydotool is usable.
+
+    ydotool 0.1.x (Ubuntu 24.04) works without a daemon — it accesses
+    /dev/uinput directly.  ydotool 1.x+ requires ydotoold to be running.
+    """
+    if not check_command_exists("ydotool"):
         return False
+
+    # If ydotoold binary exists, daemon is required (1.x+)
+    if check_command_exists("ydotoold"):
+        try:
+            result = subprocess.run(
+                ["pgrep", "-x", "ydotoold"],
+                capture_output=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    # No ydotoold binary — 0.1.x, check /dev/uinput access
+    return os.access("/dev/uinput", os.W_OK)
 
 def _check_python_version() -> list[CheckResult]:
     """Check Python version requirement."""
@@ -245,19 +257,19 @@ def _check_injection_deps_linux() -> list[CheckResult]:
 
     # ydotool
     ydotool_exists = check_command_exists("ydotool")
-    ydotoold_running = check_ydotoold_running() if ydotool_exists else False
+    ydotool_ready = check_ydotool_ready()
 
-    if ydotool_exists and ydotoold_running:
+    if ydotool_ready:
         msg, hint = "Ready", None
     elif ydotool_exists:
-        msg, hint = "ydotoold not running", "systemctl --user start ydotoold"
+        msg, hint = "ydotool installed but not usable (check ydotoold / uinput access)", "sudo systemctl start ydotoold"
     else:
-        msg, hint = "Not installed", "See install-linux.sh in the repo"
+        msg, hint = "Not installed", "sudo apt install ydotool"
 
     results.append(
         CheckResult(
             name="ydotool",
-            available=ydotool_exists and ydotoold_running,
+            available=ydotool_ready,
             message=msg,
             required=False,
             install_hint=hint,
