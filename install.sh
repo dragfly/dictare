@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dictare installer — voice-first control for AI coding agents
+# Dictare installer --voice-first control for AI coding agents
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
@@ -28,7 +28,7 @@ for arg in "$@"; do
         --skip-setup)  SKIP_SETUP=true ;;
         --help|-h)
             cat <<'EOF'
-Dictare installer — voice-first control for AI coding agents
+Dictare installer --voice-first control for AI coding agents
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
@@ -56,7 +56,7 @@ info "Installing dictare ($OS $ARCH)"
 printf "\n"
 
 # ══════════════════════════════════════════════════════════════════════════════
-# macOS — Homebrew
+# macOS --Homebrew
 # ══════════════════════════════════════════════════════════════════════════════
 if [[ "$OS" == "Darwin" ]]; then
     if ! command -v brew &>/dev/null; then
@@ -86,7 +86,7 @@ if [[ "$OS" == "Darwin" ]]; then
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Linux — uv tool install + systemd
+# Linux --uv tool install + systemd
 # ══════════════════════════════════════════════════════════════════════════════
 if [[ "$OS" == "Linux" ]]; then
     if [[ "$EUID" -eq 0 ]]; then
@@ -181,7 +181,7 @@ if [[ "$OS" == "Linux" ]]; then
         printf "\n"
         warn "Some prerequisites are missing. Run these commands, then re-run this script:"
 
-        # Box drawing helpers — 64-char content width, auto-padded
+        # Box drawing helpers --64-char content width, auto-padded
         _boxtop()   { printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"; }
         _boxbot()   { printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"; }
         _boxtitle() { printf "  ${DIM}│${RESET} ${BOLD}%-64s${RESET} ${DIM}│${RESET}\n" "$1"; }
@@ -194,11 +194,11 @@ if [[ "$OS" == "Linux" ]]; then
             _boxtitle "System packages"
             _boxgap
             _boxline "Installs libraries and tools that dictare needs:"
-            _boxline "  portaudio    — audio capture from your microphone"
-            _boxline "  espeak-ng    — text-to-speech fallback engine"
-            _boxline "  ydotool      — types text into other apps (keyboard mode)"
-            _boxline "  AppIndicator — system tray icon on Wayland/GNOME"
-            _boxline "  build tools  — needed to compile Python bindings for the"
+            _boxline "  portaudio    -- audio capture from your microphone"
+            _boxline "  espeak-ng    -- text-to-speech fallback engine"
+            _boxline "  ydotool      -- types text into other apps (keyboard mode)"
+            _boxline "  AppIndicator -- system tray icon on Wayland/GNOME"
+            _boxline "  build tools  -- needed to compile Python bindings for the"
             _boxline "                 tray icon (PyGObject)"
             _boxbot
             printf "\n"
@@ -224,7 +224,7 @@ if [[ "$OS" == "Linux" ]]; then
             _boxtitle "Input group"
             _boxgap
             _boxline "Adds your user to the 'input' group. This is required for"
-            _boxline "the global hotkey — dictare reads keyboard events to detect"
+            _boxline "the global hotkey -- dictare reads keyboard events to detect"
             _boxline "when you press the activation key."
             _boxgap
             _boxline "Log out and back in after running this command."
@@ -294,7 +294,7 @@ if [[ "$OS" == "Linux" ]]; then
         if uv pip install --python "$DICTARE_PYTHON" PyGObject pycairo 2>/dev/null; then
             ok "PyGObject installed"
         else
-            warn "PyGObject install failed — tray icon may not work on Wayland."
+            warn "PyGObject install failed --tray icon may not work on Wayland."
             printf "  ${DIM}On X11 the tray works without PyGObject.${RESET}\n"
         fi
     fi
