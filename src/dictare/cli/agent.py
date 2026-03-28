@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from typing import Annotated
 
 import typer
@@ -166,8 +167,6 @@ def register(app: typer.Typer) -> None:
             command = list(resolved_profile.command)
 
         # Check that the agent binary is installed (only for profile-resolved commands)
-        import shutil
-
         binary = command[0] if command else None
         if binary and not command_override and not shutil.which(binary):
             console.print(f"[yellow]The default agent profile is '{type_key}', but '{binary}' is not installed.[/]")

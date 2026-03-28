@@ -364,7 +364,7 @@ command = ["claude"]
         """When default profile binary is not installed, show available profiles."""
         with (
             patch("dictare.cli.agent._check_engine", return_value=True),
-            patch("shutil.which", return_value=None),
+            patch("dictare.cli.agent.shutil.which", return_value=None),
             patch("dictare.config.get_config_path", return_value=self.config),
         ):
             from dictare.cli import app
@@ -388,7 +388,7 @@ command = ["claude"]
             patch("dictare.cli.agent._check_engine", return_value=True),
             patch("dictare.agent.run_agent", side_effect=fake_run_agent),
             patch("dictare.config.get_config_path", return_value=self.config),
-            patch("shutil.which", return_value="/usr/bin/claude"),
+            patch("dictare.cli.agent.shutil.which", return_value="/usr/bin/claude"),
         ):
             from dictare.cli import app
             result = _runner.invoke(app, ["agent", "my-session"], catch_exceptions=False)
@@ -409,7 +409,7 @@ command = ["claude"]
             patch("dictare.agent.run_agent", side_effect=fake_run_agent),
             patch("dictare.config.get_config_path", return_value=self.config),
             # shutil.which returns None — but override should skip the check
-            patch("shutil.which", return_value=None),
+            patch("dictare.cli.agent.shutil.which", return_value=None),
         ):
             from dictare.cli import app
             result = _runner.invoke(
