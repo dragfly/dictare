@@ -181,57 +181,66 @@ if [[ "$OS" == "Linux" ]]; then
         printf "\n"
         warn "Some prerequisites are missing. Run these commands, then re-run this script:"
 
+        # Box drawing helpers — 64-char content width, auto-padded
+        _boxtop()   { printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"; }
+        _boxbot()   { printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"; }
+        _boxtitle() { printf "  ${DIM}│${RESET} ${BOLD}%-64s${RESET} ${DIM}│${RESET}\n" "$1"; }
+        _boxline()  { printf "  ${DIM}│${RESET} %-64s ${DIM}│${RESET}\n" "$1"; }
+        _boxgap()   { printf "  ${DIM}│${RESET} %-64s ${DIM}│${RESET}\n" ""; }
+
         if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
             printf "\n"
-            printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"
-            printf "  ${DIM}│${RESET} ${BOLD}System packages${RESET}                                                   ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}                                                                  ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  Installs libraries and tools that dictare needs:                ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  • portaudio — audio capture from your microphone               ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  • espeak-ng — text-to-speech fallback engine                   ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  • ydotool — types text into other apps (keyboard mode)         ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  • AppIndicator — system tray icon on Wayland/GNOME             ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  • build-essential, pkg-config, dev headers — needed to         ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}    compile the Python bindings for the tray icon (PyGObject)    ${DIM}│${RESET}\n"
-            printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"
+            _boxtop
+            _boxtitle "System packages"
+            _boxgap
+            _boxline "Installs libraries and tools that dictare needs:"
+            _boxline "  portaudio    — audio capture from your microphone"
+            _boxline "  espeak-ng    — text-to-speech fallback engine"
+            _boxline "  ydotool      — types text into other apps (keyboard mode)"
+            _boxline "  AppIndicator — system tray icon on Wayland/GNOME"
+            _boxline "  build tools  — needed to compile Python bindings for the"
+            _boxline "                 tray icon (PyGObject)"
+            _boxbot
             printf "\n"
             printf "  ${BOLD}%s${RESET}\n" "$INSTALL_CMD"
         fi
 
         if [[ "$NEED_UDEV" == true ]]; then
             printf "\n"
-            printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"
-            printf "  ${DIM}│${RESET} ${BOLD}Udev rule${RESET}                                                         ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}                                                                  ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  Creates a system rule that lets your user read keyboard         ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  input devices and /dev/uinput without being root.               ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  Needed for the global hotkey and for ydotool to type text.      ${DIM}│${RESET}\n"
-            printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"
+            _boxtop
+            _boxtitle "Udev rule"
+            _boxgap
+            _boxline "Creates a system rule that lets your user read keyboard"
+            _boxline "input devices and /dev/uinput without being root."
+            _boxline "Needed for the global hotkey and for ydotool to type text."
+            _boxbot
             printf "\n"
             printf "  ${BOLD}printf 'KERNEL==\"event*\", GROUP=\"input\", MODE=\"0660\"\\nKERNEL==\"uinput\", GROUP=\"input\", MODE=\"0660\"\\n' | sudo tee /etc/udev/rules.d/99-dictare.rules > /dev/null && sudo udevadm control --reload-rules && sudo udevadm trigger${RESET}\n"
         fi
 
         if [[ "$NEED_INPUT_GROUP" == true ]]; then
             printf "\n"
-            printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"
-            printf "  ${DIM}│${RESET} ${BOLD}Input group${RESET}                                                       ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}                                                                  ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  Adds your user to the 'input' group. This is required for      ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  the global hotkey — dictare reads keyboard events to detect    ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  when you press the activation key. Log out and back in after.  ${DIM}│${RESET}\n"
-            printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"
+            _boxtop
+            _boxtitle "Input group"
+            _boxgap
+            _boxline "Adds your user to the 'input' group. This is required for"
+            _boxline "the global hotkey — dictare reads keyboard events to detect"
+            _boxline "when you press the activation key."
+            _boxgap
+            _boxline "Log out and back in after running this command."
+            _boxbot
             printf "\n"
             printf "  ${BOLD}sudo usermod -aG input \$USER${RESET}\n"
         fi
 
         if [[ "$NEED_YDOTOOLD" == true ]]; then
             printf "\n"
-            printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"
-            printf "  ${DIM}│${RESET} ${BOLD}ydotoold daemon${RESET}                                                   ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}                                                                  ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  Starts the ydotool background service. This is what allows     ${DIM}│${RESET}\n"
-            printf "  ${DIM}│${RESET}  dictare to type transcribed text into any application.         ${DIM}│${RESET}\n"
-            printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"
+            _boxtop
+            _boxtitle "ydotoold daemon"
+            _boxgap
+            _boxline "Starts the ydotool background service. This is what allows"
+            _boxline "dictare to type transcribed text into any application."
+            _boxbot
             printf "\n"
             printf "  ${BOLD}sudo systemctl enable ydotoold && sudo systemctl start ydotoold${RESET}\n"
         fi
