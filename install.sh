@@ -268,11 +268,9 @@ if [[ "$OS" == "Linux" ]]; then
 
     # ── dictare ──────────────────────────────────────────────────────────────
     info "Installing dictare..."
-    if [[ "$INSTALL_GPU" == true ]]; then
-        uv tool install --python 3.11 "dictare[gpu]"
-    else
-        uv tool install --python 3.11 dictare
-    fi
+    EXTRAS="tray"
+    [[ "$INSTALL_GPU" == true ]] && EXTRAS="tray,gpu"
+    uv tool install --python 3.11 "dictare[$EXTRAS]"
 
     # ── PATH check ───────────────────────────────────────────────────────────
     mkdir -p "$HOME/.local/bin"
@@ -285,18 +283,6 @@ if [[ "$OS" == "Linux" ]]; then
         printf "  ${DIM}Add this line to your ~/.bashrc or ~/.zshrc, then restart your shell.${RESET}\n"
         printf "\n"
         export PATH="$HOME/.local/bin:$PATH"
-    fi
-
-    # ── PyGObject (tray icon, required for Wayland) ──────────────────────────
-    info "Installing PyGObject (tray icon)..."
-    DICTARE_PYTHON="$(uv tool dir)/dictare/bin/python"
-    if [[ -f "$DICTARE_PYTHON" ]]; then
-        if uv pip install --python "$DICTARE_PYTHON" PyGObject pycairo 2>/dev/null; then
-            ok "PyGObject installed"
-        else
-            warn "PyGObject install failed --tray icon may not work on Wayland."
-            printf "  ${DIM}On X11 the tray works without PyGObject.${RESET}\n"
-        fi
     fi
 
     # ── systemd service ──────────────────────────────────────────────────────
