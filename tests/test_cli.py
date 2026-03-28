@@ -135,6 +135,7 @@ class TestAgentContinue:
             patch("dictare.cli.agent._check_engine", return_value=True),
             patch("dictare.config.load_config", return_value=cfg),
             patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.cli.agent.shutil.which", return_value="/usr/bin/claude"),
         ):
             result = runner.invoke(app, ["agent"] + args)
 
@@ -232,6 +233,7 @@ class TestAgentLiveDangerously:
             patch("dictare.cli.agent._check_engine", return_value=True),
             patch("dictare.config.load_config", return_value=cfg),
             patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.cli.agent.shutil.which", return_value="/usr/bin/claude"),
         ):
             result = runner.invoke(app, ["agent"] + args)
 

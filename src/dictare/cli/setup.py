@@ -86,5 +86,5 @@ def register(app: typer.Typer) -> None:
         console.print()
         console.print("[bold green]Setup complete![/]")
         console.print()
-        console.print("  Launch an agent:  [cyan]dictare agent claude[/]")
+        console.print("  Launch an agent:  [cyan]dictare agent my-first-session[/]")
         console.print("  Start tray icon:  [cyan]dictare tray start[/]")

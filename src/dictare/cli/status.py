@@ -136,7 +136,12 @@ def _render_offline() -> None:
     dep_parts = []
     for d in deps:
         label = d.name
-        icon = "[green]OK[/]" if d.available else "[red]FAIL[/]"
+        if d.available:
+            icon = "[green]OK[/]"
+        elif d.required:
+            icon = "[red]FAIL[/]"
+        else:
+            icon = "[dim]—[/]"
         dep_parts.append(f"{label} {icon}")
     console.print(f"  {' | '.join(dep_parts)}")
     console.print()
