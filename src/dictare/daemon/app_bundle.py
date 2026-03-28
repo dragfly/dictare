@@ -188,9 +188,22 @@ def resolve_python_path(
         # First run or empty/corrupt file — no valid stored path
         return current_executable, True
 
-    if stored_path.strip() == current_executable:
+    stored = stored_path.strip()
+
+    if stored == current_executable:
         # Already correct — no change needed
         return current_executable, False
+
+    # Paths differ as strings. Check if they point to the same binary (different
+    # symlink names for the same file, e.g. 'python' vs 'python3.11' in same dir).
+    from pathlib import Path
+
+    try:
+        if Path(stored).resolve() == Path(current_executable).resolve():
+            # Same binary, just different symlink name — keep stored, no rewrite
+            return stored, False
+    except (OSError, RuntimeError):
+        pass
 
     # Path changed (brew upgrade, reinstall, etc.)
     return current_executable, True
