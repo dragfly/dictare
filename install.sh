@@ -97,8 +97,8 @@ if [[ "$OS" == "Linux" ]]; then
     # Phase 1: Check prerequisites (no sudo, no changes)
     # ══════════════════════════════════════════════════════════════════════════
     MISSING_PKGS=()
-    PREREQ_CMDS=()
-    PREREQ_NOTES=()
+    INSTALL_CMD=""
+    HAS_PREREQS=false
 
     # ── Check system packages ────────────────────────────────────────────────
     if command -v dpkg &>/dev/null; then
@@ -124,7 +124,7 @@ if [[ "$OS" == "Linux" ]]; then
         done
 
         if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
-            PREREQ_CMDS+=("sudo apt-get update && sudo apt-get install -y ${MISSING_PKGS[*]}")
+            INSTALL_CMD="sudo apt-get update && sudo apt-get install -y ${MISSING_PKGS[*]}"
         fi
 
     elif command -v rpm &>/dev/null; then
@@ -141,7 +141,7 @@ if [[ "$OS" == "Linux" ]]; then
         done
 
         if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
-            PREREQ_CMDS+=("sudo dnf install -y ${MISSING_PKGS[*]}")
+            INSTALL_CMD="sudo dnf install -y ${MISSING_PKGS[*]}"
         fi
 
     elif command -v pacman &>/dev/null; then
@@ -157,51 +157,86 @@ if [[ "$OS" == "Linux" ]]; then
         done
 
         if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
-            PREREQ_CMDS+=("sudo pacman -S --noconfirm ${MISSING_PKGS[*]}")
+            INSTALL_CMD="sudo pacman -S --noconfirm ${MISSING_PKGS[*]}"
         fi
     else
         warn "Unknown package manager. You'll need to install dependencies manually."
         warn "Required: portaudio, espeak-ng, ydotool, AppIndicator GI typelib"
     fi
 
-    # ── Check udev rule (hotkey + ydotool access) ──────────────────────────
+    # ── Check udev rule, input group, ydotoold ──────────────────────────────
     UDEV_FILE="/etc/udev/rules.d/99-dictare.rules"
-    if [[ ! -f "$UDEV_FILE" ]]; then
-        PREREQ_CMDS+=("printf 'KERNEL==\"event*\", GROUP=\"input\", MODE=\"0660\"\nKERNEL==\"uinput\", GROUP=\"input\", MODE=\"0660\"\n' | sudo tee $UDEV_FILE > /dev/null && sudo udevadm control --reload-rules && sudo udevadm trigger")
-        PREREQ_NOTES+=("Udev rule: grants access to input devices (hotkey) and uinput (ydotool text injection).")
-    fi
+    NEED_UDEV=false
+    NEED_INPUT_GROUP=false
+    NEED_YDOTOOLD=false
 
-    # ── Check input group ────────────────────────────────────────────────────
-    if ! groups | grep -qw input; then
-        PREREQ_CMDS+=("sudo usermod -aG input \$USER")
-        PREREQ_NOTES+=("Input group: required for the global hotkey (reads /dev/input via evdev). Log out and back in after adding.")
-    fi
-
-    # ── Check ydotoold daemon (ydotool 1.x+ only) ───────────────────────────
+    [[ ! -f "$UDEV_FILE" ]] && NEED_UDEV=true
+    groups | grep -qw input || NEED_INPUT_GROUP=true
     if command -v ydotoold &>/dev/null; then
-        if ! systemctl is-active ydotoold &>/dev/null 2>&1; then
-            PREREQ_CMDS+=("sudo systemctl enable ydotoold && sudo systemctl start ydotoold")
-            PREREQ_NOTES+=("ydotoold daemon: required for keyboard text injection on Wayland.")
-        fi
+        systemctl is-active ydotoold &>/dev/null 2>&1 || NEED_YDOTOOLD=true
     fi
 
     # ── Report and exit if prerequisites are missing ─────────────────────────
-    if [[ ${#PREREQ_CMDS[@]} -gt 0 ]]; then
+    if [[ ${#MISSING_PKGS[@]} -gt 0 || "$NEED_UDEV" == true || "$NEED_INPUT_GROUP" == true || "$NEED_YDOTOOLD" == true ]]; then
         printf "\n"
         warn "Some prerequisites are missing. Run these commands, then re-run this script:"
-        printf "\n"
 
-        for cmd in "${PREREQ_CMDS[@]}"; do
-            printf "  ${BOLD}%s${RESET}\n\n" "$cmd"
-        done
-
-        if [[ ${#PREREQ_NOTES[@]} -gt 0 ]]; then
-            for note in "${PREREQ_NOTES[@]}"; do
-                printf "  ${DIM}• %s${RESET}\n" "$note"
-            done
+        if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
             printf "\n"
+            printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"
+            printf "  ${DIM}│${RESET} ${BOLD}System packages${RESET}                                                   ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}                                                                  ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  Installs libraries and tools that dictare needs:                ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  • portaudio — audio capture from your microphone               ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  • espeak-ng — text-to-speech fallback engine                   ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  • ydotool — types text into other apps (keyboard mode)         ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  • AppIndicator — system tray icon on Wayland/GNOME             ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  • build-essential, pkg-config, dev headers — needed to         ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}    compile the Python bindings for the tray icon (PyGObject)    ${DIM}│${RESET}\n"
+            printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"
+            printf "\n"
+            printf "  ${BOLD}%s${RESET}\n" "$INSTALL_CMD"
         fi
 
+        if [[ "$NEED_UDEV" == true ]]; then
+            printf "\n"
+            printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"
+            printf "  ${DIM}│${RESET} ${BOLD}Udev rule${RESET}                                                         ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}                                                                  ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  Creates a system rule that lets your user read keyboard         ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  input devices and /dev/uinput without being root.               ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  Needed for the global hotkey and for ydotool to type text.      ${DIM}│${RESET}\n"
+            printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"
+            printf "\n"
+            printf "  ${BOLD}printf 'KERNEL==\"event*\", GROUP=\"input\", MODE=\"0660\"\\nKERNEL==\"uinput\", GROUP=\"input\", MODE=\"0660\"\\n' | sudo tee /etc/udev/rules.d/99-dictare.rules > /dev/null && sudo udevadm control --reload-rules && sudo udevadm trigger${RESET}\n"
+        fi
+
+        if [[ "$NEED_INPUT_GROUP" == true ]]; then
+            printf "\n"
+            printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"
+            printf "  ${DIM}│${RESET} ${BOLD}Input group${RESET}                                                       ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}                                                                  ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  Adds your user to the 'input' group. This is required for      ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  the global hotkey — dictare reads keyboard events to detect    ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  when you press the activation key. Log out and back in after.  ${DIM}│${RESET}\n"
+            printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"
+            printf "\n"
+            printf "  ${BOLD}sudo usermod -aG input \$USER${RESET}\n"
+        fi
+
+        if [[ "$NEED_YDOTOOLD" == true ]]; then
+            printf "\n"
+            printf "  ${DIM}┌──────────────────────────────────────────────────────────────────┐${RESET}\n"
+            printf "  ${DIM}│${RESET} ${BOLD}ydotoold daemon${RESET}                                                   ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}                                                                  ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  Starts the ydotool background service. This is what allows     ${DIM}│${RESET}\n"
+            printf "  ${DIM}│${RESET}  dictare to type transcribed text into any application.         ${DIM}│${RESET}\n"
+            printf "  ${DIM}└──────────────────────────────────────────────────────────────────┘${RESET}\n"
+            printf "\n"
+            printf "  ${BOLD}sudo systemctl enable ydotoold && sudo systemctl start ydotoold${RESET}\n"
+        fi
+
+        printf "\n"
         exit 1
     fi
 
