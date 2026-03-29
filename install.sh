@@ -309,8 +309,10 @@ if [[ "$OS" == "Linux" ]]; then
     ok "Done! Voice-control your AI agent:"
     printf "  ${BOLD}dictare agent my-first-session${RESET}\n"
     printf "\n"
-    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-        printf "  ${DIM}Remember to add ~/.local/bin to your PATH first (see above).${RESET}\n"
+    if [[ ":$ORIGINAL_PATH:" != *":$HOME/.local/bin:"* ]]; then
+        warn "~/.local/bin is not in your PATH yet."
+        printf "\n"
+        printf "  Run this now:   ${BOLD}source ~/.bashrc${RESET}   (or open a new terminal)\n"
         printf "\n"
     fi
     exit 0
