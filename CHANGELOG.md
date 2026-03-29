@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-03-28
+
+### Fixed
+- Linux: PATH reminder at end of install now shows correctly (was checking the wrong variable)
+
 ## [0.2.6] - 2026-03-28
 
 ### Fixed
