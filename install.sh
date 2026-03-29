@@ -310,9 +310,12 @@ if [[ "$OS" == "Linux" ]]; then
     printf "  ${BOLD}dictare agent my-first-session${RESET}\n"
     printf "\n"
     if [[ ":$ORIGINAL_PATH:" != *":$HOME/.local/bin:"* ]]; then
-        warn "~/.local/bin is not in your PATH yet."
+        warn "~/.local/bin is not in your PATH yet. Add it to your shell profile:"
         printf "\n"
-        printf "  Run this now:   ${BOLD}source ~/.bashrc${RESET}   (or open a new terminal)\n"
+        printf "  ${BOLD}export PATH=\"\$HOME/.local/bin:\$PATH\"${RESET}\n"
+        printf "\n"
+        printf "  Add this line to your ~/.bashrc or ~/.zshrc, then run:\n"
+        printf "  ${BOLD}source ~/.bashrc${RESET}   (or open a new terminal)\n"
         printf "\n"
     fi
     exit 0
