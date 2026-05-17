@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-17
+
+### Fixed
+- Apple Silicon installs now pin the tested MLX stack used by the stable v0.2.7 lockfile. This prevents fresh Homebrew/PyPI installs from drifting to newer `mlx`/`mlx-audio`/`mlx-lm`/transitive versions that can fail STT with `RuntimeError: There is no Stream(gpu, 1) in current thread`.
+
 ## [0.3.0] - 2026-05-17
 
 ### Fixed
