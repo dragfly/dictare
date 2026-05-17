@@ -272,6 +272,29 @@ def serialize_section(section: str, config: Config) -> str:  # noqa: ARG001
 
     return _SECTION_HEADERS[section]
 
+
+def get_commented_section(section: str) -> str:
+    """Return the section template with every TOML header commented out.
+
+    The live template (used by the web UI) keeps `[section]` headers
+    uncommented so the section is editable in place. The initial config
+    file written by `create_default_config()` wants the opposite: every
+    line — including section headers — must be commented, so the file
+    documents available knobs without activating any of them.
+
+    Single source of truth: rather than duplicating the template in two
+    places, this function transforms the live template by prefixing `# `
+    to lines that match a TOML header.
+    """
+    if section not in SUPPORTED_SECTIONS:
+        raise KeyError(section)
+
+    lines = _SECTION_HEADERS[section].splitlines()
+    return "\n".join(
+        f"# {line}" if _TOML_HEADER_RE.match(line) else line
+        for line in lines
+    )
+
 def apply_section(section: str, content: str, config_path: Path) -> None:
     """Validate the TOML section then write the user's literal text to the config file.
 
