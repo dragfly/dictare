@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-05-17
+
+### Fixed
+- `settings.toml` template: added missing `[audio.sounds.transcribed]` and `[audio.sounds.submit]` sections (`pencil-write` and `typewriter-burst`, both `focus_gated = true` by default), and corrected the commented default values for `start`/`stop`/`transcribing`/`sent` which previously didn't match the application defaults. Each section now also documents every available field (`enabled`, `path`, `volume`, `focus_gated`).
+
 ## [0.2.7] - 2026-03-28
 
 ### Fixed
