@@ -921,6 +921,8 @@ def create_default_config() -> Path:
     """
     import sys
 
+    from dictare.core.toml_sections import get_commented_section
+
     config_dir = get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -930,6 +932,12 @@ def create_default_config() -> Path:
     hotkey = "KEY_RIGHTMETA" if sys.platform == "darwin" else "KEY_SCROLLLOCK"
     hotkey_comment = "Right Command key" if sys.platform == "darwin" else "Scroll Lock"
     newline_keys = "shift+enter" if sys.platform == "darwin" else "alt+enter"
+
+    # Single source of truth for per-section templates lives in
+    # `dictare.core.toml_sections`. The web UI uses the live (uncommented-header)
+    # form; this initial-file flow uses the all-commented form via
+    # `get_commented_section`.
+    sounds_template = get_commented_section("audio.sounds")
 
     default_config = f"""\
 # dictare configuration
@@ -957,37 +965,7 @@ def create_default_config() -> Path:
 # min_speech_ms = 150             # Min speech duration before VAD activates (ms)
 # transcribing_sound_min_ms = 8000  # Min audio length (ms) to trigger typewriter sound
 
-# [audio.sounds.*]                # Per-event sounds — edit via Settings > Sounds
-# [audio.sounds.start]            # OFF → LISTENING  (up-beep.wav)
-# enabled = true
-# path = ""                       # Empty = bundled default
-# volume = 0.3                    # 0.0–1.0
-# focus_gated = false             # Skip when agent terminal has focus
-# [audio.sounds.stop]             # LISTENING → OFF  (down-beep.wav)
-# enabled = true
-# volume = 0.3
-# [audio.sounds.transcribing]     # LISTENING → TRANSCRIBING  (typewriter.wav, looped)
-# enabled = false                  # Disabled by default
-# volume = 0.15                   # Subtle background typewriter during STT processing
-# focus_gated = false             # Plays regardless of terminal focus
-# [audio.sounds.ready]            # TRANSCRIBING → LISTENING  (carriage return)
-# enabled = true
-# volume = 1.0
-# [audio.sounds.transcribed]      # Transcription received  (random pencil-write clip)
-# enabled = true
-# volume = 1.0
-# focus_gated = true              # Skipped when agent terminal has focus
-# [audio.sounds.submit]           # Submit action: typewriter burst  (typewriter-burst.wav)
-# enabled = true
-# volume = 0.25
-# focus_gated = true              # Skipped when agent terminal has focus
-# [audio.sounds.sent]             # Standalone carriage-return  (carriage-return.wav)
-# enabled = true
-# volume = 0.25
-# [audio.sounds.agent_announce]   # TTS announces agent name on switch
-# enabled = true
-# volume = 0.3
-
+{sounds_template}
 [stt]
 # model = "large-v3-turbo"        # Default: Whisper large-v3-turbo (fast + accurate, MLX on Mac)
 #                                 # Also: large-v3, parakeet-v3
