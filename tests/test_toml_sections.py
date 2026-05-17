@@ -335,3 +335,69 @@ default = "sonnet"
         assert extracted is not None
         assert '[["ok", "send"], ["ok", "submit"]]' in extracted
         assert "[agent_profiles]" not in extracted
+
+# ---------------------------------------------------------------------------
+# get_commented_section — derived view of the live template
+# ---------------------------------------------------------------------------
+
+class TestGetCommentedSection:
+    """The commented form is the live template with every TOML header prefixed `# `."""
+
+    def test_audio_sounds_all_headers_commented(self) -> None:
+        from dictare.core.toml_sections import (
+            _SECTION_HEADERS,
+            get_commented_section,
+        )
+
+        live = _SECTION_HEADERS["audio.sounds"]
+        commented = get_commented_section("audio.sounds")
+
+        live_headers = [
+            ln for ln in live.splitlines() if _TOML_HEADER_RE.match(ln)
+        ]
+        commented_headers = [
+            ln for ln in commented.splitlines() if ln.startswith("# [")
+        ]
+        assert len(live_headers) == len(commented_headers) > 0
+
+        # No bare (uncommented) header should leak through.
+        for line in commented.splitlines():
+            assert not _TOML_HEADER_RE.match(line), f"bare header leaked: {line!r}"
+
+    def test_unknown_section_raises(self) -> None:
+        import pytest
+
+        from dictare.core.toml_sections import get_commented_section
+
+        with pytest.raises(KeyError):
+            get_commented_section("nonexistent.section")
+
+    def test_default_config_audio_sounds_is_all_commented(self, tmp_path: Path) -> None:
+        """End-to-end: create_default_config() writes an audio.sounds block
+        where every per-event table header is commented out, so the initial
+        file activates no per-event overrides."""
+        import tomllib
+
+        from dictare import config as cfg
+
+        cfg.get_config_dir = lambda: tmp_path  # type: ignore[assignment]
+        path = cfg.create_default_config()
+        content = path.read_text()
+
+        # Parses as valid TOML.
+        parsed = tomllib.loads(content)
+        # No audio.sounds.* tables are active.
+        assert parsed.get("audio", {}).get("sounds", {}) == {}
+
+        # The 8 expected event sections are documented (as commented headers).
+        for event in (
+            "start",
+            "stop",
+            "transcribing",
+            "ready",
+            "transcribed",
+            "submit",
+            "sent",
+            "agent_announce",
+        ):
+            assert f"# [audio.sounds.{event}]" in content, event

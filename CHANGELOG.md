@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-17
+
+### Changed
+- `create_default_config()` no longer hardcodes the `[audio.sounds.*]` block in a second template — it now derives the all-commented form from the single live template in `toml_sections.py` via the new helper `get_commented_section()`. This eliminates a long-standing source of drift between the initial-file template and the web-UI template (e.g. previously the initial file had `transcribed`/`submit` but the UI section template did not).
+
+### Internal
+- New helper `dictare.core.toml_sections.get_commented_section(name)`: returns the section template with every TOML header (`[name]`) prefixed `# `, suitable for the all-commented initial config file. Pattern is extendable to the remaining per-section templates currently duplicated in `create_default_config()`.
+
 ## [0.2.8] - 2026-05-17
 
 ### Fixed
