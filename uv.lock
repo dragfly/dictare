@@ -285,12 +285,20 @@ mlx = [
     { name = "huggingface-hub" },
     { name = "mlx" },
     { name = "mlx-audio" },
+    { name = "mlx-lm" },
+    { name = "mlx-metal", marker = "sys_platform == 'darwin'" },
     { name = "mlx-whisper" },
     { name = "numba" },
+    { name = "numpy" },
     { name = "scipy" },
     { name = "soundfile" },
     { name = "tiktoken" },
+    { name = "torch" },
     { name = "tqdm" },
+]
+tray = [
+    { name = "pycairo" },
+    { name = "pygobject" },
 ]
 
 [package.metadata]
@@ -301,20 +309,25 @@ requires-dist = [
     { name = "faster-whisper", specifier = ">=1.0.0" },
     { name = "fastjsonschema", specifier = ">=2.20" },
     { name = "hidapi", marker = "sys_platform == 'darwin'", specifier = ">=0.14.0" },
-    { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
-    { name = "mlx", marker = "extra == 'mlx'", specifier = ">=0.20.0" },
-    { name = "mlx-audio", marker = "extra == 'mlx'", specifier = ">=0.3.0" },
-    { name = "mlx-whisper", marker = "extra == 'mlx'", specifier = ">=0.4.0" },
+    { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = "==1.3.4" },
+    { name = "mlx", marker = "extra == 'mlx'", specifier = "==0.30.4" },
+    { name = "mlx-audio", marker = "extra == 'mlx'", specifier = "==0.3.0" },
+    { name = "mlx-lm", marker = "extra == 'mlx'", specifier = "==0.30.5" },
+    { name = "mlx-metal", marker = "sys_platform == 'darwin' and extra == 'mlx'", specifier = "==0.30.4" },
+    { name = "mlx-whisper", marker = "extra == 'mlx'", specifier = "==0.4.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "numba", marker = "extra == 'mlx'", specifier = ">=0.60" },
+    { name = "numba", marker = "extra == 'mlx'", specifier = "==0.61.0" },
     { name = "numpy", specifier = ">=1.24.0" },
-    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.2.0" },
+    { name = "numpy", marker = "extra == 'mlx'", specifier = "==1.26.4" },
+    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.22.0" },
     { name = "onnx-asr", specifier = ">=0.1.0" },
     { name = "openvip", specifier = ">=1.0.0rc10" },
     { name = "pathvalidate", specifier = ">=3.0.0" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "piper-tts", specifier = ">=1.2.0" },
+    { name = "pycairo", marker = "extra == 'tray'", specifier = ">=1.25.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pygobject", marker = "extra == 'tray'", specifier = ">=3.50.0" },
     { name = "pynput", marker = "sys_platform == 'darwin'", specifier = ">=1.7.0" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
     { name = "pystray", specifier = ">=0.19.0" },
@@ -323,19 +336,20 @@ requires-dist = [
     { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.5.0" },
     { name = "python-json-logger", specifier = ">=2.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.0,<0.15.0" },
-    { name = "scipy", marker = "extra == 'mlx'", specifier = ">=1.10.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.0,<0.16.0" },
+    { name = "scipy", marker = "extra == 'mlx'", specifier = "==1.16.3" },
     { name = "sounddevice", specifier = ">=0.5.0,<0.5.4" },
     { name = "soundfile", specifier = ">=0.12.0" },
     { name = "soundfile", marker = "extra == 'mlx'", specifier = ">=0.12.0" },
     { name = "sse-starlette", specifier = ">=2.0.0" },
-    { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.5.0" },
+    { name = "tiktoken", marker = "extra == 'mlx'", specifier = "==0.12.0" },
     { name = "tomlkit", specifier = ">=0.14.0" },
-    { name = "tqdm", marker = "extra == 'mlx'", specifier = ">=4.60.0" },
+    { name = "torch", marker = "extra == 'mlx'", specifier = "==2.0.1" },
+    { name = "tqdm", marker = "extra == 'mlx'", specifier = "==4.67.1" },
     { name = "typer", specifier = ">=0.12.0" },
     { name = "uvicorn", specifier = ">=0.32.0" },
 ]
-provides-extras = ["dev", "gpu", "mlx"]
+provides-extras = ["dev", "gpu", "mlx", "tray"]
 
 [[package]]
 name = "evdev"
@@ -1187,6 +1201,17 @@ wheels = [
 ]
 
 [[package]]
+name = "pycairo"
+version = "1.29.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/d9/1728840a22a4ef8a8f479b9156aa2943cd98c3907accd3849fb0d5f82bfd/pycairo-1.29.0.tar.gz", hash = "sha256:f3f7fde97325cae80224c09f12564ef58d0d0f655da0e3b040f5807bd5bd3142", size = 665871, upload-time = "2025-11-11T19:13:01.584Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/31/92/1b904087e831806a449502786d47d3a468e5edb8f65755f6bd88e8038e53/pycairo-1.29.0-cp311-cp311-win32.whl", hash = "sha256:12757ebfb304b645861283c20585c9204c3430671fad925419cba04844d6dfed", size = 751342, upload-time = "2025-11-11T19:11:37.386Z" },
+    { url = "https://files.pythonhosted.org/packages/db/09/a0ab6a246a7ede89e817d749a941df34f27a74bedf15551da51e86ae105e/pycairo-1.29.0-cp311-cp311-win_amd64.whl", hash = "sha256:3391532db03f9601c1cee9ebfa15b7d1db183c6020f3e75c1348cee16825934f", size = 845036, upload-time = "2025-11-11T19:11:43.408Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/b2/bf455454bac50baef553e7356d36b9d16e482403bf132cfb12960d2dc2e7/pycairo-1.29.0-cp311-cp311-win_arm64.whl", hash = "sha256:b69be8bb65c46b680771dc6a1a422b1cdd0cffb17be548f223e8cbbb6205567c", size = 694644, upload-time = "2025-11-11T19:11:48.599Z" },
+]
+
+[[package]]
 name = "pycparser"
 version = "2.23"
 source = { registry = "https://pypi.org/simple" }
@@ -1255,6 +1280,15 @@ sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b014
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217, upload-time = "2025-06-21T13:39:07.939Z" },
 ]
+
+[[package]]
+name = "pygobject"
+version = "3.56.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pycairo" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/da/61/978c5fbca34f10a90df362502fbb5a005637909e7b5a0e9212349ea9d010/pygobject-3.56.3.tar.gz", hash = "sha256:12760e4a0e3d04b6eb95e06f7a27e362c826d567ea613373a92c003b6c70d2d6", size = 1411853, upload-time = "2026-05-08T20:46:39.904Z" }
 
 [[package]]
 name = "pyloudnorm"
