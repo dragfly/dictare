@@ -224,18 +224,93 @@ def _write_external_python_path(python_path: str) -> None:
     target.write_text(python_path)
 
 
-def ensure_python_path(executable: str) -> None:
-    """Self-healing: ensure ~/.dictare/python_path matches the running Python.
+def find_brew_python() -> str | None:
+    """Return the Homebrew-installed dictare's Python interpreter path, if present.
 
-    Called on every engine startup. If the path is stale (e.g., after
-    brew upgrade changed the Cellar version), it's updated automatically.
+    When the Homebrew formula installs dictare, the layout is:
+
+        <brew-prefix>/bin/dictare                         (symlink in PATH)
+            └─→ <brew-prefix>/Cellar/dictare/<version>/libexec/bin/dictare
+        <brew-prefix>/Cellar/dictare/<version>/libexec/uv-tools/dictare/bin/python
+                                                          (the venv interpreter)
+
+    We resolve `dictare` on PATH and require it to live under
+    `…/Cellar/dictare/<v>/libexec/bin/dictare`. The brew prefix is not
+    hard-coded — works for `/opt/homebrew` (Apple Silicon), `/usr/local`
+    (Intel), and custom installations.
+
+    Returns None when dictare is not installed via Homebrew (dev mode,
+    pyenv editable install, manual venv, etc.), so callers can fall back
+    to other resolution strategies.
+    """
+    try:
+        dictare_bin = shutil.which("dictare")
+        if not dictare_bin:
+            return None
+        real_bin = Path(dictare_bin).resolve()
+        parts = real_bin.parts
+
+        # Require the brew Cellar layout: `…/Cellar/dictare/<v>/libexec/bin/dictare`.
+        try:
+            cellar_idx = parts.index("Cellar")
+        except ValueError:
+            return None
+        if parts[cellar_idx:cellar_idx + 2] != ("Cellar", "dictare"):
+            return None
+        if parts[cellar_idx + 3:cellar_idx + 6] != ("libexec", "bin", "dictare"):
+            return None
+
+        # Translate `…/libexec/bin/dictare` → `…/libexec/uv-tools/dictare/bin/python`.
+        libexec = real_bin.parent.parent
+        python = libexec / "uv-tools" / "dictare" / "bin" / "python"
+        if python.is_file():
+            return str(python)
+    except OSError:
+        # shutil.which / resolve() can raise on permission errors or broken symlinks.
+        pass
+    return None
+
+
+def ensure_python_path(executable: str) -> None:
+    """Self-healing: ensure ~/.dictare/python_path points to the right interpreter.
+
+    Resolution priority:
+
+    1. **Homebrew wins, always.** If dictare is installed via Homebrew, the
+       stored path is reset to the brew venv's python regardless of which
+       interpreter is currently running. This protects against the
+       classic failure mode where a stray `python -m dictare …` from an
+       editable install in pyenv (or a dev venv) overwrites the brew path
+       and demotes STT/TTS to CPU because that interpreter lacks `mlx-whisper`.
+
+       The user can still develop against a non-brew interpreter — they
+       just need to *uninstall* the brew package (or pass the dev python
+       to `dictare service install`) rather than rely on accidental
+       self-healing.
+
+    2. **Otherwise, accept the currently running interpreter** (dev mode):
+       this matches the pre-existing behavior — useful for handling brew
+       upgrades (Cellar version bumps) and dev workflows where there is
+       no brew install at all.
     """
     config_dir = Path.home() / ".dictare"
     target = config_dir / "python_path"
-
     stored = target.read_text().strip() if target.exists() else None
-    resolved, changed = resolve_python_path(executable, stored)
 
+    # Step 1: brew installation wins.
+    brew_python = find_brew_python()
+    if brew_python is not None:
+        if stored == brew_python:
+            return
+        logger.info(
+            "python_path: brew install detected, pinning to %s (was %s)",
+            brew_python, stored,
+        )
+        _write_external_python_path(brew_python)
+        return
+
+    # Step 2: no brew → preserve existing self-healing behavior.
+    resolved, changed = resolve_python_path(executable, stored)
     if changed:
         logger.info("Updating python_path: %s → %s", stored, resolved)
         _write_external_python_path(resolved)
