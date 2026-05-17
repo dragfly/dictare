@@ -112,37 +112,62 @@ _SOUNDS_HEADER = """\
 # Sound effects — per-event audio feedback.
 # Default bundled files: start/sent = up-beep.wav, stop = down-beep.wav,
 #                        transcribing = typewriter.wav, ready = ready.wav,
+#                        transcribed = pencil-write-{1..5}.wav (random),
+#                        submit = typewriter-burst.wav,
 #                        agent_announce = (TTS speech, no sound file)
+#
+# focus_gated = true  → sound is SKIPPED when the active agent's terminal
+#                       has focus (you can see the screen, no audio needed).
+# focus_gated = false → sound always plays.
 #
 # All values below are defaults — uncomment only what you want to change.
 
 [audio.sounds.start]               # OFF → LISTENING
 # enabled = true
 # path = ""                        # empty = up-beep.wav
-# volume = 1.0                     # 0.0–1.0
+# volume = 0.3                     # 0.0–1.0
+# focus_gated = false
 
 [audio.sounds.stop]                # LISTENING → OFF
 # enabled = true
 # path = ""                        # empty = down-beep.wav
-# volume = 1.0
+# volume = 0.3
+# focus_gated = false
 
-[audio.sounds.transcribing]        # LISTENING → TRANSCRIBING (typewriter loop)
-# enabled = true
+[audio.sounds.transcribing]        # LISTENING → TRANSCRIBING (typewriter loop, audio >8s only)
+# enabled = false                  # disabled by default — set true for typewriter background
 # path = ""                        # empty = typewriter.wav
-# volume = 1.0                     # reduce to 0.3–0.5 for background effect
+# volume = 0.15                    # subtle background level
+# focus_gated = false
 
 [audio.sounds.ready]               # TRANSCRIBING → LISTENING (carriage return)
 # enabled = true
 # path = ""                        # empty = ready.wav
 # volume = 1.0
+# focus_gated = false
+
+[audio.sounds.transcribed]         # Transcription received (random pencil-write clip)
+# enabled = true
+# path = ""                        # empty = random pencil-write-{1..5}.wav
+# volume = 1.0
+# focus_gated = true               # skipped when the agent terminal is focused
+
+[audio.sounds.submit]              # Submit action (typewriter burst)
+# enabled = true
+# path = ""                        # empty = typewriter-burst.wav
+# volume = 0.25
+# focus_gated = true               # skipped when the agent terminal is focused
 
 [audio.sounds.sent]                # Text sent to agent
 # enabled = true
 # path = ""                        # empty = up-beep.wav
-# volume = 1.0
+# volume = 0.25
+# focus_gated = false
 
 [audio.sounds.agent_announce]      # TTS announces agent name on switch
 # enabled = true
+# volume = 0.3
+# focus_gated = false
 """
 
 _MUTE_FILTER_HEADER = """\
