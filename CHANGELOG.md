@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2rc1] - 2026-05-17
+
+### Fixed
+- macOS/Homebrew: `dictare service start` and `service install` now sync `~/.dictare/python_path` to the stable Homebrew interpreter before launchd starts the signed app. This prevents stale local `.venv` paths from making fresh Homebrew installs run STT on CPU instead of MLX.
+- Homebrew formula generation now writes the same stable Python path during `post_install` when macOS permits it, and falls back cleanly to the `service install`/`service start` pre-launch repair when an existing protected config file cannot be overwritten from Homebrew's sandbox.
+- Homebrew formula generation normalizes vendored PyAV dylib IDs before Homebrew's linkage fixup, avoiding install failures caused by overlong rewritten install names.
+
 ## [0.3.1] - 2026-05-17
 
 ### Fixed

@@ -4,6 +4,7 @@ class Dictare < Formula
   url "file://PLACEHOLDER"
   sha256 "PLACEHOLDER"
   license "MIT"
+  preserve_rpath
 
   depends_on "portaudio"
   depends_on "uv"
@@ -21,7 +22,26 @@ class Dictare < Formula
            "--prerelease=allow",
            "#{dictare_tarball}#{extras}"
 
+    dylib_dir = libexec/"uv-tools/dictare/lib/python3.11/site-packages/av/.dylibs"
+    if dylib_dir.exist?
+      dylib_dir.glob("*.dylib").each do |dylib|
+        system "install_name_tool", "-id", "@rpath/#{dylib.basename}", dylib
+      end
+    end
+
     bin.install_symlink (libexec/"bin/dictare") => "dictare"
+  end
+
+  def post_install
+    real_home = ENV["HOME"] || Pathname.new("~").expand_path.to_s
+    dictare_dir = Pathname.new(real_home)/".dictare"
+    dictare_dir.mkpath
+    python_path = dictare_dir/"python_path"
+    begin
+      File.write python_path, "#{opt_libexec}/uv-tools/dictare/bin/python"
+    rescue Errno::EACCES, Errno::EPERM => e
+      opoo "Could not update #{python_path}: #{e.message}. Run `dictare service install` or `dictare service start` to repair it."
+    end
   end
 
   def caveats

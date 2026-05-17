@@ -126,6 +126,13 @@ class TestFindBrewPython:
         self._set_path_layout(monkeypatch, cellar, {python})
         assert app_bundle.find_brew_python() == python
 
+    def test_stable_opt_path_wins_without_path_lookup(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        opt_python = "/opt/homebrew/opt/dictare/libexec/uv-tools/dictare/bin/python"
+        self._set_path_layout(monkeypatch, None, {opt_python})
+        assert app_bundle.find_brew_python() == opt_python
+
     def test_intel_brew_install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         cellar = "/usr/local/Cellar/dictare/0.2.7/libexec/bin/dictare"
         python = "/usr/local/Cellar/dictare/0.2.7/libexec/uv-tools/dictare/bin/python"
@@ -254,4 +261,20 @@ class TestEnsurePythonPath:
         # Running interpreter is intentionally something else (e.g. user
         # triggered `dictare serve` from `uv run`); brew still wins.
         app_bundle.ensure_python_path("/Users/dev/.venv/bin/python")
+        assert self._stored(fake_home) == brew
+
+    def test_sync_service_python_path_repairs_stale_venv_before_launch(
+        self,
+        fake_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        brew = "/opt/homebrew/opt/dictare/libexec/uv-tools/dictare/bin/python"
+        stale = "/Users/dev/repo/dictare/.venv/bin/python"
+        (fake_home / ".dictare").mkdir()
+        (fake_home / ".dictare" / "python_path").write_text(stale)
+
+        monkeypatch.setattr(app_bundle, "find_brew_python", lambda: brew)
+        resolved = app_bundle.sync_service_python_path(stale)
+
+        assert resolved == brew
         assert self._stored(fake_home) == brew

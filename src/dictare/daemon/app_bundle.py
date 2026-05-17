@@ -18,12 +18,27 @@ import plistlib
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 APP_NAME = "Dictare"
 BUNDLE_ID = "dev.dragfly.dictare"
+
+
+def _candidate_brew_python_paths() -> list[Path]:
+    """Return stable Homebrew opt-prefix Python candidates.
+
+    The Swift launcher reads ``~/.dictare/python_path`` before Python starts.
+    That makes this file part of the pre-launch contract: for Homebrew installs
+    it must contain the stable ``opt`` path, not a versioned Cellar path and not
+    a local development venv.
+    """
+    return [
+        Path("/opt/homebrew/opt/dictare/libexec/uv-tools/dictare/bin/python"),
+        Path("/usr/local/opt/dictare/libexec/uv-tools/dictare/bin/python"),
+    ]
 
 def get_app_path() -> Path:
     """Return the .app bundle path (~/Applications)."""
@@ -48,10 +63,9 @@ def create_app_bundle(
     Returns:
         Path to the created .app bundle.
     """
-    import sys
-
     if python_path is None:
         python_path = sys.executable
+    python_path = resolve_service_python_path(python_path)
 
     if app_dir is not None:
         app_path = app_dir / f"{APP_NAME}.app"
@@ -243,6 +257,10 @@ def find_brew_python() -> str | None:
     pyenv editable install, manual venv, etc.), so callers can fall back
     to other resolution strategies.
     """
+    for candidate in _candidate_brew_python_paths():
+        if candidate.is_file():
+            return str(candidate)
+
     try:
         dictare_bin = shutil.which("dictare")
         if not dictare_bin:
@@ -269,6 +287,32 @@ def find_brew_python() -> str | None:
         # shutil.which / resolve() can raise on permission errors or broken symlinks.
         pass
     return None
+
+
+def resolve_service_python_path(executable: str | None = None) -> str:
+    """Resolve the interpreter launchd/launcher should use.
+
+    Homebrew installs are authoritative because the signed Swift launcher reads
+    ``~/.dictare/python_path`` before the Python self-healing code can run.
+    If a stale dev venv is left in that file, the engine starts without MLX and
+    silently falls back to CPU.  Resolve the brew interpreter before writing.
+    """
+    brew_python = find_brew_python()
+    if brew_python is not None:
+        return brew_python
+    return executable or sys.executable
+
+
+def sync_service_python_path(executable: str | None = None) -> str:
+    """Write the pre-launch Python path and return it."""
+    python_path = resolve_service_python_path(executable)
+    config_dir = Path.home() / ".dictare"
+    target = config_dir / "python_path"
+    stored = target.read_text().strip() if target.exists() else None
+    if stored != python_path:
+        logger.info("syncing python_path for launcher: %s → %s", stored, python_path)
+        _write_external_python_path(python_path)
+    return python_path
 
 
 def ensure_python_path(executable: str) -> None:
@@ -298,15 +342,15 @@ def ensure_python_path(executable: str) -> None:
     stored = target.read_text().strip() if target.exists() else None
 
     # Step 1: brew installation wins.
-    brew_python = find_brew_python()
-    if brew_python is not None:
-        if stored == brew_python:
+    service_python = resolve_service_python_path(executable)
+    if service_python != executable:
+        if stored == service_python:
             return
         logger.info(
             "python_path: brew install detected, pinning to %s (was %s)",
-            brew_python, stored,
+            service_python, stored,
         )
-        _write_external_python_path(brew_python)
+        _write_external_python_path(service_python)
         return
 
     # Step 2: no brew → preserve existing self-healing behavior.
