@@ -27,6 +27,7 @@ from dictare.daemon.launchd import (
     generate_plist,
     get_plist_path,
     is_installed,
+    start,
 )
 from dictare.daemon.systemd import generate_unit, get_unit_path
 from dictare.daemon.systemd import is_installed as systemd_is_installed
@@ -56,6 +57,7 @@ class TestAppBundleCreate:
 
     def test_launcher_is_executable(self, tmp_path, monkeypatch):
         monkeypatch.setattr("dictare.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("dictare.daemon.app_bundle.find_brew_python", lambda: None)
         app_path = create_app_bundle("/opt/brew/bin/python3.11")
         launcher = app_path / "Contents" / "MacOS" / APP_NAME
         assert launcher.stat().st_mode & stat.S_IEXEC
@@ -65,6 +67,7 @@ class TestAppBundleCreate:
 
     def test_replaces_existing_bundle(self, tmp_path, monkeypatch):
         monkeypatch.setattr("dictare.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("dictare.daemon.app_bundle.find_brew_python", lambda: None)
         create_app_bundle("/usr/bin/python3")
         create_app_bundle("/other/python")
         # python_path written externally, not inside bundle
@@ -172,6 +175,22 @@ class TestLaunchdIsInstalled:
             lambda: plist,
         )
         assert is_installed() is True
+
+class TestLaunchdStart:
+    def test_syncs_python_path_before_launchctl_load(self, tmp_path, monkeypatch):
+        plist = tmp_path / "dev.dragfly.dictare.plist"
+        plist.write_text("<plist/>")
+
+        sync = MagicMock()
+        monkeypatch.setattr("dictare.daemon.launchd.get_plist_path", lambda: plist)
+        monkeypatch.setattr("dictare.daemon.launchd.is_loaded", lambda: False)
+        monkeypatch.setattr("dictare.daemon.app_bundle.sync_service_python_path", sync)
+
+        with patch("subprocess.run") as mock_run:
+            start()
+
+        sync.assert_called_once()
+        mock_run.assert_called_once_with(["launchctl", "load", str(plist)], check=True)
 
 # ---------------------------------------------------------------------------
 # launchd stop / kill verification

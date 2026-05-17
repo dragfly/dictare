@@ -63,9 +63,10 @@ def install(prebuilt_launcher: Path | None = None) -> None:
             When provided, skips swiftc compilation and uses the signed binary
             (stable TCC via Developer ID Team ID).
     """
-    from dictare.daemon.app_bundle import create_app_bundle
+    from dictare.daemon.app_bundle import create_app_bundle, sync_service_python_path
 
-    create_app_bundle(sys.executable, prebuilt_launcher=prebuilt_launcher)
+    python_path = sync_service_python_path(sys.executable)
+    create_app_bundle(python_path, prebuilt_launcher=prebuilt_launcher)
 
     # Request Input Monitoring permission (shows system dialog on first install).
     # Must run BEFORE launchctl load — the dialog only works from terminal context.
@@ -73,7 +74,7 @@ def install(prebuilt_launcher: Path | None = None) -> None:
 
     plist_path = get_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    plist_path.write_text(generate_plist(sys.executable))
+    plist_path.write_text(generate_plist(python_path))
 
     # Stop existing service and verify it's dead before loading the new one.
     if is_loaded():
@@ -116,6 +117,9 @@ def is_loaded() -> bool:
 
 def start() -> None:
     """Load the LaunchAgent (starts the process and enables KeepAlive)."""
+    from dictare.daemon.app_bundle import sync_service_python_path
+
+    sync_service_python_path(sys.executable)
     plist_path = get_plist_path()
     if not plist_path.exists():
         raise RuntimeError("Service not installed. Run 'dictare service install' first.")

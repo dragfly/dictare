@@ -176,6 +176,7 @@ jobs:
             url "${PYPI_URL}"
             sha256 "${PYPI_SHA}"
             license "MIT"
+            preserve_rpath
 
             depends_on "portaudio"
             depends_on "uv"
@@ -199,6 +200,16 @@ jobs:
                      "--prerelease=allow",
                      dictare_pkg
 
+              # PyAV wheels vendor FFmpeg dylibs whose install IDs can be too
+              # short for Homebrew's post-install opt-prefix rewrite. Normalize
+              # those IDs to short @rpath names before Homebrew fixes linkage.
+              dylib_dir = libexec/"uv-tools/dictare/lib/python3.11/site-packages/av/.dylibs"
+              if dylib_dir.exist?
+                dylib_dir.glob("*.dylib").each do |dylib|
+                  system "install_name_tool", "-id", "@rpath/#{dylib.basename}", dylib
+                end
+              end
+
               bin.install_symlink (libexec/"bin/dictare") => "dictare"
 
               # Store signed launcher bundle in Cellar
@@ -210,9 +221,21 @@ jobs:
             end
 
             def post_install
+              # The signed launcher reads this file before Python starts. Keep it
+              # pinned to the stable Homebrew opt path so stale dev venvs cannot
+              # demote a brew install from MLX to CPU.
+              real_home = ENV["HOME"] || Pathname.new("~").expand_path.to_s
+              dictare_dir = Pathname.new(real_home)/".dictare"
+              dictare_dir.mkpath
+              python_path = dictare_dir/"python_path"
+              begin
+                File.write python_path, "#{opt_libexec}/uv-tools/dictare/bin/python"
+              rescue Errno::EACCES, Errno::EPERM => e
+                opoo "Could not update #{python_path}: #{e.message}. Run `dictare service install` or `dictare service start` to repair it."
+              end
+
               # Copy launcher to ~/Applications ONLY on first install.
               # Signed .app bundles can't be overwritten (macOS SIP).
-              real_home = ENV["HOME"] || Pathname.new("~").expand_path.to_s
               app_dest = Pathname.new(real_home)/"Applications/Dictare.app"
               launcher_src = libexec/"bundle/Dictare.app"
               if launcher_src.exist? && !app_dest.exist?
