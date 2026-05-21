@@ -80,7 +80,7 @@ mlx = [
     # Keep the Apple Silicon stack on the versions resolved by the v0.2.7 release.
     # Homebrew installs from sdist and does not consume uv.lock, so loose specifiers
     # can drift to newer MLX versions that break transcription from worker threads.
-    "mlx==0.30.4",
+    "mlx==0.31.2",
     "mlx-metal==0.30.4; sys_platform == 'darwin'",
     "mlx-whisper==0.4.3",
     "mlx-audio==0.3.0",  # TTS (OuteTTS, VyvoTTS) optimized for Apple Silicon
