@@ -85,7 +85,7 @@ mlx = [
     "mlx-whisper==0.4.3",
     "mlx-audio==0.3.0",  # TTS (OuteTTS, VyvoTTS) optimized for Apple Silicon
     "mlx-lm==0.30.5",
-    "huggingface-hub==1.3.4",
+    "huggingface-hub==1.16.0",
     "tqdm==4.67.1",
     "tiktoken==0.12.0",
     "scipy==1.16.3",
