@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+- Relocated status assembly out of `DictareEngine` into `core/status_report.py`,
+  and the STT/hotkey factories into `stt/factory.py` and `hotkey/factory.py`;
+  no behavior change.
+
 ## [0.4.0rc2] - 2026-06-11
 
 ### Internal

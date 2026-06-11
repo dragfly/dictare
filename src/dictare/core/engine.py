@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import logging
-import sys
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from dictare import __version__
 from dictare.agent.base import Agent
 from dictare.audio.feedback_policy import AudioFeedbackPolicy
 from dictare.core.agent_manager import AgentManager
@@ -29,11 +27,14 @@ from dictare.core.fsm import (
     TranscriptionCompleted,
 )
 from dictare.core.openvip_messages import create_message
+from dictare.core.status_report import build_status, check_launcher_hash
 from dictare.core.tts_manager import TTSManager
 from dictare.hotkey.base import HotkeyListener
+from dictare.hotkey.factory import create_hotkey_listener
 from dictare.hotkey.tap_detector import TapDetector
 from dictare.pipeline import Pipeline
 from dictare.stt.base import STTEngine
+from dictare.stt.factory import create_stt_engine
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +207,7 @@ class DictareEngine:
         self._stt: STTEngine | None = None
         self._hotkey: HotkeyListener | None = None
         # Pre-confirmed: launcher binary matches last confirmed hash (TCC still valid)
-        self._hotkey_pre_confirmed = self._check_launcher_hash()
+        self._hotkey_pre_confirmed = check_launcher_hash()
         # Status change callback — registered by AppController to push SSE updates.
         # Engine calls this on every status-relevant change (state, agents, mode).
         self._status_change_callback: Callable[[], None] | None = None
@@ -386,99 +387,6 @@ class DictareEngine:
     # Factory Methods
     # -------------------------------------------------------------------------
 
-    def _create_stt_engine(
-        self, model_size: str | None = None, *, headless: bool = False
-    ) -> STTEngine:
-        """Create and load STT engine.
-
-        Args:
-            model_size: Model size to load. If None, uses config.stt.model.
-            headless: If True, skip all console output (for Engine/daemon mode).
-        """
-        from dictare.stt.parakeet import is_parakeet_model
-        from dictare.utils.hardware import is_mlx_available
-
-        target_model = model_size or self.config.stt.model
-        engine: STTEngine
-        if is_parakeet_model(target_model):
-            from dictare.stt.parakeet import ParakeetEngine
-            engine = ParakeetEngine()
-        elif self.config.stt.hw_accel and is_mlx_available():
-            from dictare.stt.mlx_whisper import MLXWhisperEngine
-            engine = MLXWhisperEngine()
-        else:
-            from dictare.stt.faster_whisper import FasterWhisperEngine
-            engine = FasterWhisperEngine()
-
-        engine.load_model(
-            model_size or self.config.stt.model,
-            device=self.config.stt.advanced.device,
-            compute_type=self.config.stt.advanced.compute_type,
-            console=None,  # No console in engine
-            verbose=self.config.log_level == "debug",
-            headless=headless,
-        )
-
-        return engine
-
-    def _create_hotkey_listener(self) -> HotkeyListener:
-        """Create hotkey listener with smart fallback."""
-        errors: list[str] = []
-
-        # Try evdev first on Linux
-        if sys.platform == "linux":
-            try:
-                from dictare.hotkey.evdev_listener import EvdevHotkeyListener
-
-                # Get target device from config (if user specified one)
-                target_device = self.config.hotkey.device or None
-
-                modifier = self.config.hotkey.mode_switch_modifier
-                evdev_listener: HotkeyListener = EvdevHotkeyListener(
-                    self.config.hotkey.key,
-                    target_device=target_device,
-                    mode_switch_modifier=modifier,
-                )
-
-                # Check if key is available, suggest fallback if not
-                if not evdev_listener.is_key_available():
-                    fallback = EvdevHotkeyListener.suggest_fallback_key()
-                    if fallback and fallback != self.config.hotkey.key:
-                        evdev_listener = EvdevHotkeyListener(
-                            fallback,
-                            target_device=target_device,
-                            mode_switch_modifier=modifier,
-                        )
-
-                return evdev_listener
-            except ImportError:
-                errors.append("evdev not installed (pip install evdev)")
-            except Exception as e:
-                errors.append(f"evdev error: {e}")
-
-        # Fallback to pynput (macOS and X11)
-        try:
-            from dictare.hotkey.pynput_listener import PynputHotkeyListener
-
-            pynput_listener: HotkeyListener = PynputHotkeyListener(self.config.hotkey.key)
-            if pynput_listener.is_key_available():
-                return pynput_listener
-            else:
-                errors.append(f"pynput: key {self.config.hotkey.key} not supported")
-        except ImportError:
-            errors.append("pynput not installed (pip install pynput)")
-        except Exception as e:
-            errors.append(f"pynput error: {e}")
-
-        # No hotkey backend available
-        error_details = "\n  - ".join(errors)
-        raise RuntimeError(
-            f"No hotkey backend available.\n"
-            f"Tried:\n  - {error_details}\n\n"
-            f"Install evdev (Linux): pip install evdev\n"
-            f"Install pynput (macOS/X11): pip install pynput"
-        )
-
     def _get_hotwords(self) -> str | None:
         """Build hotwords string from config and pipeline trigger words."""
         if self.config.stt.advanced.hotwords:
@@ -643,7 +551,7 @@ class DictareEngine:
         self._loading_models[0]["start_time"] = time.time()
         self._loading_models[0]["status"] = "loading"
         try:
-            self._stt = self._create_stt_engine(headless=headless)
+            self._stt = create_stt_engine(self.config, headless=headless)
         except Exception as exc:
             logger.error("STT model loading failed: %s", exc, exc_info=True)
             raise
@@ -700,7 +608,7 @@ class DictareEngine:
         # Note: hotkey disabled in daemon mode - macOS requires main thread
         if self._hotkey_enabled:
             try:
-                self._hotkey = self._create_hotkey_listener()
+                self._hotkey = create_hotkey_listener(self.config.hotkey)
             except RuntimeError:
                 self._hotkey = None
         else:
@@ -1255,241 +1163,8 @@ class DictareEngine:
     # -------------------------------------------------------------------------
 
     def get_status(self) -> dict:
-        """Build engine status dict.
-
-        Returns OpenVIP protocol-level fields at the top level,
-        with implementation-specific details in the 'platform' object.
-        """
-        from dictare.core.fsm import AppState
-
-        # Map engine state to string
-        state_map = {
-            AppState.OFF: "off",
-            AppState.LISTENING: "listening",
-            AppState.RECORDING: "recording",
-            AppState.TRANSCRIBING: "transcribing",
-            AppState.INJECTING: "transcribing",
-            AppState.PLAYING: "playing",
-        }
-        stt_state = state_map.get(self.state, "off")
-
-        # Voice muted overrides the displayed state
-        if self._voice_muted and stt_state == "listening":
-            stt_state = "muted"
-
-        uptime = (
-            time.time() - self._stats.start_time
-            if self._stats.start_time
-            else 0
-        )
-
-        stt_active = stt_state not in ("off",)
-
-        return {
-            # OpenVIP protocol-level fields
-            "openvip": "1.0",
-            "stt": {"enabled": True, "active": stt_active},
-            "tts": {"enabled": self._tts_mgr.available},
-            "connected_agents": self.visible_agents,
-            # Implementation-specific details (StatusPanel)
-            "platform": {
-                "name": "Dictare",
-                "version": __version__,
-                "mode": "agents" if self.agent_mode else "keyboard",
-                "state": stt_state,
-                "uptime_seconds": uptime,
-                "stt": {
-                    "model_name": self.config.stt.model,
-                    "device": getattr(self._stt, "_device", self.config.stt.advanced.device),
-                    "last_text": self._last_text,
-                },
-                "output": {
-                    "mode": "agents" if self.agent_mode else "keyboard",
-                    "current_agent": self.visible_current_agent,
-                    "available_agents": self.visible_agents,
-                },
-                "hotkey": {
-                    "key": self.config.hotkey.key,
-                    "bound": self._is_hotkey_active(),
-                    "status": self._hotkey_status_raw(),
-                },
-                "tts": {
-                    "engine": self.config.tts.engine,
-                    "language": self.config.tts.language,
-                    "available": self._tts_mgr.available,
-                    "error": self._tts_mgr.error or None,
-                },
-                "audio_devices": {
-                    "input": self.config.audio.input_device or "(default)",
-                    "output": self.config.audio.output_device or "(default)",
-                },
-                "audio_in_use": self._audio_manager.get_actual_devices() if self._audio_manager else {"input": None, "output": None},
-                "audio_devices_available": self._get_audio_devices(),
-                "permissions": self._get_permissions(),
-                "loading": {
-                    "active": self._loading,
-                    "models": [
-                        {
-                            "name": m["name"],
-                            "status": m["status"],
-                            "elapsed": round(time.time() - m["start_time"], 1) if m["status"] == "loading" else m["elapsed"],
-                            "estimated": m["estimated"],
-                        }
-                        for m in self._loading_models
-                    ],
-                },
-                "engines": self._get_engines_cache(),
-                "stats": self._get_session_stats(),
-            },
-        }
-
-    _EXIT_PHRASES: list[str] = [
-        "Your fingers are getting jealous.",
-        "The keyboard is overrated.",
-        "Voice: 1, Keyboard: 0.",
-        "Dictation: because typing is so last century.",
-        "Your hands thank you.",
-        "Talk is cheap — unless it's voice-to-code.",
-        "Words spoken, keystrokes avoided.",
-        "Efficiency is just another word for talking to your computer.",
-        "Your vocal cords are your best developer tool.",
-        "Less typing, more thinking.",
-    ]
-
-    def _get_audio_devices(self) -> dict:
-        """Return current audio device lists for status response."""
-        from dictare.audio.capture import AudioCapture
-
-        try:
-            return {
-                "input": AudioCapture.list_devices(),
-                "output": AudioCapture.list_output_devices(),
-                "default_input": AudioCapture.get_default_device(),
-                "default_output": AudioCapture.get_default_output_device(),
-            }
-        except Exception:
-            return {"input": [], "output": [], "default_input": None, "default_output": None}
-
-    def _get_session_stats(self) -> dict:
-        """Return today's cumulative stats for the status response.
-
-        Combines the in-memory session counters (since this engine start)
-        with the persisted today_baseline (previous engine runs today),
-        so the dashboard always shows the full daily total.
-        """
-        b = self._today_baseline
-        count = self._stats.count + b.get("transcriptions", 0)
-        words = self._stats.words + b.get("words", 0)
-        chars = self._stats.chars + b.get("chars", 0)
-        audio = self._stats.audio_seconds + b.get("audio_seconds", 0.0)
-        phrase = self._EXIT_PHRASES[count % len(self._EXIT_PHRASES)] if count > 0 else ""
-        return {
-            "transcriptions": count,
-            "words": words,
-            "chars": chars,
-            "audio_seconds": round(audio, 1),
-            "transcription_seconds": round(self._stats.transcription_seconds + b.get("transcription_seconds", 0.0), 1),
-            "injection_seconds": round(self._stats.injection_seconds + b.get("injection_seconds", 0.0), 1),
-            "phrase": phrase,
-        }
-
-    def _get_engines_cache(self) -> dict:
-        """Return cached engine availability (computed once, lazy)."""
-        if self._engines_cache is None:
-            from dictare.utils.platform import check_all_stt_engines, check_all_tts_engines
-
-            self._engines_cache = {
-                "tts": check_all_tts_engines(self.config.tts.engine),
-                "stt": check_all_stt_engines(self.config.stt.model),
-            }
-        return self._engines_cache
-
-    def _is_hotkey_active(self) -> bool:
-        """Return True if the hotkey is actually functional.
-
-        On Linux / terminal mode: Python directly binds the hotkey listener.
-        On macOS daemon mode: serve writes ~/.dictare/hotkey_runtime_status
-        with capture health derived from active providers (ipc/pynput/signal).
-        If runtime status is unavailable, we fall back to launcher hotkey_status.
-        """
-        import sys
-
-        if self._hotkey is not None:
-            return True
-        if sys.platform == "darwin":
-            from dictare.hotkey.runtime_status import read_runtime_status
-
-            runtime = read_runtime_status()
-            if runtime is not None:
-                return bool(runtime.get("capture_healthy", False))
-
-            from pathlib import Path
-            status_file = Path.home() / ".dictare" / "hotkey_status"
-            try:
-                return status_file.read_text().strip() in ("active", "confirmed")
-            except FileNotFoundError:
-                pass
-        return False
-
-    def _hotkey_status_raw(self) -> str:
-        """Return the raw hotkey_status string for diagnostics."""
-        import sys
-
-        if self._hotkey is not None:
-            return "bound"
-        if sys.platform == "darwin":
-            from dictare.hotkey.runtime_status import read_runtime_status
-
-            runtime = read_runtime_status()
-            if runtime is not None:
-                status = str(runtime.get("status", "unknown"))
-            else:
-                from pathlib import Path
-                status_file = Path.home() / ".dictare" / "hotkey_status"
-                try:
-                    status = status_file.read_text().strip()
-                except FileNotFoundError:
-                    status = "unknown"
-
-            # If tap is created ("active") but the launcher binary hasn't
-            # changed since last confirmation, TCC trust is still valid.
-            if status == "active" and self._hotkey_pre_confirmed:
-                return "confirmed"
-            return status
-        return "unknown"
-
-    @staticmethod
-    def _check_launcher_hash() -> bool:
-        """Check if launcher binary matches the previously confirmed hash."""
-        import sys
-        if sys.platform != "darwin":
-            return False
-        try:
-            from dictare.hotkey.ipc import check_confirmed_launcher_hash
-            return check_confirmed_launcher_hash()
-        except Exception:
-            return False
-
-    @staticmethod
-    def _get_permissions() -> dict:
-        """Check platform permissions (Accessibility + Microphone)."""
-        import sys
-
-        if sys.platform != "darwin":
-            return {"accessibility": True, "microphone": True}
-
-        from dictare.platform.permissions import (
-            ACCESSIBILITY_SETTINGS_URL,
-            MICROPHONE_SETTINGS_URL,
-            get_permissions,
-        )
-
-        perms = get_permissions()
-        return {
-            **perms,
-            "accessibility_url": ACCESSIBILITY_SETTINGS_URL,
-            "microphone_url": MICROPHONE_SETTINGS_URL,
-        }
+        """Build engine status dict (assembled by core.status_report)."""
+        return build_status(self)
 
     def handle_speech(self, body: dict) -> dict:
         """Handle a speech (TTS) request (delegates to TTSManager)."""

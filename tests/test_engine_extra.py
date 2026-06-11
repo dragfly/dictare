@@ -445,30 +445,36 @@ class TestExitWatchdog:
 
 
 # ---------------------------------------------------------------------------
-# _get_session_stats
+# session_stats (core.status_report)
 # ---------------------------------------------------------------------------
 
 class TestGetSessionStats:
-    """Test _get_session_stats."""
+    """Test status_report.session_stats."""
 
     def test_includes_baseline(self) -> None:
+        from dictare.core.status_report import session_stats
+
         engine = DictareEngine(config=MockConfig())
         engine._today_baseline = {"transcriptions": 10, "words": 100}
         engine._stats.count = 5
         engine._stats.words = 50
-        stats = engine._get_session_stats()
+        stats = session_stats(engine)
         assert stats["transcriptions"] == 15
         assert stats["words"] == 150
 
     def test_phrase_non_empty_when_count_positive(self) -> None:
+        from dictare.core.status_report import session_stats
+
         engine = DictareEngine(config=MockConfig())
         engine._stats.count = 1
-        stats = engine._get_session_stats()
+        stats = session_stats(engine)
         assert stats["phrase"] != ""
 
     def test_phrase_present_when_count_zero(self) -> None:
+        from dictare.core.status_report import session_stats
+
         engine = DictareEngine(config=MockConfig())
-        stats = engine._get_session_stats()
+        stats = session_stats(engine)
         assert isinstance(stats["phrase"], str)
 
 
