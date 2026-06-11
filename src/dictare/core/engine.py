@@ -32,7 +32,7 @@ from dictare.core.openvip_messages import create_message
 from dictare.core.tts_manager import TTSManager
 from dictare.hotkey.base import HotkeyListener
 from dictare.hotkey.tap_detector import TapDetector
-from dictare.pipeline import Pipeline, PipelineLoader
+from dictare.pipeline import Pipeline
 from dictare.stt.base import STTEngine
 
 logger = logging.getLogger(__name__)
@@ -518,37 +518,72 @@ class DictareEngine:
     def _create_pipeline(self) -> Pipeline | None:
         """Create message pipeline from config.
 
+        Filters are constructed explicitly — misconfiguration fails loudly
+        at startup instead of silently dropping a step.
+
         Returns:
-            Pipeline if enabled, None otherwise.
+            Pipeline if enabled and has steps, None otherwise.
         """
-        services = {
-            "agent_ids": self.agents,
-            "subscribe_to_events": True,
-            "is_muted": lambda: self._voice_muted,
-        }
-        return PipelineLoader().build_filter_pipeline(
-            self.config.pipeline, services,
-        )
+        from dictare.pipeline.filters.agent_filter import AgentFilter
+        from dictare.pipeline.filters.input_filter import InputFilter
+        from dictare.pipeline.filters.mute_filter import MuteFilter
+
+        cfg = self.config.pipeline
+        if not cfg.enabled:
+            return None
+
+        pipeline = Pipeline()
+
+        # Mute filter must run FIRST — discards all text when muted
+        if cfg.mute_filter.enabled:
+            pipeline.add_step(MuteFilter(
+                mute_triggers=cfg.mute_filter.mute_triggers,
+                listen_triggers=cfg.mute_filter.listen_triggers,
+                is_muted=lambda: self._voice_muted,
+                confidence_threshold=cfg.mute_filter.confidence_threshold,
+                max_scan_words=cfg.mute_filter.max_scan_words,
+                decay_rate=cfg.mute_filter.decay_rate,
+            ))
+
+        if cfg.agent_filter.enabled:
+            agent_filter = AgentFilter(
+                agent_ids=self.agents,
+                triggers=cfg.agent_filter.triggers,
+                match_threshold=cfg.agent_filter.match_threshold,
+            )
+            self._agent_mgr.on_registered = agent_filter.agent_registered
+            self._agent_mgr.on_unregistered = agent_filter.agent_unregistered
+            pipeline.add_step(agent_filter)
+
+        if cfg.submit_filter.enabled:
+            pipeline.add_step(InputFilter(
+                triggers=cfg.submit_filter.triggers,
+                confidence_threshold=cfg.submit_filter.confidence_threshold,
+                max_scan_words=cfg.submit_filter.max_scan_words,
+                decay_rate=cfg.submit_filter.decay_rate,
+            ))
+
+        return pipeline if len(pipeline) > 0 else None
 
     def _create_executor_pipeline(self) -> Pipeline:
         """Create executor pipeline for acting on extension fields.
 
         Executors run after filters and handle side effects:
-        - AgentSwitchExecutor: switches the current agent on x_agent_switch
         - MuteExecutor: mutes/unmutes voice on x_mute
+        - AgentSwitchExecutor: switches the current agent on x_agent_switch
 
         Returns:
-            Pipeline with executors (always created, may be empty).
+            Pipeline with executors.
         """
-        services = {
-            "switch_fn": self._switch_to_agent_by_name_internal,
-            "current_agent_fn": lambda: self._agent_mgr.current_agent,
-            "mute_fn": self.mute,
-            "unmute_fn": self.unmute,
-        }
-        return PipelineLoader().build_executor_pipeline(
-            self.config.pipeline, services,
-        )
+        from dictare.pipeline.executors import AgentSwitchExecutor, MuteExecutor
+
+        pipeline = Pipeline()
+        pipeline.add_step(MuteExecutor(mute_fn=self.mute, unmute_fn=self.unmute))
+        pipeline.add_step(AgentSwitchExecutor(
+            switch_fn=self._switch_to_agent_by_name_internal,
+            current_agent_fn=lambda: self._agent_mgr.current_agent,
+        ))
+        return pipeline
 
     # -------------------------------------------------------------------------
     # Initialization

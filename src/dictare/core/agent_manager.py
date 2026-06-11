@@ -11,8 +11,6 @@ import time as _time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from dictare.core.bus import bus
-
 if TYPE_CHECKING:
     from dictare.agent.base import Agent
 
@@ -45,6 +43,9 @@ class AgentManager:
         self._on_notify: Callable[[], None] | None = None
         self._on_agent_change: Callable[[str, int], None] | None = None
         self._on_speak: Callable[[str], None] | None = None
+        # Registration listeners — wired to AgentFilter at pipeline construction
+        self.on_registered: Callable[[str], None] | None = None
+        self.on_unregistered: Callable[[str], None] | None = None
 
     # ------------------------------------------------------------------
     # Properties
@@ -157,7 +158,8 @@ class AgentManager:
         else:
             logger.info("register_agent(%s): reserved agent registered", agent.id)
 
-        bus.publish("agent.registered", agent_id=agent.id)
+        if self.on_registered:
+            self.on_registered(agent.id)
         self._notify()
         return True
 
@@ -185,7 +187,8 @@ class AgentManager:
             else:
                 self._current_agent_id = None
 
-        bus.publish("agent.unregistered", agent_id=agent_id)
+        if self.on_unregistered:
+            self.on_unregistered(agent_id)
         self._notify()
         return True
 

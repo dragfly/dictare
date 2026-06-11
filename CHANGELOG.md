@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name, voice state, and current voice target as a system notification —
   without touching the terminal.
 
+### Internal
+- Pipeline filters and executors are now constructed explicitly by the engine;
+  removed the reflection-based `PipelineLoader` (misconfigured steps now fail
+  loudly at startup instead of being silently skipped).
+- Removed the internal `EventBus` (replaced by direct AgentManager→AgentFilter
+  callbacks) and the unused `OneShotTranscriber`.
+
 ## [0.3.2rc1] - 2026-05-17
 
 ### Fixed
