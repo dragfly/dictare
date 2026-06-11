@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loudly at startup instead of being silently skipped).
 - Removed the internal `EventBus` (replaced by direct AgentManager→AgentFilter
   callbacks) and the unused `OneShotTranscriber`.
+- Split `http_server.py` route handlers into three domain modules
+  (`http_routes_openvip.py`, `http_routes_settings.py`, `http_routes_models.py`);
+  no behavior change — endpoint surface verified identical.
 
 ## [0.3.2rc1] - 2026-05-17
 
