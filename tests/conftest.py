@@ -108,7 +108,7 @@ class ComplianceMockController:
     def __init__(self) -> None:
         self._calls: list[dict] = []
 
-    def _handle_app_command(self, body: dict) -> dict:
+    def handle_app_command(self, body: dict) -> dict:
         self._calls.append(body)
         return {"status": "ok"}
 

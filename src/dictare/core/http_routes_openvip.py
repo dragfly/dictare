@@ -44,29 +44,29 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
 
         # Reject reserved agent IDs unless caller has the right token
         if agent_id in DictareEngine.RESERVED_AGENT_IDS:
-            if not server._has_permission(request, "register_tts"):
+            if not server.has_permission(request, "register_tts"):
                 raise HTTPException(
                     status_code=403,
                     detail="Reserved agent ID",
                 )
         # Check for duplicate connection
-        with server._agent_queues_lock:
-            if agent_id in server._agent_queues:
+        with server.agent_queues_lock:
+            if agent_id in server.agent_queues:
                 raise HTTPException(
                     status_code=409,
                     detail=f"Agent '{agent_id}' already connected",
                 )
             queue: asyncio.Queue = asyncio.Queue()
-            server._agent_queues[agent_id] = queue
+            server.agent_queues[agent_id] = queue
 
         # Create SSE agent and register with engine
         from dictare.agent.sse import SSEAgent
 
         agent = SSEAgent(agent_id, server)
-        server._engine.register_agent(agent)
+        server.engine.register_agent(agent)
         is_tts = agent_id == DictareEngine.TTS_AGENT_ID
         if is_tts:
-            server._tts_connected_event.set()
+            server.tts_connected_event.set()
         logger.info("SSE agent connected: %s", agent_id)
 
         async def event_generator():
@@ -90,11 +90,11 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
                         yield {"comment": "keepalive"}
             finally:
                 # Cleanup on disconnect
-                with server._agent_queues_lock:
-                    server._agent_queues.pop(agent_id, None)
-                server._engine.unregister_agent(agent_id)
+                with server.agent_queues_lock:
+                    server.agent_queues.pop(agent_id, None)
+                server.engine.unregister_agent(agent_id)
                 if is_tts:
-                    server._tts_connected_event.clear()
+                    server.tts_connected_event.clear()
                 logger.info("SSE agent disconnected: %s", agent_id)
 
         return EventSourceResponse(event_generator())
@@ -102,8 +102,8 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
     @app.post("/openvip/agents/{agent_id}/messages")
     async def post_agent_message(agent_id: str, request: Request):
         """Send a message to a connected agent."""
-        with server._agent_queues_lock:
-            queue = server._agent_queues.get(agent_id)
+        with server.agent_queues_lock:
+            queue = server.agent_queues.get(agent_id)
         if queue is None:
             raise HTTPException(
                 status_code=404,
@@ -145,7 +145,7 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
             )
         try:
             result = await asyncio.to_thread(
-                server._engine.handle_speech, body
+                server.engine.handle_speech, body
             )
             if result.get("status") == "error":
                 return JSONResponse(
@@ -163,7 +163,7 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
     @app.post("/openvip/speech/stop")
     async def speech_stop():
         """Interrupt the currently playing TTS audio."""
-        stopped = await asyncio.to_thread(server._engine.stop_speaking)
+        stopped = await asyncio.to_thread(server.engine.stop_speaking)
         return {"openvip": "1.0", "status": "ok", "stopped": stopped}
 
     @app.post("/api/agents/{agent_id}/focus")
@@ -176,34 +176,34 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
         focused = body.get("focused")
         if not isinstance(focused, bool):
             raise HTTPException(status_code=400, detail="'focused' must be a boolean")
-        server._engine.set_agent_focus(agent_id, focused)
+        server.engine.set_agent_focus(agent_id, focused)
         return {"status": "ok"}
 
     @app.get("/api/speech/voices")
     async def speech_voices():
         """List available voices for the current TTS engine."""
-        voices = await asyncio.to_thread(server._engine.list_voices)
+        voices = await asyncio.to_thread(server.engine.list_voices)
         return {
-            "engine": server._engine.config.tts.engine,
+            "engine": server.engine.config.tts.engine,
             "voices": voices,
         }
 
     @app.post("/internal/tts/complete")
     async def tts_complete(request: Request):
         """Worker signals that a speak() call finished."""
-        if not server._has_permission(request, "register_tts"):
+        if not server.has_permission(request, "register_tts"):
             raise HTTPException(status_code=403, detail="Forbidden")
         body = await request.json()
         message_id = body.get("message_id", "")
         ok = body.get("ok", False)
         duration_ms = body.get("duration_ms", 0)
-        server._engine.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
+        server.engine.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
         return {"status": "ok"}
 
     @app.get("/openvip/status")
     async def get_status():
         """Get engine status."""
-        return server._engine.get_status()
+        return server.engine.get_status()
 
     @app.get("/openvip/status/stream")
     async def sse_status_stream(request: Request):
@@ -213,15 +213,15 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
         Sends keepalive comments every 30s if no events.
         """
         sq: asyncio.Queue = asyncio.Queue()
-        with server._status_queues_lock:
+        with server.status_queues_lock:
             # Evict oldest connections when at capacity
-            while len(server._status_queues) >= _MAX_STATUS_STREAMS:
-                evicted = server._status_queues.pop(0)
+            while len(server.status_queues) >= _MAX_STATUS_STREAMS:
+                evicted = server.status_queues.pop(0)
                 evicted.put_nowait(None)  # sentinel → close
-            server._status_queues.append(sq)
+            server.status_queues.append(sq)
 
         # Send current status immediately on connect
-        initial = server._engine.get_status()
+        initial = server.engine.get_status()
         await sq.put(initial)
 
         async def event_generator():
@@ -243,9 +243,9 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
                     except TimeoutError:
                         yield {"comment": "keepalive"}
             finally:
-                with server._status_queues_lock:
+                with server.status_queues_lock:
                     try:
-                        server._status_queues.remove(sq)
+                        server.status_queues.remove(sq)
                     except ValueError:
                         pass
 
@@ -264,14 +264,14 @@ def register_openvip_routes(app: FastAPI, server: OpenVIPServer) -> None:
             # Protocol commands → engine
             if command in PROTOCOL_COMMANDS:
                 result = await asyncio.to_thread(
-                    server._engine.handle_protocol_command, body
+                    server.engine.handle_protocol_command, body
                 )
                 return result
 
             # App commands → controller
-            if server._controller is not None:
+            if server.controller is not None:
                 result = await asyncio.to_thread(
-                    server._controller._handle_app_command, body
+                    server.controller.handle_app_command, body
                 )
                 return result
 

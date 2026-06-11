@@ -207,13 +207,13 @@ class TestControllerRouting:
         from dictare.app.controller import AppController
 
         ctrl = MagicMock(spec=AppController)
-        ctrl._handle_app_command = AppController._handle_app_command.__get__(ctrl)
+        ctrl.handle_app_command = AppController.handle_app_command.__get__(ctrl)
         return ctrl
 
     def test_set_agent_by_name(self) -> None:
         """output.set_agent:claude calls switch_to_agent('claude')."""
         ctrl = self._make_controller()
-        result = ctrl._handle_app_command({"command": "output.set_agent:claude"})
+        result = ctrl.handle_app_command({"command": "output.set_agent:claude"})
         ctrl.switch_to_agent.assert_called_once_with("claude")
         assert result["status"] == "ok"
         assert result["openvip"] == "1.0"
@@ -221,7 +221,7 @@ class TestControllerRouting:
     def test_set_agent_cursor(self) -> None:
         """output.set_agent:cursor calls switch_to_agent('cursor')."""
         ctrl = self._make_controller()
-        result = ctrl._handle_app_command({"command": "output.set_agent:cursor"})
+        result = ctrl.handle_app_command({"command": "output.set_agent:cursor"})
         ctrl.switch_to_agent.assert_called_once_with("cursor")
         assert result["status"] == "ok"
         assert result["openvip"] == "1.0"

@@ -167,8 +167,8 @@ def test_spawn_worker_uses_venv_python():
 
     mock_http = MagicMock()
     mock_http.port = 8770
-    mock_http._tts_connected_event = MagicMock()
-    mock_http._tts_connected_event.is_set.return_value = True
+    mock_http.tts_connected_event = MagicMock()
+    mock_http.tts_connected_event.is_set.return_value = True
 
     fake_venv_python = "/fake/tts-env/piper/bin/python"
     fake_src_path = "/fake/src"
@@ -211,8 +211,8 @@ def test_spawn_worker_uses_sys_executable_without_venv():
 
     mock_http = MagicMock()
     mock_http.port = 8770
-    mock_http._tts_connected_event = MagicMock()
-    mock_http._tts_connected_event.is_set.return_value = True
+    mock_http.tts_connected_event = MagicMock()
+    mock_http.tts_connected_event.is_set.return_value = True
 
     with (
         patch("subprocess.Popen") as mock_popen,

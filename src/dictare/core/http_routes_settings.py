@@ -165,9 +165,9 @@ def register_settings_routes(app: FastAPI, server: OpenVIPServer) -> None:
             delete_config_value(config_key)
 
         if dev_type == "input":
-            server._engine.reset_audio_input()
+            server.engine.reset_audio_input()
         else:
-            server._engine.reset_audio_output(device)
+            server.engine.reset_audio_output(device)
 
         server.notify_status_change()
         return {"status": "ok"}

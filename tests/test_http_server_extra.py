@@ -80,7 +80,7 @@ class MockController:
     def __init__(self) -> None:
         self._app_calls: list[dict] = []
 
-    def _handle_app_command(self, body: dict) -> dict:
+    def handle_app_command(self, body: dict) -> dict:
         self._app_calls.append(body)
         return {"status": "ok"}
 
@@ -264,8 +264,8 @@ class TestDuplicateAgentConnection:
     def test_duplicate_agent_returns_409(self, server: OpenVIPServer) -> None:
         """Connecting the same agent twice returns 409."""
         # Manually register an agent queue
-        with server._agent_queues_lock:
-            server._agent_queues["taken"] = asyncio.Queue()
+        with server.agent_queues_lock:
+            server.agent_queues["taken"] = asyncio.Queue()
 
         client = TestClient(server._app)
         response = client.get("/openvip/agents/taken/messages")
@@ -330,8 +330,8 @@ class TestPostAgentMessageValidation:
 
     def test_invalid_json_returns_400(self, server: OpenVIPServer) -> None:
         """Invalid JSON body returns 400."""
-        with server._agent_queues_lock:
-            server._agent_queues["test"] = asyncio.Queue()
+        with server.agent_queues_lock:
+            server.agent_queues["test"] = asyncio.Queue()
 
         client = TestClient(server._app)
         response = client.post(
@@ -344,8 +344,8 @@ class TestPostAgentMessageValidation:
 
     def test_invalid_openvip_message_returns_400(self, server: OpenVIPServer) -> None:
         """Message that fails OpenVIP validation returns 400."""
-        with server._agent_queues_lock:
-            server._agent_queues["test"] = asyncio.Queue()
+        with server.agent_queues_lock:
+            server.agent_queues["test"] = asyncio.Queue()
 
         client = TestClient(server._app)
         # Missing required fields (openvip, type, id, timestamp)
@@ -429,8 +429,8 @@ class TestPutMessageEdgeCases:
     def test_put_message_to_existing_agent_with_loop(self, server: OpenVIPServer) -> None:
         """put_message succeeds when event loop is running."""
         q: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["test"] = q
+        with server.agent_queues_lock:
+            server.agent_queues["test"] = q
 
         loop = asyncio.new_event_loop()
         server._loop = loop
@@ -458,8 +458,8 @@ class TestNotifyStatusChange:
     def test_notify_pushes_to_queues(self, server: OpenVIPServer) -> None:
         """notify_status_change pushes status to all subscribed queues."""
         q: asyncio.Queue = asyncio.Queue()
-        with server._status_queues_lock:
-            server._status_queues.append(q)
+        with server.status_queues_lock:
+            server.status_queues.append(q)
 
         loop = asyncio.new_event_loop()
         server._loop = loop
@@ -493,22 +493,22 @@ class TestHasPermission:
         """Returns False if no token for the permission."""
         req = MagicMock()
         req.headers = {"authorization": "Bearer something"}
-        assert server._has_permission(req, "nonexistent") is False
+        assert server.has_permission(req, "nonexistent") is False
 
     def test_correct_bearer_token(self, auth_server: OpenVIPServer) -> None:
         req = MagicMock()
         req.headers = {"authorization": "Bearer secret-token"}
-        assert auth_server._has_permission(req, "register_tts") is True
+        assert auth_server.has_permission(req, "register_tts") is True
 
     def test_wrong_bearer_token(self, auth_server: OpenVIPServer) -> None:
         req = MagicMock()
         req.headers = {"authorization": "Bearer wrong-token"}
-        assert auth_server._has_permission(req, "register_tts") is False
+        assert auth_server.has_permission(req, "register_tts") is False
 
     def test_missing_auth_header(self, auth_server: OpenVIPServer) -> None:
         req = MagicMock()
         req.headers = {}
-        assert auth_server._has_permission(req, "register_tts") is False
+        assert auth_server.has_permission(req, "register_tts") is False
 
 
 # ---------------------------------------------------------------------------
@@ -522,14 +522,14 @@ class TestTTSConnectedEvents:
         assert server.is_tts_connected() is False
 
     def test_set_then_check(self, server: OpenVIPServer) -> None:
-        server._tts_connected_event.set()
+        server.tts_connected_event.set()
         assert server.is_tts_connected() is True
 
     def test_wait_returns_false_on_timeout(self, server: OpenVIPServer) -> None:
         assert server.wait_tts_connected(timeout=0.01) is False
 
     def test_wait_returns_true_when_set(self, server: OpenVIPServer) -> None:
-        server._tts_connected_event.set()
+        server.tts_connected_event.set()
         assert server.wait_tts_connected(timeout=0.01) is True
 
 

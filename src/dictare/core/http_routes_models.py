@@ -43,7 +43,7 @@ def register_models_routes(app: FastAPI, server: OpenVIPServer) -> None:
             cached = await asyncio.to_thread(is_repo_cached, repo, check_file)
             cache_size = await asyncio.to_thread(get_cache_size, repo) if cached else 0
 
-            job = server._download_jobs.get(model_id)
+            job = server.download_jobs.get(model_id)
             downloading = job is not None and job.get("status") == "downloading"
 
             result.append({
@@ -79,12 +79,12 @@ def register_models_routes(app: FastAPI, server: OpenVIPServer) -> None:
         if await asyncio.to_thread(is_repo_cached, repo, check_file):
             return {"status": "cached"}
 
-        if model_id in server._download_jobs and server._download_jobs[model_id].get("status") == "downloading":
+        if model_id in server.download_jobs and server.download_jobs[model_id].get("status") == "downloading":
             return {"status": "downloading"}
 
         loop = asyncio.get_running_loop()
         t = threading.Thread(
-            target=server._run_model_download,
+            target=server.run_model_download,
             args=(model_id, info, loop),
             daemon=True,
             name=f"model-dl-{model_id}",
@@ -96,11 +96,11 @@ def register_models_routes(app: FastAPI, server: OpenVIPServer) -> None:
     async def models_pull_progress(request: Request):
         """SSE stream for model download progress."""
         pq: asyncio.Queue = asyncio.Queue()
-        with server._progress_queues_lock:
-            server._progress_queues.append(pq)
+        with server.progress_queues_lock:
+            server.progress_queues.append(pq)
 
         # Send snapshot of all in-progress jobs on connect
-        for mid, job in server._download_jobs.items():
+        for mid, job in server.download_jobs.items():
             await pq.put({"model_id": mid, **job})
 
         async def event_generator():
@@ -114,9 +114,9 @@ def register_models_routes(app: FastAPI, server: OpenVIPServer) -> None:
                     except TimeoutError:
                         yield {"comment": "keepalive"}
             finally:
-                with server._progress_queues_lock:
+                with server.progress_queues_lock:
                     try:
-                        server._progress_queues.remove(pq)
+                        server.progress_queues.remove(pq)
                     except ValueError:
                         pass
 
@@ -136,12 +136,12 @@ def register_models_routes(app: FastAPI, server: OpenVIPServer) -> None:
             )
 
         job_id = f"tts-install-{engine}"
-        if job_id in server._download_jobs and server._download_jobs[job_id].get("status") == "downloading":
+        if job_id in server.download_jobs and server.download_jobs[job_id].get("status") == "downloading":
             return {"status": "installing"}
 
         loop = asyncio.get_running_loop()
         t = threading.Thread(
-            target=server._run_tts_install,
+            target=server.run_tts_install,
             args=(engine, loop),
             daemon=True,
             name=f"tts-install-{engine}",
@@ -229,7 +229,7 @@ def register_models_routes(app: FastAPI, server: OpenVIPServer) -> None:
                 ready = platform_ok and venv_installed and model_cached
 
             # Download state
-            job = server._download_jobs.get(cap_id) or server._download_jobs.get(f"tts-install-{venv_name}")
+            job = server.download_jobs.get(cap_id) or server.download_jobs.get(f"tts-install-{venv_name}")
             downloading = job is not None and job.get("status") == "downloading"
 
             result.append({
@@ -274,12 +274,12 @@ def register_models_routes(app: FastAPI, server: OpenVIPServer) -> None:
             return {"status": "ready"}
 
         # Check for existing job
-        if cap_id in server._download_jobs and server._download_jobs[cap_id].get("status") == "downloading":
+        if cap_id in server.download_jobs and server.download_jobs[cap_id].get("status") == "downloading":
             return {"status": "installing"}
 
         loop = asyncio.get_running_loop()
         t = threading.Thread(
-            target=server._run_capability_install,
+            target=server.run_capability_install,
             args=(cap_id, info, loop),
             daemon=True,
             name=f"cap-install-{cap_id}",

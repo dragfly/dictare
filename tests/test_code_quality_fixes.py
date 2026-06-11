@@ -98,8 +98,8 @@ class TestJSONParseExceptionType:
 
         # Create agent queue so endpoint doesn't 404
         queue: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["test-agent"] = queue
+        with server.agent_queues_lock:
+            server.agent_queues["test-agent"] = queue
 
         response = client.post(
             "/openvip/agents/test-agent/messages",

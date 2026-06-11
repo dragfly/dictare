@@ -563,7 +563,7 @@ class AppController:
     # Internal
     # =========================================================================
 
-    def _handle_app_command(self, body: dict) -> dict:
+    def handle_app_command(self, body: dict) -> dict:
         """Handle application-level control commands.
 
         Called by engine for commands that are not protocol-level

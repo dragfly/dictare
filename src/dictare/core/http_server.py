@@ -92,27 +92,27 @@ class OpenVIPServer:
         port: int = 8770,
         auth_tokens: dict[str, str] | None = None,
     ) -> None:
-        self._engine = engine
-        self._controller = controller
+        self.engine = engine
+        self.controller = controller
         self._host = host
         self._port = port
         self._auth_tokens: dict[str, str] = auth_tokens or {}
 
         # Event set when __tts__ agent connects, cleared on disconnect
-        self._tts_connected_event = threading.Event()
+        self.tts_connected_event = threading.Event()
 
         # Agent queues: agent_id -> asyncio.Queue
-        self._agent_queues: dict[str, asyncio.Queue] = {}
-        self._agent_queues_lock = threading.Lock()
+        self.agent_queues: dict[str, asyncio.Queue] = {}
+        self.agent_queues_lock = threading.Lock()
 
         # Status stream subscribers: list of asyncio.Queue
-        self._status_queues: list[asyncio.Queue] = []
-        self._status_queues_lock = threading.Lock()
+        self.status_queues: list[asyncio.Queue] = []
+        self.status_queues_lock = threading.Lock()
 
         # Model download jobs: model_id -> {status, fraction, downloaded_bytes, total_bytes}
-        self._download_jobs: dict[str, dict] = {}
-        self._progress_queues: list[asyncio.Queue] = []
-        self._progress_queues_lock = threading.Lock()
+        self.download_jobs: dict[str, dict] = {}
+        self.progress_queues: list[asyncio.Queue] = []
+        self.progress_queues_lock = threading.Lock()
 
         # Server thread and event loop
         self._thread: threading.Thread | None = None
@@ -127,13 +127,13 @@ class OpenVIPServer:
 
     def is_tts_connected(self) -> bool:
         """Check if the TTS worker has connected."""
-        return self._tts_connected_event.is_set()
+        return self.tts_connected_event.is_set()
 
     def wait_tts_connected(self, timeout: float = 0.5) -> bool:
         """Wait for TTS worker to connect. Returns True if connected."""
-        return self._tts_connected_event.wait(timeout=timeout)
+        return self.tts_connected_event.wait(timeout=timeout)
 
-    def _has_permission(self, request: Request, permission: str) -> bool:
+    def has_permission(self, request: Request, permission: str) -> bool:
         """Check if request carries a valid Bearer token for *permission*."""
         token = self._auth_tokens.get(permission)
         if not token:
@@ -154,7 +154,7 @@ class OpenVIPServer:
         register_models_routes(app, self)
         return app
 
-    def _run_model_download(
+    def run_model_download(
         self, model_id: str, info: dict, loop: asyncio.AbstractEventLoop
     ) -> None:
         """Download a model in a background thread, streaming SSE progress events.
@@ -181,18 +181,18 @@ class OpenVIPServer:
             pass
 
         def _push(event: dict) -> None:
-            with self._progress_queues_lock:
-                queues = list(self._progress_queues)
+            with self.progress_queues_lock:
+                queues = list(self.progress_queues)
             for q in queues:
                 loop.call_soon_threadsafe(q.put_nowait, event)
 
-        self._download_jobs[model_id] = {
+        self.download_jobs[model_id] = {
             "status": "downloading",
             "fraction": 0.0,
             "downloaded_bytes": 0,
             "total_bytes": total_bytes,
         }
-        _push({"model_id": model_id, **self._download_jobs[model_id]})
+        _push({"model_id": model_id, **self.download_jobs[model_id]})
 
         done_event = threading.Event()
         errors: list[Exception] = []
@@ -212,11 +212,11 @@ class OpenVIPServer:
             done_event.wait(timeout=0.5)
             current = get_cache_size(repo)
             fraction = min(current / total_bytes, 0.99) if total_bytes > 0 else 0.0
-            self._download_jobs[model_id].update({
+            self.download_jobs[model_id].update({
                 "fraction": fraction,
                 "downloaded_bytes": current,
             })
-            _push({"model_id": model_id, **self._download_jobs[model_id]})
+            _push({"model_id": model_id, **self.download_jobs[model_id]})
 
         if errors:
             logger.error("Model %s download failed: %s", model_id, errors[0])
@@ -226,14 +226,14 @@ class OpenVIPServer:
             logger.info("Model %s downloaded (%.1f MB)", model_id, current / 1e6)
             job = {"status": "done", "fraction": 1.0, "downloaded_bytes": current, "total_bytes": total_bytes}
 
-        self._download_jobs[model_id] = job
+        self.download_jobs[model_id] = job
         _push({"model_id": model_id, **job})
 
         # Clean up after 10 s so clients can read the final state
         time.sleep(_JOB_CLEANUP_DELAY)
-        self._download_jobs.pop(model_id, None)
+        self.download_jobs.pop(model_id, None)
 
-    def _run_tts_install(
+    def run_tts_install(
         self, engine: str, loop: asyncio.AbstractEventLoop
     ) -> None:
         """Install TTS venv in a background thread, streaming progress via SSE."""
@@ -245,21 +245,21 @@ class OpenVIPServer:
         logger.info("Installing TTS venv for %s", engine)
 
         def _push(event: dict) -> None:
-            with self._progress_queues_lock:
-                queues = list(self._progress_queues)
+            with self.progress_queues_lock:
+                queues = list(self.progress_queues)
             for q in queues:
                 loop.call_soon_threadsafe(q.put_nowait, event)
 
-        self._download_jobs[job_id] = {
+        self.download_jobs[job_id] = {
             "status": "downloading",
             "fraction": 0.0,
             "message": f"Installing TTS venv for {engine}...",
         }
-        _push({"model_id": job_id, **self._download_jobs[job_id]})
+        _push({"model_id": job_id, **self.download_jobs[job_id]})
 
         def on_progress(msg: str) -> None:
-            self._download_jobs[job_id].update({"message": msg, "fraction": 0.5})
-            _push({"model_id": job_id, **self._download_jobs[job_id]})
+            self.download_jobs[job_id].update({"message": msg, "fraction": 0.5})
+            _push({"model_id": job_id, **self.download_jobs[job_id]})
 
         ok = install_venv(engine, on_progress=on_progress)
 
@@ -270,13 +270,13 @@ class OpenVIPServer:
             logger.error("TTS venv install failed for %s", engine)
             job = {"status": "error", "fraction": 0.0, "message": f"Failed to install TTS venv for {engine}"}
 
-        self._download_jobs[job_id] = job
+        self.download_jobs[job_id] = job
         _push({"model_id": job_id, **job})
 
         time.sleep(_JOB_CLEANUP_DELAY)
-        self._download_jobs.pop(job_id, None)
+        self.download_jobs.pop(job_id, None)
 
-    def _run_capability_install(
+    def run_capability_install(
         self, cap_id: str, info: dict, loop: asyncio.AbstractEventLoop
     ) -> None:
         """Install a capability: venv first, then model download.
@@ -296,35 +296,35 @@ class OpenVIPServer:
         logger.info("Installing capability %s", cap_id)
 
         def _push(event: dict) -> None:
-            with self._progress_queues_lock:
-                queues = list(self._progress_queues)
+            with self.progress_queues_lock:
+                queues = list(self.progress_queues)
             for q in queues:
                 loop.call_soon_threadsafe(q.put_nowait, event)
 
-        self._download_jobs[cap_id] = {
+        self.download_jobs[cap_id] = {
             "status": "downloading",
             "fraction": 0.0,
             "message": f"Installing {cap_id}...",
         }
-        _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+        _push({"model_id": cap_id, **self.download_jobs[cap_id]})
 
         # Step 1: Install venv if needed
         if venv_name and not is_venv_installed(venv_name):
-            self._download_jobs[cap_id].update({"message": f"Creating venv for {venv_name}...", "fraction": 0.1})
-            _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+            self.download_jobs[cap_id].update({"message": f"Creating venv for {venv_name}...", "fraction": 0.1})
+            _push({"model_id": cap_id, **self.download_jobs[cap_id]})
 
             def on_progress(msg: str) -> None:
-                self._download_jobs[cap_id].update({"message": msg, "fraction": 0.3})
-                _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+                self.download_jobs[cap_id].update({"message": msg, "fraction": 0.3})
+                _push({"model_id": cap_id, **self.download_jobs[cap_id]})
 
             ok = install_venv(venv_name, on_progress=on_progress)
             if not ok:
                 logger.error("Capability %s: venv install failed", cap_id)
                 job = {"status": "error", "fraction": 0.0, "message": f"Venv install failed for {venv_name}"}
-                self._download_jobs[cap_id] = job
+                self.download_jobs[cap_id] = job
                 _push({"model_id": cap_id, **job})
                 time.sleep(_JOB_CLEANUP_DELAY)
-                self._download_jobs.pop(cap_id, None)
+                self.download_jobs.pop(cap_id, None)
                 return
 
         # Step 2: Download model if needed
@@ -337,13 +337,13 @@ class OpenVIPServer:
             except Exception:
                 pass
 
-            self._download_jobs[cap_id].update({
+            self.download_jobs[cap_id].update({
                 "message": "Downloading model...",
                 "fraction": 0.5,
                 "downloaded_bytes": 0,
                 "total_bytes": total_bytes,
             })
-            _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+            _push({"model_id": cap_id, **self.download_jobs[cap_id]})
 
             import threading as _threading
 
@@ -365,29 +365,29 @@ class OpenVIPServer:
                 done_event.wait(timeout=0.5)
                 current = get_cache_size(repo)
                 fraction = 0.5 + 0.49 * min(current / total_bytes, 1.0) if total_bytes > 0 else 0.5
-                self._download_jobs[cap_id].update({
+                self.download_jobs[cap_id].update({
                     "fraction": fraction,
                     "downloaded_bytes": current,
                     "message": "Downloading model...",
                 })
-                _push({"model_id": cap_id, **self._download_jobs[cap_id]})
+                _push({"model_id": cap_id, **self.download_jobs[cap_id]})
 
             if errors:
                 logger.error("Capability %s: model download failed: %s", cap_id, errors[0])
                 job = {"status": "error", "fraction": 0.0, "message": str(errors[0])}
-                self._download_jobs[cap_id] = job
+                self.download_jobs[cap_id] = job
                 _push({"model_id": cap_id, **job})
                 time.sleep(_JOB_CLEANUP_DELAY)
-                self._download_jobs.pop(cap_id, None)
+                self.download_jobs.pop(cap_id, None)
                 return
 
         logger.info("Capability %s installed successfully", cap_id)
         job = {"status": "done", "fraction": 1.0, "message": f"{cap_id} installed"}
-        self._download_jobs[cap_id] = job
+        self.download_jobs[cap_id] = job
         _push({"model_id": cap_id, **job})
 
         time.sleep(_JOB_CLEANUP_DELAY)
-        self._download_jobs.pop(cap_id, None)
+        self.download_jobs.pop(cap_id, None)
 
     def start(self) -> None:
         """Start the HTTP server in a background thread."""
@@ -502,8 +502,8 @@ class OpenVIPServer:
         Returns:
             True if message was queued, False if agent not connected.
         """
-        with self._agent_queues_lock:
-            queue = self._agent_queues.get(agent_id)
+        with self.agent_queues_lock:
+            queue = self.agent_queues.get(agent_id)
 
         if queue is None:
             return False
@@ -519,20 +519,20 @@ class OpenVIPServer:
 
         Called from engine threads on state transitions and agent changes.
         """
-        with self._status_queues_lock:
-            if not self._status_queues:
+        with self.status_queues_lock:
+            if not self.status_queues:
                 return
-            queues = list(self._status_queues)
+            queues = list(self.status_queues)
 
         if not (self._loop and self._loop.is_running()):
             return
 
-        status = self._engine.get_status()
+        status = self.engine.get_status()
         for q in queues:
             self._loop.call_soon_threadsafe(q.put_nowait, status)
 
     @property
     def connected_agents(self) -> list[str]:
         """List of currently connected agent IDs."""
-        with self._agent_queues_lock:
-            return list(self._agent_queues.keys())
+        with self.agent_queues_lock:
+            return list(self.agent_queues.keys())

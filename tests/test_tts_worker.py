@@ -156,7 +156,7 @@ class TestTTSConnectedEvent:
 
     def test_initially_not_set(self, server: OpenVIPServer) -> None:
         """TTS connected event is not set initially."""
-        assert not server._tts_connected_event.is_set()
+        assert not server.tts_connected_event.is_set()
 
 # ---------------------------------------------------------------------------
 # Part 3: WorkerTTSEngine proxy tests
@@ -178,7 +178,7 @@ class TestWorkerTTSEngine:
     def test_is_available_true_when_connected(
         self, server: OpenVIPServer,
     ) -> None:
-        server._tts_connected_event.set()
+        server.tts_connected_event.set()
         proxy = WorkerTTSEngine(server)
         assert proxy.is_available() is True
 
@@ -225,8 +225,8 @@ class TestWorkerTTSEngine:
         try:
             # Simulate a connected worker by creating a queue
             queue: asyncio.Queue = asyncio.Queue()
-            with server._agent_queues_lock:
-                server._agent_queues["__tts__"] = queue
+            with server.agent_queues_lock:
+                server.agent_queues["__tts__"] = queue
 
             # We need a running event loop for put_message to work
             loop = asyncio.new_event_loop()
@@ -274,19 +274,19 @@ class TestHasPermission:
         server = OpenVIPServer(engine, None, auth_tokens={})
         request = MagicMock()
         request.headers = {"authorization": "Bearer something"}
-        assert server._has_permission(request, "register_tts") is False
+        assert server.has_permission(request, "register_tts") is False
 
     def test_correct_token(self, server: OpenVIPServer, token: str) -> None:
         request = MagicMock()
         request.headers = {"authorization": f"Bearer {token}"}
-        assert server._has_permission(request, "register_tts") is True
+        assert server.has_permission(request, "register_tts") is True
 
     def test_wrong_token(self, server: OpenVIPServer) -> None:
         request = MagicMock()
         request.headers = {"authorization": "Bearer wrong"}
-        assert server._has_permission(request, "register_tts") is False
+        assert server.has_permission(request, "register_tts") is False
 
     def test_missing_header(self, server: OpenVIPServer) -> None:
         request = MagicMock()
         request.headers = {}
-        assert server._has_permission(request, "register_tts") is False
+        assert server.has_permission(request, "register_tts") is False

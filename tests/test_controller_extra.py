@@ -247,21 +247,21 @@ class TestHandleAppCommand:
     def test_output_set_agent(self) -> None:
         ctrl = AppController(_make_config())
         ctrl._engine = _make_engine()
-        result = ctrl._handle_app_command({"command": "output.set_agent:cursor"})
+        result = ctrl.handle_app_command({"command": "output.set_agent:cursor"})
         assert result["status"] == "ok"
         ctrl._engine.switch_to_agent_by_name.assert_called_once_with("cursor")
 
     def test_output_set_mode(self) -> None:
         ctrl = AppController(_make_config())
         ctrl._engine = _make_engine()
-        result = ctrl._handle_app_command({"command": "output.set_mode:keyboard"})
+        result = ctrl.handle_app_command({"command": "output.set_mode:keyboard"})
         assert result["status"] == "ok"
         assert result["mode"] == "keyboard"
         ctrl._engine.set_output_mode.assert_called_once_with("keyboard")
 
     def test_unknown_command(self) -> None:
         ctrl = AppController(_make_config())
-        result = ctrl._handle_app_command({"command": "foo.bar"})
+        result = ctrl.handle_app_command({"command": "foo.bar"})
         assert result["status"] == "error"
 
 
