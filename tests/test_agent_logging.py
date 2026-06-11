@@ -23,7 +23,7 @@ class TestAgentBannerLogged:
         """run_agent must NOT print banner lines to stderr."""
         with patch("openvip.Client") as mock_client:
             mock_client.return_value.get_status.side_effect = ConnectionRefusedError
-            run_agent("voice", ["echo", "hi"], status_bar=False)
+            run_agent("voice", ["echo", "hi"])
         captured = capsys.readouterr()
         # The error message about unreachable engine is OK — we check that
         # the old banner lines (Agent:, Server:, Session:, Running:) are gone.
@@ -54,7 +54,7 @@ class TestAgentBannerLogged:
             mock_client.return_value.get_status.return_value = _make_status([])
             # Command will fail at PTY spawn — that's fine, the log happens before
             try:
-                run_agent("test", ["__nonexistent__"], status_bar=False, clear_on_start=False)
+                run_agent("test", ["__nonexistent__"], clear_on_start=False)
             except (FileNotFoundError, OSError):
                 pass
             finally:

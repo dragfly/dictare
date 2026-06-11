@@ -261,10 +261,6 @@ class ClientConfig(BaseModel):
         default="http://127.0.0.1:8770/openvip",
         description="Engine OpenVIP URL",
     )
-    status_bar: bool = Field(
-        default=True,
-        description="Show persistent status bar in dictare agent",
-    )
     clear_on_start: bool = Field(
         default=True,
         description="Clear terminal before launching child process",
@@ -272,6 +268,10 @@ class ClientConfig(BaseModel):
     claim_key: str = Field(
         default="ctrl+\\",
         description="Hotkey to claim this PTY as active voice target (e.g. ctrl+\\, ctrl+])",
+    )
+    info_key: str = Field(
+        default="ctrl+]",
+        description="Hotkey to show agent name and voice state as a system notification (empty = disabled)",
     )
 
 class LoggingConfig(BaseModel):
@@ -327,26 +327,6 @@ class AgentFilterConfig(BaseModel):
         description="Minimum fuzzy match score for agent name (0.0-1.0)",
     )
 
-class AgentTerminalConfig(BaseModel):
-    """Per-agent terminal/PTY behaviour overrides.
-
-    These settings control how dictare's PTY proxy interacts with the child
-    process output.  Different agents (Claude Code, Gemini CLI, Codex, …)
-    use different terminal rendering strategies, so some need tweaks.
-    """
-
-    scroll_region: bool = Field(
-        default=True,
-        description=(
-            "Use DECSTBM scroll region to protect the status bar row. "
-            "When false, the status bar is still drawn on the last row "
-            "using absolute cursor positioning, but no scroll region is "
-            "set — the child's cursor movement is unrestricted. Useful for "
-            "agents like Gemini CLI whose Ink renderer uses cursor-up "
-            "sequences that conflict with scroll region constraints."
-        ),
-    )
-
 class AgentProfileConfig(BaseModel):
     """Agent profile configuration (defines a named agent preset and its launch command)."""
 
@@ -368,10 +348,6 @@ class AgentProfileConfig(BaseModel):
     live_dangerously: bool | None = Field(
         default=None,
         description="Always apply live_dangerously_args for this profile. Overrides the global agent_profiles.live_dangerously setting.",
-    )
-    terminal: AgentTerminalConfig = Field(
-        default_factory=AgentTerminalConfig,
-        description="Terminal/PTY behaviour overrides for this agent profile",
     )
 
 class AgentProfilesConfig(BaseModel):
@@ -1007,9 +983,9 @@ mode_switch_modifier = "KEY_RIGHTALT"  # Hold + hotkey to switch agent/keyboard 
 
 [client]
 # url = "http://127.0.0.1:8770/openvip"
-# status_bar = true
 # clear_on_start = true
 claim_key = "ctrl+\\\\"              # Hotkey to claim this agent (ctrl+\\, ctrl+], etc.)
+# info_key = "ctrl+]"             # Hotkey to show agent info notification (empty = disabled)
 
 # [logging]
 # log_file = ""                   # JSONL structured log path

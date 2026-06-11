@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0rc1] - 2026-06-11
+
+### Changed
+- **Status bar removed.** `dictare agent` is now a fully transparent passthrough:
+  no scroll region, no reserved row, no redraw logic — the wrapped agent owns the
+  terminal completely. This eliminates all rendering conflicts with agent TUIs
+  (Claude Code, Codex, Gemini CLI). The system tray is now the primary place to
+  check voice state.
+- Removed config options: `client.status_bar`, `agent_profiles.<name>.terminal.scroll_region`,
+  and the `--no-status-bar` CLI flag. Leftover keys in existing `config.toml` files
+  are ignored — no migration needed.
+
+### Added
+- On-demand agent info notification: press `ctrl+]` (configurable via
+  `client.info_key`, empty to disable) inside `dictare agent` to see the agent
+  name, voice state, and current voice target as a system notification —
+  without touching the terminal.
+
 ## [0.3.2rc1] - 2026-05-17
 
 ### Fixed

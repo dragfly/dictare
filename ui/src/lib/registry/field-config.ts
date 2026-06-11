@@ -52,7 +52,7 @@ export const SIZE_HINTS: Record<string, string> = {
 };
 
 /** Fields with enum/Literal types (fixed options from schema) */
-export const ENUM_FIELDS = new Set(["output.mode", "tts.engine"]);
+export const ENUM_FIELDS = new Set(["log_level", "output.mode", "tts.engine"]);
 
 /** UI-friendly description overrides (replaces Pydantic description in the UI) */
 export const FIELD_DESCRIPTIONS: Record<string, string> = {
