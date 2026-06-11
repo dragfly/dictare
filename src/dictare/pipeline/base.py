@@ -143,11 +143,11 @@ class Pipeline:
         Args:
             steps: List of filters or executors to apply, in order.
         """
-        self._steps: list[Filter | Executor] = steps or []
+        self.steps: list[Filter | Executor] = steps or []
 
     def add_step(self, step: Filter | Executor) -> None:
         """Add a step to the end of the pipeline."""
-        self._steps.append(step)
+        self.steps.append(step)
 
     def process(self, message: dict) -> list[dict]:
         """Process a message through all steps.
@@ -160,7 +160,7 @@ class Pipeline:
         """
         messages = [message]
 
-        for step in self._steps:
+        for step in self.steps:
             next_messages = []
 
             for msg in messages:
@@ -194,10 +194,10 @@ class Pipeline:
     @property
     def step_names(self) -> list[str]:
         """Names of steps in the pipeline."""
-        return [s.name for s in self._steps]
+        return [s.name for s in self.steps]
 
     def __len__(self) -> int:
-        return len(self._steps)
+        return len(self.steps)
 
     def __repr__(self) -> str:
         return f"Pipeline(steps={self.step_names})"

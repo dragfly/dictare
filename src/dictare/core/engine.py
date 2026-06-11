@@ -151,11 +151,11 @@ class DictareEngine:
             None if config.output.mode == "agents" else self.KEYBOARD_AGENT_ID
         )
         self._agent_mgr = AgentManager(initial_agent_id=initial_agent_id)
-        self._agent_mgr._on_notify = self._notify_status
-        self._agent_mgr._on_agent_change = lambda aid, idx: self._emit(
+        self._agent_mgr.on_notify = self._notify_status
+        self._agent_mgr.on_agent_change = lambda aid, idx: self._emit(
             "on_agent_change", aid, idx
         )
-        self._agent_mgr._on_speak = lambda text: self.speak_text(text)
+        self._agent_mgr.on_speak = lambda text: self.speak_text(text)
 
         # Audio feedback policy — decides whether focus-gated sounds play
         self._feedback_policy = AudioFeedbackPolicy()
@@ -407,7 +407,7 @@ class DictareEngine:
         words: set[str] = set()
         if self._pipeline is None:
             return words
-        for step in self._pipeline._steps:
+        for step in self._pipeline.steps:
             if isinstance(step, InputFilter):
                 for patterns in step.triggers.values():
                     for pattern in patterns:
@@ -590,7 +590,7 @@ class DictareEngine:
         logger.info("VAD model loaded in %.1fs", vad_elapsed)
 
         # Wire device change callback — audio manager notifies engine
-        self.audio_manager._on_devices_updated = self._notify_status
+        self.audio_manager.on_devices_updated = self._notify_status
 
         # Load TTS engine (optional — engine continues if unavailable)
         self.tts_mgr.load(
@@ -1075,7 +1075,7 @@ class DictareEngine:
             logger.debug("Focus-reconnect skipped: reconnect already in progress")
             return
         try:
-            if self.audio_manager.reconnect(self.audio_manager._on_audio_chunk):
+            if self.audio_manager.reconnect(self.audio_manager.on_audio_chunk):
                 logger.info("Focus-triggered audio reconnect succeeded")
             else:
                 logger.warning("Focus-triggered audio reconnect failed")
@@ -1342,7 +1342,7 @@ class DictareEngine:
                     if not self._reconnecting.acquire(blocking=False):
                         continue  # focus-reconnect already in progress
                     try:
-                        if self.audio_manager.reconnect(self.audio_manager._on_audio_chunk):
+                        if self.audio_manager.reconnect(self.audio_manager.on_audio_chunk):
                             logger.info("Audio reconnect succeeded")
                         else:
                             logger.error("Audio reconnect failed — waiting 3s before retry")

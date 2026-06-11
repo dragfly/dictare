@@ -78,7 +78,7 @@ class AudioManager:
         self._device_monitor: DeviceMonitor | None = None
 
         # Callback when device list or defaults change — engine sets this to push SSE
-        self._on_devices_updated: Callable[[], None] | None = None
+        self.on_devices_updated: Callable[[], None] | None = None
 
         # Track when preferred (fixed) devices are temporarily unavailable
         self._input_device_missing = False
@@ -209,7 +209,7 @@ class AudioManager:
         self._should_process_check = should_process
         self._is_running_check = is_running
         if self._audio:
-            self._audio.start_streaming(self._on_audio_chunk)
+            self._audio.start_streaming(self.on_audio_chunk)
         if self._device_monitor:
             self._device_monitor.start()
 
@@ -308,8 +308,8 @@ class AudioManager:
         self._restart_input_stream()
 
         # Notify UI so dropdowns update with fresh device data
-        if self._on_devices_updated:
-            self._on_devices_updated()
+        if self.on_devices_updated:
+            self.on_devices_updated()
 
     def reset_audio_input(self) -> None:
         """Reset audio input stream to current config/default device.
@@ -347,7 +347,7 @@ class AudioManager:
                 channels=self._config.advanced.channels,
                 device=device,
             )
-            self._audio.start_streaming(self._on_audio_chunk)
+            self._audio.start_streaming(self.on_audio_chunk)
             self.reset_vad()
             logger.info("Input stream restarted, device=%r", device or "(default)")
         except Exception:
@@ -414,7 +414,7 @@ class AudioManager:
         self.stop_streaming()
 
         # Acquire lock to ensure no callback is currently using VAD
-        # This synchronizes with _on_audio_chunk() which also holds this lock
+        # This synchronizes with on_audio_chunk() which also holds this lock
         with self._vad_lock:
             self._streaming_vad = None
 
@@ -423,7 +423,7 @@ class AudioManager:
             self._vad.close()
             self._vad = None
 
-    def _on_audio_chunk(self, chunk: Any) -> None:
+    def on_audio_chunk(self, chunk: Any) -> None:
         """Process audio chunk through VAD."""
         # Only process if engine is running AND should process audio
         if not (self.is_engine_running and self.should_process_audio):
