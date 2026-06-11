@@ -35,7 +35,7 @@ class MockEngine:
     def __init__(self) -> None:
         self._registered_agents: list = []
         self._unregistered_agents: list[str] = []
-        self._tts_mgr = _MockTTSMgr()
+        self.tts_mgr = _MockTTSMgr()
 
     def register_agent(self, agent) -> bool:
         self._registered_agents.append(agent)
@@ -49,7 +49,7 @@ class MockEngine:
         return {"protocol_version": "1.0", "state": "off", "connected_agents": []}
 
     def complete_tts(self, message_id: str, *, ok: bool, duration_ms: int = 0) -> None:
-        self._tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
+        self.tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
 
 @pytest.fixture
 def engine() -> MockEngine:
@@ -139,7 +139,7 @@ class TestTTSCompleteEndpoint:
     ) -> None:
         """POST /internal/tts/complete triggers proxy.complete()."""
         proxy = MagicMock()
-        engine._tts_mgr._tts_proxy = proxy
+        engine.tts_mgr._tts_proxy = proxy
 
         client.post(
             "/internal/tts/complete",

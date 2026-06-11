@@ -502,7 +502,7 @@ class TestAgentSwitch:
 
         result = engine.handle_protocol_command({"command": "engine.shutdown"})
         assert result["status"] == "ok"
-        assert engine._running is False
+        assert engine.running is False
         # Cancel the shutdown watchdog so it doesn't os._exit() during tests
         engine._exit_watchdog_cancel.set()
 
@@ -1223,10 +1223,10 @@ class TestProcessQueuedAudio:
                 return audio
 
             mock_am.pop_queued_audio = pop_and_drain
-            engine._audio_manager = mock_am
+            engine.audio_manager = mock_am
 
             # This used to raise: ValueError: The truth value of an array...
-            engine._process_queued_audio()
+            engine.process_queued_audio()
         finally:
             engine._controller.stop()
 
@@ -1251,9 +1251,9 @@ class TestProcessQueuedAudio:
                 return empty
 
             mock_am.pop_queued_audio = pop_and_drain
-            engine._audio_manager = mock_am
+            engine.audio_manager = mock_am
 
-            engine._process_queued_audio()
+            engine.process_queued_audio()
             # Should not raise, and no event sent (empty audio)
         finally:
             engine._controller.stop()
@@ -1278,9 +1278,9 @@ class TestProcessQueuedAudio:
                 return None
 
             mock_am.pop_queued_audio = pop_and_drain
-            engine._audio_manager = mock_am
+            engine.audio_manager = mock_am
 
-            engine._process_queued_audio()
+            engine.process_queued_audio()
         finally:
             engine._controller.stop()
 
@@ -1300,7 +1300,7 @@ def _should_send_message(msg: dict) -> bool:
 class TestMessageSendingLogic:
     """Tests for message sending logic - verifies empty/submit handling.
 
-    These tests verify the logic used in engine._inject_text to decide
+    These tests verify the logic used in engine.inject_text to decide
     whether a message should be sent to an agent.
     """
 
@@ -1371,10 +1371,10 @@ class TestTTSIntegration:
         engine = DictareEngine(config=config)
         mock_tts = MagicMock()
         if tts_available:
-            engine._tts_mgr._tts_engine = mock_tts
+            engine.tts_mgr._tts_engine = mock_tts
         else:
-            engine._tts_mgr._tts_engine = None
-            engine._tts_mgr._tts_error = "TTS engine 'piper' is not available."
+            engine.tts_mgr._tts_engine = None
+            engine.tts_mgr._tts_error = "TTS engine 'piper' is not available."
         return engine, mock_tts
 
     @patch("dictare.audio.beep.play_audio")
@@ -1599,7 +1599,7 @@ class TestSetOutputMode:
         engine._agent_mgr._agent_order.append("claude")
         engine._agent_mgr._current_agent_id = "claude"
 
-        engine._tap_detector._on_double_tap()
+        engine.tap_detector._on_double_tap()
         mock_agent.send.assert_called_once()
         msg = mock_agent.send.call_args[0][0]
         assert "submit" in msg.get("x_input", {}).get("ops", [])
@@ -1619,7 +1619,7 @@ class TestSetOutputMode:
         # Simulate RECORDING state
         engine._state_manager._state = AppState.RECORDING
 
-        engine._tap_detector._on_double_tap()
+        engine.tap_detector._on_double_tap()
         # Should NOT send immediately
         mock_agent.send.assert_not_called()
         # Should set pending flag
@@ -1639,7 +1639,7 @@ class TestSetOutputMode:
 
         engine._state_manager._state = AppState.TRANSCRIBING
 
-        engine._tap_detector._on_double_tap()
+        engine.tap_detector._on_double_tap()
         mock_agent.send.assert_not_called()
         assert engine._submit_pending is True
 
@@ -1658,7 +1658,7 @@ class TestSetOutputMode:
         # Set pending submit
         engine._submit_pending = True
 
-        engine._inject_text("hello world")
+        engine.inject_text("hello world")
 
         # Flag should be consumed
         assert engine._submit_pending is False
@@ -1683,7 +1683,7 @@ class TestSetOutputMode:
 
         engine._submit_pending = False
 
-        engine._inject_text("hello world")
+        engine.inject_text("hello world")
 
         msg = mock_agent.send.call_args[0][0]
         x_input = msg.get("x_input", {})
@@ -1722,7 +1722,7 @@ class TestResendLast:
         engine = DictareEngine(config=config)
         engine._last_text = "hello world"
 
-        with patch.object(engine, "_inject_text") as mock_inject:
+        with patch.object(engine, "inject_text") as mock_inject:
             result = engine.resend_last()
 
         assert result is True
@@ -1736,7 +1736,7 @@ class TestResendLast:
         engine = DictareEngine(config=config)
         engine._last_text = ""
 
-        with patch.object(engine, "_inject_text") as mock_inject:
+        with patch.object(engine, "inject_text") as mock_inject:
             result = engine.resend_last()
 
         assert result is False

@@ -41,7 +41,7 @@ def _make_engine() -> MagicMock:
     engine.stats.audio_seconds = 10.0
     engine.stats.transcription_seconds = 2.0
     engine.stats.injection_seconds = 0.5
-    engine._tap_detector = MagicMock()
+    engine.tap_detector = MagicMock()
     return engine
 
 
@@ -227,8 +227,8 @@ class TestAppCommandsWithEngine:
         ctrl = AppController(_make_config())
         ctrl._engine = _make_engine()
         ctrl.on_hotkey_tap()
-        ctrl._engine._tap_detector.on_key_down.assert_called_once()
-        ctrl._engine._tap_detector.on_key_up.assert_called_once()
+        ctrl._engine.tap_detector.on_key_down.assert_called_once()
+        ctrl._engine.tap_detector.on_key_up.assert_called_once()
 
     def test_on_hotkey_combo(self) -> None:
         ctrl = AppController(_make_config())

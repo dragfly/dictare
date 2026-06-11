@@ -64,7 +64,7 @@ def build_status(engine: DictareEngine) -> dict:
         # OpenVIP protocol-level fields
         "openvip": "1.0",
         "stt": {"enabled": True, "active": stt_active},
-        "tts": {"enabled": engine._tts_mgr.available},
+        "tts": {"enabled": engine.tts_mgr.available},
         "connected_agents": engine.visible_agents,
         # Implementation-specific details (StatusPanel)
         "platform": {
@@ -91,14 +91,14 @@ def build_status(engine: DictareEngine) -> dict:
             "tts": {
                 "engine": engine.config.tts.engine,
                 "language": engine.config.tts.language,
-                "available": engine._tts_mgr.available,
-                "error": engine._tts_mgr.error or None,
+                "available": engine.tts_mgr.available,
+                "error": engine.tts_mgr.error or None,
             },
             "audio_devices": {
                 "input": engine.config.audio.input_device or "(default)",
                 "output": engine.config.audio.output_device or "(default)",
             },
-            "audio_in_use": engine._audio_manager.get_actual_devices() if engine._audio_manager else {"input": None, "output": None},
+            "audio_in_use": engine.audio_manager.get_actual_devices() if engine.audio_manager else {"input": None, "output": None},
             "audio_devices_available": audio_devices(),
             "permissions": permissions(),
             "loading": {

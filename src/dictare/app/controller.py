@@ -274,7 +274,7 @@ class AppController:
 
         # 3. Restore saved state BEFORE HTTP server starts.
         #    Overrides config defaults with saved session if fresh.
-        start_listening = self._engine._restore_state(start_listening)
+        start_listening = self._engine.restore_state(start_listening)
 
         # 4. Start HTTP server early (so StatusPanel can connect during loading)
         from dictare.core.http_server import OpenVIPServer
@@ -282,7 +282,7 @@ class AppController:
         self._http_server = OpenVIPServer(
             self._engine, self,
             self._config.server.host, self._config.server.port,
-            auth_tokens={"register_tts": self._engine._tts_mgr.auth_token},
+            auth_tokens={"register_tts": self._engine.tts_mgr.auth_token},
         )
         self._http_server.start()
 
@@ -341,8 +341,8 @@ class AppController:
         # Save final state, then disable further saves — agents unregister during
         # HTTP server shutdown and would overwrite state with stale data.
         if self._engine:
-            self._engine._save_state()
-            self._engine._running = False
+            self._engine.save_state()
+            self._engine.running = False
 
         # Stop bindings
         if self._bindings:
@@ -378,7 +378,7 @@ class AppController:
         """Request graceful shutdown.  Saves session state before stopping."""
         if self._engine:
             self._engine.save_session_before_shutdown()
-            self._engine._running = False
+            self._engine.running = False
         self._shutdown_event.set()
 
     def wait_for_shutdown(self, timeout: float | None = None) -> bool:
@@ -418,8 +418,8 @@ class AppController:
         """
         if not self._engine:
             return
-        self._engine._tap_detector.on_key_down()
-        self._engine._tap_detector.on_key_up()
+        self._engine.tap_detector.on_key_down()
+        self._engine.tap_detector.on_key_up()
 
     def on_hotkey_key_down(self) -> None:
         """Called when the hotkey key is pressed down (IPC key.down event).
@@ -429,13 +429,13 @@ class AppController:
         """
         if not self._engine:
             return
-        self._engine._tap_detector.on_key_down()
+        self._engine.tap_detector.on_key_down()
 
     def on_hotkey_key_up(self) -> None:
         """Called when the hotkey key is released (IPC key.up event)."""
         if not self._engine:
             return
-        self._engine._tap_detector.on_key_up()
+        self._engine.tap_detector.on_key_up()
 
     def on_hotkey_other_key(self) -> None:
         """Called when another key is pressed while the hotkey modifier is held.
@@ -445,7 +445,7 @@ class AppController:
         """
         if not self._engine:
             return
-        self._engine._tap_detector.on_other_key()
+        self._engine.tap_detector.on_other_key()
 
     def on_hotkey_combo(self) -> None:
         """Called when the mode-switch combo is pressed (modifier + hotkey).

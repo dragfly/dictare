@@ -160,7 +160,7 @@ def _run_serve(
     _logger.info("dictare %s starting (PID %s, port %s)", __version__, os.getpid(), config.server.port)
     _logger.info("Log: %s", log_path)
 
-    # Listening state is restored by engine._restore_state() — not here.
+    # Listening state is restored by engine.restore_state() — not here.
     start_listening = False
 
     # NOTE: PID file is written by AppController._check_single_instance() inside

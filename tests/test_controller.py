@@ -42,12 +42,12 @@ class MockEngine:
     """Mock engine for testing controller."""
 
     def __init__(self) -> None:
-        self._audio_manager = MagicMock()
-        self._audio_manager.sample_rate = 16000
-        self._audio_manager.queue_audio = MagicMock()
-        self._audio_manager.flush_vad = MagicMock()
-        self._audio_manager.reset_vad = MagicMock()
-        self._audio_manager.clear_queue = MagicMock()
+        self.audio_manager = MagicMock()
+        self.audio_manager.sample_rate = 16000
+        self.audio_manager.queue_audio = MagicMock()
+        self.audio_manager.flush_vad = MagicMock()
+        self.audio_manager.reset_vad = MagicMock()
+        self.audio_manager.clear_queue = MagicMock()
 
         self.agents = ["claude", "cursor", "vscode"]
         self._current_agent_index = 0
@@ -56,24 +56,24 @@ class MockEngine:
         self.injections: list[Any] = []
         self.agent_switches: list[tuple[str, int]] = []
 
-    def _transcribe_and_process(self, audio_data: Any, agent: Any = None) -> None:
+    def transcribe_and_process(self, audio_data: Any, agent: Any = None) -> None:
         self.transcriptions.append((audio_data, agent))
 
-    def _inject_text(self, text: str, agent: Any = None, language: str | None = None) -> None:
+    def inject_text(self, text: str, agent: Any = None, language: str | None = None) -> None:
         self.injections.append((text, agent, language))
 
-    def _process_queued_audio(self) -> None:
+    def process_queued_audio(self) -> None:
         pass
 
-    def _discard_current_internal(self) -> None:
-        self._audio_manager.clear_queue()
-        self._audio_manager.reset_vad()
+    def discard_current_internal(self) -> None:
+        self.audio_manager.clear_queue()
+        self.audio_manager.reset_vad()
 
-    def _switch_agent_internal(self, direction: int) -> None:
+    def switch_agent_internal(self, direction: int) -> None:
         self._current_agent_index = (self._current_agent_index + direction) % len(self.agents)
         self.agent_switches.append((self.agents[self._current_agent_index], self._current_agent_index))
 
-    def _switch_to_agent_by_name_internal(self, name: str) -> bool:
+    def switch_to_agent_by_name_internal(self, name: str) -> bool:
         for i, agent in enumerate(self.agents):
             if agent.lower() == name.lower():
                 self._current_agent_index = i
@@ -81,7 +81,7 @@ class MockEngine:
                 return True
         return False
 
-    def _switch_to_agent_by_index_internal(self, index: int) -> bool:
+    def switch_to_agent_by_index_internal(self, index: int) -> bool:
         idx = index - 1
         if 0 <= idx < len(self.agents):
             self._current_agent_index = idx
@@ -218,7 +218,7 @@ class TestSpeechEndQueuesAudio:
             _drain(controller)
 
             assert sm.state == AppState.TRANSCRIBING
-            engine._audio_manager.queue_audio.assert_called_once_with(audio_data)
+            engine.audio_manager.queue_audio.assert_called_once_with(audio_data)
         finally:
             controller.stop()
 
@@ -236,7 +236,7 @@ class TestSpeechEndQueuesAudio:
             _drain(controller)
 
             assert sm.state == AppState.INJECTING
-            engine._audio_manager.queue_audio.assert_called_once_with(audio_data)
+            engine.audio_manager.queue_audio.assert_called_once_with(audio_data)
         finally:
             controller.stop()
 
@@ -305,7 +305,7 @@ class TestPlayEvents:
             assert sm.state == AppState.PLAYING
             assert controller.play_in_progress is True
             assert controller._current_play_id == 1
-            engine._audio_manager.reset_vad.assert_called()
+            engine.audio_manager.reset_vad.assert_called()
         finally:
             controller.stop()
 
@@ -611,7 +611,7 @@ class TestSwitchAgents:
             controller.send(SwitchAgent(direction=1, source="api"))
             _wait_until(lambda: len(engine.agent_switches) == 1)
 
-            engine._audio_manager.flush_vad.assert_called()
+            engine.audio_manager.flush_vad.assert_called()
         finally:
             controller.stop()
 
@@ -662,7 +662,7 @@ class TestDiscardEvent:
             _wait_until(lambda: sm.state == AppState.LISTENING)
 
             assert sm.state == AppState.LISTENING
-            engine._audio_manager.reset_vad.assert_called()
+            engine.audio_manager.reset_vad.assert_called()
         finally:
             controller.stop()
 
