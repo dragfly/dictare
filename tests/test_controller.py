@@ -421,10 +421,13 @@ class TestPlayEvents:
 
         try:
             # Play starts while in TRANSCRIBING → forces PLAYING
+            # Wait on the STATE (last mutation in _handle_play_start): waiting on
+            # play_in_progress races with the not-yet-applied transition.
             controller.send(PlayStarted(text="Agent 2", source="tts"))
-            _wait_until(lambda: controller.play_in_progress is True)
+            _wait_until(lambda: sm.state == AppState.PLAYING)
 
             assert sm.state == AppState.PLAYING
+            assert controller.play_in_progress is True
 
             # Transcription completes while audio playing → deferred
             controller.send(TranscriptionCompleted(text="test", source="stt"))
@@ -462,12 +465,13 @@ class TestPlayEvents:
         try:
             # TTS announce fires during RECORDING (agent switch)
             controller.send(PlayStarted(text="agent roger", source="tts"))
-            _wait_until(lambda: controller.play_in_progress is True)
+            _wait_until(lambda: sm.state == AppState.PLAYING)
 
             # State MUST be PLAYING (not stuck in RECORDING)
             assert sm.state == AppState.PLAYING, (
                 f"Expected PLAYING after PlayStarted during RECORDING, got {sm.state}"
             )
+            assert controller.play_in_progress is True
 
             # TTS finishes
             controller.send(PlayCompleted(source="tts"))
@@ -493,12 +497,13 @@ class TestPlayEvents:
         try:
             # TTS announce fires during TRANSCRIBING
             controller.send(PlayStarted(text="agent roger", source="tts"))
-            _wait_until(lambda: controller.play_in_progress is True)
+            _wait_until(lambda: sm.state == AppState.PLAYING)
 
             # State MUST be PLAYING
             assert sm.state == AppState.PLAYING, (
                 f"Expected PLAYING after PlayStarted during TRANSCRIBING, got {sm.state}"
             )
+            assert controller.play_in_progress is True
 
             # TTS finishes
             controller.send(PlayCompleted(source="tts"))
