@@ -208,51 +208,52 @@ class TestControllerRouting:
 
         ctrl = MagicMock(spec=AppController)
         ctrl.handle_app_command = AppController.handle_app_command.__get__(ctrl)
+        ctrl._engine = MagicMock()
         return ctrl
 
     def test_set_agent_by_name(self) -> None:
-        """output.set_agent:claude calls switch_to_agent('claude')."""
+        """output.set_agent:claude calls engine.switch_to_agent_by_name('claude')."""
         ctrl = self._make_controller()
         result = ctrl.handle_app_command({"command": "output.set_agent:claude"})
-        ctrl.switch_to_agent.assert_called_once_with("claude")
+        ctrl._engine.switch_to_agent_by_name.assert_called_once_with("claude")
         assert result["status"] == "ok"
         assert result["openvip"] == "1.0"
 
     def test_set_agent_cursor(self) -> None:
-        """output.set_agent:cursor calls switch_to_agent('cursor')."""
+        """output.set_agent:cursor calls engine.switch_to_agent_by_name('cursor')."""
         ctrl = self._make_controller()
         result = ctrl.handle_app_command({"command": "output.set_agent:cursor"})
-        ctrl.switch_to_agent.assert_called_once_with("cursor")
+        ctrl._engine.switch_to_agent_by_name.assert_called_once_with("cursor")
         assert result["status"] == "ok"
         assert result["openvip"] == "1.0"
 
 class TestSwitchToAgentMode:
-    """Test that switch_to_agent auto-enables agents mode."""
+    """Test that switch_to_agent_by_name auto-enables agents mode."""
+
+    def _make_engine(self) -> MagicMock:
+        from dictare.core.engine import DictareEngine
+
+        eng = MagicMock(spec=DictareEngine)
+        eng.switch_to_agent_by_name = DictareEngine.switch_to_agent_by_name.__get__(eng)
+        eng._controller = MagicMock()
+        return eng
 
     def test_switch_enables_agent_mode(self) -> None:
-        """switch_to_agent switches to agents mode if in keyboard mode."""
-        from dictare.app.controller import AppController
+        """switch_to_agent_by_name switches to agents mode if in keyboard mode."""
+        eng = self._make_engine()
+        eng.agent_mode = False  # keyboard mode
 
-        ctrl = MagicMock(spec=AppController)
-        ctrl.switch_to_agent = AppController.switch_to_agent.__get__(ctrl)
-        ctrl._engine = MagicMock()
-        ctrl._engine.agent_mode = False  # keyboard mode
+        eng.switch_to_agent_by_name("claude")
 
-        ctrl.switch_to_agent("claude")
-
-        ctrl._engine.set_output_mode.assert_called_once_with("agents")
-        ctrl._engine.switch_to_agent_by_name.assert_called_once_with("claude")
+        eng.set_output_mode.assert_called_once_with("agents")
+        eng._controller.send.assert_called_once()
 
     def test_switch_skips_mode_change_if_already_agents(self) -> None:
-        """switch_to_agent does NOT call set_output_mode if already in agents mode."""
-        from dictare.app.controller import AppController
+        """switch_to_agent_by_name does NOT call set_output_mode if already in agents mode."""
+        eng = self._make_engine()
+        eng.agent_mode = True  # already in agent mode
 
-        ctrl = MagicMock(spec=AppController)
-        ctrl.switch_to_agent = AppController.switch_to_agent.__get__(ctrl)
-        ctrl._engine = MagicMock()
-        ctrl._engine.agent_mode = True  # already in agent mode
+        eng.switch_to_agent_by_name("claude")
 
-        ctrl.switch_to_agent("claude")
-
-        ctrl._engine.set_output_mode.assert_not_called()
-        ctrl._engine.switch_to_agent_by_name.assert_called_once_with("claude")
+        eng.set_output_mode.assert_not_called()
+        eng._controller.send.assert_called_once()

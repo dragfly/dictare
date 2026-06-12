@@ -69,82 +69,11 @@ class TestAppControllerInit:
 
 
 # ---------------------------------------------------------------------------
-# Properties without engine
-# ---------------------------------------------------------------------------
-
-class TestPropertiesWithoutEngine:
-    """Test properties when engine is not started."""
-
-    def test_is_listening_false(self) -> None:
-        ctrl = AppController(_make_config())
-        assert ctrl.is_listening is False
-
-    def test_current_agent_none(self) -> None:
-        ctrl = AppController(_make_config())
-        assert ctrl.current_agent is None
-
-    def test_agents_empty(self) -> None:
-        ctrl = AppController(_make_config())
-        assert ctrl.agents == []
-
-
-# ---------------------------------------------------------------------------
-# Properties with engine
-# ---------------------------------------------------------------------------
-
-class TestPropertiesWithEngine:
-    """Test properties when engine is set."""
-
-    def test_is_listening_delegates(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        assert ctrl.is_listening is True
-
-    def test_current_agent_delegates(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        assert ctrl.current_agent == "claude"
-
-    def test_agents_delegates(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        assert ctrl.agents == ["claude", "cursor"]
-
-
-# ---------------------------------------------------------------------------
-# App commands without engine — no-op
+# Hotkey entry points without engine — no-op (late-binding guards)
 # ---------------------------------------------------------------------------
 
 class TestAppCommandsWithoutEngine:
-    """All app commands are no-ops when engine is None."""
-
-    def test_toggle_listening_noop(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl.toggle_listening()  # should not raise
-
-    def test_next_agent_noop(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl.next_agent()
-
-    def test_prev_agent_noop(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl.prev_agent()
-
-    def test_switch_to_agent_noop(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl.switch_to_agent("claude")
-
-    def test_switch_to_agent_index_noop(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl.switch_to_agent_index(1)
-
-    def test_repeat_last_noop(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl.repeat_last()
-
-    def test_set_output_mode_noop(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl.set_output_mode("keyboard")
+    """Hotkey entry points are no-ops when engine is None (pre-start window)."""
 
     def test_on_hotkey_tap_noop(self) -> None:
         ctrl = AppController(_make_config())
@@ -168,60 +97,11 @@ class TestAppCommandsWithoutEngine:
 
 
 # ---------------------------------------------------------------------------
-# App commands with engine
+# Hotkey entry points with engine
 # ---------------------------------------------------------------------------
 
 class TestAppCommandsWithEngine:
-    """Test that app commands delegate to engine."""
-
-    def test_toggle_listening(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        ctrl.toggle_listening()
-        ctrl._engine.set_listening.assert_called_once_with(False)
-
-    def test_next_agent(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        ctrl.next_agent()
-        ctrl._engine.switch_agent.assert_called_once_with(1)
-
-    def test_prev_agent(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        ctrl.prev_agent()
-        ctrl._engine.switch_agent.assert_called_once_with(-1)
-
-    def test_switch_to_agent(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        ctrl.switch_to_agent("cursor")
-        ctrl._engine.switch_to_agent_by_name.assert_called_once_with("cursor")
-
-    def test_switch_to_agent_forces_agents_mode(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        ctrl._engine.agent_mode = False  # keyboard mode
-        ctrl.switch_to_agent("cursor")
-        ctrl._engine.set_output_mode.assert_called_once_with("agents")
-
-    def test_switch_to_agent_index(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        ctrl.switch_to_agent_index(2)
-        ctrl._engine.switch_to_agent_by_index.assert_called_once_with(2)
-
-    def test_repeat_last(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        ctrl.repeat_last()
-        ctrl._engine.resend_last.assert_called_once()
-
-    def test_set_output_mode(self) -> None:
-        ctrl = AppController(_make_config())
-        ctrl._engine = _make_engine()
-        ctrl.set_output_mode("keyboard")
-        ctrl._engine.set_output_mode.assert_called_once_with("keyboard")
+    """Test that hotkey entry points delegate to engine."""
 
     def test_on_hotkey_tap(self) -> None:
         ctrl = AppController(_make_config())

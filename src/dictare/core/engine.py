@@ -1091,7 +1091,12 @@ class DictareEngine:
         self._agent_mgr.switch_by_direction(direction)
 
     def switch_to_agent_by_name(self, name: str) -> bool:
-        """Switch to a specific agent by name - sends event to controller."""
+        """Switch to a specific agent by name - sends event to controller.
+
+        Forces agents mode first so the voice output reaches the agent.
+        """
+        if not self.agent_mode:
+            self.set_output_mode("agents")
         self._controller.send(SwitchAgent(agent_name=name, source="api"))
         return True  # Actual success determined asynchronously
 
