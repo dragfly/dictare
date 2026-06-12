@@ -7,10 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0rc3] - 2026-06-12
+
 ### Internal
 - Relocated status assembly out of `DictareEngine` into `core/status_report.py`,
   and the STT/hotkey factories into `stt/factory.py` and `hotkey/factory.py`;
   no behavior change.
+- Cross-object contracts are now public API (C1): engine members used by
+  controllers, server members used by route modules, and component callbacks
+  wired by the engine lost their leading underscore. Rename only.
+- Removed the AppController pass-through facade: keyboard bindings call the
+  engine directly, and the agents-mode-forcing logic moved into
+  `engine.switch_to_agent_by_name`. The `on_hotkey_*` entry points stay
+  (late-binding guards for the pre-start SIGUSR1/IPC window).
 
 ## [0.4.0rc2] - 2026-06-11
 
