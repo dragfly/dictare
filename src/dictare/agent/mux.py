@@ -315,17 +315,31 @@ def _claim_agent(agent_id: str, base_url: str) -> None:
 
     threading.Thread(target=_do, daemon=True).start()
 
-def _format_agent_info(agent_id: str, platform_status: dict) -> str:
-    """Build the notification body: agent name, voice state, current target."""
+def _abbreviate_home(path: str) -> str:
+    """Replace the user's home prefix with ``~`` (no-op if path is outside home)."""
+    home = str(Path.home())
+    if path == home:
+        return "~"
+    if path.startswith(home + os.sep):
+        return "~" + path[len(home):]
+    return path
+
+
+def _format_agent_info(agent_id: str, platform_status: dict, cwd: str | None = None) -> str:
+    """Build the notification body: agent name, voice state, current target, cwd."""
     from dictare.status import resolve_display_state
 
     state, _style = resolve_display_state(platform_status, agent_id)
     current = platform_status.get("output", {}).get("current_agent")
     if current == agent_id:
-        return f"{agent_id} — {state}"
-    if current:
-        return f"{agent_id} — {state} (current: {current})"
-    return f"{agent_id} — {state} (no voice target)"
+        header = f"{agent_id} — {state}"
+    elif current:
+        header = f"{agent_id} — {state} (current: {current})"
+    else:
+        header = f"{agent_id} — {state} (no voice target)"
+    if cwd:
+        return f"{header}\n{_abbreviate_home(cwd)}"
+    return header
 
 def _notify(title: str, message: str) -> None:
     """Show a system notification (best-effort, never raises)."""
@@ -344,14 +358,16 @@ def _notify(title: str, message: str) -> None:
 
 def _show_agent_info(agent_id: str, base_url: str) -> None:
     """Fetch engine status and show it as a system notification (fire-and-forget)."""
+    cwd = os.getcwd()
+
     def _do() -> None:
         try:
             from openvip import Client
 
             status = Client(base_url, timeout=3).get_status()
-            body = _format_agent_info(agent_id, status.platform or {})
+            body = _format_agent_info(agent_id, status.platform or {}, cwd=cwd)
         except Exception:
-            body = f"{agent_id} — engine unreachable"
+            body = f"{agent_id} — engine unreachable\n{_abbreviate_home(cwd)}"
         _notify("Dictare", body)
 
     threading.Thread(target=_do, daemon=True).start()

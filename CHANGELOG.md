@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0rc4] - 2026-06-12
+
+### Changed
+- `ctrl+]` info notification now includes the agent's working directory on
+  a second line (`~/`-abbreviated when inside `$HOME`). Helps tell apart
+  multiple `dictare agent` sessions started in different projects.
+
 ## [0.4.0rc3] - 2026-06-12
 
 ### Internal
