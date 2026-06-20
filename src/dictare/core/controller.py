@@ -200,14 +200,14 @@ class StateController:
         if current not in (AppState.LISTENING, AppState.RECORDING):
             # Can't transition - queue audio if busy transcribing/injecting
             if current in (AppState.TRANSCRIBING, AppState.INJECTING) and self._engine:
-                if self._engine._audio_manager:
-                    self._engine._audio_manager.queue_audio(event.audio_data)
+                if self._engine.audio_manager:
+                    self._engine.audio_manager.queue_audio(event.audio_data)
             return
 
         # Calculate duration
         sample_rate = 16000  # Default
-        if self._engine and self._engine._audio_manager:
-            sample_rate = self._engine._audio_manager.sample_rate
+        if self._engine and self._engine.audio_manager:
+            sample_rate = self._engine.audio_manager.sample_rate
         duration_ms = len(event.audio_data) / sample_rate * 1000
 
         old_state = current
@@ -233,7 +233,7 @@ class StateController:
         # Start transcription (with captured agent)
         self._start_transcription_watchdog()
         if self._engine:
-            self._engine._transcribe_and_process(
+            self._engine.transcribe_and_process(
                 event.audio_data, agent=event.agent
             )
 
@@ -271,7 +271,7 @@ class StateController:
             self._pending_transcription = event
             # Still inject the text (goes to correct agent via captured agent)
             if self._engine and event.text:
-                self._engine._inject_text(event.text, agent=event.agent, language=event.language)
+                self._engine.inject_text(event.text, agent=event.agent, language=event.language)
             return
 
         # Normal flow: transition to target state and inject
@@ -283,11 +283,11 @@ class StateController:
             self._on_state_change(old_state, target_state, "transcription_complete")
 
         if self._engine and event.text:
-            self._engine._inject_text(event.text, agent=event.agent, language=event.language)
+            self._engine.inject_text(event.text, agent=event.agent, language=event.language)
 
         # Process queued audio only when going back to LISTENING
         if target_state == AppState.LISTENING and self._engine:
-            self._engine._process_queued_audio()
+            self._engine.process_queued_audio()
 
     def _handle_play_start(self, event: PlayStarted) -> None:
         """TTS is about to play.
@@ -310,8 +310,8 @@ class StateController:
                 self._desired_state_after_play = AppState.LISTENING
 
         # Reset VAD to discard any buffered audio
-        if self._engine and self._engine._audio_manager:
-            self._engine._audio_manager.reset_vad()
+        if self._engine and self._engine.audio_manager:
+            self._engine.audio_manager.reset_vad()
 
         # Transition to PLAYING from any state (except OFF)
         if current != AppState.OFF and current != AppState.PLAYING:
@@ -333,8 +333,8 @@ class StateController:
             return
 
         # Reset VAD to discard TTS audio
-        if self._engine and self._engine._audio_manager:
-            self._engine._audio_manager.reset_vad()
+        if self._engine and self._engine.audio_manager:
+            self._engine.audio_manager.reset_vad()
 
         # Go to desired state (LISTENING or OFF based on user intent)
         target_state = self._desired_state_after_play
@@ -366,7 +366,7 @@ class StateController:
 
         # Process any queued audio now that we're listening again
         if target_state == AppState.LISTENING and self._engine:
-            self._engine._process_queued_audio()
+            self._engine.process_queued_audio()
 
     def _handle_hotkey_toggle(self, event: HotkeyPressed) -> None:
         """User wants to toggle listening."""
@@ -386,7 +386,7 @@ class StateController:
             if self._state_manager.try_transition(AppState.OFF):
                 # Clear buffered audio
                 if self._engine:
-                    self._engine._discard_current_internal()
+                    self._engine.discard_current_internal()
                 if self._on_state_change:
                     self._on_state_change(previous, AppState.OFF, "hotkey_toggle")
 
@@ -400,23 +400,23 @@ class StateController:
             return
 
         # Flush VAD to send buffered audio to CURRENT agent before switching
-        if self._engine._audio_manager:
-            self._engine._audio_manager.flush_vad()
+        if self._engine.audio_manager:
+            self._engine.audio_manager.flush_vad()
 
         # Determine new agent
         if event.agent_name:
             # Switch by name
-            success = self._engine._switch_to_agent_by_name_internal(event.agent_name)
+            success = self._engine.switch_to_agent_by_name_internal(event.agent_name)
             if not success:
                 return
         elif event.agent_index is not None:
             # Switch by index (1-based)
-            success = self._engine._switch_to_agent_by_index_internal(event.agent_index)
+            success = self._engine.switch_to_agent_by_index_internal(event.agent_index)
             if not success:
                 return
         else:
             # Switch by direction
-            self._engine._switch_agent_internal(event.direction)
+            self._engine.switch_agent_internal(event.direction)
 
     def _handle_set_listening(self, event: SetListening) -> None:
         """API request to set listening on/off."""
@@ -441,7 +441,7 @@ class StateController:
     def _handle_discard_current(self, event: DiscardCurrent) -> None:
         """User wants to discard current recording."""
         if self._engine:
-            self._engine._discard_current_internal()
+            self._engine.discard_current_internal()
 
         if self._state_manager.state == AppState.RECORDING:
             old_state = AppState.RECORDING

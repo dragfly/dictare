@@ -118,7 +118,7 @@ class TestAgentContinue:
         cfg = Config()
         cfg = cfg.model_copy(update={
             "agent_profiles": AgentProfilesConfig(default="sonnet", sonnet=at),
-            "client": ClientConfig(url="http://127.0.0.1:8770", status_bar=False),
+            "client": ClientConfig(url="http://127.0.0.1:8770"),
         })
         return cfg
 
@@ -216,7 +216,7 @@ class TestAgentLiveDangerously:
             "agent_profiles": AgentProfilesConfig(
                 default="sonnet", live_dangerously=global_live_dangerously, sonnet=at,
             ),
-            "client": ClientConfig(url="http://127.0.0.1:8770", status_bar=False),
+            "client": ClientConfig(url="http://127.0.0.1:8770"),
         })
         return cfg
 

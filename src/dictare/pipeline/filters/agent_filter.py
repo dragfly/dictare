@@ -23,7 +23,6 @@ import re
 from dataclasses import dataclass, field
 
 from dictare.core.agent_manager import AgentManager
-from dictare.core.bus import bus
 from dictare.pipeline.base import PipelineResult, fork_message
 from dictare.pipeline.filters._text import normalize as _normalize
 from dictare.pipeline.filters._text import tokenize as _tokenize
@@ -106,36 +105,24 @@ class AgentFilter:
 
     Dynamic Updates
     ---------------
-    If `subscribe_to_events=True` (default), the filter automatically
-    subscribes to "agents.changed" events on the internal event bus.
-    When agents are added/removed, the filter updates its list.
+    ``agent_registered`` / ``agent_unregistered`` keep ``agent_ids`` in sync;
+    the engine wires them to ``AgentManager.on_registered/on_unregistered``
+    at pipeline construction.
 
     Attributes:
-        agent_ids: Initial list of agent IDs. Updated dynamically if subscribed.
+        agent_ids: Initial list of agent IDs. Updated via the callbacks above.
         triggers: Words that trigger agent switch (default: ["agent", "agente"]).
         match_threshold: Minimum score to consider a match (0.0-1.0).
         max_scan_words: Maximum words from end to scan for triggers.
-        subscribe_to_events: Whether to auto-subscribe to agents.changed events.
     """
 
     agent_ids: list[str] = field(default_factory=list)
     triggers: list[str] = field(default_factory=lambda: AGENT_TRIGGERS.copy())
     match_threshold: float = 0.5
     max_scan_words: int = 10
-    subscribe_to_events: bool = True
 
-    def __post_init__(self) -> None:
-        """Subscribe to event bus after initialization."""
-        if self.subscribe_to_events:
-            bus.subscribe("agent.registered", self._on_agent_registered)
-            bus.subscribe("agent.unregistered", self._on_agent_unregistered)
-            logger.debug(
-                "agent_filter_subscribed",
-                extra={"events": ["agent.registered", "agent.unregistered"]},
-            )
-
-    def _on_agent_registered(self, agent_id: str) -> None:
-        """Handle agent.registered event from event bus.
+    def agent_registered(self, agent_id: str) -> None:
+        """Add a newly registered agent to the matchable list.
 
         Args:
             agent_id: ID of the registered agent.
@@ -149,8 +136,8 @@ class AgentFilter:
                 extra={"agent_id": agent_id, "agent_ids": self.agent_ids},
             )
 
-    def _on_agent_unregistered(self, agent_id: str) -> None:
-        """Handle agent.unregistered event from event bus.
+    def agent_unregistered(self, agent_id: str) -> None:
+        """Remove an unregistered agent from the matchable list.
 
         Args:
             agent_id: ID of the unregistered agent.

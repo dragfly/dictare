@@ -93,7 +93,6 @@ def register(app: typer.Typer) -> None:
         # Parse extra args: extract own flags and command override
         args = list(ctx.args)
         own_flags_to_remove: set[int] = set()
-        show_status_bar: bool | None = None
         agent_profile_name: str | None = None
         continue_session: bool = False
         live_dangerously: bool = False
@@ -101,9 +100,6 @@ def register(app: typer.Typer) -> None:
         for i, arg in enumerate(args):
             if arg in ("--verbose", "-v"):
                 verbose = True
-                own_flags_to_remove.add(i)
-            elif arg == "--no-status-bar":
-                show_status_bar = False
                 own_flags_to_remove.add(i)
             elif arg in ("--continue", "-C"):
                 continue_session = True
@@ -131,7 +127,7 @@ def register(app: typer.Typer) -> None:
             unknown_flags = [a for a in command_override if a.startswith("-")]
             if unknown_flags:
                 console.print(f"[red]Error: unrecognized option(s): {' '.join(unknown_flags)}[/]")
-                console.print("[dim]dictare agent options: --profile/-t <profile>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose, --no-status-bar[/]")
+                console.print("[dim]dictare agent options: --profile/-t <profile>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose[/]")
                 console.print("[dim]To pass flags to the agent command:  dictare agent <name> -- <command> [flags][/]")
                 raise typer.Exit(1)
 
@@ -218,31 +214,11 @@ def register(app: typer.Typer) -> None:
                     break
             # run_agent() will do a final check and error out if still unreachable
 
-        # CLI flags override config
-        if show_status_bar is None:
-            show_status_bar = config.client.status_bar
-        # Terminal overrides from agent profile config (if resolved)
-        terminal_config = (
-            resolved_profile.terminal if resolved_profile else None
-        )
-
-        # Status bar right-side label: type name or first 30 chars of command
-        agent_label: str | None = None
-        if command_override:
-            cmd_str = " ".join(command_override)
-            agent_label = cmd_str[:30] + ("\u2026" if len(cmd_str) > 30 else "")
-        elif type_key:
-            agent_label = type_key
-
         exit_code = run_agent(
             agent_id, command, verbose=verbose,
-            base_url=server, status_bar=show_status_bar,
+            base_url=server,
             clear_on_start=config.client.clear_on_start,
             claim_key=config.client.claim_key,
-            agent_label=agent_label,
-            scroll_region=(
-                terminal_config.scroll_region
-                if terminal_config else True
-            ),
+            info_key=config.client.info_key,
         )
         raise typer.Exit(exit_code)

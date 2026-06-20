@@ -7,6 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-15
+
+Stable release consolidating the `0.4.0rc1` → `rc4` series. Two themes: a major
+UX simplification (status bar removed, transparent agent passthrough) and a deep
+internal cleanup (~2300 lines net removed across 65 files).
+
+### Highlights for users
+- **Transparent agent passthrough.** `dictare agent` no longer draws a status bar
+  or competes with the wrapped agent for terminal control. The wrapped agent owns
+  the terminal completely — no more rendering conflicts with Claude Code, Codex,
+  Gemini CLI, or any other TUI agent.
+- **On-demand info via `ctrl+]`.** A system notification shows agent name, voice
+  state, current voice target, and the agent's working directory (`~/`-abbreviated
+  inside `$HOME`). The key is configurable via `client.info_key` (empty to disable).
+- **System tray is now the primary place** to check voice state.
+
+### Removed (no migration needed)
+- Config: `client.status_bar`, `agent_profiles.<name>.terminal.scroll_region`.
+  Leftover keys in existing `config.toml` files are silently ignored.
+- CLI flag: `--no-status-bar`.
+
+### Internal cleanup
+- `engine.py`: status assembly extracted to `core/status_report.py`, STT/hotkey
+  factories moved into `stt/factory.py` and `hotkey/factory.py`. No behavior change.
+- `http_server.py`: route handlers split into three domain modules
+  (`http_routes_openvip.py`, `http_routes_settings.py`, `http_routes_models.py`).
+- Cross-object contracts now public API: engine members used by controllers, server
+  members used by route modules, and component callbacks wired by the engine lost
+  their leading underscore (rename only).
+- Removed the `AppController` pass-through facade — keyboard bindings call the
+  engine directly. The `on_hotkey_*` entry points stay (late-binding guards for
+  the pre-start SIGUSR1/IPC window).
+- Pipeline filters and executors now constructed explicitly by the engine; the
+  reflection-based `PipelineLoader` is gone. Misconfigured pipelines now fail
+  loudly at startup instead of silently skipping steps.
+- Removed the internal `EventBus` (replaced by direct AgentManager→AgentFilter
+  callbacks) and the unused `OneShotTranscriber`.
+
+### Tests
+- 1721 passing (+685 since 0.3.2rc1), ruff clean, mypy clean across 138 files.
+
+See `0.4.0rc1`–`0.4.0rc4` entries below for the incremental commit-by-commit detail.
+
+## [0.4.0rc4] - 2026-06-12
+
+### Changed
+- `ctrl+]` info notification now includes the agent's working directory on
+  a second line (`~/`-abbreviated when inside `$HOME`). Helps tell apart
+  multiple `dictare agent` sessions started in different projects.
+
+## [0.4.0rc3] - 2026-06-12
+
+### Internal
+- Relocated status assembly out of `DictareEngine` into `core/status_report.py`,
+  and the STT/hotkey factories into `stt/factory.py` and `hotkey/factory.py`;
+  no behavior change.
+- Cross-object contracts are now public API (C1): engine members used by
+  controllers, server members used by route modules, and component callbacks
+  wired by the engine lost their leading underscore. Rename only.
+- Removed the AppController pass-through facade: keyboard bindings call the
+  engine directly, and the agents-mode-forcing logic moved into
+  `engine.switch_to_agent_by_name`. The `on_hotkey_*` entry points stay
+  (late-binding guards for the pre-start SIGUSR1/IPC window).
+
+## [0.4.0rc2] - 2026-06-11
+
+### Internal
+- Split `http_server.py` route handlers into three domain modules
+  (`http_routes_openvip.py`, `http_routes_settings.py`, `http_routes_models.py`);
+  no behavior change — endpoint surface verified identical.
+
+## [0.4.0rc1] - 2026-06-11
+
+### Changed
+- **Status bar removed.** `dictare agent` is now a fully transparent passthrough:
+  no scroll region, no reserved row, no redraw logic — the wrapped agent owns the
+  terminal completely. This eliminates all rendering conflicts with agent TUIs
+  (Claude Code, Codex, Gemini CLI). The system tray is now the primary place to
+  check voice state.
+- Removed config options: `client.status_bar`, `agent_profiles.<name>.terminal.scroll_region`,
+  and the `--no-status-bar` CLI flag. Leftover keys in existing `config.toml` files
+  are ignored — no migration needed.
+
+### Added
+- On-demand agent info notification: press `ctrl+]` (configurable via
+  `client.info_key`, empty to disable) inside `dictare agent` to see the agent
+  name, voice state, and current voice target as a system notification —
+  without touching the terminal.
+
+### Internal
+- Pipeline filters and executors are now constructed explicitly by the engine;
+  removed the reflection-based `PipelineLoader` (misconfigured steps now fail
+  loudly at startup instead of being silently skipped).
+- Removed the internal `EventBus` (replaced by direct AgentManager→AgentFilter
+  callbacks) and the unused `OneShotTranscriber`.
+
 ## [0.3.2rc1] - 2026-05-17
 
 ### Fixed

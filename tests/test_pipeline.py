@@ -1,8 +1,7 @@
 """Tests for the pipeline filter system."""
 
-import pytest
 
-from dictare.core.bus import bus
+
 from dictare.pipeline import (
     AgentFilter,
     InputFilter,
@@ -30,13 +29,6 @@ def _make_filter(**kwargs: object) -> InputFilter:
     if "triggers" not in kwargs:
         kwargs["triggers"] = _TEST_TRIGGERS
     return InputFilter(**kwargs)  # type: ignore[arg-type]
-
-@pytest.fixture(autouse=True)
-def reset_event_bus():
-    """Reset event bus before each test."""
-    bus.reset()
-    yield
-    bus.reset()
 
 class TestHelperFunctions:
     """Test helper functions for text processing."""
@@ -585,26 +577,26 @@ class TestAgentFilterBasics:
 
     def test_name_property(self) -> None:
         """Filter has correct name."""
-        f = AgentFilter(subscribe_to_events=False)
+        f = AgentFilter()
         assert f.name == "agent_filter"
 
     def test_empty_text_passes(self) -> None:
         """Empty text passes through."""
-        f = AgentFilter(agent_ids=["dictare"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["dictare"])
         msg = {"text": ""}
         result = f.process(msg)
         assert result.action == PipelineAction.PASS
 
     def test_no_agents_passes(self) -> None:
         """Message passes if no agents configured."""
-        f = AgentFilter(agent_ids=[], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=[])
         msg = {"text": "agent dictare"}
         result = f.process(msg)
         assert result.action == PipelineAction.PASS
 
     def test_existing_agent_switch_passes(self) -> None:
         """Message with existing x_agent_switch passes through."""
-        f = AgentFilter(agent_ids=["dictare"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["dictare"])
         msg = {"text": "agent dictare", "x_agent_switch": {"target": "other"}}
         result = f.process(msg)
         assert result.action == PipelineAction.PASS
@@ -614,7 +606,7 @@ class TestAgentFilterDetection:
 
     def test_exact_match(self) -> None:
         """Exact agent name match produces two messages."""
-        f = AgentFilter(agent_ids=["dictare", "helper"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["dictare", "helper"])
         msg = {"text": "fammi vedere il codice agent dictare"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
@@ -630,7 +622,7 @@ class TestAgentFilterDetection:
 
     def test_phonetic_match_koder_coder(self) -> None:
         """Phonetic match: 'coder' matches 'koder'."""
-        f = AgentFilter(agent_ids=["koder", "dictare"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["koder", "dictare"])
         msg = {"text": "questo bug agent coder"}  # Heard as "coder"
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
@@ -639,7 +631,7 @@ class TestAgentFilterDetection:
 
     def test_phonetic_match_koder_codor(self) -> None:
         """Phonetic match: 'codor' matches 'koder'."""
-        f = AgentFilter(agent_ids=["koder", "dictare"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["koder", "dictare"])
         msg = {"text": "questo bug agent codor"}  # Heard as "codor"
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
@@ -651,7 +643,7 @@ class TestAgentFilterDetection:
         f = AgentFilter(
             agent_ids=["dictare"],
             triggers=["agent", "agente"],  # User must add "agente" for Italian
-            subscribe_to_events=False,
+
         )
         msg = {"text": "fammi vedere agente dictare"}
         result = f.process(msg)
@@ -661,7 +653,7 @@ class TestAgentFilterDetection:
 
     def test_case_insensitive(self) -> None:
         """Agent matching is case insensitive."""
-        f = AgentFilter(agent_ids=["Dictare"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["Dictare"])
         msg = {"text": "agent dictare"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
@@ -671,7 +663,7 @@ class TestAgentFilterDetection:
 
     def test_no_match_below_threshold(self) -> None:
         """No match if score is below threshold."""
-        f = AgentFilter(agent_ids=["dictare"], match_threshold=0.95, subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["dictare"], match_threshold=0.95)
         msg = {"text": "agent boxtype"}  # Similar but not identical
         result = f.process(msg)
         # boxtype vs dictare: edit=0.857, phonetic different (B vs F/V)
@@ -680,7 +672,7 @@ class TestAgentFilterDetection:
 
     def test_best_match_selected(self) -> None:
         """Best matching agent is selected when multiple could match."""
-        f = AgentFilter(agent_ids=["koder", "codex-analysis"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["koder", "codex-analysis"])
         msg = {"text": "agent coder"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
@@ -691,7 +683,7 @@ class TestAgentFilterDetection:
 
     def test_trigger_in_middle_not_detected(self) -> None:
         """Trigger in middle of text (not at end) is not detected."""
-        f = AgentFilter(agent_ids=["dictare"], max_scan_words=5, subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["dictare"], max_scan_words=5)
         # agent dictare is more than 5 words from end
         msg = {"text": "agent dictare one two three four five six"}
         result = f.process(msg)
@@ -699,7 +691,7 @@ class TestAgentFilterDetection:
 
     def test_text_cleaned_after_match(self) -> None:
         """Text before trigger becomes first message, switch is second."""
-        f = AgentFilter(agent_ids=["dictare"], subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["dictare"])
         msg = {"text": "questo \u00e8 il codice agent dictare"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
@@ -715,7 +707,7 @@ class TestAgentFilterDetection:
         """'box type' (two words) matches 'dictare' - handles Whisper space insertion."""
         # Note: This tests the case where Whisper transcribes "dictare" as "box type"
         # The fuzzy match should still work on "box" vs "dictare"
-        f = AgentFilter(agent_ids=["dictare"], match_threshold=0.5, subscribe_to_events=False)
+        f = AgentFilter(agent_ids=["dictare"], match_threshold=0.5)
         msg = {"text": "agent box"}  # Just "box" - "type" is separate
         result = f.process(msg)
         # "box" vs "dictare": phonetic B vs V (different), edit distance 4/7
@@ -730,7 +722,7 @@ class TestAgentFilterWithPipeline:
 
     def test_agent_filter_before_input_filter(self) -> None:
         """Agent filter can run before input filter in pipeline."""
-        agent_f = AgentFilter(agent_ids=["dictare"], subscribe_to_events=False)
+        agent_f = AgentFilter(agent_ids=["dictare"])
         input_f = _make_filter()
 
         p = Pipeline([agent_f, input_f])
@@ -742,7 +734,7 @@ class TestAgentFilterWithPipeline:
 
     def test_agent_and_input_in_same_message(self) -> None:
         """Both agent switch and input can be detected."""
-        agent_f = AgentFilter(agent_ids=["dictare"], subscribe_to_events=False)
+        agent_f = AgentFilter(agent_ids=["dictare"])
         input_f = _make_filter()
 
         # Agent filter first, then input filter
@@ -754,23 +746,11 @@ class TestAgentFilterWithPipeline:
         result = p.process(msg)
         assert "submit" in result[0].get("x_input", {}).get("ops", [])
 
-class TestAgentFilterEventBus:
-    """Test AgentFilter event bus integration."""
-
-    def test_subscribes_to_agent_events_by_default(self) -> None:
-        """Filter subscribes to agent.registered/unregistered events by default."""
-        f = AgentFilter()  # subscribe_to_events=True by default
-        assert f.agent_ids == []
-
-        # Register agents via events
-        bus.publish("agent.registered", agent_id="dictare")
-        bus.publish("agent.registered", agent_id="helper")
-
-        # Filter should have both agents
-        assert f.agent_ids == ["dictare", "helper"]
+class TestAgentFilterDynamicUpdates:
+    """Test AgentFilter registration callbacks (wired to AgentManager)."""
 
     def test_dynamic_agent_update(self) -> None:
-        """Filter updates agent_ids when event is published."""
+        """Filter updates agent_ids via registration callbacks."""
         f = AgentFilter()
 
         # Initially no agents
@@ -778,31 +758,25 @@ class TestAgentFilterEventBus:
         result = f.process(msg)
         assert result.action == PipelineAction.PASS  # No agents to match
 
-        # Add agent via event
-        bus.publish("agent.registered", agent_id="dictare")
+        f.agent_registered("dictare")
 
         # Now should match
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
         assert result.messages[0]["x_agent_switch"]["target"] == "dictare"
 
-    def test_agent_removed_via_event(self) -> None:
-        """Filter stops matching agent when removed via event."""
+    def test_agent_removed(self) -> None:
+        """Filter stops matching agent after unregistration."""
         f = AgentFilter()
+        f.agent_registered("dictare")
+        f.agent_registered("helper")
 
-        # Add agents
-        bus.publish("agent.registered", agent_id="dictare")
-        bus.publish("agent.registered", agent_id="helper")
-
-        # Should match dictare
         msg = {"text": "agent dictare"}
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
 
-        # Remove dictare
-        bus.publish("agent.unregistered", agent_id="dictare")
+        f.agent_unregistered("dictare")
 
-        # Should not match dictare anymore
         result = f.process(msg)
         assert result.action == PipelineAction.PASS
 
@@ -811,41 +785,36 @@ class TestAgentFilterEventBus:
         result = f.process(msg)
         assert result.action == PipelineAction.CONSUME
 
-    def test_no_subscription_when_disabled(self) -> None:
-        """Filter doesn't subscribe when subscribe_to_events=False."""
-        f = AgentFilter(subscribe_to_events=False)
-
-        # Publish event
-        bus.publish("agent.registered", agent_id="dictare")
-
-        # Filter should not have updated
-        assert f.agent_ids == []
-
-    def test_multiple_filters_receive_event(self) -> None:
-        """Multiple filters all receive the event."""
-        f1 = AgentFilter()
-        f2 = AgentFilter()
-
-        bus.publish("agent.registered", agent_id="dictare")
-
-        assert f1.agent_ids == ["dictare"]
-        assert f2.agent_ids == ["dictare"]
-
     def test_duplicate_register_ignored(self) -> None:
         """Registering same agent twice doesn't duplicate."""
         f = AgentFilter()
-
-        bus.publish("agent.registered", agent_id="dictare")
-        bus.publish("agent.registered", agent_id="dictare")
-
+        f.agent_registered("dictare")
+        f.agent_registered("dictare")
         assert f.agent_ids == ["dictare"]
 
     def test_unregister_nonexistent_ignored(self) -> None:
         """Unregistering non-existent agent is a no-op."""
         f = AgentFilter()
+        f.agent_unregistered("dictare")
+        assert f.agent_ids == []
 
-        bus.publish("agent.unregistered", agent_id="dictare")
+    def test_agent_manager_wiring(self) -> None:
+        """AgentManager registration callbacks reach the filter."""
+        from dictare.core.agent_manager import AgentManager
 
+        class _FakeAgent:
+            def __init__(self, agent_id: str) -> None:
+                self.id = agent_id
+
+        mgr = AgentManager()
+        f = AgentFilter()
+        mgr.on_registered = f.agent_registered
+        mgr.on_unregistered = f.agent_unregistered
+
+        mgr.register(_FakeAgent("dictare"))
+        assert f.agent_ids == ["dictare"]
+
+        mgr.unregister("dictare")
         assert f.agent_ids == []
 
 class TestAgentFilterReservedIds:
@@ -855,7 +824,6 @@ class TestAgentFilterReservedIds:
         """AgentFilter with __keyboard__ in agent_ids does NOT match 'agent keyboard'."""
         f = AgentFilter(
             agent_ids=["__keyboard__", "dictare"],
-            subscribe_to_events=False,
         )
         msg = {"text": "agent keyboard"}
         result = f.process(msg)
@@ -863,12 +831,12 @@ class TestAgentFilterReservedIds:
         assert result.action == PipelineAction.PASS
 
     def test_reserved_agent_skipped_on_registration(self) -> None:
-        """Event bus registration of __keyboard__ is not added to filter's list."""
+        """Registration of __keyboard__ is not added to filter's list."""
         f = AgentFilter()
 
-        bus.publish("agent.registered", agent_id="__keyboard__")
-        bus.publish("agent.registered", agent_id="__tts__")
-        bus.publish("agent.registered", agent_id="dictare")
+        f.agent_registered("__keyboard__")
+        f.agent_registered("__tts__")
+        f.agent_registered("dictare")
 
         assert "__keyboard__" not in f.agent_ids
         assert "__tts__" not in f.agent_ids
@@ -878,7 +846,6 @@ class TestAgentFilterReservedIds:
         """'agent keyboard' matches a real agent named 'keyboard', not __keyboard__."""
         f = AgentFilter(
             agent_ids=["__keyboard__", "keyboard-app"],
-            subscribe_to_events=False,
         )
         msg = {"text": "agent keyboard"}
         result = f.process(msg)

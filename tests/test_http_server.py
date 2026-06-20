@@ -61,7 +61,7 @@ class MockController:
     def __init__(self) -> None:
         self._app_calls: list[dict] = []
 
-    def _handle_app_command(self, body: dict) -> dict:
+    def handle_app_command(self, body: dict) -> dict:
         self._app_calls.append(body)
         return {"status": "ok"}
 
@@ -127,7 +127,7 @@ class TestControlEndpoint:
     def test_app_command_routed_to_controller(
         self, client: TestClient, engine: MockEngine, controller: MockController
     ) -> None:
-        """App commands go to controller._handle_app_command, not engine."""
+        """App commands go to controller.handle_app_command, not engine."""
         client.post("/openvip/control", json={"command": "output.set_mode:agents"})
         assert len(controller._app_calls) == 1
         assert len(engine._protocol_calls) == 0
@@ -201,8 +201,8 @@ class TestPostAgentMessage:
 
         # Manually create a queue to simulate connected agent
         queue: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["test-agent"] = queue
+        with server.agent_queues_lock:
+            server.agent_queues["test-agent"] = queue
 
         body = {
             "openvip": "1.0", "type": "transcription",
@@ -234,8 +234,8 @@ class TestPutMessage:
         import asyncio
 
         queue: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["test"] = queue
+        with server.agent_queues_lock:
+            server.agent_queues["test"] = queue
 
         # No event loop running
         result = server.put_message("test", {"text": "hello"})
@@ -252,9 +252,9 @@ class TestConnectedAgents:
         """Connected agents appear in list."""
         import asyncio
 
-        with server._agent_queues_lock:
-            server._agent_queues["alice"] = asyncio.Queue()
-            server._agent_queues["bob"] = asyncio.Queue()
+        with server.agent_queues_lock:
+            server.agent_queues["alice"] = asyncio.Queue()
+            server.agent_queues["bob"] = asyncio.Queue()
 
         agents = server.connected_agents
         assert sorted(agents) == ["alice", "bob"]

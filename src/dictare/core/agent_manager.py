@@ -11,8 +11,6 @@ import time as _time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from dictare.core.bus import bus
-
 if TYPE_CHECKING:
     from dictare.agent.base import Agent
 
@@ -42,9 +40,12 @@ class AgentManager:
         self._preferred_agent_deadline: float | None = None
 
         # Callbacks — set by engine after construction
-        self._on_notify: Callable[[], None] | None = None
-        self._on_agent_change: Callable[[str, int], None] | None = None
-        self._on_speak: Callable[[str], None] | None = None
+        self.on_notify: Callable[[], None] | None = None
+        self.on_agent_change: Callable[[str, int], None] | None = None
+        self.on_speak: Callable[[str], None] | None = None
+        # Registration listeners — wired to AgentFilter at pipeline construction
+        self.on_registered: Callable[[str], None] | None = None
+        self.on_unregistered: Callable[[str], None] | None = None
 
     # ------------------------------------------------------------------
     # Properties
@@ -96,8 +97,8 @@ class AgentManager:
 
     def _notify(self) -> None:
         """Push status update via engine callback."""
-        if self._on_notify:
-            self._on_notify()
+        if self.on_notify:
+            self.on_notify()
 
     def _set_current(self, agent_id: str, idx: int = 0) -> None:
         """Set current agent, emit event, and push status update."""
@@ -106,8 +107,8 @@ class AgentManager:
             return
         logger.info("_set_current_agent: %s (idx=%d)", agent_id, idx)
         self._current_agent_id = agent_id
-        if self._on_agent_change:
-            self._on_agent_change(agent_id, idx)
+        if self.on_agent_change:
+            self.on_agent_change(agent_id, idx)
         self._notify()
 
     # ------------------------------------------------------------------
@@ -157,7 +158,8 @@ class AgentManager:
         else:
             logger.info("register_agent(%s): reserved agent registered", agent.id)
 
-        bus.publish("agent.registered", agent_id=agent.id)
+        if self.on_registered:
+            self.on_registered(agent.id)
         self._notify()
         return True
 
@@ -185,7 +187,8 @@ class AgentManager:
             else:
                 self._current_agent_id = None
 
-        bus.publish("agent.unregistered", agent_id=agent_id)
+        if self.on_unregistered:
+            self.on_unregistered(agent_id)
         self._notify()
         return True
 
@@ -300,14 +303,14 @@ class AgentManager:
                 self._current_agent_id = real_agents[0]
             else:
                 self._current_agent_id = None
-            if self._on_speak:
-                self._on_speak("agent mode")
+            if self.on_speak:
+                self.on_speak("agent mode")
         else:
             if self._current_agent_id and self._current_agent_id != self.KEYBOARD_AGENT_ID:
                 self._last_sse_agent_id = self._current_agent_id
             self._current_agent_id = self.KEYBOARD_AGENT_ID
-            if self._on_speak:
-                self._on_speak("keyboard mode")
+            if self.on_speak:
+                self.on_speak("keyboard mode")
 
         self._notify()
 

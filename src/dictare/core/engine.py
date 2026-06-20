@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import logging
-import sys
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from dictare import __version__
 from dictare.agent.base import Agent
 from dictare.audio.feedback_policy import AudioFeedbackPolicy
 from dictare.core.agent_manager import AgentManager
@@ -29,11 +27,14 @@ from dictare.core.fsm import (
     TranscriptionCompleted,
 )
 from dictare.core.openvip_messages import create_message
+from dictare.core.status_report import build_status, check_launcher_hash
 from dictare.core.tts_manager import TTSManager
 from dictare.hotkey.base import HotkeyListener
+from dictare.hotkey.factory import create_hotkey_listener
 from dictare.hotkey.tap_detector import TapDetector
-from dictare.pipeline import Pipeline, PipelineLoader
+from dictare.pipeline import Pipeline
 from dictare.stt.base import STTEngine
+from dictare.stt.factory import create_stt_engine
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +151,11 @@ class DictareEngine:
             None if config.output.mode == "agents" else self.KEYBOARD_AGENT_ID
         )
         self._agent_mgr = AgentManager(initial_agent_id=initial_agent_id)
-        self._agent_mgr._on_notify = self._notify_status
-        self._agent_mgr._on_agent_change = lambda aid, idx: self._emit(
+        self._agent_mgr.on_notify = self._notify_status
+        self._agent_mgr.on_agent_change = lambda aid, idx: self._emit(
             "on_agent_change", aid, idx
         )
-        self._agent_mgr._on_speak = lambda text: self.speak_text(text)
+        self._agent_mgr.on_speak = lambda text: self.speak_text(text)
 
         # Audio feedback policy — decides whether focus-gated sounds play
         self._feedback_policy = AudioFeedbackPolicy()
@@ -170,7 +171,7 @@ class DictareEngine:
         )
         self._controller.set_engine(self)
 
-        self._running = False
+        self.running = False
         self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
 
@@ -195,18 +196,18 @@ class DictareEngine:
         # Tap detection (isolated state machine)
         # Single tap: toggle mute on/off
         # Double tap: submit (inject Enter into active window)
-        self._tap_detector = TapDetector(
+        self.tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
             on_single_tap=lambda: self._controller.send(HotkeyPressed(source="hotkey")),
             on_double_tap=self._submit_action,
         )
 
         # Initialize components
-        self._audio_manager: AudioManager | None = None
+        self.audio_manager: AudioManager | None = None
         self._stt: STTEngine | None = None
         self._hotkey: HotkeyListener | None = None
         # Pre-confirmed: launcher binary matches last confirmed hash (TCC still valid)
-        self._hotkey_pre_confirmed = self._check_launcher_hash()
+        self._hotkey_pre_confirmed = check_launcher_hash()
         # Status change callback — registered by AppController to push SSE updates.
         # Engine calls this on every status-relevant change (state, agents, mode).
         self._status_change_callback: Callable[[], None] | None = None
@@ -215,7 +216,7 @@ class DictareEngine:
         self._loading = False
         self._loading_models: list[dict[str, Any]] = []
         # TTS manager — owns engine loading, worker subprocess, speech, mic-pausing
-        self._tts_mgr = TTSManager(config, controller=self._controller)
+        self.tts_mgr = TTSManager(config, controller=self._controller)
         # Watchdog cancel event — allows tests to prevent os._exit()
         self._exit_watchdog_cancel = threading.Event()
 
@@ -253,15 +254,15 @@ class DictareEngine:
         self._check_grace_period()
         if self._status_change_callback is not None:
             self._status_change_callback()
-        self._save_state()
+        self.save_state()
 
     def _check_grace_period(self) -> None:
         """Assign first available agent once the preferred-agent grace period expires."""
         self._agent_mgr.check_grace_period()
 
-    def _save_state(self) -> None:
+    def save_state(self) -> None:
         """Save current state to session-state.json.  Skipped during shutdown."""
-        if not self._running:
+        if not self.running:
             return
         from dictare.utils.state import save_state
 
@@ -289,7 +290,7 @@ class DictareEngine:
             self.is_listening,
         )
 
-    def _restore_state(self, start_listening: bool) -> bool:
+    def restore_state(self, start_listening: bool) -> bool:
         """Restore session state, overriding config defaults.
 
         Returns the (possibly updated) start_listening value.
@@ -386,99 +387,6 @@ class DictareEngine:
     # Factory Methods
     # -------------------------------------------------------------------------
 
-    def _create_stt_engine(
-        self, model_size: str | None = None, *, headless: bool = False
-    ) -> STTEngine:
-        """Create and load STT engine.
-
-        Args:
-            model_size: Model size to load. If None, uses config.stt.model.
-            headless: If True, skip all console output (for Engine/daemon mode).
-        """
-        from dictare.stt.parakeet import is_parakeet_model
-        from dictare.utils.hardware import is_mlx_available
-
-        target_model = model_size or self.config.stt.model
-        engine: STTEngine
-        if is_parakeet_model(target_model):
-            from dictare.stt.parakeet import ParakeetEngine
-            engine = ParakeetEngine()
-        elif self.config.stt.hw_accel and is_mlx_available():
-            from dictare.stt.mlx_whisper import MLXWhisperEngine
-            engine = MLXWhisperEngine()
-        else:
-            from dictare.stt.faster_whisper import FasterWhisperEngine
-            engine = FasterWhisperEngine()
-
-        engine.load_model(
-            model_size or self.config.stt.model,
-            device=self.config.stt.advanced.device,
-            compute_type=self.config.stt.advanced.compute_type,
-            console=None,  # No console in engine
-            verbose=self.config.log_level == "debug",
-            headless=headless,
-        )
-
-        return engine
-
-    def _create_hotkey_listener(self) -> HotkeyListener:
-        """Create hotkey listener with smart fallback."""
-        errors: list[str] = []
-
-        # Try evdev first on Linux
-        if sys.platform == "linux":
-            try:
-                from dictare.hotkey.evdev_listener import EvdevHotkeyListener
-
-                # Get target device from config (if user specified one)
-                target_device = self.config.hotkey.device or None
-
-                modifier = self.config.hotkey.mode_switch_modifier
-                evdev_listener: HotkeyListener = EvdevHotkeyListener(
-                    self.config.hotkey.key,
-                    target_device=target_device,
-                    mode_switch_modifier=modifier,
-                )
-
-                # Check if key is available, suggest fallback if not
-                if not evdev_listener.is_key_available():
-                    fallback = EvdevHotkeyListener.suggest_fallback_key()
-                    if fallback and fallback != self.config.hotkey.key:
-                        evdev_listener = EvdevHotkeyListener(
-                            fallback,
-                            target_device=target_device,
-                            mode_switch_modifier=modifier,
-                        )
-
-                return evdev_listener
-            except ImportError:
-                errors.append("evdev not installed (pip install evdev)")
-            except Exception as e:
-                errors.append(f"evdev error: {e}")
-
-        # Fallback to pynput (macOS and X11)
-        try:
-            from dictare.hotkey.pynput_listener import PynputHotkeyListener
-
-            pynput_listener: HotkeyListener = PynputHotkeyListener(self.config.hotkey.key)
-            if pynput_listener.is_key_available():
-                return pynput_listener
-            else:
-                errors.append(f"pynput: key {self.config.hotkey.key} not supported")
-        except ImportError:
-            errors.append("pynput not installed (pip install pynput)")
-        except Exception as e:
-            errors.append(f"pynput error: {e}")
-
-        # No hotkey backend available
-        error_details = "\n  - ".join(errors)
-        raise RuntimeError(
-            f"No hotkey backend available.\n"
-            f"Tried:\n  - {error_details}\n\n"
-            f"Install evdev (Linux): pip install evdev\n"
-            f"Install pynput (macOS/X11): pip install pynput"
-        )
-
     def _get_hotwords(self) -> str | None:
         """Build hotwords string from config and pipeline trigger words."""
         if self.config.stt.advanced.hotwords:
@@ -499,7 +407,7 @@ class DictareEngine:
         words: set[str] = set()
         if self._pipeline is None:
             return words
-        for step in self._pipeline._steps:
+        for step in self._pipeline.steps:
             if isinstance(step, InputFilter):
                 for patterns in step.triggers.values():
                     for pattern in patterns:
@@ -518,37 +426,72 @@ class DictareEngine:
     def _create_pipeline(self) -> Pipeline | None:
         """Create message pipeline from config.
 
+        Filters are constructed explicitly — misconfiguration fails loudly
+        at startup instead of silently dropping a step.
+
         Returns:
-            Pipeline if enabled, None otherwise.
+            Pipeline if enabled and has steps, None otherwise.
         """
-        services = {
-            "agent_ids": self.agents,
-            "subscribe_to_events": True,
-            "is_muted": lambda: self._voice_muted,
-        }
-        return PipelineLoader().build_filter_pipeline(
-            self.config.pipeline, services,
-        )
+        from dictare.pipeline.filters.agent_filter import AgentFilter
+        from dictare.pipeline.filters.input_filter import InputFilter
+        from dictare.pipeline.filters.mute_filter import MuteFilter
+
+        cfg = self.config.pipeline
+        if not cfg.enabled:
+            return None
+
+        pipeline = Pipeline()
+
+        # Mute filter must run FIRST — discards all text when muted
+        if cfg.mute_filter.enabled:
+            pipeline.add_step(MuteFilter(
+                mute_triggers=cfg.mute_filter.mute_triggers,
+                listen_triggers=cfg.mute_filter.listen_triggers,
+                is_muted=lambda: self._voice_muted,
+                confidence_threshold=cfg.mute_filter.confidence_threshold,
+                max_scan_words=cfg.mute_filter.max_scan_words,
+                decay_rate=cfg.mute_filter.decay_rate,
+            ))
+
+        if cfg.agent_filter.enabled:
+            agent_filter = AgentFilter(
+                agent_ids=self.agents,
+                triggers=cfg.agent_filter.triggers,
+                match_threshold=cfg.agent_filter.match_threshold,
+            )
+            self._agent_mgr.on_registered = agent_filter.agent_registered
+            self._agent_mgr.on_unregistered = agent_filter.agent_unregistered
+            pipeline.add_step(agent_filter)
+
+        if cfg.submit_filter.enabled:
+            pipeline.add_step(InputFilter(
+                triggers=cfg.submit_filter.triggers,
+                confidence_threshold=cfg.submit_filter.confidence_threshold,
+                max_scan_words=cfg.submit_filter.max_scan_words,
+                decay_rate=cfg.submit_filter.decay_rate,
+            ))
+
+        return pipeline if len(pipeline) > 0 else None
 
     def _create_executor_pipeline(self) -> Pipeline:
         """Create executor pipeline for acting on extension fields.
 
         Executors run after filters and handle side effects:
-        - AgentSwitchExecutor: switches the current agent on x_agent_switch
         - MuteExecutor: mutes/unmutes voice on x_mute
+        - AgentSwitchExecutor: switches the current agent on x_agent_switch
 
         Returns:
-            Pipeline with executors (always created, may be empty).
+            Pipeline with executors.
         """
-        services = {
-            "switch_fn": self._switch_to_agent_by_name_internal,
-            "current_agent_fn": lambda: self._agent_mgr.current_agent,
-            "mute_fn": self.mute,
-            "unmute_fn": self.unmute,
-        }
-        return PipelineLoader().build_executor_pipeline(
-            self.config.pipeline, services,
-        )
+        from dictare.pipeline.executors import AgentSwitchExecutor, MuteExecutor
+
+        pipeline = Pipeline()
+        pipeline.add_step(MuteExecutor(mute_fn=self.mute, unmute_fn=self.unmute))
+        pipeline.add_step(AgentSwitchExecutor(
+            switch_fn=self.switch_to_agent_by_name_internal,
+            current_agent_fn=lambda: self._agent_mgr.current_agent,
+        ))
+        return pipeline
 
     # -------------------------------------------------------------------------
     # Initialization
@@ -608,7 +551,7 @@ class DictareEngine:
         self._loading_models[0]["start_time"] = time.time()
         self._loading_models[0]["status"] = "loading"
         try:
-            self._stt = self._create_stt_engine(headless=headless)
+            self._stt = create_stt_engine(self.config, headless=headless)
         except Exception as exc:
             logger.error("STT model loading failed: %s", exc, exc_info=True)
             raise
@@ -626,11 +569,11 @@ class DictareEngine:
         self._loading_models[1]["start_time"] = time.time()
         self._loading_models[1]["status"] = "loading"
         try:
-            self._audio_manager = AudioManager(
+            self.audio_manager = AudioManager(
                 config=self.config.audio,
                 verbose=self.config.log_level == "debug",
             )
-            self._audio_manager.initialize(
+            self.audio_manager.initialize(
                 on_speech_start=self._on_vad_speech_start,
                 on_speech_end=self._on_vad_speech_end,
                 on_max_speech=self._on_max_speech_duration,
@@ -647,25 +590,25 @@ class DictareEngine:
         logger.info("VAD model loaded in %.1fs", vad_elapsed)
 
         # Wire device change callback — audio manager notifies engine
-        self._audio_manager._on_devices_updated = self._notify_status
+        self.audio_manager.on_devices_updated = self._notify_status
 
         # Load TTS engine (optional — engine continues if unavailable)
-        self._tts_mgr.load(
+        self.tts_mgr.load(
             http_server=http_server,
             estimated=get_model_load_time(tts_engine_name) or 1,
         )
-        self._loading_models[2] = self._tts_mgr.loading_status
+        self._loading_models[2] = self.tts_mgr.loading_status
 
         # Pre-cache mute/listen TTS phrases in background
         precache = self.config.pipeline.mute_filter.mute_phrases + self.config.pipeline.mute_filter.listen_phrases
         if precache:
-            self._tts_mgr.precache_phrases(precache)
+            self.tts_mgr.precache_phrases(precache)
 
         # Create hotkey listener for toggle (if available and enabled)
         # Note: hotkey disabled in daemon mode - macOS requires main thread
         if self._hotkey_enabled:
             try:
-                self._hotkey = self._create_hotkey_listener()
+                self._hotkey = create_hotkey_listener(self.config.hotkey)
             except RuntimeError:
                 self._hotkey = None
         else:
@@ -699,7 +642,7 @@ class DictareEngine:
         captured_agent = self._get_current_agent()
 
         if self._logger:
-            sample_rate = self._audio_manager.sample_rate if self._audio_manager else self.config.audio.advanced.sample_rate
+            sample_rate = self.audio_manager.sample_rate if self.audio_manager else self.config.audio.advanced.sample_rate
             duration_ms = len(audio_data) / sample_rate * 1000
             self._logger.log_vad_event("speech_end", duration_ms=duration_ms)
 
@@ -716,7 +659,7 @@ class DictareEngine:
     # Transcription
     # -------------------------------------------------------------------------
 
-    def _transcribe_and_process(self, audio_data: Any, agent: Agent | None = None) -> None:
+    def transcribe_and_process(self, audio_data: Any, agent: Agent | None = None) -> None:
         """Transcribe audio and send to agent.
 
         Called by StateController when SpeechEnded is processed.
@@ -805,19 +748,19 @@ class DictareEngine:
         thread = threading.Thread(target=do_transcribe, daemon=True)
         thread.start()
 
-    def _process_queued_audio(self) -> None:
+    def process_queued_audio(self) -> None:
         """Process any queued audio from speech that occurred during transcription.
 
         Called by StateController after transcription completes.
         """
-        if not self._audio_manager:
+        if not self.audio_manager:
             return
 
-        sample_rate = self._audio_manager.sample_rate
+        sample_rate = self.audio_manager.sample_rate
         min_samples = int(sample_rate * self.MIN_RECORDING_DURATION)
 
-        while self._audio_manager.has_queued_audio:
-            audio_data = self._audio_manager.pop_queued_audio()
+        while self.audio_manager.has_queued_audio:
+            audio_data = self.audio_manager.pop_queued_audio()
             if audio_data is None or len(audio_data) == 0:
                 continue
 
@@ -839,7 +782,7 @@ class DictareEngine:
     # Text Injection
     # -------------------------------------------------------------------------
 
-    def _inject_text(self, text: str, *, agent: Agent | None = None, language: str | None = None) -> None:
+    def inject_text(self, text: str, *, agent: Agent | None = None, language: str | None = None) -> None:
         """Inject text into the target agent.
 
         Uses OpenVIP message format - each agent handles its own transport:
@@ -986,8 +929,8 @@ class DictareEngine:
         """
         state = self._state_manager.state
         vad_speaking = (
-            self._audio_manager is not None
-            and self._audio_manager.is_speaking
+            self.audio_manager is not None
+            and self.audio_manager.is_speaking
         )
 
         if state in (AppState.RECORDING, AppState.TRANSCRIBING) or vad_speaking:
@@ -1039,9 +982,9 @@ class DictareEngine:
         # TTS feedback
         import random
         phrases = self.config.pipeline.mute_filter.mute_phrases
-        if phrases and self._tts_mgr.available:
+        if phrases and self.tts_mgr.available:
             phrase = random.choice(phrases)  # noqa: S311
-            self._tts_mgr.speak_text(phrase)
+            self.tts_mgr.speak_text(phrase)
 
         self._notify_status()
 
@@ -1059,9 +1002,9 @@ class DictareEngine:
         # TTS feedback
         import random
         phrases = self.config.pipeline.mute_filter.listen_phrases
-        if phrases and self._tts_mgr.available:
+        if phrases and self.tts_mgr.available:
             phrase = random.choice(phrases)  # noqa: S311
-            self._tts_mgr.speak_text(phrase)
+            self.tts_mgr.speak_text(phrase)
 
         self._notify_status()
 
@@ -1095,15 +1038,15 @@ class DictareEngine:
         """Update focus state for an agent's terminal."""
         logger.info("Focus: agent=%s focused=%s", agent_id, focused)
         self._feedback_policy.set_focus(agent_id, focused)
-        self._save_state()
+        self.save_state()
 
         # Trigger immediate audio reconnect on focus-in if audio is dead.
         # After sleep/wake the main loop may be waiting on a retry timer —
         # this bypasses the wait so audio recovers in ~2-3s instead of 30s.
         # Cooldown: skip if a reconnect was triggered in the last 10 seconds
         # to prevent oscillation loops from rapid focus True/False cycling.
-        if focused and self._audio_manager:
-            reason = self._audio_manager.reconnect_reason
+        if focused and self.audio_manager:
+            reason = self.audio_manager.reconnect_reason
             if reason:
                 now = time.monotonic()
                 if now - self._last_focus_reconnect < 10.0:
@@ -1126,13 +1069,13 @@ class DictareEngine:
         Runs in a daemon thread so it doesn't block the HTTP handler.
         Uses self._reconnecting lock to avoid racing with the main loop.
         """
-        if not self._audio_manager:
+        if not self.audio_manager:
             return
         if not self._reconnecting.acquire(blocking=False):
             logger.debug("Focus-reconnect skipped: reconnect already in progress")
             return
         try:
-            if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
+            if self.audio_manager.reconnect(self.audio_manager.on_audio_chunk):
                 logger.info("Focus-triggered audio reconnect succeeded")
             else:
                 logger.warning("Focus-triggered audio reconnect failed")
@@ -1143,16 +1086,21 @@ class DictareEngine:
         """Switch to next/previous agent - sends event to controller."""
         self._controller.send(SwitchAgent(direction=direction, source="api"))
 
-    def _switch_agent_internal(self, direction: int) -> None:
+    def switch_agent_internal(self, direction: int) -> None:
         """Internal: Actually switch agent. Called by controller."""
         self._agent_mgr.switch_by_direction(direction)
 
     def switch_to_agent_by_name(self, name: str) -> bool:
-        """Switch to a specific agent by name - sends event to controller."""
+        """Switch to a specific agent by name - sends event to controller.
+
+        Forces agents mode first so the voice output reaches the agent.
+        """
+        if not self.agent_mode:
+            self.set_output_mode("agents")
         self._controller.send(SwitchAgent(agent_name=name, source="api"))
         return True  # Actual success determined asynchronously
 
-    def _switch_to_agent_by_name_internal(self, name: str) -> bool:
+    def switch_to_agent_by_name_internal(self, name: str) -> bool:
         """Internal: Actually switch by name. Called by controller."""
         return self._agent_mgr.switch_by_name(name)
 
@@ -1161,7 +1109,7 @@ class DictareEngine:
         self._controller.send(SwitchAgent(agent_index=index, source="api"))
         return True  # Actual success determined asynchronously
 
-    def _switch_to_agent_by_index_internal(self, index: int) -> bool:
+    def switch_to_agent_by_index_internal(self, index: int) -> bool:
         """Internal: Actually switch by index. Called by controller."""
         return self._agent_mgr.switch_by_index(index)
 
@@ -1169,11 +1117,11 @@ class DictareEngine:
         """Discard current recording/transcription - sends event."""
         self._controller.send(DiscardCurrent(source="api"))
 
-    def _discard_current_internal(self) -> None:
+    def discard_current_internal(self) -> None:
         """Internal: Actually discard. Called by controller."""
-        if self._audio_manager:
-            self._audio_manager.clear_queue()
-            self._audio_manager.reset_vad()  # Use reset, not flush
+        if self.audio_manager:
+            self.audio_manager.clear_queue()
+            self.audio_manager.reset_vad()  # Use reset, not flush
 
     # -------------------------------------------------------------------------
     # TTS / Audio Feedback (delegated to TTSManager)
@@ -1192,27 +1140,27 @@ class DictareEngine:
             logger.debug("resend_last: no last text to resend")
             return False
         logger.info("resend_last: resending %r", self._last_text)
-        self._inject_text(self._last_text)
+        self.inject_text(self._last_text)
         return True
 
     def speak_text(self, text: str) -> None:
         """Speak text using TTS (delegates to TTSManager)."""
-        self._tts_mgr.speak_text(text)
+        self.tts_mgr.speak_text(text)
 
     def speak_agent(self, agent_name: str) -> None:
         """Announce agent name via TTS (delegates to TTSManager)."""
-        self._tts_mgr.speak_agent(agent_name)
+        self.tts_mgr.speak_agent(agent_name)
 
     def reset_audio_input(self) -> None:
         """Reset audio input to current config. Called from HTTP endpoint."""
-        if self._audio_manager:
-            self._audio_manager.reset_audio_input()
+        if self.audio_manager:
+            self.audio_manager.reset_audio_input()
             self._notify_status()
 
     def reset_audio_output(self, device: str) -> None:
         """Reset audio output device. Called from HTTP endpoint."""
-        if self._audio_manager:
-            self._audio_manager.reset_audio_output(device)
+        if self.audio_manager:
+            self.audio_manager.reset_audio_output(device)
             self._notify_status()
 
     # -------------------------------------------------------------------------
@@ -1220,257 +1168,24 @@ class DictareEngine:
     # -------------------------------------------------------------------------
 
     def get_status(self) -> dict:
-        """Build engine status dict.
-
-        Returns OpenVIP protocol-level fields at the top level,
-        with implementation-specific details in the 'platform' object.
-        """
-        from dictare.core.fsm import AppState
-
-        # Map engine state to string
-        state_map = {
-            AppState.OFF: "off",
-            AppState.LISTENING: "listening",
-            AppState.RECORDING: "recording",
-            AppState.TRANSCRIBING: "transcribing",
-            AppState.INJECTING: "transcribing",
-            AppState.PLAYING: "playing",
-        }
-        stt_state = state_map.get(self.state, "off")
-
-        # Voice muted overrides the displayed state
-        if self._voice_muted and stt_state == "listening":
-            stt_state = "muted"
-
-        uptime = (
-            time.time() - self._stats.start_time
-            if self._stats.start_time
-            else 0
-        )
-
-        stt_active = stt_state not in ("off",)
-
-        return {
-            # OpenVIP protocol-level fields
-            "openvip": "1.0",
-            "stt": {"enabled": True, "active": stt_active},
-            "tts": {"enabled": self._tts_mgr.available},
-            "connected_agents": self.visible_agents,
-            # Implementation-specific details (StatusPanel)
-            "platform": {
-                "name": "Dictare",
-                "version": __version__,
-                "mode": "agents" if self.agent_mode else "keyboard",
-                "state": stt_state,
-                "uptime_seconds": uptime,
-                "stt": {
-                    "model_name": self.config.stt.model,
-                    "device": getattr(self._stt, "_device", self.config.stt.advanced.device),
-                    "last_text": self._last_text,
-                },
-                "output": {
-                    "mode": "agents" if self.agent_mode else "keyboard",
-                    "current_agent": self.visible_current_agent,
-                    "available_agents": self.visible_agents,
-                },
-                "hotkey": {
-                    "key": self.config.hotkey.key,
-                    "bound": self._is_hotkey_active(),
-                    "status": self._hotkey_status_raw(),
-                },
-                "tts": {
-                    "engine": self.config.tts.engine,
-                    "language": self.config.tts.language,
-                    "available": self._tts_mgr.available,
-                    "error": self._tts_mgr.error or None,
-                },
-                "audio_devices": {
-                    "input": self.config.audio.input_device or "(default)",
-                    "output": self.config.audio.output_device or "(default)",
-                },
-                "audio_in_use": self._audio_manager.get_actual_devices() if self._audio_manager else {"input": None, "output": None},
-                "audio_devices_available": self._get_audio_devices(),
-                "permissions": self._get_permissions(),
-                "loading": {
-                    "active": self._loading,
-                    "models": [
-                        {
-                            "name": m["name"],
-                            "status": m["status"],
-                            "elapsed": round(time.time() - m["start_time"], 1) if m["status"] == "loading" else m["elapsed"],
-                            "estimated": m["estimated"],
-                        }
-                        for m in self._loading_models
-                    ],
-                },
-                "engines": self._get_engines_cache(),
-                "stats": self._get_session_stats(),
-            },
-        }
-
-    _EXIT_PHRASES: list[str] = [
-        "Your fingers are getting jealous.",
-        "The keyboard is overrated.",
-        "Voice: 1, Keyboard: 0.",
-        "Dictation: because typing is so last century.",
-        "Your hands thank you.",
-        "Talk is cheap — unless it's voice-to-code.",
-        "Words spoken, keystrokes avoided.",
-        "Efficiency is just another word for talking to your computer.",
-        "Your vocal cords are your best developer tool.",
-        "Less typing, more thinking.",
-    ]
-
-    def _get_audio_devices(self) -> dict:
-        """Return current audio device lists for status response."""
-        from dictare.audio.capture import AudioCapture
-
-        try:
-            return {
-                "input": AudioCapture.list_devices(),
-                "output": AudioCapture.list_output_devices(),
-                "default_input": AudioCapture.get_default_device(),
-                "default_output": AudioCapture.get_default_output_device(),
-            }
-        except Exception:
-            return {"input": [], "output": [], "default_input": None, "default_output": None}
-
-    def _get_session_stats(self) -> dict:
-        """Return today's cumulative stats for the status response.
-
-        Combines the in-memory session counters (since this engine start)
-        with the persisted today_baseline (previous engine runs today),
-        so the dashboard always shows the full daily total.
-        """
-        b = self._today_baseline
-        count = self._stats.count + b.get("transcriptions", 0)
-        words = self._stats.words + b.get("words", 0)
-        chars = self._stats.chars + b.get("chars", 0)
-        audio = self._stats.audio_seconds + b.get("audio_seconds", 0.0)
-        phrase = self._EXIT_PHRASES[count % len(self._EXIT_PHRASES)] if count > 0 else ""
-        return {
-            "transcriptions": count,
-            "words": words,
-            "chars": chars,
-            "audio_seconds": round(audio, 1),
-            "transcription_seconds": round(self._stats.transcription_seconds + b.get("transcription_seconds", 0.0), 1),
-            "injection_seconds": round(self._stats.injection_seconds + b.get("injection_seconds", 0.0), 1),
-            "phrase": phrase,
-        }
-
-    def _get_engines_cache(self) -> dict:
-        """Return cached engine availability (computed once, lazy)."""
-        if self._engines_cache is None:
-            from dictare.utils.platform import check_all_stt_engines, check_all_tts_engines
-
-            self._engines_cache = {
-                "tts": check_all_tts_engines(self.config.tts.engine),
-                "stt": check_all_stt_engines(self.config.stt.model),
-            }
-        return self._engines_cache
-
-    def _is_hotkey_active(self) -> bool:
-        """Return True if the hotkey is actually functional.
-
-        On Linux / terminal mode: Python directly binds the hotkey listener.
-        On macOS daemon mode: serve writes ~/.dictare/hotkey_runtime_status
-        with capture health derived from active providers (ipc/pynput/signal).
-        If runtime status is unavailable, we fall back to launcher hotkey_status.
-        """
-        import sys
-
-        if self._hotkey is not None:
-            return True
-        if sys.platform == "darwin":
-            from dictare.hotkey.runtime_status import read_runtime_status
-
-            runtime = read_runtime_status()
-            if runtime is not None:
-                return bool(runtime.get("capture_healthy", False))
-
-            from pathlib import Path
-            status_file = Path.home() / ".dictare" / "hotkey_status"
-            try:
-                return status_file.read_text().strip() in ("active", "confirmed")
-            except FileNotFoundError:
-                pass
-        return False
-
-    def _hotkey_status_raw(self) -> str:
-        """Return the raw hotkey_status string for diagnostics."""
-        import sys
-
-        if self._hotkey is not None:
-            return "bound"
-        if sys.platform == "darwin":
-            from dictare.hotkey.runtime_status import read_runtime_status
-
-            runtime = read_runtime_status()
-            if runtime is not None:
-                status = str(runtime.get("status", "unknown"))
-            else:
-                from pathlib import Path
-                status_file = Path.home() / ".dictare" / "hotkey_status"
-                try:
-                    status = status_file.read_text().strip()
-                except FileNotFoundError:
-                    status = "unknown"
-
-            # If tap is created ("active") but the launcher binary hasn't
-            # changed since last confirmation, TCC trust is still valid.
-            if status == "active" and self._hotkey_pre_confirmed:
-                return "confirmed"
-            return status
-        return "unknown"
-
-    @staticmethod
-    def _check_launcher_hash() -> bool:
-        """Check if launcher binary matches the previously confirmed hash."""
-        import sys
-        if sys.platform != "darwin":
-            return False
-        try:
-            from dictare.hotkey.ipc import check_confirmed_launcher_hash
-            return check_confirmed_launcher_hash()
-        except Exception:
-            return False
-
-    @staticmethod
-    def _get_permissions() -> dict:
-        """Check platform permissions (Accessibility + Microphone)."""
-        import sys
-
-        if sys.platform != "darwin":
-            return {"accessibility": True, "microphone": True}
-
-        from dictare.platform.permissions import (
-            ACCESSIBILITY_SETTINGS_URL,
-            MICROPHONE_SETTINGS_URL,
-            get_permissions,
-        )
-
-        perms = get_permissions()
-        return {
-            **perms,
-            "accessibility_url": ACCESSIBILITY_SETTINGS_URL,
-            "microphone_url": MICROPHONE_SETTINGS_URL,
-        }
+        """Build engine status dict (assembled by core.status_report)."""
+        return build_status(self)
 
     def handle_speech(self, body: dict) -> dict:
         """Handle a speech (TTS) request (delegates to TTSManager)."""
-        return self._tts_mgr.handle_speech(body)
+        return self.tts_mgr.handle_speech(body)
 
     def list_voices(self) -> list[str]:
         """Return available voices (delegates to TTSManager)."""
-        return self._tts_mgr.list_voices()
+        return self.tts_mgr.list_voices()
 
     def stop_speaking(self) -> bool:
         """Interrupt the currently playing audio (delegates to TTSManager)."""
-        return self._tts_mgr.stop_speaking()
+        return self.tts_mgr.stop_speaking()
 
     def complete_tts(self, message_id: str, *, ok: bool, duration_ms: int = 0) -> None:
         """Signal that a TTS worker finished processing a message."""
-        self._tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
+        self.tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
 
     def _start_exit_watchdog(self, exit_code: int, timeout: float = 6) -> None:
         """Start a watchdog that force-exits after *timeout* seconds.
@@ -1517,7 +1232,7 @@ class DictareEngine:
             return {"openvip": "1.0", "status": "ok"}
         elif command == "engine.shutdown":
             self.save_session_before_shutdown()
-            self._running = False
+            self.running = False
             # Watchdog: force-exit if graceful stop() hangs (e.g. audio deadlock).
             # Exit code 1 so both Restart=always and Restart=on-failure trigger a restart.
             self._start_exit_watchdog(exit_code=1)
@@ -1525,7 +1240,7 @@ class DictareEngine:
         elif command == "engine.restart":
             # Persist state, then exit — the service manager (Restart=always) restarts us.
             self.save_session_before_shutdown()
-            self._running = False
+            self.running = False
             self._start_exit_watchdog(exit_code=0)
             return {"openvip": "1.0", "status": "ok"}
         elif command == "ping":
@@ -1570,7 +1285,7 @@ class DictareEngine:
             start_listening,
         )
 
-        self._running = True
+        self.running = True
         self._stats.start_time = time.time()
 
         # Start keyboard agent if in keyboard mode (special built-in agent)
@@ -1583,21 +1298,21 @@ class DictareEngine:
         # Start hotkey listener (tap detector handles single/double tap)
         if self._hotkey:
             self._hotkey.start(
-                on_press=self._tap_detector.on_key_down,
-                on_release=self._tap_detector.on_key_up,
-                on_other_key=self._tap_detector.on_other_key,
+                on_press=self.tap_detector.on_key_down,
+                on_release=self.tap_detector.on_key_up,
+                on_other_key=self.tap_detector.on_other_key,
                 on_combo=self.toggle_mode,
             )
 
         # Start audio streaming (always needed for VAD to work)
         _t0 = time.monotonic()
-        if self._audio_manager:
-            self._audio_manager.start_streaming(
+        if self.audio_manager:
+            self.audio_manager.start_streaming(
                 should_process=lambda: (
                     self._state_manager.should_process_audio
                     and (not self.agent_mode or bool(self.visible_agents))
                 ),
-                is_running=lambda: self._running,
+                is_running=lambda: self.running,
             )
         _audio_ms = (time.monotonic() - _t0) * 1000
         if _audio_ms > 500:
@@ -1621,23 +1336,23 @@ class DictareEngine:
         zombie streams).
         """
         try:
-            while self._running:
+            while self.running:
                 time.sleep(0.1)
-                if not self._audio_manager:
+                if not self.audio_manager:
                     continue
 
-                reason = self._audio_manager.reconnect_reason
+                reason = self.audio_manager.reconnect_reason
                 if reason:
                     logger.warning("Audio reconnect needed: %s", reason)
                     if not self._reconnecting.acquire(blocking=False):
                         continue  # focus-reconnect already in progress
                     try:
-                        if self._audio_manager.reconnect(self._audio_manager._on_audio_chunk):
+                        if self.audio_manager.reconnect(self.audio_manager.on_audio_chunk):
                             logger.info("Audio reconnect succeeded")
                         else:
                             logger.error("Audio reconnect failed — waiting 3s before retry")
                             _deadline = time.monotonic() + 3.0
-                            while self._running and time.monotonic() < _deadline:
+                            while self.running and time.monotonic() < _deadline:
                                 time.sleep(0.5)
                     finally:
                         self._reconnecting.release()
@@ -1661,7 +1376,7 @@ class DictareEngine:
 
     def stop(self) -> None:
         """Stop the engine."""
-        self._running = False
+        self.running = False
 
         # Stop the state controller first
         self._controller.stop()
@@ -1670,12 +1385,12 @@ class DictareEngine:
         self._state_manager.transition(AppState.OFF, force=True)
 
         # Close audio/VAD
-        if self._audio_manager:
-            self._audio_manager.flush_vad()
-            self._audio_manager.close()
+        if self.audio_manager:
+            self.audio_manager.flush_vad()
+            self.audio_manager.close()
 
         # Cancel any pending tap timer
-        self._tap_detector.reset()
+        self.tap_detector.reset()
 
         if self._input_manager:
             self._input_manager.stop()
@@ -1691,7 +1406,7 @@ class DictareEngine:
             self._hotkey.stop()
 
         # Terminate TTS worker subprocess
-        self._tts_mgr.stop()
+        self.tts_mgr.stop()
 
 def create_engine(
     config: Config,

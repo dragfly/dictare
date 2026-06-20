@@ -150,7 +150,7 @@ class TestHandleProtocolCommand:
         with patch("dictare.utils.state.save_state"):
             result = engine.handle_protocol_command({"command": "engine.shutdown"})
         assert result["status"] == "ok"
-        assert engine._running is False
+        assert engine.running is False
 
     def test_engine_restart(self) -> None:
         engine = DictareEngine(config=MockConfig())
@@ -158,7 +158,7 @@ class TestHandleProtocolCommand:
         with patch("dictare.utils.state.save_state"):
             result = engine.handle_protocol_command({"command": "engine.restart"})
         assert result["status"] == "ok"
-        assert engine._running is False
+        assert engine.running is False
 
     def test_unknown_command(self) -> None:
         engine = DictareEngine(config=MockConfig())
@@ -246,14 +246,14 @@ class TestMuteUnmute:
 
     def test_mute_sets_flag(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._running = True
+        engine.running = True
         with patch("dictare.utils.state.save_state"):
             engine.mute()
         assert engine._voice_muted is True
 
     def test_mute_idempotent(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._running = True
+        engine.running = True
         with patch("dictare.utils.state.save_state"):
             engine.mute()
             engine.mute()  # second call should be no-op
@@ -261,7 +261,7 @@ class TestMuteUnmute:
 
     def test_unmute_clears_flag(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._running = True
+        engine.running = True
         engine._voice_muted = True
         with patch("dictare.utils.state.save_state"):
             engine.unmute()
@@ -269,7 +269,7 @@ class TestMuteUnmute:
 
     def test_unmute_idempotent(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._running = True
+        engine.running = True
         with patch("dictare.utils.state.save_state"):
             engine.unmute()  # already unmuted
         assert engine._voice_muted is False
@@ -346,14 +346,14 @@ class TestAgentFocus:
 
     def test_set_focus(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._running = True
+        engine.running = True
         with patch("dictare.utils.state.save_state"):
             engine.set_agent_focus("claude", True)
         assert engine._feedback_policy.focused_agent == "claude"
 
     def test_set_focus_false_clears(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._running = True
+        engine.running = True
         with patch("dictare.utils.state.save_state"):
             engine.set_agent_focus("claude", True)
             # Focus-out is debounced, so set it directly
@@ -392,15 +392,15 @@ class TestDiscardCurrent:
 
     def test_discard_with_audio_manager(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._audio_manager = MagicMock()
-        engine._discard_current_internal()
-        engine._audio_manager.clear_queue.assert_called_once()
-        engine._audio_manager.reset_vad.assert_called_once()
+        engine.audio_manager = MagicMock()
+        engine.discard_current_internal()
+        engine.audio_manager.clear_queue.assert_called_once()
+        engine.audio_manager.reset_vad.assert_called_once()
 
     def test_discard_without_audio_manager(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._audio_manager = None
-        engine._discard_current_internal()  # should not raise
+        engine.audio_manager = None
+        engine.discard_current_internal()  # should not raise
 
 
 # ---------------------------------------------------------------------------
@@ -412,15 +412,15 @@ class TestEngineStop:
 
     def test_stop_sets_running_false(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._running = True
+        engine.running = True
         engine.stop()
-        assert engine._running is False
+        assert engine.running is False
 
     def test_stop_closes_audio_manager(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._audio_manager = MagicMock()
+        engine.audio_manager = MagicMock()
         engine.stop()
-        engine._audio_manager.close.assert_called_once()
+        engine.audio_manager.close.assert_called_once()
 
     def test_stop_without_audio_manager(self) -> None:
         engine = DictareEngine(config=MockConfig())
@@ -445,30 +445,36 @@ class TestExitWatchdog:
 
 
 # ---------------------------------------------------------------------------
-# _get_session_stats
+# session_stats (core.status_report)
 # ---------------------------------------------------------------------------
 
 class TestGetSessionStats:
-    """Test _get_session_stats."""
+    """Test status_report.session_stats."""
 
     def test_includes_baseline(self) -> None:
+        from dictare.core.status_report import session_stats
+
         engine = DictareEngine(config=MockConfig())
         engine._today_baseline = {"transcriptions": 10, "words": 100}
         engine._stats.count = 5
         engine._stats.words = 50
-        stats = engine._get_session_stats()
+        stats = session_stats(engine)
         assert stats["transcriptions"] == 15
         assert stats["words"] == 150
 
     def test_phrase_non_empty_when_count_positive(self) -> None:
+        from dictare.core.status_report import session_stats
+
         engine = DictareEngine(config=MockConfig())
         engine._stats.count = 1
-        stats = engine._get_session_stats()
+        stats = session_stats(engine)
         assert stats["phrase"] != ""
 
     def test_phrase_present_when_count_zero(self) -> None:
+        from dictare.core.status_report import session_stats
+
         engine = DictareEngine(config=MockConfig())
-        stats = engine._get_session_stats()
+        stats = session_stats(engine)
         assert isinstance(stats["phrase"], str)
 
 
@@ -518,11 +524,11 @@ class TestProcessQueuedAudio:
 
     def test_no_audio_manager(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._audio_manager = None
-        engine._process_queued_audio()  # should not raise
+        engine.audio_manager = None
+        engine.process_queued_audio()  # should not raise
 
     def test_empty_queue(self) -> None:
         engine = DictareEngine(config=MockConfig())
-        engine._audio_manager = MagicMock()
-        engine._audio_manager.has_queued_audio = False
-        engine._process_queued_audio()  # should not raise
+        engine.audio_manager = MagicMock()
+        engine.audio_manager.has_queued_audio = False
+        engine.process_queued_audio()  # should not raise

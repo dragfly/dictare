@@ -355,7 +355,7 @@ class TestAudioManagerDeviceMonitor:
         manager, mock_reinit, mock_restart, cleanup = self._make_manager()
         try:
             updated = []
-            manager._on_devices_updated = lambda: updated.append(1)
+            manager.on_devices_updated = lambda: updated.append(1)
             manager._on_device_change("default_input_changed")
             mock_reinit.assert_called_once()
             mock_restart.assert_called_once()
@@ -545,7 +545,7 @@ class TestAudioManagerDeviceMonitor:
         )
         try:
             updated: list[str] = []
-            manager._on_devices_updated = lambda: updated.append("called")
+            manager.on_devices_updated = lambda: updated.append("called")
 
             with (
                 patch.object(AudioCapture, "list_devices", return_value=[

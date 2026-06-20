@@ -10,7 +10,7 @@ import threading
 import pytest
 
 from dictare.agent.base import BaseAgent, OpenVIPMessage
-from dictare.agent.mux import _read_from_sse, _stream_active_agent
+from dictare.agent.mux import _read_from_sse
 from dictare.agent.sse import SSEAgent
 
 
@@ -164,149 +164,6 @@ def _make_status_handler(agent_id: str, current_agent: str, state: str = "listen
 
     return Handler
 
-class TestStreamActiveAgentStatus:
-    """Test _stream_active_agent status updates via SSE."""
-
-    def _make_status(self, state: str, current_agent: str, agents: list[str] | None = None):
-        """Create a mock Status object."""
-        from openvip import Status
-
-        return Status(
-            openvip="1.0",
-            connected_agents=agents or [current_agent],
-            platform={
-                "state": state,
-                "output": {"current_agent": current_agent},
-            },
-        )
-
-    def test_stream_shows_listening_when_active(self) -> None:
-        """Active agent in listening state shows 'listening' (green)."""
-        from unittest.mock import patch
-
-        stop = threading.Event()
-        statuses: list[tuple[str, str]] = []
-
-        def on_status(text, style):
-            statuses.append((text, style))
-            stop.set()
-
-        def fake_subscribe(**kwargs):
-            yield self._make_status("listening", "myagent")
-
-        with patch("openvip.Client") as mock_client:
-            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
-
-        assert len(statuses) >= 1
-        assert "listening" in statuses[0][0]
-        assert statuses[0][1] == "ok"
-
-    def test_stream_shows_off_when_engine_off(self) -> None:
-        """Active agent with engine off shows 'off' (dim)."""
-        from unittest.mock import patch
-
-        stop = threading.Event()
-        statuses: list[tuple[str, str]] = []
-
-        def on_status(text, style):
-            statuses.append((text, style))
-            stop.set()
-
-        def fake_subscribe(**kwargs):
-            yield self._make_status("off", "myagent")
-
-        with patch("openvip.Client") as mock_client:
-            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
-
-        assert len(statuses) >= 1
-        assert "off" in statuses[0][0]
-        assert statuses[0][1] == "dim"
-
-    def test_stream_shows_standby_when_not_active(self) -> None:
-        """Non-active agent shows 'standby' (warn)."""
-        from unittest.mock import patch
-
-        stop = threading.Event()
-        statuses: list[tuple[str, str]] = []
-
-        def on_status(text, style):
-            statuses.append((text, style))
-            stop.set()
-
-        def fake_subscribe(**kwargs):
-            yield self._make_status("listening", "other-agent")
-
-        with patch("openvip.Client") as mock_client:
-            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
-
-        assert len(statuses) >= 1
-        assert "standby" in statuses[0][0]
-        assert statuses[0][1] == "warn"
-
-    def test_stream_deduplicates_same_status(self) -> None:
-        """Repeated identical status does not trigger on_status again."""
-        from unittest.mock import patch
-
-        stop = threading.Event()
-        statuses: list[tuple[str, str]] = []
-        call_count = [0]
-
-        def on_status(text, style):
-            statuses.append((text, style))
-            call_count[0] += 1
-            if call_count[0] >= 2:
-                stop.set()
-
-        def fake_subscribe(**kwargs):
-            # Yield same status twice — only first should trigger on_status
-            yield self._make_status("listening", "myagent")
-            yield self._make_status("listening", "myagent")
-            # Yield different status to trigger second on_status and stop
-            yield self._make_status("off", "myagent")
-
-        with patch("openvip.Client") as mock_client:
-            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
-
-        assert len(statuses) == 2
-        assert "listening" in statuses[0][0]
-        assert "off" in statuses[1][0]
-
-    def test_stream_shows_loading_when_loading(self) -> None:
-        """Engine loading models shows 'loading' (warn)."""
-        from unittest.mock import patch
-
-        from openvip import Status
-
-        stop = threading.Event()
-        statuses: list[tuple[str, str]] = []
-
-        def on_status(text, style):
-            statuses.append((text, style))
-            stop.set()
-
-        def fake_subscribe(**kwargs):
-            yield Status(
-                openvip="1.0",
-                connected_agents=[],
-                platform={
-                    "state": "off",
-                    "output": {"current_agent": None},
-                    "loading": {"active": True},
-                },
-            )
-
-        with patch("openvip.Client") as mock_client:
-            mock_client.return_value.subscribe_status.side_effect = fake_subscribe
-            _stream_active_agent("myagent", "http://localhost:8770/openvip", stop, on_status)
-
-        assert len(statuses) >= 1
-        assert "loading" in statuses[0][0]
-        assert statuses[0][1] == "warn"
-
 class _FakeSSEResponse:
     """Fake HTTP response that yields SSE lines then stops."""
 
@@ -438,14 +295,13 @@ class TestSSEInputExecutorIntegration:
         assert "submit" not in item[1]
 
 class TestSSEDisconnectStatus:
-    """Test _read_from_sse reports disconnection errors via on_status."""
+    """Test _read_from_sse reconnects after connection errors."""
 
     @pytest.mark.slow
-    def test_sse_error_reports_reconnecting(self) -> None:
-        """SSE connection error triggers 'reconnecting' status."""
+    def test_sse_error_reconnects(self) -> None:
+        """SSE connection error triggers a reconnect attempt."""
         stop = threading.Event()
         wq: queue.Queue = queue.Queue()
-        statuses: list[tuple[str, str]] = []
         call_count = [0]
 
         heartbeat = json.dumps({"type": "heartbeat"})
@@ -456,12 +312,9 @@ class TestSSEDisconnectStatus:
                 raise ConnectionRefusedError("Connection refused")
             return _FakeSSEResponse([f"data: {heartbeat}\n"], stop)
 
-        def on_status(text, style):
-            statuses.append((text, style))
-
         def stop_after_reconnect():
-            # Wait until we get at least one message (successful reconnect)
-            while wq.empty() and call_count[0] < 3:
+            # Wait until the connection was retried at least once
+            while call_count[0] < 2:
                 threading.Event().wait(0.01)
             stop.set()
 
@@ -474,11 +327,9 @@ class TestSSEDisconnectStatus:
                 "myagent",
                 "http://127.0.0.1:9999",
                 wq, stop,
-                on_status=on_status,
             )
 
-        error_statuses = [(t, s) for t, s in statuses if s == "error"]
-        assert len(error_statuses) >= 1, f"Expected error status, got: {statuses}"
+        assert call_count[0] >= 2, f"Expected reconnect attempt, got {call_count[0]} call(s)"
 
 class TestSSEDuplicateAgent:
     """Test client behavior when server returns 409 (agent already connected)."""
@@ -490,7 +341,6 @@ class TestSSEDuplicateAgent:
 
         stop = threading.Event()
         wq: queue.Queue = queue.Queue()
-        statuses: list[tuple[str, str]] = []
         call_count = [0]
 
         def fake_urlopen(req, **kw):
@@ -499,22 +349,15 @@ class TestSSEDuplicateAgent:
                 req.full_url, 409, "Conflict", {}, None,
             )
 
-        def on_status(text, style):
-            statuses.append((text, style))
-
         with _mock.patch("urllib.request.urlopen", fake_urlopen):
             _read_from_sse(
                 "claude",
                 "http://127.0.0.1:9999",
                 wq, stop,
-                on_status=on_status,
             )
 
         # Should have called urlopen exactly once (no retry)
         assert call_count[0] == 1
-
-        # Should have reported error via status bar
-        assert any("already connected" in t for t, s in statuses), f"Expected duplicate error, got: {statuses}"
 
         # Should have put error on write_queue
         assert not wq.empty()
@@ -532,22 +375,15 @@ class TestSSEDuplicateAgent:
 
         stop = threading.Event()
         wq: queue.Queue = queue.Queue()
-        statuses: list[tuple[str, str]] = []
         call_count = [0]
 
         def fake_urlopen(req, **kw):
             call_count[0] += 1
             if call_count[0] >= 3:
                 stop.set()
-                raise urllib.error.HTTPError(
-                    req.full_url, 500, "Internal Server Error", {}, None,
-                )
             raise urllib.error.HTTPError(
                 req.full_url, 500, "Internal Server Error", {}, None,
             )
-
-        def on_status(text, style):
-            statuses.append((text, style))
 
         with _mock.patch("urllib.request.urlopen", fake_urlopen), \
              _mock.patch("openvip.client.time.sleep"):
@@ -555,13 +391,10 @@ class TestSSEDuplicateAgent:
                 "claude",
                 "http://127.0.0.1:9999",
                 wq, stop,
-                on_status=on_status,
             )
 
         # Should have retried (more than 1 call)
         assert call_count[0] >= 2
-        # Error statuses should mention HTTP code
-        assert any("500" in t for t, s in statuses), f"Expected HTTP 500 in status, got: {statuses}"
 
 class TestWriteToPtySeparateEsc:
     """Test that text and ESC sequences are written as SEPARATE os.write() calls.

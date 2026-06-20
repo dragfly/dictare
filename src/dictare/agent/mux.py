@@ -7,7 +7,6 @@ import logging
 import os
 import platform
 import queue
-import re as _re
 import select
 import sys
 import termios
@@ -27,24 +26,12 @@ from dictare.agent.pty_session import (
     _set_winsize,  # noqa: F401  — backward-compat re-export
     _write_all,
 )
-from dictare.agent.status_bar import StatusBar
 from dictare.logging.setup import setup_logging
 from dictare.pipeline.base import PipelineAction
 from dictare.pipeline.executors import InputExecutor
 from dictare.utils.stats import update_keystrokes
 
 logger = logging.getLogger(__name__)
-
-# Escape sequences that trigger a reactive status bar redraw:
-# - ESC[2J  = erase screen (Claude Code Ctrl+O, resize)
-# - ESC[J   = erase below cursor (Codex startup: cursor at row 1 → wipes all)
-# - ESC[r   = DECSTBM reset (Codex resets our scroll region)
-_SCREEN_CLEAR = b"\x1b[2J"
-_ERASE_BELOW = b"\x1b[J"
-_DECSTBM_RESET = b"\x1b[r"
-# Regex to detect child-initiated DECSTBM set (ESC[N;Mr) — NOT the bare reset (ESC[r).
-# If the child sets its own scroll region, we must back off.
-_DECSTBM_SET_RE = _re.compile(rb'\x1b\[\d+;\d+r')
 
 # Session logs directory
 SESSIONS_DIR = Path.home() / ".local" / "share" / "dictare" / "sessions"
@@ -250,6 +237,9 @@ def _read_from_stdin(
     session_path: Path | None = None,
     claim_key_raw: bytes = _CTRL_BACKSLASH,
     claim_key_seqs: list[bytes] | None = None,
+    info_key_raw: bytes | None = None,
+    info_key_seqs: list[bytes] | None = None,
+    on_info: Callable[[], None] | None = None,
 ) -> None:
     """Read from keyboard in raw mode and put data in queue.
 
@@ -257,6 +247,9 @@ def _read_from_stdin(
     ``output.set_agent:<agent_id>`` to the engine, making this
     terminal the active voice target.  The keystroke is consumed
     and never forwarded to the child process.
+
+    When *info_key_raw* and *on_info* are set, the info key is
+    intercepted and *on_info* is called (agent info notification).
 
     Supports raw-mode byte, kitty CSI u, and xterm modifyOtherKeys.
     """
@@ -291,6 +284,16 @@ def _read_from_stdin(
                         if not data:
                             continue
 
+                # Intercept info key to show agent info notification
+                if on_info and info_key_raw:
+                    data, found = _strip_claim_key(data, info_key_raw, info_key_seqs or [])
+                    if found:
+                        if session_path:
+                            _log_event(session_path, "info_key", {"agent_id": agent_id})
+                        on_info()
+                        if not data:
+                            continue
+
                 # Count keystrokes (bytes received = approximate keystroke count)
                 if keystroke_counter:
                     keystroke_counter.add(len(data))
@@ -312,51 +315,62 @@ def _claim_agent(agent_id: str, base_url: str) -> None:
 
     threading.Thread(target=_do, daemon=True).start()
 
-def _stream_active_agent(
-    agent_id: str,
-    base_url: str,
-    stop_event: threading.Event,
-    on_status: Callable[[str, str], None],
-) -> None:
-    """Subscribe to /status/stream SSE to track active agent.
+def _abbreviate_home(path: str) -> str:
+    """Replace the user's home prefix with ``~`` (no-op if path is outside home)."""
+    home = str(Path.home())
+    if path == home:
+        return "~"
+    if path.startswith(home + os.sep):
+        return "~" + path[len(home):]
+    return path
 
-    Updates status bar with listening/off/standby indicator.
-    Push-based: engine sends status on every state transition and
-    agent connect/disconnect — no polling needed.
-    """
-    from openvip import Client
 
+def _format_agent_info(agent_id: str, platform_status: dict, cwd: str | None = None) -> str:
+    """Build the notification body: agent name, voice state, current target, cwd."""
     from dictare.status import resolve_display_state
 
-    client = Client(base_url, timeout=5)
-    last_key: tuple[str, str] | None = None
+    state, _style = resolve_display_state(platform_status, agent_id)
+    current = platform_status.get("output", {}).get("current_agent")
+    if current == agent_id:
+        header = f"{agent_id} — {state}"
+    elif current:
+        header = f"{agent_id} — {state} (current: {current})"
+    else:
+        header = f"{agent_id} — {state} (no voice target)"
+    if cwd:
+        return f"{header}\n{_abbreviate_home(cwd)}"
+    return header
 
-    def _on_disconnect(exc: Exception | None) -> None:
-        nonlocal last_key
-        if exc:
-            last_key = None  # Force refresh on reconnect
+def _notify(title: str, message: str) -> None:
+    """Show a system notification (best-effort, never raises)."""
+    import subprocess
 
-    for status in client.subscribe_status(
-        reconnect=True,
-        stop=stop_event.is_set,
-        on_disconnect=_on_disconnect,
-    ):
-        if stop_event.is_set():
-            break
-
-        platform = status.platform or {}
-        state, style = resolve_display_state(platform, agent_id)
-        dot = "●" if state in ("listening", "recording", "off", "muted") else "○"
-        if state == "recording":
-            # Red text for "recording", revert to bar style after
-            label = f"{dot} {agent_id} \u00b7 \x1b[38;5;210mrecording\x1b[38;5;114m"
+    try:
+        if sys.platform == "darwin":
+            esc_msg = message.replace("\\", "\\\\").replace('"', '\\"')
+            esc_title = title.replace("\\", "\\\\").replace('"', '\\"')
+            script = f'display notification "{esc_msg}" with title "{esc_title}"'
+            subprocess.run(["osascript", "-e", script], timeout=5, capture_output=True)
         else:
-            label = f"{dot} {agent_id} \u00b7 {state}"
+            subprocess.run(["notify-send", title, message], timeout=5, capture_output=True)
+    except Exception:
+        pass
 
-        key = (label, style)
-        if key != last_key:
-            last_key = key
-            on_status(label, style)
+def _show_agent_info(agent_id: str, base_url: str) -> None:
+    """Fetch engine status and show it as a system notification (fire-and-forget)."""
+    cwd = os.getcwd()
+
+    def _do() -> None:
+        try:
+            from openvip import Client
+
+            status = Client(base_url, timeout=3).get_status()
+            body = _format_agent_info(agent_id, status.platform or {}, cwd=cwd)
+        except Exception:
+            body = f"{agent_id} — engine unreachable\n{_abbreviate_home(cwd)}"
+        _notify("Dictare", body)
+
+    threading.Thread(target=_do, daemon=True).start()
 
 def _read_from_sse(
     agent_id: str,
@@ -366,7 +380,6 @@ def _read_from_sse(
     session_path: Path | None = None,
     keystroke_counter: KeystrokeCounter | None = None,
     verbose: bool = False,
-    on_status: Callable[[str, str], None] | None = None,
 ) -> None:
     """Connect to engine SSE and receive OpenVIP messages.
 
@@ -380,7 +393,6 @@ def _read_from_sse(
         session_path: Optional session log file path.
         keystroke_counter: Optional keystroke counter for session stats.
         verbose: Log full text in session file.
-        on_status: Optional callback(text, style) for status changes.
     """
     from openvip import Client, DuplicateAgentError
 
@@ -407,11 +419,6 @@ def _read_from_sse(
         if not exc:
             return
         http_code = getattr(exc, "code", None)
-        if on_status:
-            if http_code:
-                on_status(f"\u26a0 {agent_id} \u00b7 HTTP {http_code}, reconnecting...", "error")
-            else:
-                on_status(f"\u26a0 {agent_id} \u00b7 reconnecting...", "error")
         if session_path:
             event = "sse_http_error" if http_code else "sse_connect_error"
             log_data: dict[str, Any] = {"error": str(exc)}
@@ -467,8 +474,6 @@ def _read_from_sse(
 
     except DuplicateAgentError:
         err_msg = f"Agent '{agent_id}' already connected"
-        if on_status:
-            on_status(f"\u2716 {err_msg}", "error")
         if session_path:
             _log_event(session_path, "sse_duplicate", {"agent_id": agent_id})
         write_queue.put(("error", err_msg))  # type: ignore[arg-type]
@@ -506,7 +511,6 @@ def _write_to_pty(
         try:
             if msg_type == "error":
                 # Fatal error from SSE thread — stop the session
-                # (status bar already updated by SSE thread)
                 if session_path:
                     _log_event(session_path, "agent_error", {"error": data})
                 stop_event.set()
@@ -665,11 +669,9 @@ def run_agent(
     command: list[str],
     verbose: bool = False,
     base_url: str = DEFAULT_BASE_URL,
-    status_bar: bool = True,
     clear_on_start: bool = True,
     claim_key: str = "ctrl+\\",
-    agent_label: str | None = None,
-    scroll_region: bool = True,
+    info_key: str = "ctrl+]",
 ) -> int:
     """Run a command with multiplexed input from stdin and dictare SSE.
 
@@ -681,9 +683,10 @@ def run_agent(
         command: Command and arguments to run.
         verbose: Enable verbose agent logging and full text in session file.
         base_url: Engine HTTP server base URL.
-        status_bar: Show persistent status bar on last terminal row.
         clear_on_start: Clear terminal before launching child process.
         claim_key: Key combo to claim this agent (e.g. "ctrl+\\", "ctrl+]").
+        info_key: Key combo to show agent info as a system notification
+            (empty string disables it).
 
     Returns:
         Exit code of the process.
@@ -708,8 +711,15 @@ def run_agent(
         return 1
 
     # --- Pre-flight OK — proceed with session setup ---
-    # Parse claim key once at startup
+    # Parse claim and info keys once at startup
     claim_raw, claim_seqs = _parse_claim_key(claim_key)
+    info_raw: bytes | None = None
+    info_seqs: list[bytes] = []
+    if info_key:
+        info_raw, info_seqs = _parse_claim_key(info_key)
+        if info_raw == claim_raw:
+            logger.warning("info_key equals claim_key — info notification disabled")
+            info_raw = None
 
     # Create session log
     session_path = _get_session_log_path(agent_id)
@@ -729,7 +739,6 @@ def run_agent(
         "server": base_url,
         "session": str(session_path),
         "command": " ".join(command),
-        "scroll_region": scroll_region,
     })
 
     # Load redact rules (list of [find, replace] byte pairs)
@@ -750,58 +759,13 @@ def run_agent(
         old_settings = termios.tcgetattr(sys.stdin.fileno())
 
     rows, cols = _get_winsize()
-    sbar = StatusBar(agent_id, agent_label=agent_label, cwd=Path.cwd(), use_scroll_region=scroll_region) if status_bar else None
-
-    # Auto-detection: if the child sends its own DECSTBM set sequences,
-    # we must disable our scroll region to avoid conflicts.
-    _sr_active = scroll_region  # mutable — can be disabled at runtime
-
-    def _disable_scroll_region() -> None:
-        nonlocal _sr_active
-        if not _sr_active:
-            return
-        _sr_active = False
-        # Remove our scroll region and let the child manage its own
-        if sbar:
-            sbar._use_scroll_region = False
-            sbar._region_esc = b""
-        # Reset scroll region to full screen
-        sys.stdout.buffer.write(b"\x1b[r")
-        sys.stdout.buffer.flush()
-        logger.info("scroll_region_auto_disabled", extra={
-            "reason": "child uses own DECSTBM sequences",
-        })
 
     def on_output(data: bytes) -> None:
         for find, replace in _redact_rules:
             data = data.replace(find, replace)
-
-        # Auto-detect: child sets its own scroll region → disable ours
-        if _sr_active and _DECSTBM_SET_RE.search(data):
-            _disable_scroll_region()
-
-        # Rewrite bare DECSTBM reset so child can't destroy our scroll region.
-        if sbar and _sr_active and _DECSTBM_RESET in data:
-            safe_region = f"\x1b[1;{sbar._rows - 1}r".encode()
-            data = data.replace(_DECSTBM_RESET, safe_region)
         os.write(sys.stdout.fileno(), data)
-        if sbar and _sr_active:
-            sbar.after_child_output()
-        if sbar and _sr_active and (_SCREEN_CLEAR in data or _ERASE_BELOW in data):
-            sbar.request_redraw()
-        if sbar and not _sr_active:
-            sbar.mark_child_output()
 
-    def on_resize(r: int, c: int) -> None:
-        if sbar:
-            sbar.on_resize(r, c)
-
-    session = PTYSession(
-        command, rows, cols,
-        on_output=on_output,
-        on_resize=on_resize,
-        reserve_rows=1 if sbar and scroll_region else 0,
-    )
+    session = PTYSession(command, rows, cols, on_output=on_output)
 
     try:
         # Clear terminal for clean start (before launching child process
@@ -811,10 +775,6 @@ def run_agent(
             sys.stdout.buffer.flush()
 
         session.start()
-
-        # Init status bar before raw mode
-        if sbar:
-            sbar.init(rows, cols)
 
         # Put terminal in raw mode
         if old_settings:
@@ -843,14 +803,21 @@ def run_agent(
         stdin_thread = threading.Thread(
             target=_read_from_stdin,
             args=(write_queue, stop_event, keystroke_counter, agent_id, base_url, session_path),
-            kwargs={"claim_key_raw": claim_raw, "claim_key_seqs": claim_seqs},
+            kwargs={
+                "claim_key_raw": claim_raw,
+                "claim_key_seqs": claim_seqs,
+                "info_key_raw": info_raw,
+                "info_key_seqs": info_seqs,
+                "on_info": (
+                    (lambda: _show_agent_info(agent_id, base_url)) if info_raw else None
+                ),
+            },
             daemon=True,
         )
         # SSE-based IPC: connect to engine HTTP server
         sse_thread = threading.Thread(
             target=_read_from_sse,
             args=(agent_id, base_url, write_queue, stop_event, session_path, keystroke_counter, verbose),
-            kwargs={"on_status": sbar.update if sbar else None},
             daemon=True,
         )
         # Start consumer thread (read from queue, write to PTY)
@@ -859,23 +826,11 @@ def run_agent(
             args=(master_fd, write_queue, stop_event, session_path, keystroke_counter, verbose),
             daemon=True,
         )
-        # Stream engine status via SSE (status bar: listening/off/standby)
-        if sbar:
-            status_thread = threading.Thread(
-                target=_stream_active_agent,
-                args=(agent_id, base_url, stop_event, sbar.update),
-                daemon=True,
-            )
-
         stdin_thread.start()
         sse_thread.start()
         writer_thread.start()
-        if sbar:
-            status_thread.start()
 
-        exit_code = session.run_output_loop(
-            on_idle=sbar.check_redraw if sbar else None,
-        )
+        exit_code = session.run_output_loop()
         stop_event.set()
 
         # Log session end with total keystrokes
@@ -894,10 +849,6 @@ def run_agent(
         except OSError:
             pass
         _report_focus(agent_id, base_url, False)
-
-        # Reset scroll region before restoring terminal
-        if sbar:
-            sbar.cleanup()
 
         # Restore terminal settings
         if old_settings:

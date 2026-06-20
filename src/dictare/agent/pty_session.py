@@ -52,7 +52,7 @@ class PTYSession:
     """Manages a child process inside a pseudo-terminal.
 
     Handles: openpty, fork+exec, SIGWINCH, output loop, waitpid, cleanup.
-    Does NOT handle: raw mode, status bar, SSE, session logging, write queue.
+    Does NOT handle: raw mode, SSE, session logging, write queue.
     """
 
     def __init__(
@@ -61,15 +61,11 @@ class PTYSession:
         rows: int = 24,
         cols: int = 80,
         on_output: Callable[[bytes], None] | None = None,
-        on_resize: Callable[[int, int], None] | None = None,
-        reserve_rows: int = 0,
     ) -> None:
         self._command = command
         self._rows = rows
         self._cols = cols
         self._on_output = on_output
-        self._on_resize = on_resize
-        self._reserve_rows = reserve_rows
         self._master_fd: int | None = None
         self._pid: int | None = None
         self._old_sigwinch: signal._HANDLER | None = None
@@ -103,16 +99,14 @@ class PTYSession:
             self._command = [resolved] + self._command[1:]
 
         master_fd, slave_fd = pty.openpty()
-        _set_winsize(slave_fd, self._rows - self._reserve_rows, self._cols)
+        _set_winsize(slave_fd, self._rows, self._cols)
 
         # Install SIGWINCH handler before fork
         def _handle_sigwinch(signum: int, frame: object) -> None:
             rows, cols = _get_winsize()
             self._rows = rows
             self._cols = cols
-            if self._on_resize:
-                self._on_resize(rows, cols)
-            _set_winsize(master_fd, rows - self._reserve_rows, cols)
+            _set_winsize(master_fd, rows, cols)
 
         self._old_sigwinch = signal.signal(signal.SIGWINCH, _handle_sigwinch)
 
@@ -135,11 +129,8 @@ class PTYSession:
         self._master_fd = master_fd
         self._pid = pid
 
-    def run_output_loop(self, on_idle: Callable[[], None] | None = None) -> int:
+    def run_output_loop(self) -> int:
         """Read from PTY and dispatch output. Blocks until child exits.
-
-        Args:
-            on_idle: Called on each select timeout (e.g. for deferred redraws).
 
         Returns:
             Child process exit code.
@@ -165,9 +156,6 @@ class PTYSession:
                             break
                     except OSError:
                         break
-
-                if on_idle:
-                    on_idle()
         except KeyboardInterrupt:
             os.kill(pid, signal.SIGTERM)
 

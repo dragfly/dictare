@@ -34,7 +34,7 @@ class MockEngine:
     def __init__(self) -> None:
         self._registered_agents: list = []
         self._unregistered_agents: list[str] = []
-        self._tts_mgr = _MockTTSMgr()
+        self.tts_mgr = _MockTTSMgr()
 
     def register_agent(self, agent) -> bool:
         self._registered_agents.append(agent)
@@ -48,7 +48,7 @@ class MockEngine:
         return {"protocol_version": "1.0", "state": "off", "connected_agents": []}
 
     def complete_tts(self, message_id: str, *, ok: bool, duration_ms: int = 0) -> None:
-        self._tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
+        self.tts_mgr.complete_tts(message_id, ok=ok, duration_ms=duration_ms)
 
 @pytest.fixture
 def engine() -> MockEngine:
@@ -98,8 +98,8 @@ class TestJSONParseExceptionType:
 
         # Create agent queue so endpoint doesn't 404
         queue: asyncio.Queue = asyncio.Queue()
-        with server._agent_queues_lock:
-            server._agent_queues["test-agent"] = queue
+        with server.agent_queues_lock:
+            server.agent_queues["test-agent"] = queue
 
         response = client.post(
             "/openvip/agents/test-agent/messages",

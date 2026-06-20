@@ -199,3 +199,127 @@ class TestCustomClaimKeys:
     def test_ctrl_close_bracket_raw(self) -> None:
         raw, _ = _parse_claim_key("ctrl+]")
         assert raw == b"\x1d"  # ord(']') & 0x1F = 93 & 31 = 29 = 0x1d
+
+# ---------------------------------------------------------------------------
+# _format_agent_info (info key notification)
+# ---------------------------------------------------------------------------
+
+class TestFormatAgentInfo:
+    """Test agent info notification body formatting."""
+
+    def test_current_agent_listening(self) -> None:
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "listening", "output": {"current_agent": "frontend"}}
+        body = _format_agent_info("frontend", platform)
+        assert body == "frontend — listening"
+
+    def test_current_agent_recording(self) -> None:
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "recording", "output": {"current_agent": "frontend"}}
+        body = _format_agent_info("frontend", platform)
+        assert body == "frontend — recording"
+
+    def test_standby_shows_current(self) -> None:
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "listening", "output": {"current_agent": "backend"}}
+        body = _format_agent_info("frontend", platform)
+        assert body == "frontend — standby (current: backend)"
+
+    def test_no_voice_target(self) -> None:
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "off", "output": {"current_agent": None}}
+        body = _format_agent_info("frontend", platform)
+        assert body == "frontend — standby (no voice target)"
+
+    def test_engine_off_current_agent(self) -> None:
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "off", "output": {"current_agent": "frontend"}}
+        body = _format_agent_info("frontend", platform)
+        assert body == "frontend — off"
+
+    def test_cwd_appended_as_second_line(self) -> None:
+        from pathlib import Path
+
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "listening", "output": {"current_agent": "frontend"}}
+        cwd = str(Path.home() / "repos" / "oss" / "dictare")
+        body = _format_agent_info("frontend", platform, cwd=cwd)
+        assert body == "frontend — listening\n~/repos/oss/dictare"
+
+    def test_cwd_outside_home_not_abbreviated(self) -> None:
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "listening", "output": {"current_agent": "frontend"}}
+        body = _format_agent_info("frontend", platform, cwd="/tmp/work")
+        assert body == "frontend — listening\n/tmp/work"
+
+
+class TestAbbreviateHome:
+    """Test ~ abbreviation of home-prefixed paths."""
+
+    def test_exact_home(self) -> None:
+        from pathlib import Path
+
+        from dictare.agent.mux import _abbreviate_home
+
+        assert _abbreviate_home(str(Path.home())) == "~"
+
+    def test_subdir_of_home(self) -> None:
+        from pathlib import Path
+
+        from dictare.agent.mux import _abbreviate_home
+
+        assert _abbreviate_home(str(Path.home() / "a" / "b")) == "~/a/b"
+
+    def test_outside_home_unchanged(self) -> None:
+        from dictare.agent.mux import _abbreviate_home
+
+        assert _abbreviate_home("/usr/local/bin") == "/usr/local/bin"
+
+    def test_path_only_prefix_not_subdir(self) -> None:
+        """A path that *starts with the home string* but isn't a subdir stays unchanged."""
+        from pathlib import Path
+
+        from dictare.agent.mux import _abbreviate_home
+
+        sibling = str(Path.home()) + "-other"
+        assert _abbreviate_home(sibling) == sibling
+
+class TestShowAgentInfo:
+    """Test _show_agent_info fire-and-forget behavior."""
+
+    def test_does_not_block_or_raise(self) -> None:
+        """Runs in background thread even with unreachable engine."""
+        import time
+
+        from dictare.agent.mux import _show_agent_info
+
+        with patch("dictare.agent.mux._notify") as mock_notify:
+            start = time.monotonic()
+            _show_agent_info("myagent", "http://127.0.0.1:1")  # unreachable
+            elapsed = time.monotonic() - start
+            assert elapsed < 0.5  # fire-and-forget, never blocks
+
+            # Wait for the background thread to report failure
+            for _ in range(100):
+                if mock_notify.called:
+                    break
+                time.sleep(0.05)
+            assert mock_notify.called
+            title, body = mock_notify.call_args[0]
+            assert title == "Dictare"
+            assert "engine unreachable" in body
+
+class TestInfoKeyCollision:
+    """info_key equal to claim_key is disabled with a warning."""
+
+    def test_parse_info_key_ctrl_bracket(self) -> None:
+        raw, seqs = _parse_claim_key("ctrl+]")
+        assert raw == b"\x1d"
+        assert f"\x1b[{ord(']')};5u".encode() in seqs

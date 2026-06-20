@@ -175,13 +175,13 @@ class TestAgentModeProperty:
         assert engine.agent_mode is True
 
 class TestEngineSaveState:
-    """Engine._save_state round-trip."""
+    """Engine.save_state round-trip."""
 
     def test_save_agent_and_listening(self, state_dir: Path) -> None:
         engine = _make_engine()
-        engine._running = True
+        engine.running = True
         engine._agent_mgr._current_agent_id = "claude"
-        engine._save_state()
+        engine.save_state()
 
         loaded = load_state()
         assert loaded is not None
@@ -189,13 +189,13 @@ class TestEngineSaveState:
 
     def test_save_skipped_during_shutdown(self, state_dir: Path) -> None:
         engine = _make_engine()
-        engine._running = True
+        engine.running = True
         engine._agent_mgr._current_agent_id = "voice"
-        engine._save_state()
+        engine.save_state()
 
-        engine._running = False
+        engine.running = False
         engine._agent_mgr._current_agent_id = None
-        engine._save_state()  # Should be a no-op
+        engine.save_state()  # Should be a no-op
 
         loaded = load_state()
         assert loaded is not None
@@ -203,7 +203,7 @@ class TestEngineSaveState:
 
     def test_save_before_shutdown_bypasses_running_guard(self, state_dir: Path) -> None:
         engine = _make_engine()
-        engine._running = True
+        engine.running = True
         engine._agent_mgr._current_agent_id = "voice"
         engine.save_session_before_shutdown()
 
@@ -212,12 +212,12 @@ class TestEngineSaveState:
         assert loaded["active_agent"] == "voice"
 
 class TestEngineRestoreState:
-    """Engine._restore_state overrides config from session."""
+    """Engine.restore_state overrides config from session."""
 
     def test_restore_sets_preferred_agent(self, state_dir: Path) -> None:
         save_state(active_agent="claude")
         engine = _make_engine()
-        engine._restore_state(start_listening=False)
+        engine.restore_state(start_listening=False)
         assert engine._agent_mgr._last_sse_agent_id == "claude"
         assert engine._agent_mgr._preferred_agent_deadline is not None
 
@@ -226,7 +226,7 @@ class TestEngineRestoreState:
 
         save_state(active_agent=DictareEngine.KEYBOARD_AGENT_ID)
         engine = _make_engine()
-        engine._restore_state(start_listening=False)
+        engine.restore_state(start_listening=False)
         assert engine._agent_mgr._current_agent_id == DictareEngine.KEYBOARD_AGENT_ID
         assert engine.agent_mode is False
         assert engine._agent_mgr._last_sse_agent_id is None
@@ -234,13 +234,13 @@ class TestEngineRestoreState:
     def test_restore_listening(self, state_dir: Path) -> None:
         save_state(active_agent="claude", listening=True)
         engine = _make_engine()
-        result = engine._restore_state(start_listening=False)
+        result = engine.restore_state(start_listening=False)
         assert result is True  # listening restored
 
     def test_restore_not_listening(self, state_dir: Path) -> None:
         save_state(active_agent="claude", listening=False)
         engine = _make_engine()
-        result = engine._restore_state(start_listening=False)
+        result = engine.restore_state(start_listening=False)
         assert result is False
 
     def test_expired_session_uses_config(self, state_dir: Path) -> None:
@@ -252,13 +252,13 @@ class TestEngineRestoreState:
         (state_dir / "session-state.json").write_text(json.dumps(data))
 
         engine = _make_engine("keyboard")
-        result = engine._restore_state(start_listening=False)
+        result = engine.restore_state(start_listening=False)
         assert result is False  # config default, not restored
         assert engine.agent_mode is False  # config says keyboard
 
     def test_no_file_uses_config(self, state_dir: Path) -> None:
         engine = _make_engine("keyboard")
-        result = engine._restore_state(start_listening=False)
+        result = engine.restore_state(start_listening=False)
         assert result is False
         assert engine.agent_mode is False
 
@@ -272,18 +272,18 @@ class TestGracePeriod:
     def test_restore_sets_grace_period(self, state_dir: Path) -> None:
         save_state(active_agent="claude")
         engine = _make_engine()
-        engine._restore_state(start_listening=False)
+        engine.restore_state(start_listening=False)
         assert engine._agent_mgr._preferred_agent_deadline is not None
 
     def test_no_session_no_grace_period(self, state_dir: Path) -> None:
         engine = _make_engine()
-        engine._restore_state(start_listening=False)
+        engine.restore_state(start_listening=False)
         assert engine._agent_mgr._preferred_agent_deadline is None
 
     def test_grace_expired_activates_first_agent(self, state_dir: Path) -> None:
         save_state(active_agent="claude")
         engine = _make_engine()
-        engine._restore_state(start_listening=False)
+        engine.restore_state(start_listening=False)
 
         agent = MagicMock()
         agent.id = "aider"
@@ -300,7 +300,7 @@ class TestGracePeriod:
 
         save_state(active_agent="claude")
         engine = _make_engine()
-        engine._restore_state(start_listening=False)
+        engine.restore_state(start_listening=False)
 
         assert engine._agent_mgr._preferred_agent_deadline is not None
         assert engine._agent_mgr._preferred_agent_deadline > _time.monotonic()
@@ -309,7 +309,7 @@ class TestGracePeriod:
     def test_preferred_agent_arrives_within_grace(self, state_dir: Path) -> None:
         save_state(active_agent="claude")
         engine = _make_engine()
-        engine._restore_state(start_listening=False)
+        engine.restore_state(start_listening=False)
 
         agent = MagicMock()
         agent.id = "claude"

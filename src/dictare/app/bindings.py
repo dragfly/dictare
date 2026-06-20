@@ -1,10 +1,10 @@
 """KeyboardBindingManager - manages hotkeys, shortcuts, and device profiles.
 
-Translates user input (key presses, device buttons) into AppController commands.
+Translates user input (key presses, device buttons) into engine commands.
 
 Responsibilities:
 - Hotkey binding (e.g., ScrollLock → toggle_listening)
-- Keyboard shortcuts (e.g., Ctrl+Alt+→ → next_agent)
+- Keyboard shortcuts (e.g., Ctrl+Alt+→ → next agent)
 - Device profiles (e.g., presenter buttons)
 """
 
@@ -15,25 +15,25 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from dictare.app.controller import AppController
     from dictare.config import Config
+    from dictare.core.engine import DictareEngine
 
 logger = logging.getLogger(__name__)
 
 class KeyboardBindingManager:
     """Manages keyboard bindings and input sources.
 
-    Connects input events (hotkeys, shortcuts, devices) to AppController commands.
+    Connects input events (hotkeys, shortcuts, devices) to engine commands.
     """
 
-    def __init__(self, controller: AppController, config: Config) -> None:
+    def __init__(self, engine: DictareEngine, config: Config) -> None:
         """Initialize the binding manager.
 
         Args:
-            controller: AppController to send commands to.
+            engine: Engine to send commands to.
             config: Application configuration.
         """
-        self._controller = controller
+        self._engine = engine
         self._config = config
         self._input_manager: Any = None  # InputManager
         self._running = False
@@ -80,8 +80,8 @@ class KeyboardBindingManager:
         logger.debug("KeyboardBindingManager stopped")
 
     def _create_command_handler(self) -> _BindingCommands:
-        """Create command handler that routes to AppController."""
-        return _BindingCommands(self._controller)
+        """Create command handler that routes to the engine."""
+        return _BindingCommands(self._engine)
 
     @property
     def is_running(self) -> bool:
@@ -96,23 +96,22 @@ class KeyboardBindingManager:
         return []
 
 class _BindingCommands:
-    """Command handler that routes InputManager commands to AppController.
+    """Command handler that routes InputManager commands to the engine.
 
     This bridges the InputManager (which expects an AppCommands-like interface)
-    to the AppController (which has the actual implementation).
+    to the DictareEngine (which has the actual implementation).
     """
 
-    def __init__(self, controller: AppController) -> None:
-        self._controller = controller
-        self._commands: dict[str, Callable[..., None]] = {
-            "listening-on": lambda: self._set_listening(True),
-            "listening-off": lambda: self._set_listening(False),
-            "toggle-listening": self._controller.toggle_listening,
-            "next-agent": self._controller.next_agent,
-            "prev-agent": self._controller.prev_agent,
-            "switch-to-agent": self._switch_to_agent,
-            "switch-to-agent-index": self._switch_to_agent_index,
-            "repeat": self._controller.repeat_last,
+    def __init__(self, engine: DictareEngine) -> None:
+        self._commands: dict[str, Callable[..., Any]] = {
+            "listening-on": lambda: engine.set_listening(True),
+            "listening-off": lambda: engine.set_listening(False),
+            "toggle-listening": engine.toggle_listening,
+            "next-agent": lambda: engine.switch_agent(1),
+            "prev-agent": lambda: engine.switch_agent(-1),
+            "switch-to-agent": engine.switch_to_agent_by_name,
+            "switch-to-agent-index": engine.switch_to_agent_by_index,
+            "repeat": engine.resend_last,
         }
 
     def execute(self, name: str, args: dict | None = None) -> bool:
@@ -138,17 +137,3 @@ class _BindingCommands:
         except Exception as e:
             logger.warning(f"Command error {name}: {e}")
             return False
-
-    def _set_listening(self, on: bool) -> None:
-        """Set listening state (idempotent)."""
-        engine = self._controller.engine
-        if engine:
-            engine.set_listening(on)
-
-    def _switch_to_agent(self, name: str) -> None:
-        """Switch to agent by name."""
-        self._controller.switch_to_agent(name)
-
-    def _switch_to_agent_index(self, index: int) -> None:
-        """Switch to agent by index."""
-        self._controller.switch_to_agent_index(index)

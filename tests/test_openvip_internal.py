@@ -162,8 +162,8 @@ class TestPutMessage:
         self, server: OpenVIPServer,
     ) -> None:
         """put_message returns False when server event loop not running."""
-        with server._agent_queues_lock:
-            server._agent_queues["test"] = asyncio.Queue()
+        with server.agent_queues_lock:
+            server.agent_queues["test"] = asyncio.Queue()
         result = server.put_message("test", {"text": "hi"})
         assert result is False
 
@@ -179,9 +179,9 @@ class TestConnectedAgents:
         assert server.connected_agents == []
 
     def test_reflects_connected_agents(self, server: OpenVIPServer) -> None:
-        with server._agent_queues_lock:
-            server._agent_queues["alice"] = asyncio.Queue()
-            server._agent_queues["bob"] = asyncio.Queue()
+        with server.agent_queues_lock:
+            server.agent_queues["alice"] = asyncio.Queue()
+            server.agent_queues["bob"] = asyncio.Queue()
         assert sorted(server.connected_agents) == ["alice", "bob"]
 
 # =============================================================================

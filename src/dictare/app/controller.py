@@ -129,9 +129,9 @@ class _ControllerEvents(EngineEvents):
 class AppController:
     """Application controller for foreground mode.
 
-    Manages the lifecycle of engine and input bindings.
-    Exposes app-level commands (toggle_listening, next_agent, etc.)
-    that are stateful and non-atomic.
+    Manages the lifecycle of engine, HTTP server, and input bindings.
+    Also hosts the hotkey entry points (on_hotkey_*) that serve.py wires
+    to SIGUSR1/IPC before the engine exists — they late-bind to the engine.
 
     Usage:
         controller = AppController(config)
@@ -274,7 +274,7 @@ class AppController:
 
         # 3. Restore saved state BEFORE HTTP server starts.
         #    Overrides config defaults with saved session if fresh.
-        start_listening = self._engine._restore_state(start_listening)
+        start_listening = self._engine.restore_state(start_listening)
 
         # 4. Start HTTP server early (so StatusPanel can connect during loading)
         from dictare.core.http_server import OpenVIPServer
@@ -282,7 +282,7 @@ class AppController:
         self._http_server = OpenVIPServer(
             self._engine, self,
             self._config.server.host, self._config.server.port,
-            auth_tokens={"register_tts": self._engine._tts_mgr.auth_token},
+            auth_tokens={"register_tts": self._engine.tts_mgr.auth_token},
         )
         self._http_server.start()
 
@@ -316,7 +316,7 @@ class AppController:
 
         # 7. Create and start keyboard bindings (foreground only)
         if with_bindings:
-            self._bindings = KeyboardBindingManager(self, self._config)
+            self._bindings = KeyboardBindingManager(self._engine, self._config)
             self._bindings.start()
 
         self._running = True
@@ -341,8 +341,8 @@ class AppController:
         # Save final state, then disable further saves — agents unregister during
         # HTTP server shutdown and would overwrite state with stale data.
         if self._engine:
-            self._engine._save_state()
-            self._engine._running = False
+            self._engine.save_state()
+            self._engine.running = False
 
         # Stop bindings
         if self._bindings:
@@ -378,7 +378,7 @@ class AppController:
         """Request graceful shutdown.  Saves session state before stopping."""
         if self._engine:
             self._engine.save_session_before_shutdown()
-            self._engine._running = False
+            self._engine.running = False
         self._shutdown_event.set()
 
     def wait_for_shutdown(self, timeout: float | None = None) -> bool:
@@ -393,20 +393,9 @@ class AppController:
         return self._shutdown_event.wait(timeout)
 
     # =========================================================================
-    # App Commands (stateful, non-atomic)
+    # Hotkey entry points (wired to SIGUSR1/IPC BEFORE start() — engine may
+    # not exist yet, hence the late-binding guards)
     # =========================================================================
-
-    def toggle_listening(self) -> None:
-        """Toggle listening on/off.
-
-        Reads current state and calls set_listening with opposite value.
-        """
-        if not self._engine:
-            return
-
-        current = self._engine.is_listening
-        self._engine.set_listening(not current)
-        logger.debug(f"toggle_listening: {current} -> {not current}")
 
     def on_hotkey_tap(self) -> None:
         """Simulate a complete hotkey tap through the TapDetector.
@@ -418,8 +407,8 @@ class AppController:
         """
         if not self._engine:
             return
-        self._engine._tap_detector.on_key_down()
-        self._engine._tap_detector.on_key_up()
+        self._engine.tap_detector.on_key_down()
+        self._engine.tap_detector.on_key_up()
 
     def on_hotkey_key_down(self) -> None:
         """Called when the hotkey key is pressed down (IPC key.down event).
@@ -429,13 +418,13 @@ class AppController:
         """
         if not self._engine:
             return
-        self._engine._tap_detector.on_key_down()
+        self._engine.tap_detector.on_key_down()
 
     def on_hotkey_key_up(self) -> None:
         """Called when the hotkey key is released (IPC key.up event)."""
         if not self._engine:
             return
-        self._engine._tap_detector.on_key_up()
+        self._engine.tap_detector.on_key_up()
 
     def on_hotkey_other_key(self) -> None:
         """Called when another key is pressed while the hotkey modifier is held.
@@ -445,7 +434,7 @@ class AppController:
         """
         if not self._engine:
             return
-        self._engine._tap_detector.on_other_key()
+        self._engine.tap_detector.on_other_key()
 
     def on_hotkey_combo(self) -> None:
         """Called when the mode-switch combo is pressed (modifier + hotkey).
@@ -455,71 +444,6 @@ class AppController:
         if not self._engine:
             return
         self._engine.toggle_mode()
-
-    def next_agent(self) -> None:
-        """Switch to next agent.
-
-        Uses engine's built-in _switch_agent(direction=+1).
-        """
-        if not self._engine:
-            return
-
-        self._engine.switch_agent(1)
-
-    def prev_agent(self) -> None:
-        """Switch to previous agent.
-
-        Uses engine's built-in _switch_agent(direction=-1).
-        """
-        if not self._engine:
-            return
-
-        self._engine.switch_agent(-1)
-
-    def switch_to_agent(self, name: str) -> None:
-        """Switch to agent by name.
-
-        If the engine is in keyboard mode, switches to agents mode first
-        so the voice output actually reaches the agent.
-
-        Args:
-            name: Agent name to switch to.
-        """
-        if not self._engine:
-            return
-
-        if not self._engine.agent_mode:
-            self._engine.set_output_mode("agents")
-
-        self._engine.switch_to_agent_by_name(name)
-
-    def switch_to_agent_index(self, index: int) -> None:
-        """Switch to agent by index (1-based for user convenience).
-
-        Args:
-            index: 1-based agent index.
-        """
-        if not self._engine:
-            return
-
-        self._engine.switch_to_agent_by_index(index)
-
-    def repeat_last(self) -> None:
-        """Resend the last transcription to the current agent."""
-        if not self._engine:
-            return
-
-        self._engine.resend_last()
-
-    def set_output_mode(self, mode: str) -> None:
-        """Switch output mode (keyboard <-> agents).
-
-        Args:
-            mode: "keyboard" or "agents".
-        """
-        if not self._engine:
-            return
-        self._engine.set_output_mode(mode)
 
     # =========================================================================
     # Properties
@@ -540,30 +464,11 @@ class AppController:
         """Check if controller is running."""
         return self._running
 
-    @property
-    def is_listening(self) -> bool:
-        """Check if engine is listening."""
-        return self._engine.is_listening if self._engine else False
-
-    @property
-    def current_agent(self) -> str | None:
-        """Get current agent name."""
-        if not self._engine:
-            return None
-        return self._engine.current_agent
-
-    @property
-    def agents(self) -> list[str]:
-        """Get list of agent names."""
-        if not self._engine:
-            return []
-        return self._engine.agents
-
     # =========================================================================
     # Internal
     # =========================================================================
 
-    def _handle_app_command(self, body: dict) -> dict:
+    def handle_app_command(self, body: dict) -> dict:
         """Handle application-level control commands.
 
         Called by engine for commands that are not protocol-level
@@ -575,11 +480,13 @@ class AppController:
         if command == "output.set_agent" or command.startswith("output.set_agent:"):
             agent = command.split(":", 1)[1] if ":" in command else body.get("agent", "")
             logger.info("switch_to_agent: %s", agent)
-            self.switch_to_agent(agent)
+            if self._engine:
+                self._engine.switch_to_agent_by_name(agent)
             return {"openvip": "1.0", "status": "ok"}
         elif command.startswith("output.set_mode:"):
             mode = command.split(":", 1)[1]
-            self.set_output_mode(mode)
+            if self._engine:
+                self._engine.set_output_mode(mode)
             return {"openvip": "1.0", "status": "ok", "mode": mode}
 
         return {"openvip": "1.0", "status": "error", "error": f"Unknown command: {command}"}
