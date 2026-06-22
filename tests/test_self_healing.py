@@ -1,8 +1,8 @@
 """Tests for self-healing python_path resolution.
 
-After `brew upgrade`, the Cellar path changes (e.g. 0.2.0 → 0.2.1).
-resolve_python_path() decides which path to use; ensure_python_path()
-writes it to disk. The logic is pure — no SO calls, fully testable.
+The launcher reads ``~/.dictare/python_path`` before Python starts. New installs
+pin that file to Dictare's runtime store; legacy installs can still fall back to
+Homebrew or the currently running development interpreter.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from dictare import runtime_store
 from dictare.daemon import app_bundle
 from dictare.daemon.app_bundle import resolve_python_path
 
@@ -181,7 +182,7 @@ class TestFindBrewPython:
 
 
 # ---------------------------------------------------------------------------
-# ensure_python_path — brew priority + dev-mode fallback
+# ensure_python_path — runtime-store priority + legacy fallbacks
 # ---------------------------------------------------------------------------
 
 class TestEnsurePythonPath:
@@ -200,66 +201,60 @@ class TestEnsurePythonPath:
         f = fake_home / ".dictare" / "python_path"
         return f.read_text().strip() if f.exists() else None
 
-    def test_brew_priority_overrides_stale_pyenv_path(
+    def test_runtime_store_overrides_stale_pyenv_path(
         self,
         fake_home: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """The exact bug we're fixing: a stale pyenv path gets replaced with
-        the brew interpreter — even though `sys.executable` would also be pyenv."""
-        brew = "/opt/homebrew/Cellar/dictare/0.2.7/libexec/uv-tools/dictare/bin/python"
+        runtime = "/Users/dev/.local/share/dictare/versions/0.5.0rc1/bin/python"
         pyenv = "/Users/dev/.pyenv/versions/3.11.7/bin/python3.11"
 
         (fake_home / ".dictare").mkdir()
         (fake_home / ".dictare" / "python_path").write_text(pyenv)
 
-        monkeypatch.setattr(app_bundle, "find_brew_python", lambda: brew)
+        monkeypatch.setattr(runtime_store, "resolve_service_python_path", lambda fallback=None: runtime)
         app_bundle.ensure_python_path(pyenv)
 
-        assert self._stored(fake_home) == brew
+        assert self._stored(fake_home) == runtime
 
-    def test_brew_priority_no_rewrite_when_already_correct(
+    def test_runtime_store_no_rewrite_when_already_correct(
         self,
         fake_home: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        brew = "/opt/homebrew/Cellar/dictare/0.2.7/libexec/uv-tools/dictare/bin/python"
+        runtime = "/Users/dev/.local/share/dictare/versions/0.5.0rc1/bin/python"
 
         (fake_home / ".dictare").mkdir()
-        (fake_home / ".dictare" / "python_path").write_text(brew)
+        (fake_home / ".dictare" / "python_path").write_text(runtime)
         before_mtime = (fake_home / ".dictare" / "python_path").stat().st_mtime_ns
 
-        monkeypatch.setattr(app_bundle, "find_brew_python", lambda: brew)
+        monkeypatch.setattr(runtime_store, "resolve_service_python_path", lambda fallback=None: runtime)
         app_bundle.ensure_python_path("/some/other/python")
 
         # Path is unchanged AND file was not rewritten.
-        assert self._stored(fake_home) == brew
+        assert self._stored(fake_home) == runtime
         assert (fake_home / ".dictare" / "python_path").stat().st_mtime_ns == before_mtime
 
-    def test_dev_mode_fallback_when_no_brew(
+    def test_dev_mode_fallback_when_no_runtime_or_brew(
         self,
         fake_home: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Without brew installed, `sys.executable` wins (pre-existing behavior).
-        This is what dev workflows rely on (e.g. `dictare service install`
-        from a local .venv)."""
         venv = "/Users/dev/repo/dictare/.venv/bin/python"
+        monkeypatch.setattr(runtime_store, "resolve_service_python_path", lambda fallback=None: None)
         monkeypatch.setattr(app_bundle, "find_brew_python", lambda: None)
         app_bundle.ensure_python_path(venv)
         assert self._stored(fake_home) == venv
 
-    def test_brew_priority_first_install(
+    def test_legacy_brew_fallback_when_no_runtime(
         self,
         fake_home: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """No stored path yet — brew is detected and pinned immediately."""
         brew = "/opt/homebrew/Cellar/dictare/0.2.7/libexec/uv-tools/dictare/bin/python"
+        monkeypatch.setattr(runtime_store, "resolve_service_python_path", lambda fallback=None: None)
         monkeypatch.setattr(app_bundle, "find_brew_python", lambda: brew)
 
-        # Running interpreter is intentionally something else (e.g. user
-        # triggered `dictare serve` from `uv run`); brew still wins.
         app_bundle.ensure_python_path("/Users/dev/.venv/bin/python")
         assert self._stored(fake_home) == brew
 
@@ -268,13 +263,13 @@ class TestEnsurePythonPath:
         fake_home: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        brew = "/opt/homebrew/opt/dictare/libexec/uv-tools/dictare/bin/python"
+        runtime = "/Users/dev/.local/share/dictare/versions/0.5.0rc1/bin/python"
         stale = "/Users/dev/repo/dictare/.venv/bin/python"
         (fake_home / ".dictare").mkdir()
         (fake_home / ".dictare" / "python_path").write_text(stale)
 
-        monkeypatch.setattr(app_bundle, "find_brew_python", lambda: brew)
+        monkeypatch.setattr(runtime_store, "resolve_service_python_path", lambda fallback=None: runtime)
         resolved = app_bundle.sync_service_python_path(stale)
 
-        assert resolved == brew
-        assert self._stored(fake_home) == brew
+        assert resolved == runtime
+        assert self._stored(fake_home) == runtime

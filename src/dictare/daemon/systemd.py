@@ -54,9 +54,12 @@ def install() -> None:
     """Write unit file and enable the service."""
     import sys
 
+    from dictare.runtime_store import resolve_service_python_path
+
+    python_path = resolve_service_python_path(sys.executable) or sys.executable
     unit_path = get_unit_path()
     unit_path.parent.mkdir(parents=True, exist_ok=True)
-    unit_path.write_text(generate_unit(sys.executable))
+    unit_path.write_text(generate_unit(python_path))
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
     subprocess.run(["systemctl", "--user", "enable", UNIT_NAME], check=True)
 

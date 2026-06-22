@@ -156,7 +156,7 @@ def _check_stt_deps() -> list[CheckResult]:
                     name="mlx-whisper",
                     available=False,
                     message="Not installed",
-                    install_hint="uv tool install 'dictare[mlx,macos]' --force",
+                    install_hint="dictare upgrade --reinstall",
                 )
             ]
     else:
@@ -176,7 +176,7 @@ def _check_stt_deps() -> list[CheckResult]:
                     name="faster-whisper",
                     available=False,
                     message="Not installed",
-                    install_hint="uv tool install 'dictare[linux]' --force",
+                    install_hint="dictare upgrade --reinstall",
                 )
             ]
 
@@ -224,7 +224,7 @@ def _check_hotkey_deps_linux() -> list[CheckResult]:
                 available=False,
                 message="Not installed",
                 required=False,
-                install_hint="uv tool install 'dictare[linux]' --force",
+                install_hint="dictare upgrade --reinstall",
             )
         )
     return results
@@ -247,7 +247,7 @@ def _check_hotkey_deps_macos() -> list[CheckResult]:
                 name="pynput",
                 available=False,
                 message="Not installed",
-                install_hint="uv tool install 'dictare[mlx,macos]' --force",
+                install_hint="dictare upgrade --reinstall",
             )
         ]
 
@@ -344,7 +344,7 @@ def _check_gpu_deps() -> list[CheckResult]:
                             available=False,
                             message=f"{gpu_count} device(s), cuDNN missing",
                             required=False,
-                            install_hint="uv tool install dictare --with 'nvidia-cudnn-cu12>=9.1.0,<9.2.0'",
+                            install_hint="dictare upgrade --reinstall --extras tray,gpu",
                         )
                     )
             else:
@@ -391,7 +391,7 @@ def _check_gpu_deps() -> list[CheckResult]:
                         available=False,
                         message="MLX not installed",
                         required=False,
-                        install_hint="uv tool install dictare --with 'mlx-whisper>=0.4.0'",
+                        install_hint="dictare upgrade --reinstall",
                     )
                 )
         else:
