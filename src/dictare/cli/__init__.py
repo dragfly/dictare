@@ -19,6 +19,7 @@ from dictare.cli import (
     logs,
     misc,
     models,
+    repair,
     serve,
     service,
     setup,
@@ -26,6 +27,7 @@ from dictare.cli import (
     status,
     transcribe,
     tray,
+    upgrade,
 )
 from dictare.cli._helpers import console
 from dictare.config import ConfigError
@@ -54,6 +56,8 @@ setup.register(app)
 status.register(app)
 logs.register(app)
 serve.register(app)
+repair.register(app)
+upgrade.register(app)
 
 def version_callback(value: bool) -> None:
     """Print version and exit."""

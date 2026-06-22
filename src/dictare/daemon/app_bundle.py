@@ -19,6 +19,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -292,11 +293,19 @@ def find_brew_python() -> str | None:
 def resolve_service_python_path(executable: str | None = None) -> str:
     """Resolve the interpreter launchd/launcher should use.
 
-    Homebrew installs are authoritative because the signed Swift launcher reads
-    ``~/.dictare/python_path`` before the Python self-healing code can run.
-    If a stale dev venv is left in that file, the engine starts without MLX and
-    silently falls back to CPU.  Resolve the brew interpreter before writing.
+    The Dictare runtime store is authoritative for the new installer. Homebrew
+    remains a legacy fallback for old installs. For Homebrew installs, prefer
+    the stable opt interpreter so old Cellar paths do not leak into launchd.
     """
+    try:
+        from dictare.runtime_store import resolve_service_python_path as resolve_runtime_python
+
+        runtime_python = resolve_runtime_python(None)
+        if runtime_python:
+            return runtime_python
+    except Exception:
+        pass
+
     brew_python = find_brew_python()
     if brew_python is not None:
         return brew_python
@@ -340,6 +349,19 @@ def ensure_python_path(executable: str) -> None:
     config_dir = Path.home() / ".dictare"
     target = config_dir / "python_path"
     stored = target.read_text().strip() if target.exists() else None
+
+    try:
+        from dictare.runtime_store import resolve_service_python_path as resolve_runtime_python
+
+        runtime_python = resolve_runtime_python(None)
+        if runtime_python and stored != runtime_python:
+            logger.info("python_path: pinning to Dictare runtime store %s", runtime_python)
+            _write_external_python_path(runtime_python)
+            return
+        if runtime_python:
+            return
+    except Exception:
+        pass
 
     # Step 1: brew installation wins.
     service_python = resolve_service_python_path(executable)
@@ -392,6 +414,42 @@ def _install_cellar_bundle(src_bundle: Path, dest_bundle: Path) -> None:
         check=False, capture_output=True,
     )
     logger.info("Installed signed bundle: %s → %s", src_bundle, dest_bundle)
+
+
+def migrate_signed_bundle_from_cellar(force: bool = False) -> bool:
+    """Move an old user app aside and install the signed Cellar bundle.
+
+    Returns True when a migration happened. This is a legacy Homebrew repair
+    helper for users with an ad-hoc app bundle in ~/Applications.
+    """
+    src = _find_cellar_bundle()
+    if src is None:
+        return False
+
+    dest = get_app_path()
+    signed_marker = dest / "Contents" / "Resources" / "launcher_signed"
+    if dest.exists() and signed_marker.exists() and not force:
+        return False
+
+    if dest.exists():
+        trash = Path.home() / ".dictare" / "trash"
+        trash.mkdir(parents=True, exist_ok=True)
+        backup = trash / f"Dictare.app.{int(time.time())}"
+        counter = 0
+        while backup.exists():
+            counter += 1
+            backup = trash / f"Dictare.app.{int(time.time())}.{counter}"
+        shutil.move(str(dest), str(backup))
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dest, symlinks=True)
+    subprocess.run(
+        ["xattr", "-dr", "com.apple.quarantine", str(dest)],
+        check=False,
+        capture_output=True,
+    )
+    logger.info("Migrated signed bundle: %s → %s", src, dest)
+    return True
 
 def _install_prebuilt_launcher(prebuilt: Path, dest: Path) -> bool:
     """Install a pre-built signed launcher binary.

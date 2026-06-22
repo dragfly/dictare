@@ -2,28 +2,10 @@
 
 from __future__ import annotations
 
-import sys
-
 import typer
 
 from dictare.cli._helpers import console
 
-
-def _is_brew_service_active() -> bool:
-    """Check if Homebrew is managing the dictare service."""
-    import subprocess
-
-    try:
-        result = subprocess.run(
-            ["brew", "services", "list"],
-            capture_output=True, text=True, timeout=5,
-        )
-        for line in result.stdout.splitlines():
-            if line.startswith("dictare") and "started" in line:
-                return True
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    return False
 
 def register(app: typer.Typer) -> None:
     """Register setup command on the main app."""
@@ -33,11 +15,11 @@ def register(app: typer.Typer) -> None:
         """First-time setup: config, models, service, tray, permissions.
 
         Installs and starts everything needed to use dictare.
-        For Homebrew users, this is optional (use 'brew services start dictare').
-
         Example:
             dictare setup
         """
+        import sys
+
         from dictare.cli.models import ensure_required_models
         from dictare.config import create_default_config, get_config_path, load_config
 
@@ -69,10 +51,7 @@ def register(app: typer.Typer) -> None:
                 console.print(f"[yellow]Skipping service install (unsupported platform: {sys.platform})[/]")
                 return
 
-            # Skip if Homebrew is already managing the service
-            if _is_brew_service_active():
-                console.print("[dim]✓ Service managed by Homebrew (brew services)[/]")
-            elif not backend.is_installed():
+            if not backend.is_installed():
                 backend.install()
                 if sys.platform == "linux":
                     backend.start()

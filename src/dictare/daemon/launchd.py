@@ -24,16 +24,26 @@ def get_plist_path() -> Path:
 def generate_plist(python_path: str) -> str:
     """Generate the LaunchAgent plist XML for the given python executable.
 
-    If a .app bundle exists, ProgramArguments points to its executable
-    so macOS associates permissions with the bundle (shows "Dictare" in
-    system dialogs, and the bundle's CGEventTap can capture global hotkeys).
+    If a .app bundle exists, ProgramArguments launches it through LaunchServices.
+    Starting the bundle executable directly from launchd can create a CGEventTap
+    that reports active but never receives keyboard events. ``open -W`` keeps the
+    LaunchAgent process alive while LaunchServices owns the app launch.
     Otherwise falls back to the raw python path.
     """
-    from dictare.daemon.app_bundle import get_app_path, get_executable_path
+    from dictare.daemon.app_bundle import get_app_path
 
     app_path = get_app_path()
     if app_path.exists():
-        program_args = [get_executable_path()]
+        program_args = [
+            "/usr/bin/open",
+            "-n",
+            "-W",
+            "--stdout",
+            str(LOG_DIR / "stdout.log"),
+            "--stderr",
+            str(LOG_DIR / "stderr.log"),
+            str(app_path),
+        ]
     else:
         program_args = [python_path, "-m", "dictare", "serve"]
 
@@ -68,8 +78,9 @@ def install(prebuilt_launcher: Path | None = None) -> None:
     python_path = sync_service_python_path(sys.executable)
     create_app_bundle(python_path, prebuilt_launcher=prebuilt_launcher)
 
-    # Request Input Monitoring permission (shows system dialog on first install).
-    # Must run BEFORE launchctl load — the dialog only works from terminal context.
+    # Request Input Monitoring permission before launchctl load.  Run the signed
+    # launcher directly in the caller context; using ``open --args`` has proven
+    # unreliable for LSUIElement apps and can accidentally start a full engine.
     _request_input_monitoring()
 
     plist_path = get_plist_path()
@@ -231,16 +242,11 @@ def _request_input_monitoring() -> None:
         logger.debug("Input Monitoring setup already done for this binary")
         return
 
-    # Launch the .app with --request-input-monitoring via `open`.
-    # Using `open` makes macOS treat it as a real app (own TCC identity),
-    # not a child of Terminal (which would inherit Terminal's permissions).
-    # NOTE: do NOT use --wait-apps — CGRequestListenEventAccess() may show a
-    # blocking dialog; if it's hidden behind other windows the process hangs
-    # for 30+ seconds.  Launch fire-and-forget; the dialog appears in the
-    # background and the user can grant it whenever it surfaces.
+    launcher = macos_dir / "Dictare"
     subprocess.run(
-        ["open", str(app_path), "--args", "--request-input-monitoring"],
-        capture_output=True, text=True,
+        [str(launcher), "--request-input-monitoring"],
+        capture_output=True,
+        text=True,
     )
 
     # If the app reported success AND we trust it was actually prompted,
@@ -311,11 +317,9 @@ def install_tray() -> None:
     """Create and load a LaunchAgent for the tray app (auto-start at login)."""
     import sys
 
-    # On Homebrew, prefer the stable opt/ symlink over the versioned Cellar path.
-    # The symlink survives upgrades; sys.executable points to the versioned path
-    # which breaks after `brew upgrade dictare`.
-    stable = Path("/opt/homebrew/opt/dictare/libexec/uv-tools/dictare/bin/python")
-    python_path = str(stable) if stable.exists() else sys.executable
+    from dictare.daemon.app_bundle import resolve_service_python_path
+
+    python_path = resolve_service_python_path(sys.executable)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     plist: dict = {

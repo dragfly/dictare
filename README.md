@@ -44,18 +44,46 @@ of window focus**. Your coding agent can be behind 3 other windows — it still 
 
 ## Install
 
-**macOS** — [full guide](https://dictare.io/docs/installation/)
-
-```bash
-brew install dragfly/tap/dictare
-```
-
-**Linux** — [full guide](https://dictare.io/docs/installation/)
+**macOS + Linux** — [full guide](https://dictare.io/docs/installation/)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
-sudo usermod -aG input $USER   # required for hotkey (log out/in after)
 ```
+
+Dictare installs into `~/.local/share/dictare/versions/` and exposes a stable
+`~/.local/bin/dictare` shim. Upgrades and rollback are managed by Dictare, not
+by Homebrew.
+
+### Release candidate
+
+Install the `0.5.0rc1` release candidate with a prepared rollback runtime:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash -s -- --version 0.5.0rc1 --previous-version 0.4.0
+```
+
+Rollback to `0.4.0`:
+
+```bash
+dictare rollback
+```
+
+### Legacy Homebrew installs
+
+If you installed Dictare with Homebrew, remove the legacy install first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/scripts/uninstall.sh | bash
+```
+
+Then reinstall with the new installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
+```
+
+Your config and models are preserved in `~/.config/dictare/` and
+`~/.local/share/dictare/`.
 
 ### Permissions
 
@@ -64,7 +92,7 @@ sudo usermod -aG input $USER   # required for hotkey (log out/in after)
 > 2. **Input Monitoring** — System Settings → Privacy & Security → enable Dictare
 > 3. **Accessibility** — needed for keyboard mode (typing into other apps)
 >
-> After granting all three: `dictare service restart`
+> After granting all three: `dictare repair`
 
 > **Linux** — two steps:
 > 1. **Input group** (hotkey, X11 + Wayland): `sudo usermod -aG input $USER` — log out/in
@@ -161,6 +189,9 @@ Default hotkey: **Right ⌘** (macOS) / **Scroll Lock** (Linux).
 ## Service Management
 
 ```bash
+dictare upgrade             # Install latest runtime and switch atomically
+dictare rollback            # Switch back to the previous runtime
+dictare repair              # Repair runtime/service/launcher integration
 dictare service install     # Install + enable (auto-starts at login)
 dictare service start       # Start the service
 dictare service stop        # Stop the service

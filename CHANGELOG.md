@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0rc1] - 2026-06-22
+
+### Added
+- New cross-platform runtime-store installer: `curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash`.
+- Dictare-owned runtime layout under `~/.local/share/dictare/versions/<version>` with stable `current` and `previous` symlinks.
+- Stable user shim at `~/.local/bin/dictare`.
+- `dictare upgrade`, `dictare rollback`, and `dictare repair` for product-owned lifecycle management.
+- Installer support for release-candidate rollback preloading via `--previous-version`.
+
+### Changed
+- Homebrew is no longer the primary macOS install or upgrade path.
+- macOS launchd integration starts the signed `Dictare.app` through LaunchServices so the global hotkey event tap receives keyboard events reliably.
+- Linux and macOS now share the same install/upgrade/rollback model.
+- Release publishing no longer updates the Homebrew tap.
+
+### Migration
+- Existing Homebrew users should run `scripts/uninstall.sh` to remove the legacy install while preserving config, models, and user data.
+- RC testers can install with `--version 0.5.0rc1 --previous-version 0.4.0` and return to the prepared stable runtime with `dictare rollback`.
+
 ## [0.4.0] - 2026-06-15
 
 Stable release consolidating the `0.4.0rc1` → `rc4` series. Two themes: a major

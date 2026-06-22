@@ -119,17 +119,16 @@ class TestLaunchdGeneratePlist:
         assert parsed["ProgramArguments"][0] == "/opt/venv/bin/python"
 
     def test_uses_app_bundle_when_exists(self, tmp_path, monkeypatch):
-        """With .app bundle, plist points to the bundle executable."""
+        """With .app bundle, plist launches through LaunchServices."""
         app_path = tmp_path / "Dictare.app"
         app_path.mkdir()
         monkeypatch.setattr("dictare.daemon.app_bundle.get_app_path", lambda: app_path)
-        monkeypatch.setattr(
-            "dictare.daemon.app_bundle.get_executable_path",
-            lambda: str(app_path / "Contents" / "MacOS" / "Dictare"),
-        )
         xml = generate_plist("/usr/bin/python3")
         parsed = plistlib.loads(xml.encode())
-        assert str(app_path) in parsed["ProgramArguments"][0]
+        args = parsed["ProgramArguments"]
+        assert args[0] == "/usr/bin/open"
+        assert "-W" in args
+        assert str(app_path) in args
 
     def test_run_at_load(self):
         xml = generate_plist("/usr/bin/python3")
