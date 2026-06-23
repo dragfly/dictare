@@ -25,9 +25,12 @@ State machine:
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable
 from enum import Enum, auto
+
+logger = logging.getLogger(__name__)
 
 
 class TapState(Enum):
@@ -113,15 +116,18 @@ class TapDetector:
     def on_key_down(self) -> None:
         """Called when the hotkey is pressed down."""
         with self._lock:
+            logger.debug("tap_detector: key_down state=%s", self._state.name)
             if self._state == TapState.IDLE:
                 self._transition(TapState.PRESSED_1)
                 self._combo_detected = False
+                logger.debug("tap_detector: state IDLE -> PRESSED_1")
 
             elif self._state == TapState.RELEASED_1:
                 self._cancel_timer()  # Cancel double-tap window timer
                 self._transition(TapState.PRESSED_2)
                 self._combo_detected = False
                 self._start_hold_timer()
+                logger.debug("tap_detector: state RELEASED_1 -> PRESSED_2")
 
             # PRESSED_1, PRESSED_2, HOLD_ACTIVE = key repeat, ignore
 
@@ -130,25 +136,35 @@ class TapDetector:
         callback = None
 
         with self._lock:
+            logger.debug("tap_detector: key_up state=%s", self._state.name)
             if self._state == TapState.PRESSED_1:
                 if self._combo_detected:
+                    logger.debug("tap_detector: reset after combo on first press")
                     self._reset()
                 else:
                     self._transition(TapState.RELEASED_1)
                     self._start_double_tap_timer()
+                    logger.debug(
+                        "tap_detector: state PRESSED_1 -> RELEASED_1 "
+                        "threshold=%.3fs",
+                        self.threshold,
+                    )
 
             elif self._state == TapState.PRESSED_2:
                 self._cancel_timer()  # Cancel hold timer
                 if self._combo_detected:
+                    logger.debug("tap_detector: reset after combo on second press")
                     self._reset()
                 else:
                     callback = self._on_double_tap
                     self._reset()
+                    logger.info("tap_detector: double_tap detected")
 
             elif self._state == TapState.HOLD_ACTIVE:
                 # Hold was armed; fire callback now that modifier is released.
                 callback = self._on_hold
                 self._reset()
+                logger.info("tap_detector: hold detected")
 
         if callback:
             callback()
@@ -158,6 +174,7 @@ class TapDetector:
         with self._lock:
             if self._state in (TapState.PRESSED_1, TapState.PRESSED_2):
                 self._combo_detected = True
+                logger.debug("tap_detector: combo detected state=%s", self._state.name)
 
     def _start_hold_timer(self) -> None:
         """Start hold detection timer (on second press)."""
@@ -185,6 +202,7 @@ class TapDetector:
             if self._state == TapState.PRESSED_2 and not self._combo_detected:
                 self._state = TapState.HOLD_ACTIVE
                 self._timer = None
+                logger.debug("tap_detector: hold armed")
 
     def _on_double_tap_timeout(self) -> None:
         """Double-tap window expired — fire single tap."""
@@ -193,6 +211,7 @@ class TapDetector:
         with self._lock:
             if self._state == TapState.RELEASED_1 and not self._combo_detected:
                 callback = self._on_single_tap
+                logger.info("tap_detector: single_tap detected")
             self._reset()
 
         if callback:

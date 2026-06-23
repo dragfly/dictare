@@ -1605,11 +1605,13 @@ class TestSetOutputMode:
         assert "submit" in msg.get("x_input", {}).get("ops", [])
 
     def test_double_tap_during_recording_defers_submit(self) -> None:
-        """Double-tap during RECORDING sets _submit_pending instead of sending."""
+        """Double-tap during RECORDING arms submit for the completed utterance."""
         from dictare.core.fsm import AppState
 
         config = MockConfig()
         engine = DictareEngine(config=config)
+        engine.audio_manager = MagicMock()
+        engine.audio_manager.is_speaking = True
         mock_agent = MagicMock()
         mock_agent.id = "claude"
         engine._agent_mgr._agents["claude"] = mock_agent
@@ -1624,6 +1626,9 @@ class TestSetOutputMode:
         mock_agent.send.assert_not_called()
         # Should set pending flag
         assert engine._submit_pending is True
+        # Do not flush/cut the current utterance: users intentionally
+        # double-tap while still speaking, then stop naturally.
+        engine.audio_manager.flush_vad.assert_not_called()
 
     def test_double_tap_during_transcribing_defers_submit(self) -> None:
         """Double-tap during TRANSCRIBING sets _submit_pending."""
