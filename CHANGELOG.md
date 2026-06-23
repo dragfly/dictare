@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Updated the optional Apple Silicon MLX stack's `huggingface-hub` pin to
+  `1.16.0` while keeping the rest of the tested MLX stack unchanged.
+
 ## [0.5.1rc1] - 2026-06-23
 
 ### Changed
