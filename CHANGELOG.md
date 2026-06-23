@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-23
+
+Stable patch release after `0.5.1rc1`.
+
+### Fixed
+- Improved double-tap submit delivery for terminal UI agents such as Codex by
+  writing transcription text and the submit Enter byte as separate PTY writes,
+  with an explicit short delay before submit.
+- Added end-to-end diagnostics for double-tap submit delivery across the engine
+  and agent mux, including `submit_bytes`, `x_input_ops`, and separate
+  text/newline/submit write events.
+- Preserved the intended double-tap-while-speaking contract: double tap arms
+  submit for the next completed utterance instead of forcing a VAD flush or
+  sending an immediate empty Enter.
+- Fixed local wheel upgrade parsing so `dictare upgrade --from-path` can derive
+  valid package versions from local wheel filenames.
+
 ### Changed
 - Updated the optional Apple Silicon MLX stack's `huggingface-hub` pin to
   `1.16.0` while keeping the rest of the tested MLX stack unchanged.
