@@ -47,18 +47,17 @@ of window focus**. Your coding agent can be behind 3 other windows — it still 
 **macOS + Linux** — [full guide](https://dictare.io/docs/installation/)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash -s -- --version 0.5.0rc1 --previous-version 0.4.0
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
 ```
 
 Dictare installs into `~/.local/share/dictare/versions/` and exposes a stable
 `~/.local/bin/dictare` shim. Upgrades and rollback are managed by Dictare, not
-by Homebrew. The command above installs the `0.5.0rc1` release candidate with a
-prepared rollback runtime.
+by Homebrew.
 
-Rollback to `0.4.0`:
+Upgrade an existing runtime:
 
 ```bash
-dictare rollback
+dictare upgrade
 ```
 
 ### Legacy Homebrew installs
@@ -72,7 +71,7 @@ curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/scripts/uninst
 Then reinstall with the new installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash -s -- --version 0.5.0rc1 --previous-version 0.4.0
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
 ```
 
 Your config and models are preserved in `~/.config/dictare/` and
