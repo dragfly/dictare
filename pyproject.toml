@@ -74,7 +74,7 @@ tray = [
     "pycairo>=1.25.0",
 ]
 gpu = [
-    "nvidia-cudnn-cu12>=9.1.0,<9.22.0",  # Must match ctranslate2's cuDNN requirement
+    "nvidia-cudnn-cu12>=9.1.0,<9.23.0",  # Must match ctranslate2's cuDNN requirement
 ]
 mlx = [
     # Keep the Apple Silicon stack on the versions resolved by the v0.2.7 release.

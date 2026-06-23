@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1rc1] - 2026-06-23
+
+### Changed
+- Updated GitHub Actions workflows to use `actions/checkout@v7`.
+- Relaxed the optional Linux GPU `nvidia-cudnn-cu12` upper bound to allow
+  `<9.23.0`, matching Dependabot's maintenance update.
+
+### Notes
+- MLX stack dependency update PRs are intentionally left out of this release
+  candidate until `dictare[mlx]` has explicit CI or manual dogfood coverage.
+
 ## [0.5.0] - 2026-06-23
 
 Stable release of the runtime-store installer introduced in `0.5.0rc1`.
