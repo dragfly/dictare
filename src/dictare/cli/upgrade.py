@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 import urllib.request
 from pathlib import Path
@@ -34,8 +33,19 @@ def _latest_pypi_version() -> str:
 
 def _version_from_path(path: str) -> str | None:
     name = Path(path).name
-    match = re.search(r"dictare-([0-9][A-Za-z0-9.+!_-]*)\.(?:tar\.gz|whl|zip)$", name)
-    return match.group(1) if match else None
+    if name.endswith(".whl"):
+        parts = name[:-4].split("-")
+        if len(parts) >= 5 and parts[0].replace("_", "-").lower() == "dictare":
+            return parts[1]
+        return None
+
+    for suffix in (".tar.gz", ".zip"):
+        if name.endswith(suffix):
+            stem = name[:-len(suffix)]
+            prefix = "dictare-"
+            if stem.startswith(prefix):
+                return stem[len(prefix):]
+    return None
 
 
 def _parse_extras(value: str | None) -> list[str] | None:
