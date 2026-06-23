@@ -406,7 +406,9 @@ class AppController:
         if called twice within the double-tap window).
         """
         if not self._engine:
+            logger.debug("hotkey: tap event ignored reason=no_engine")
             return
+        logger.debug("hotkey: tap event received transport=fallback")
         self._engine.tap_detector.on_key_down()
         self._engine.tap_detector.on_key_up()
 
@@ -417,13 +419,17 @@ class AppController:
         detection that is not possible with the legacy hotkey.tap protocol.
         """
         if not self._engine:
+            logger.debug("hotkey: key_down ignored reason=no_engine")
             return
+        logger.debug("hotkey: key_down received")
         self._engine.tap_detector.on_key_down()
 
     def on_hotkey_key_up(self) -> None:
         """Called when the hotkey key is released (IPC key.up event)."""
         if not self._engine:
+            logger.debug("hotkey: key_up ignored reason=no_engine")
             return
+        logger.debug("hotkey: key_up received")
         self._engine.tap_detector.on_key_up()
 
     def on_hotkey_other_key(self) -> None:
@@ -433,7 +439,9 @@ class AppController:
         TapDetector will cancel the pending tap detection.
         """
         if not self._engine:
+            logger.debug("hotkey: other_key ignored reason=no_engine")
             return
+        logger.debug("hotkey: other_key received")
         self._engine.tap_detector.on_other_key()
 
     def on_hotkey_combo(self) -> None:

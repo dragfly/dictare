@@ -198,8 +198,8 @@ class DictareEngine:
         # Double tap: submit (inject Enter into active window)
         self.tap_detector = TapDetector(
             threshold=self.DOUBLE_TAP_THRESHOLD,
-            on_single_tap=lambda: self._controller.send(HotkeyPressed(source="hotkey")),
-            on_double_tap=self._submit_action,
+            on_single_tap=self._single_tap_action,
+            on_double_tap=self._double_tap_action,
         )
 
         # Initialize components
@@ -818,6 +818,13 @@ class DictareEngine:
         submit_from_double_tap = self._submit_pending
         if submit_from_double_tap:
             self._submit_pending = False
+            target_agent_id = target_agent.id if target_agent is not None else None
+            logger.info(
+                "submit_action: consuming_deferred_submit agent=%s chars=%d auto_submit=%s",
+                target_agent_id,
+                len(text),
+                auto_submit,
+            )
 
         # Build OpenVIP transcription message
         message = create_message(text, language=message_language)
@@ -917,6 +924,47 @@ class DictareEngine:
     # Hotkey Actions
     # -------------------------------------------------------------------------
 
+    def _hotkey_context(self) -> tuple[str, bool, str | None, bool | None]:
+        """Return current hotkey context for gesture/submit diagnostics."""
+        state = self._state_manager.state.name
+        vad_speaking = (
+            self.audio_manager is not None
+            and self.audio_manager.is_speaking
+        )
+        agent = self._get_current_agent()
+        agent_id = agent.id if agent is not None else None
+        focused = (
+            self._feedback_policy.focused_agent == agent_id
+            if agent_id is not None
+            else None
+        )
+        return state, vad_speaking, agent_id, focused
+
+    def _single_tap_action(self) -> None:
+        """Handle a detected single-tap gesture."""
+        state, vad_speaking, agent_id, focused = self._hotkey_context()
+        logger.info(
+            "hotkey: single_tap detected state=%s vad=%s agent=%s focused=%s",
+            state,
+            vad_speaking,
+            agent_id,
+            focused,
+        )
+        self._controller.send(HotkeyPressed(source="hotkey"))
+
+    def _double_tap_action(self) -> None:
+        """Handle a detected double-tap gesture."""
+        state, vad_speaking, agent_id, focused = self._hotkey_context()
+        logger.info(
+            "hotkey: double_tap detected state=%s vad=%s agent=%s focused=%s pending=%s",
+            state,
+            vad_speaking,
+            agent_id,
+            focused,
+            self._submit_pending,
+        )
+        self._submit_action()
+
     def _submit_action(self) -> None:
         """Send a submit action to the connected agent (double-tap hotkey).
 
@@ -935,20 +983,44 @@ class DictareEngine:
 
         if state in (AppState.RECORDING, AppState.TRANSCRIBING) or vad_speaking:
             self._submit_pending = True
-            logger.debug(
-                "submit_action: deferred (state=%s, vad=%s)",
-                state.name, vad_speaking,
+            agent = self._get_current_agent()
+            agent_id = agent.id if agent is not None else None
+            focused = (
+                self._feedback_policy.focused_agent == agent_id
+                if agent_id is not None
+                else None
+            )
+            logger.info(
+                "submit_action: deferred state=%s vad=%s agent=%s focused=%s",
+                state.name,
+                vad_speaking,
+                agent_id,
+                focused,
             )
             return
 
         agent = self._get_current_agent()
         if agent is None:
-            logger.debug("submit_action: no agent connected, ignoring")
+            logger.info(
+                "submit_action: ignored reason=no_agent state=%s vad=%s",
+                state.name,
+                vad_speaking,
+            )
             return
         message = create_message("")
-        message["x_input"] = {"ops": ["submit"], "trigger": "<double_tap>", "source": "dictare/double-tap"}
-        agent.send(message)
-        logger.debug("submit_action: submit sent to agent %s", agent.id)
+        message["x_input"] = {
+            "ops": ["submit"],
+            "trigger": "<double_tap>",
+            "source": "dictare/double-tap",
+        }
+        success = agent.send(message)
+        focused = self._feedback_policy.focused_agent == agent.id
+        logger.info(
+            "submit_action: immediate_submit sent agent=%s success=%s focused=%s",
+            agent.id,
+            success,
+            focused,
+        )
         self._play_focus_gated_sound("submit")
 
     # -------------------------------------------------------------------------
