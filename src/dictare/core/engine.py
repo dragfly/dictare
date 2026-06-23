@@ -182,7 +182,15 @@ class DictareEngine:
         self._keyboard_agent: Any = None  # Special built-in agent for keyboard mode
 
         # Pending submit — set by double-tap during recording/transcription.
-        # Consumed by _inject_text to attach submit to the next transcription.
+        #
+        # Product semantics:
+        #   "double tap while speaking" means "submit the current utterance as
+        #   soon as VAD naturally closes it".
+        #
+        # Do not replace this with an immediate empty Enter, and do not flush
+        # VAD on double-tap. Users intentionally double-tap before they stop
+        # talking; the submit must be attached to exactly the next completed
+        # transcription.
         self._submit_pending = False
 
         # Voice muted flag — when True, MuteFilter discards all text
@@ -820,7 +828,8 @@ class DictareEngine:
             self._submit_pending = False
             target_agent_id = target_agent.id if target_agent is not None else None
             logger.info(
-                "submit_action: consuming_deferred_submit agent=%s chars=%d auto_submit=%s",
+                "submit_action: consuming_deferred_submit agent=%s chars=%d "
+                "auto_submit=%s semantics=submit_next_completed_utterance",
                 target_agent_id,
                 len(text),
                 auto_submit,
@@ -836,6 +845,17 @@ class DictareEngine:
             }
         else:
             message["x_input"] = {"ops": ["newline"], "source": "dictare/engine"}
+
+        x_input = message.get("x_input", {})
+        logger.debug(
+            "injection_prepare: agent=%s chars=%d ops=%s "
+            "submit_from_double_tap=%s auto_submit=%s",
+            target_agent.id if target_agent is not None else None,
+            len(text),
+            x_input.get("ops") if isinstance(x_input, dict) else None,
+            submit_from_double_tap,
+            auto_submit,
+        )
 
         # Apply pipeline: filters (enrich) then executors (act)
         messages_to_send = [message]
@@ -968,9 +988,13 @@ class DictareEngine:
     def _submit_action(self) -> None:
         """Send a submit action to the connected agent (double-tap hotkey).
 
-        If the engine is currently recording/transcribing or the VAD
-        detects active speech, defers the submit until the next
-        _inject_text call attaches it to the transcribed message.
+        If the engine is currently recording/transcribing or the VAD detects
+        active speech, arm a deferred submit. That deferred submit is consumed
+        by the next _inject_text call and attached to that transcription.
+
+        This is intentional UX: the user may double-tap while still talking.
+        Dictare should keep recording until VAD naturally closes the utterance,
+        then submit the completed text immediately.
 
         If truly idle (LISTENING, no speech), sends an immediate empty
         submit message.
@@ -991,7 +1015,8 @@ class DictareEngine:
                 else None
             )
             logger.info(
-                "submit_action: deferred state=%s vad=%s agent=%s focused=%s",
+                "submit_action: armed_deferred_submit state=%s vad=%s "
+                "agent=%s focused=%s semantics=submit_next_completed_utterance",
                 state.name,
                 vad_speaking,
                 agent_id,

@@ -6,6 +6,7 @@ import http.server
 import json
 import queue
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -403,7 +404,11 @@ class TestWriteToPtySeparateEsc:
     which treats ESC as the start of a key sequence and discards preceding text.
     """
 
-    def _run_writer(self, data: dict) -> tuple[list[bytes], int]:
+    def _run_writer(
+        self,
+        data: dict,
+        session_path: Path | None = None,
+    ) -> tuple[list[bytes], int]:
         """Helper: run _write_to_pty with one message, return (writes, drain_count)."""
         from unittest.mock import patch
 
@@ -431,7 +436,12 @@ class TestWriteToPtySeparateEsc:
 
         with patch("os.write", side_effect=fake_write), \
              patch("termios.tcdrain", side_effect=fake_tcdrain):
-            _write_to_pty(master_fd=99, write_queue=wq, stop_event=stop)
+            _write_to_pty(
+                master_fd=99,
+                write_queue=wq,
+                stop_event=stop,
+                session_path=session_path,
+            )
 
         return writes, drain_count[0]
 
@@ -471,3 +481,33 @@ class TestWriteToPtySeparateEsc:
         writes, _ = self._run_writer({"text": "hello world\n", "submit": True})
         text_write = writes[0]
         assert b"\x1b" not in text_write, f"Text write contains ESC: {text_write!r}"
+
+    def test_submit_bytes_logged_separately(self, tmp_path: Path) -> None:
+        """Session log distinguishes text, visual newline, and submit writes."""
+        session_path = tmp_path / "session.jsonl"
+
+        self._run_writer(
+            {
+                "text": "hello world",
+                "submit": True,
+                "x_input_ops": ["submit"],
+                "x_input_source": "dictare/double-tap",
+                "submit_trigger": "<double_tap>",
+                "openvip_id": "abc",
+            },
+            session_path=session_path,
+        )
+
+        events = [
+            json.loads(line)
+            for line in session_path.read_text().splitlines()
+        ]
+        submit_event = next(e for e in events if e["event"] == "msg_submit_written")
+        sent_event = next(e for e in events if e["event"] == "msg_sent")
+
+        assert submit_event["bytes"] == 1
+        assert submit_event["submit_trigger"] == "<double_tap>"
+        assert sent_event["text_bytes"] == len(b"hello world")
+        assert sent_event["visual_newline_bytes"] == 0
+        assert sent_event["submit_bytes"] == 1
+        assert sent_event["submit"] is True

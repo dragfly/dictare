@@ -130,6 +130,16 @@ _FOCUS_DISABLE = b"\x1b[?1004l"
 _FOCUS_IN = b"\x1b[I"
 _FOCUS_OUT = b"\x1b[O"
 
+# PTY delivery timing.
+#
+# Text and submit are logically separate operations. Keep the bytes separate in
+# the PTY too: first write text, drain, then write Enter. Some terminal TUIs are
+# sensitive to receiving the submit byte immediately after a large text write,
+# so the text→submit gap is intentionally visible and logged.
+_VISUAL_NEWLINE_DELAY_SECONDS = 0.01
+_SUBMIT_ONLY_DELAY_SECONDS = 0.01
+_SUBMIT_AFTER_TEXT_DELAY_SECONDS = 0.075
+
 def _parse_claim_key(key_str: str) -> tuple[bytes, list[bytes]]:
     """Parse a claim key string into (raw_byte, escape_sequences).
 
@@ -446,10 +456,21 @@ def _read_from_sse(
             msg_id = str(msg.id) if msg.id else None
             msg_ts = msg.timestamp.isoformat() if msg.timestamp else None
 
+            # Process through executor pipeline (needs raw dict for x_input access)
+            msg_dict = msg.to_dict()
+            x_input = msg_dict.get("x_input")
+            x_input_ops = x_input.get("ops") or [] if isinstance(x_input, dict) else []
+            submit_requested = "submit" in x_input_ops
+            newline_requested = "newline" in x_input_ops
+
             # Set openvip metadata for the executor's write_fn
             _openvip_meta.clear()
             _openvip_meta["openvip_id"] = msg_id
             _openvip_meta["openvip_ts"] = msg_ts
+            _openvip_meta["x_input_ops"] = list(x_input_ops)
+            if isinstance(x_input, dict):
+                _openvip_meta["x_input_source"] = x_input.get("source")
+                _openvip_meta["submit_trigger"] = x_input.get("trigger")
 
             msg_count += 1
             if session_path:
@@ -457,12 +478,16 @@ def _read_from_sse(
                 _log_event(session_path, "msg_read", {
                     "seq": msg_count,
                     "text": text if verbose else (text[:20] + "[...]" if len(text) > 20 else text),
+                    "chars": len(text),
                     "openvip_id": msg_id,
+                    "x_input_ops": list(x_input_ops),
+                    "submit_requested": submit_requested,
+                    "newline_requested": newline_requested,
+                    "x_input_source": _openvip_meta.get("x_input_source"),
+                    "submit_trigger": _openvip_meta.get("submit_trigger"),
                     "keystrokes": keystroke_counter.count if keystroke_counter else 0,
                 })
 
-            # Process through executor pipeline (needs raw dict for x_input access)
-            msg_dict = msg.to_dict()
             result = input_executor.process(msg_dict)
             if result.action == PipelineAction.PASS:
                 # No x_input — enqueue as plain text
@@ -522,7 +547,25 @@ def _write_to_pty(
                 msg_count += 1
                 # Parsed JSONL message from file
                 text = data.get("text", "")
-                bytes_written = 0
+                original_text = text
+                submit = bool(data.get("submit"))
+                x_input_ops = data.get("x_input_ops") or []
+                text_bytes_written = 0
+                visual_newline_bytes_written = 0
+                submit_bytes_written = 0
+
+                if session_path:
+                    _log_event(session_path, "msg_write_started", {
+                        "seq": msg_count,
+                        "chars": len(original_text),
+                        "submit": submit,
+                        "x_input_ops": x_input_ops,
+                        "x_input_source": data.get("x_input_source"),
+                        "submit_trigger": data.get("submit_trigger"),
+                        "openvip_id": data.get("openvip_id"),
+                        "openvip_ts": data.get("openvip_ts"),
+                        "keystrokes": keystroke_counter.count if keystroke_counter else 0,
+                    })
 
                 # Write text and control sequences as SEPARATE writes.
                 # Escape sequences (\x1b) must not be in the same buffer
@@ -535,29 +578,68 @@ def _write_to_pty(
 
                     if text:
                         text_bytes = text.encode()
-                        bytes_written += _write_all(master_fd, text_bytes)
+                        text_bytes_written = _write_all(master_fd, text_bytes)
                         termios.tcdrain(master_fd)
+                        if session_path:
+                            _log_event(session_path, "msg_text_written", {
+                                "seq": msg_count,
+                                "bytes": text_bytes_written,
+                                "openvip_id": data.get("openvip_id"),
+                            })
 
                     # Alt+Enter for visual newline (contains ESC — must be separate).
                     # 10ms grace period so the slave reads text before ESC arrives.
                     if has_visual_newline:
-                        stop_event.wait(0.01)
-                        bytes_written += _write_all(master_fd, alt_enter)
+                        stop_event.wait(_VISUAL_NEWLINE_DELAY_SECONDS)
+                        visual_newline_bytes_written = _write_all(master_fd, alt_enter)
                         termios.tcdrain(master_fd)
+                        if session_path:
+                            _log_event(session_path, "msg_visual_newline_written", {
+                                "seq": msg_count,
+                                "bytes": visual_newline_bytes_written,
+                                "delay_s": _VISUAL_NEWLINE_DELAY_SECONDS,
+                                "openvip_id": data.get("openvip_id"),
+                            })
 
                 # Submit enter (plain CR — no ESC, safe to write anytime)
-                if data.get("submit"):
-                    stop_event.wait(0.01)
-                    bytes_written += _write_all(master_fd, enter_key)
+                if submit:
+                    delay_s = (
+                        _SUBMIT_AFTER_TEXT_DELAY_SECONDS
+                        if text_bytes_written or visual_newline_bytes_written
+                        else _SUBMIT_ONLY_DELAY_SECONDS
+                    )
+                    stop_event.wait(delay_s)
+                    submit_bytes_written = _write_all(master_fd, enter_key)
                     termios.tcdrain(master_fd)
+                    if session_path:
+                        _log_event(session_path, "msg_submit_written", {
+                            "seq": msg_count,
+                            "bytes": submit_bytes_written,
+                            "delay_s": delay_s,
+                            "openvip_id": data.get("openvip_id"),
+                            "submit_trigger": data.get("submit_trigger"),
+                        })
 
                 # Log message AFTER successful write AND drain
                 if session_path:
-                    text = data.get("text", "")
+                    text = original_text
+                    bytes_written = (
+                        text_bytes_written
+                        + visual_newline_bytes_written
+                        + submit_bytes_written
+                    )
                     _log_event(session_path, "msg_sent", {
                         "seq": msg_count,
                         "text": text if verbose else (text[:20] + "[...]" if len(text) > 20 else text),
+                        "chars": len(text),
                         "bytes": bytes_written,
+                        "text_bytes": text_bytes_written,
+                        "visual_newline_bytes": visual_newline_bytes_written,
+                        "submit_bytes": submit_bytes_written,
+                        "submit": submit,
+                        "x_input_ops": x_input_ops,
+                        "x_input_source": data.get("x_input_source"),
+                        "submit_trigger": data.get("submit_trigger"),
                         "openvip_id": data.get("openvip_id"),
                         "openvip_ts": data.get("openvip_ts"),
                         "keystrokes": keystroke_counter.count if keystroke_counter else 0,
