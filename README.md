@@ -60,23 +60,6 @@ Upgrade an existing runtime:
 dictare upgrade
 ```
 
-### Legacy Homebrew installs
-
-If you installed Dictare with Homebrew, remove the legacy install first:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/scripts/uninstall.sh | bash
-```
-
-Then reinstall with the new installer:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
-```
-
-Your config and models are preserved in `~/.config/dictare/` and
-`~/.local/share/dictare/`.
-
 ### Permissions
 
 > **macOS** — grant when prompted:
@@ -258,6 +241,23 @@ uv run --python 3.11 pytest tests/ -x -n auto
 dictare is the reference implementation of [OpenVIP](https://openvip.dev) — an open protocol for
 voice input to AI agents. Any tool can implement the SSE endpoint and receive
 voice transcriptions from dictare.
+
+## Legacy Homebrew installs
+
+If you installed Dictare with Homebrew, remove the legacy install first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/scripts/uninstall.sh | bash
+```
+
+Then reinstall with the new installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
+```
+
+Your config and models are preserved in `~/.config/dictare/` and
+`~/.local/share/dictare/`.
 
 ## License
 
