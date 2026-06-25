@@ -88,7 +88,7 @@ mlx = [
     "huggingface-hub==1.16.0",
     "tqdm==4.67.1",
     "tiktoken==0.12.0",
-    "scipy==1.16.3",
+    "scipy==1.17.1",
     "numba==0.61.0",
     "numpy==1.26.4",
     "torch==2.0.1",
