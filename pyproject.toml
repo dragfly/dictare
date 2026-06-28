@@ -74,7 +74,7 @@ tray = [
     "pycairo>=1.25.0",
 ]
 gpu = [
-    "nvidia-cudnn-cu12>=9.1.0,<9.23.0",  # Must match ctranslate2's cuDNN requirement
+    "nvidia-cudnn-cu12>=9.1.0,<9.24.0",  # Must match ctranslate2's cuDNN requirement
 ]
 mlx = [
     # Keep the Apple Silicon stack on the versions resolved by the v0.2.7 release.
@@ -137,4 +137,5 @@ markers = [
     "internal: tests that depend on mock internals — skipped with --openvip-url",
     "macos: tests that require real macOS hardware (CoreAudio ctypes) — run with: pytest -m macos",
     "mlx: tests that require the Apple Silicon `mlx` extra (mlx-whisper etc.) — run with: pytest -m mlx",
+    "gpu: tests that require the Linux/CUDA `gpu` extra (ctranslate2 on CUDA) — run with: pytest -m gpu",
 ]
