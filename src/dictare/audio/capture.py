@@ -17,6 +17,78 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def _abort_close_stream(stream: Any) -> None:
+    """Best-effort abort + close of a PortAudio stream, swallowing errors."""
+    if stream is None:
+        return
+    try:
+        stream.abort()
+    except Exception:
+        pass
+    try:
+        stream.close()
+    except Exception:
+        pass
+
+
+def _run_with_timeout(
+    fn: Callable[[], Any],
+    timeout_s: float,
+    label: str,
+    on_late: Callable[[Any], None] | None = None,
+) -> Any:
+    """Run a blocking PortAudio call with a hard timeout.
+
+    PortAudio/CoreAudio calls (open, start, stop, close, abort) can block
+    indefinitely after a device error on macOS (e.g. error -50 following a
+    device change). Running them in a daemon thread and abandoning them on
+    timeout keeps the caller — in particular the audio reconnect loop — from
+    wedging forever while holding a lock.
+
+    This mirrors the watchdog already used for ``Pa_Terminate`` in
+    ``AudioManager._reinit_portaudio`` so every blocking call is bounded the
+    same way.
+
+    Returns the call's result, or raises ``TimeoutError`` if it does not
+    finish within ``timeout_s``. If ``on_late`` is given, it is invoked with
+    the result when an abandoned call eventually returns, so a stream that was
+    opened after we gave up gets cleaned up instead of leaking.
+    """
+    box: dict[str, Any] = {}
+    done = threading.Event()
+
+    def _runner() -> None:
+        try:
+            box["result"] = fn()
+        except BaseException as exc:  # noqa: BLE001 — re-raised in caller thread
+            box["error"] = exc
+        finally:
+            done.set()
+
+    threading.Thread(target=_runner, daemon=True, name=f"pa-{label}").start()
+
+    if done.wait(timeout=timeout_s):
+        if "error" in box:
+            raise box["error"]
+        return box.get("result")
+
+    logger.warning(
+        "PortAudio %s timed out after %.1fs — abandoning call", label, timeout_s
+    )
+    if on_late is not None:
+        def _reap() -> None:
+            done.wait()
+            if "result" in box:
+                try:
+                    on_late(box["result"])
+                except Exception:
+                    logger.debug("late cleanup for %s failed", label, exc_info=True)
+
+        threading.Thread(target=_reap, daemon=True, name=f"pa-{label}-reap").start()
+    raise TimeoutError(f"PortAudio {label} timed out after {timeout_s}s")
+
+
 class AudioCapture:
     """Records audio from microphone using sounddevice.
 
@@ -199,15 +271,29 @@ class AudioCapture:
 
             self._streaming_callback = callback
             self._last_callback_time = time.monotonic()
-            self._stream = sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                device=self.device or None,  # Empty string -> None (use default)
-                dtype=self.dtype,
-                blocksize=512,  # Match VAD chunk size
-                callback=self._streaming_audio_callback,
-            )
-            self._stream.start()
+
+            def _open() -> sd.InputStream:
+                stream = sd.InputStream(
+                    samplerate=self.sample_rate,
+                    channels=self.channels,
+                    device=self.device or None,  # Empty string -> None (use default)
+                    dtype=self.dtype,
+                    blocksize=512,  # Match VAD chunk size
+                    callback=self._streaming_audio_callback,
+                )
+                stream.start()
+                return stream
+
+            # Bound the open/start: a corrupted CoreAudio state can make these
+            # block forever, which would wedge the reconnect loop. On timeout
+            # the abandoned stream is aborted/closed in the background.
+            try:
+                self._stream = _run_with_timeout(
+                    _open, timeout_s=5.0, label="open", on_late=_abort_close_stream
+                )
+            except Exception:
+                self._streaming_callback = None
+                raise
 
     def _streaming_audio_callback(
         self,
@@ -241,9 +327,17 @@ class AudioCapture:
         """Stop continuous audio streaming."""
         with self._lock:
             if self._stream:
-                self._stream.stop()
-                self._stream.close()
+                stream = self._stream
                 self._stream = None
+                # Bound stop/close: like open, these can hang on a dead device.
+                try:
+                    _run_with_timeout(
+                        lambda: (stream.stop(), stream.close()),
+                        timeout_s=3.0,
+                        label="stop",
+                    )
+                except TimeoutError:
+                    pass  # abandoned; daemon thread finishes in the background
             self._streaming_callback = None
 
     @staticmethod
@@ -278,10 +372,16 @@ class AudioCapture:
         self._needs_reconnect = True
         stream = self._stream  # Atomic reference read
         if stream is not None:
-            try:
-                stream.abort()  # Pa_AbortStream — fast C call, thread-safe
-            except Exception:
-                pass
+            # Pa_AbortStream is usually fast, but on a corrupted CoreAudio
+            # state it can block. Since this may run on the CoreAudio thread,
+            # fire-and-forget so we never wait: the stream is being discarded
+            # by the reconnect anyway.
+            threading.Thread(
+                target=_abort_close_stream,
+                args=(stream,),
+                daemon=True,
+                name="pa-abort",
+            ).start()
 
     @property
     def reconnect_reason(self) -> str | None:
