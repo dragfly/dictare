@@ -319,7 +319,7 @@ requires-dist = [
     { name = "numba", marker = "extra == 'mlx'", specifier = "==0.61.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "numpy", marker = "extra == 'mlx'", specifier = "==1.26.4" },
-    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.23.0" },
+    { name = "nvidia-cudnn-cu12", marker = "extra == 'gpu'", specifier = ">=9.1.0,<9.24.0" },
     { name = "onnx-asr", specifier = ">=0.1.0" },
     { name = "openvip", specifier = ">=1.0.0rc10" },
     { name = "pathvalidate", specifier = ">=3.0.0" },
