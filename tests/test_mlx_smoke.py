@@ -35,21 +35,18 @@ def test_mlx_stack_imports() -> None:
     import torch  # noqa: F401
 
 
-def test_mlx_whisper_transcribes(tmp_path) -> None:
+def test_mlx_whisper_transcribes() -> None:
     """End-to-end: whisper-tiny loads and runs on real audio without crashing.
 
-    Asserts only the structural shape of the result — the point is to exercise
-    the mlx runtime path, not transcription accuracy.
+    Passes a float32 array straight in — the way the engine feeds mic frames —
+    which exercises the mlx runtime without needing ffmpeg to decode a file.
+    Asserts only the structural shape of the result, not transcription accuracy.
     """
-    import soundfile as sf
-
     sr = 16000
     t = np.linspace(0, 2.0, sr * 2, endpoint=False)
     audio = (0.01 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
-    wav = tmp_path / "tone.wav"
-    sf.write(str(wav), audio, sr)
 
     result = mlx_whisper.transcribe(
-        str(wav), path_or_hf_repo="mlx-community/whisper-tiny"
+        audio, path_or_hf_repo="mlx-community/whisper-tiny"
     )
     assert isinstance(result.get("text"), str)
