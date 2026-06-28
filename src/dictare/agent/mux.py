@@ -7,6 +7,7 @@ import logging
 import os
 import platform
 import queue
+import re
 import select
 import sys
 import termios
@@ -130,6 +131,112 @@ _FOCUS_DISABLE = b"\x1b[?1004l"
 _FOCUS_IN = b"\x1b[I"
 _FOCUS_OUT = b"\x1b[O"
 
+_MODIFIER_VALUES = range(1, 257)
+_KITTY_EVENT_TYPES = (1, 2, 3)
+
+_EVDEV_TO_KITTY_CODE = {
+    "KEY_ESC": 27,
+    "KEY_ESCAPE": 27,
+    "KEY_ENTER": 13,
+    "KEY_TAB": 9,
+    "KEY_BACKSPACE": 127,
+    "KEY_CAPSLOCK": 57358,
+    "KEY_SCROLLLOCK": 57359,
+    "KEY_NUMLOCK": 57360,
+    "KEY_SYSRQ": 57361,
+    "KEY_PRINTSCREEN": 57361,
+    "KEY_PAUSE": 57362,
+    "KEY_MENU": 57363,
+    "KEY_KP0": 57399,
+    "KEY_KP1": 57400,
+    "KEY_KP2": 57401,
+    "KEY_KP3": 57402,
+    "KEY_KP4": 57403,
+    "KEY_KP5": 57404,
+    "KEY_KP6": 57405,
+    "KEY_KP7": 57406,
+    "KEY_KP8": 57407,
+    "KEY_KP9": 57408,
+    "KEY_KPDOT": 57409,
+    "KEY_KPSLASH": 57410,
+    "KEY_KPASTERISK": 57411,
+    "KEY_KPMINUS": 57412,
+    "KEY_KPPLUS": 57413,
+    "KEY_KPENTER": 57414,
+    "KEY_KPEQUAL": 57415,
+    "KEY_LEFTSHIFT": 57441,
+    "KEY_LEFTCTRL": 57442,
+    "KEY_LEFTALT": 57443,
+    "KEY_LEFTMETA": 57444,
+    "KEY_LEFTSUPER": 57444,
+    "KEY_RIGHTSHIFT": 57447,
+    "KEY_RIGHTCTRL": 57448,
+    "KEY_RIGHTALT": 57449,
+    "KEY_RIGHTMETA": 57450,
+    "KEY_RIGHTSUPER": 57450,
+    "KEY_PLAY": 57428,
+    "KEY_PAUSECD": 57429,
+    "KEY_PLAYPAUSE": 57430,
+    "KEY_STOPCD": 57432,
+    "KEY_FASTFORWARD": 57433,
+    "KEY_REWIND": 57434,
+    "KEY_NEXTSONG": 57435,
+    "KEY_PREVIOUSSONG": 57436,
+    "KEY_RECORD": 57437,
+    "KEY_VOLUMEDOWN": 57438,
+    "KEY_VOLUMEUP": 57439,
+    "KEY_MUTE": 57440,
+}
+
+_LEGACY_TILDE_CODES = {
+    "KEY_INSERT": 2,
+    "KEY_DELETE": 3,
+    "KEY_PAGEUP": 5,
+    "KEY_PAGEDOWN": 6,
+    "KEY_HOME": 7,
+    "KEY_END": 8,
+    "KEY_F1": 11,
+    "KEY_F2": 12,
+    "KEY_F3": 13,
+    "KEY_F4": 14,
+    "KEY_F5": 15,
+    "KEY_F6": 17,
+    "KEY_F7": 18,
+    "KEY_F8": 19,
+    "KEY_F9": 20,
+    "KEY_F10": 21,
+    "KEY_F11": 23,
+    "KEY_F12": 24,
+    "KEY_MENU": 29,
+}
+
+_LEGACY_LETTER_CODES = {
+    "KEY_UP": "A",
+    "KEY_DOWN": "B",
+    "KEY_RIGHT": "C",
+    "KEY_LEFT": "D",
+    "KEY_BEGIN": "E",
+    "KEY_END": "F",
+    "KEY_HOME": "H",
+    "KEY_F1": "P",
+    "KEY_F2": "Q",
+    "KEY_F3": "R",
+    "KEY_F4": "S",
+}
+
+_SS3_CODES = {
+    "KEY_UP": "A",
+    "KEY_DOWN": "B",
+    "KEY_RIGHT": "C",
+    "KEY_LEFT": "D",
+    "KEY_HOME": "H",
+    "KEY_END": "F",
+    "KEY_F1": "P",
+    "KEY_F2": "Q",
+    "KEY_F3": "R",
+    "KEY_F4": "S",
+}
+
 # PTY delivery timing.
 #
 # Text and submit are logically separate operations. Keep the bytes separate in
@@ -194,6 +301,88 @@ def _strip_claim_key(data: bytes, raw: bytes, escape_seqs: list[bytes]) -> tuple
         found = True
     return data, found
 
+def _strip_terminal_sequences(data: bytes, sequences: list[bytes]) -> tuple[bytes, bool]:
+    """Remove exact terminal escape sequences from *data*."""
+    found = False
+    for seq in sequences:
+        if seq and seq in data:
+            data = data.replace(seq, b"")
+            found = True
+    return data, found
+
+def _kitty_csi_u_sequences(code: int) -> list[bytes]:
+    """Return kitty/CSI-u encodings for one functional key code."""
+    sequences = [f"\x1b[{code}u".encode()]
+    for modifier in _MODIFIER_VALUES:
+        sequences.append(f"\x1b[{code};{modifier}u".encode())
+        for event_type in _KITTY_EVENT_TYPES:
+            sequences.append(f"\x1b[{code};{modifier}:{event_type}u".encode())
+    return sequences
+
+def _legacy_tilde_sequences(code: int) -> list[bytes]:
+    """Return xterm-style ``CSI number ~`` encodings for a functional key."""
+    sequences = [f"\x1b[{code}~".encode()]
+    for modifier in _MODIFIER_VALUES:
+        sequences.append(f"\x1b[{code};{modifier}~".encode())
+    return sequences
+
+def _legacy_letter_sequences(letter: str) -> list[bytes]:
+    """Return xterm/kitty legacy ``CSI 1;modifier <letter>`` encodings."""
+    sequences = [f"\x1b[{letter}".encode(), f"\x1b[1{letter}".encode()]
+    for modifier in _MODIFIER_VALUES:
+        sequences.append(f"\x1b[1;{modifier}{letter}".encode())
+    return sequences
+
+def _normalize_evdev_key_name(key_name: str | None) -> str:
+    """Normalize configured hotkey names to evdev-style names."""
+    if not key_name:
+        return ""
+    normalized = key_name.strip().upper().replace("-", "_")
+    if not normalized:
+        return ""
+    if re.fullmatch(r"F\d{1,2}", normalized):
+        return f"KEY_{normalized}"
+    if not normalized.startswith("KEY_"):
+        return f"KEY_{normalized}"
+    return normalized
+
+def _terminal_sequences_for_evdev_key(key_name: str | None) -> list[bytes]:
+    """Return terminal sequences that can represent a configured global hotkey.
+
+    Dictare observes the global hotkey through platform input APIs, but the same
+    physical key can still arrive on stdin when the agent terminal is in raw
+    mode.  Keep this scoped to the configured key instead of stripping arbitrary
+    CSI-u input.
+    """
+    normalized = _normalize_evdev_key_name(key_name)
+    if not normalized:
+        return []
+
+    sequences: list[bytes] = []
+    match = re.fullmatch(r"KEY_F(\d{1,2})", normalized)
+    if match:
+        number = int(match.group(1))
+        if 13 <= number <= 35:
+            sequences.extend(_kitty_csi_u_sequences(57376 + number - 13))
+
+    kitty_code = _EVDEV_TO_KITTY_CODE.get(normalized)
+    if kitty_code is not None:
+        sequences.extend(_kitty_csi_u_sequences(kitty_code))
+
+    legacy_tilde = _LEGACY_TILDE_CODES.get(normalized)
+    if legacy_tilde is not None:
+        sequences.extend(_legacy_tilde_sequences(legacy_tilde))
+
+    legacy_letter = _LEGACY_LETTER_CODES.get(normalized)
+    if legacy_letter is not None:
+        sequences.extend(_legacy_letter_sequences(legacy_letter))
+
+    ss3_letter = _SS3_CODES.get(normalized)
+    if ss3_letter is not None:
+        sequences.append(f"\x1bO{ss3_letter}".encode())
+
+    return sorted(set(sequences), key=len, reverse=True)
+
 # Backward-compatible alias used by existing tests
 def _strip_ctrl_backslash(data: bytes) -> tuple[bytes, bool]:
     """Remove Ctrl+\\\\ from *data* (backward-compatible wrapper)."""
@@ -250,6 +439,8 @@ def _read_from_stdin(
     info_key_raw: bytes | None = None,
     info_key_seqs: list[bytes] | None = None,
     on_info: Callable[[], None] | None = None,
+    global_hotkey_key: str | None = None,
+    global_hotkey_seqs: list[bytes] | None = None,
 ) -> None:
     """Read from keyboard in raw mode and put data in queue.
 
@@ -261,10 +452,16 @@ def _read_from_stdin(
     When *info_key_raw* and *on_info* are set, the info key is
     intercepted and *on_info* is called (agent info notification).
 
+    When *global_hotkey_seqs* is set, terminal escape sequences for the
+    configured global hotkey are consumed so they do not leak into the child
+    process after the platform hotkey listener handles the event.
+
     Supports raw-mode byte, kitty CSI u, and xterm modifyOtherKeys.
     """
     if claim_key_seqs is None:
         claim_key_seqs = _CTRL_BACKSLASH_SEQS
+    if global_hotkey_seqs is None:
+        global_hotkey_seqs = []
     try:
         while not stop_event.is_set():
             r, _, _ = select.select([sys.stdin.fileno()], [], [], 0.1)
@@ -301,6 +498,18 @@ def _read_from_stdin(
                         if session_path:
                             _log_event(session_path, "info_key", {"agent_id": agent_id})
                         on_info()
+                        if not data:
+                            continue
+
+                # Consume terminal-side representation of the configured global hotkey
+                if global_hotkey_seqs:
+                    data, found = _strip_terminal_sequences(data, global_hotkey_seqs)
+                    if found:
+                        if session_path:
+                            _log_event(session_path, "global_hotkey", {
+                                "agent_id": agent_id,
+                                "key": global_hotkey_key,
+                            })
                         if not data:
                             continue
 
@@ -754,6 +963,7 @@ def run_agent(
     clear_on_start: bool = True,
     claim_key: str = "ctrl+\\",
     info_key: str = "ctrl+]",
+    global_hotkey_key: str | None = None,
 ) -> int:
     """Run a command with multiplexed input from stdin and dictare SSE.
 
@@ -769,6 +979,8 @@ def run_agent(
         claim_key: Key combo to claim this agent (e.g. "ctrl+\\", "ctrl+]").
         info_key: Key combo to show agent info as a system notification
             (empty string disables it).
+        global_hotkey_key: Evdev-style global hotkey key name to consume from
+            terminal stdin when the terminal also reports the physical key.
 
     Returns:
         Exit code of the process.
@@ -795,6 +1007,7 @@ def run_agent(
     # --- Pre-flight OK — proceed with session setup ---
     # Parse claim and info keys once at startup
     claim_raw, claim_seqs = _parse_claim_key(claim_key)
+    global_hotkey_seqs = _terminal_sequences_for_evdev_key(global_hotkey_key)
     info_raw: bytes | None = None
     info_seqs: list[bytes] = []
     if info_key:
@@ -890,6 +1103,8 @@ def run_agent(
                 "claim_key_seqs": claim_seqs,
                 "info_key_raw": info_raw,
                 "info_key_seqs": info_seqs,
+                "global_hotkey_key": global_hotkey_key,
+                "global_hotkey_seqs": global_hotkey_seqs,
                 "on_info": (
                     (lambda: _show_agent_info(agent_id, base_url)) if info_raw else None
                 ),
