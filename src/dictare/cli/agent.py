@@ -220,5 +220,6 @@ def register(app: typer.Typer) -> None:
             clear_on_start=config.client.clear_on_start,
             claim_key=config.client.claim_key,
             info_key=config.client.info_key,
+            global_hotkey_key=config.hotkey.key,
         )
         raise typer.Exit(exit_code)
