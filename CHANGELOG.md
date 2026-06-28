@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-06-28
+
+### Fixed
+- Audio reconnect no longer wedges forever when a PortAudio/CoreAudio call
+  (stream open/abort/close) blocks on a corrupted device state. These calls are
+  now bounded by a timeout watchdog — the same pattern already used for
+  PortAudio re-init — so the reconnect loop always releases its lock and audio
+  recovers on its own, without an engine restart.
+
 ## [0.5.1] - 2026-06-23
 
 Stable patch release after `0.5.1rc1`.
