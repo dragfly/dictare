@@ -32,11 +32,24 @@ from dictare.daemon.launchd import (
 from dictare.daemon.systemd import generate_unit, get_unit_path
 from dictare.daemon.systemd import is_installed as systemd_is_installed
 
+
+@pytest.fixture
+def isolated_home(tmp_path, monkeypatch):
+    """Keep app bundle tests from reading or writing the developer's home."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(
+        "dictare.runtime_store.resolve_service_python_path",
+        lambda fallback=None: None,
+    )
+    return tmp_path
+
+
 # ---------------------------------------------------------------------------
 # .app bundle
 # ---------------------------------------------------------------------------
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("isolated_home")
 class TestAppBundleCreate:
     def test_creates_directory_structure(self, tmp_path, monkeypatch):
         monkeypatch.setattr("dictare.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
@@ -75,6 +88,7 @@ class TestAppBundleCreate:
         assert python_path_file.read_text().strip() == "/other/python"
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("isolated_home")
 class TestAppBundleRemove:
     def test_removes_bundle(self, tmp_path, monkeypatch):
         monkeypatch.setattr("dictare.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
