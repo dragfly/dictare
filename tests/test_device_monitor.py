@@ -319,9 +319,9 @@ class TestEmergencyAbort:
 class TestAudioManagerDeviceMonitor:
     """Test AudioManager device monitor integration.
 
-    _on_device_change() always reinits PortAudio and restarts the input stream.
-    Tests verify the policy decisions (reset output, track missing flags, etc.)
-    while mocking the low-level PA/stream methods.
+    Input-affecting device changes reinit PortAudio and restart the input stream.
+    Output-only default changes only reset beep output and notify the UI.
+    Tests verify the policy decisions while mocking the low-level PA/stream methods.
     """
 
     def _make_manager(self, *, input_device: str = "", output_device: str = ""):
@@ -382,28 +382,29 @@ class TestAudioManagerDeviceMonitor:
             cleanup()
 
     def test_on_device_change_default_output_resets(self) -> None:
-        """Default output change triggers reset_audio_output when config is default."""
-        manager, _, _, cleanup = self._make_manager()
+        """Default output change resets beep output without touching input capture."""
+        manager, mock_reinit, mock_restart, cleanup = self._make_manager()
         try:
+            updated = []
+            manager.on_devices_updated = lambda: updated.append(1)
             with patch.object(manager, "reset_audio_output") as mock_reset:
                 manager._on_device_change("default_output_changed")
                 mock_reset.assert_called_once_with("")
+            mock_reinit.assert_not_called()
+            mock_restart.assert_not_called()
+            assert len(updated) == 1
         finally:
             cleanup()
 
     def test_on_device_change_fixed_output_ignored(self) -> None:
         """Default output change is ignored when fixed output device is still present."""
-        manager, _, _, cleanup = self._make_manager(output_device="My Speakers")
+        manager, mock_reinit, mock_restart, cleanup = self._make_manager(output_device="My Speakers")
         try:
-            with (
-                patch.object(AudioCapture, "list_devices", return_value=[]),
-                patch.object(AudioCapture, "list_output_devices", return_value=[
-                    {"name": "My Speakers", "index": 0, "channels": 2, "sample_rate": 44100},
-                ]),
-                patch.object(manager, "reset_audio_output") as mock_reset,
-            ):
+            with patch.object(manager, "reset_audio_output") as mock_reset:
                 manager._on_device_change("default_output_changed")
                 mock_reset.assert_not_called()
+            mock_reinit.assert_not_called()
+            mock_restart.assert_not_called()
         finally:
             cleanup()
 
@@ -425,7 +426,7 @@ class TestAudioManagerDeviceMonitor:
                 ]),
                 patch.object(manager, "reset_audio_output") as mock_reset,
             ):
-                manager._on_device_change("default_output_changed")
+                manager._on_device_change("devices_changed")
                 mock_reset.assert_called_once_with("")  # fall back to default
 
             assert manager._output_device_missing
@@ -562,25 +563,22 @@ class TestAudioManagerDeviceMonitor:
         finally:
             cleanup()
 
-    def test_all_reasons_always_restart_input(self) -> None:
-        """Every device change reinits PA and restarts input stream."""
-        manager, mock_reinit, mock_restart, cleanup = self._make_manager(
-            input_device="Fixed", output_device="Fixed",
-        )
+    def test_input_affecting_reasons_restart_input_but_default_output_does_not(self) -> None:
+        """Input-affecting changes restart input; output-only default changes do not."""
+        manager, mock_reinit, mock_restart, cleanup = self._make_manager()
         try:
-            with (
-                patch.object(AudioCapture, "list_devices", return_value=[
-                    {"name": "Fixed", "index": 0, "channels": 1, "sample_rate": 44100},
-                ]),
-                patch.object(AudioCapture, "list_output_devices", return_value=[
-                    {"name": "Fixed", "index": 1, "channels": 2, "sample_rate": 44100},
-                ]),
-            ):
-                for reason in ("default_input_changed", "default_output_changed", "devices_changed"):
+            with patch.object(manager, "reset_audio_output") as mock_reset:
+                for reason in ("default_input_changed", "devices_changed"):
                     manager._on_device_change(reason)
 
-            assert mock_reinit.call_count == 3
-            assert mock_restart.call_count == 3
+                assert mock_reinit.call_count == 2
+                assert mock_restart.call_count == 2
+
+                manager._on_device_change("default_output_changed")
+                mock_reset.assert_called_once_with("")
+
+            assert mock_reinit.call_count == 2
+            assert mock_restart.call_count == 2
         finally:
             cleanup()
 

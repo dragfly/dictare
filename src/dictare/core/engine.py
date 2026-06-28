@@ -1328,6 +1328,7 @@ class DictareEngine:
             self.toggle_listening()
             return {"openvip": "1.0", "status": "ok"}
         elif command == "engine.shutdown":
+            logger.info("protocol_command: engine.shutdown")
             self.save_session_before_shutdown()
             self.running = False
             # Watchdog: force-exit if graceful stop() hangs (e.g. audio deadlock).
@@ -1336,6 +1337,7 @@ class DictareEngine:
             return {"openvip": "1.0", "status": "ok"}
         elif command == "engine.restart":
             # Persist state, then exit — the service manager (Restart=always) restarts us.
+            logger.info("protocol_command: engine.restart")
             self.save_session_before_shutdown()
             self.running = False
             self._start_exit_watchdog(exit_code=0)
