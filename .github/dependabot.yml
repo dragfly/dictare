@@ -7,6 +7,25 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+    ignore:
+      # The macOS `mlx` optional-extra is a hand-frozen, exact-pinned set
+      # (mlx*, torch, scipy, numba, tiktoken, huggingface-hub, tqdm), tested
+      # together on Apple Silicon. CI installs only `.[dev]`, never `.[mlx]`,
+      # so bumps here are untested and ABI-risky. Bump them manually as a
+      # coordinated family. See docs: audio-reconnect-hang-fix predates this,
+      # but the principle is the same — don't auto-bump the frozen mlx stack.
+      - dependency-name: "mlx*"
+      - dependency-name: "torch"
+      - dependency-name: "scipy"
+      - dependency-name: "numba"
+      - dependency-name: "tiktoken"
+      - dependency-name: "huggingface-hub"
+      - dependency-name: "tqdm"
+      # numpy: the core code is numpy-2-clean (exercised by CI), but the mlx
+      # pin requires 1.x (torch 2.0.1 / numba have no numpy-2 ABI). Block the
+      # major bump; still allow 1.26.x patch/minor.
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
