@@ -182,6 +182,56 @@ class TestFindBrewPython:
 
 
 # ---------------------------------------------------------------------------
+# _find_cellar_bundle — discover Homebrew's signed launcher source
+# ---------------------------------------------------------------------------
+
+class TestFindCellarBundle:
+    """Find the signed Homebrew bundle without depending on PATH order."""
+
+    def _make_bundle(self, root: Path) -> Path:
+        bundle = root / "Dictare.app"
+        macos = bundle / "Contents" / "MacOS"
+        macos.mkdir(parents=True)
+        (macos / "Dictare").write_text("")
+        return bundle
+
+    def test_env_bundle_wins_when_runtime_shim_shadows_path(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        bundle = self._make_bundle(tmp_path / "homebrew" / "libexec" / "bundle")
+        user_shim = tmp_path / "home" / ".local" / "bin" / "dictare"
+        user_shim.parent.mkdir(parents=True)
+        user_shim.write_text("")
+
+        monkeypatch.setenv("DICTARE_HOMEBREW_BUNDLE", str(bundle))
+        monkeypatch.setattr(app_bundle.shutil, "which", lambda _: str(user_shim))
+
+        assert app_bundle._find_cellar_bundle() == bundle
+
+    def test_persistent_bundle_hint_wins_when_runtime_shim_shadows_path(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_home = tmp_path / "home"
+        bundle = self._make_bundle(tmp_path / "custom-brew" / "libexec" / "bundle")
+        user_shim = fake_home / ".local" / "bin" / "dictare"
+        user_shim.parent.mkdir(parents=True)
+        user_shim.write_text("")
+        hint = fake_home / ".dictare" / "homebrew_bundle_path"
+        hint.parent.mkdir(parents=True)
+        hint.write_text(str(bundle))
+
+        monkeypatch.delenv("DICTARE_HOMEBREW_BUNDLE", raising=False)
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        monkeypatch.setattr(app_bundle.shutil, "which", lambda _: str(user_shim))
+
+        assert app_bundle._find_cellar_bundle() == bundle
+
+
+# ---------------------------------------------------------------------------
 # ensure_python_path — runtime-store priority + legacy fallbacks
 # ---------------------------------------------------------------------------
 

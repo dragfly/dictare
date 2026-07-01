@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 
 import typer
 
@@ -23,6 +24,39 @@ def _get_backend():
     else:
         console.print(f"[red]Unsupported platform: {sys.platform}[/]")
         raise typer.Exit(1)
+
+
+def _wait_for_engine_ready(timeout: float = 45.0, interval: float = 0.5) -> bool:
+    """Return True once the engine has finished startup work."""
+    from openvip import Client
+
+    from dictare.config import load_config
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            config = load_config()
+            client = Client(
+                f"http://{config.server.host}:{config.server.port}/openvip",
+                timeout=1,
+            )
+            status = client.get_status()
+            platform = status.platform or {}
+            loading = platform.get("loading") or {}
+            if not loading.get("active", False):
+                return True
+        except Exception:
+            pass
+        time.sleep(interval)
+    return False
+
+
+def _print_start_result(message: str) -> None:
+    if _wait_for_engine_ready():
+        console.print(f"[green]{message}; engine is running[/]")
+    else:
+        console.print(f"[green]{message}[/]")
+        console.print("[yellow]Engine is still starting; run 'dictare status' in a few seconds.[/]")
 
 @app.command("install")
 def service_install(
@@ -59,7 +93,7 @@ def service_install(
     except Exception as e:
         console.print(f"[red]Failed to install service: {e}[/]")
         raise typer.Exit(1)
-    console.print("[green]Service installed and started[/]")
+    _print_start_result("Service installed and started")
 
     # Tray is handled by install() → install_tray() already (macOS only).
     # No duplicate call needed here.
@@ -93,7 +127,7 @@ def service_start() -> None:
     except Exception as e:
         console.print(f"[red]Failed to start service: {e}[/]")
         raise typer.Exit(1)
-    console.print("[green]Service started[/]")
+    _print_start_result("Service started")
 
 @app.command("stop")
 def service_stop() -> None:
@@ -130,7 +164,7 @@ def service_restart() -> None:
     except Exception as e:
         console.print(f"[red]Failed to start service: {e}[/]")
         raise typer.Exit(1)
-    console.print("[green]Service restarted[/]")
+    _print_start_result("Service restarted")
 
 @app.command("status")
 def service_status() -> None:

@@ -17,6 +17,7 @@ def test_runtime_lifecycle_commands_are_registered() -> None:
     assert "repair" in result.output
     assert "upgrade" in result.output
     assert "rollback" in result.output
+    assert "uninstall" in result.output
 
 
 def test_version_from_path_parses_wheel_version() -> None:

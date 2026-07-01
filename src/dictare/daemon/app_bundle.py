@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.resources
 import logging
+import os
 import plistlib
 import shutil
 import stat
@@ -40,6 +41,33 @@ def _candidate_brew_python_paths() -> list[Path]:
         Path("/opt/homebrew/opt/dictare/libexec/uv-tools/dictare/bin/python"),
         Path("/usr/local/opt/dictare/libexec/uv-tools/dictare/bin/python"),
     ]
+
+def _candidate_homebrew_bundle_paths() -> list[Path]:
+    """Return Homebrew-installed signed bundle candidates.
+
+    The runtime-store installer can create ``~/.local/bin/dictare``. If that
+    shim appears before Homebrew in PATH, resolving ``dictare`` is not enough to
+    find the signed bundle. Prefer the explicit wrapper hint and stable Homebrew
+    opt paths before falling back to PATH.
+    """
+    candidates: list[Path] = []
+    env_bundle = os.environ.get("DICTARE_HOMEBREW_BUNDLE")
+    if env_bundle:
+        candidates.append(Path(env_bundle).expanduser())
+    hint_file = Path.home() / ".dictare" / "homebrew_bundle_path"
+    try:
+        hinted_bundle = hint_file.read_text().strip()
+    except OSError:
+        hinted_bundle = ""
+    if hinted_bundle:
+        candidates.append(Path(hinted_bundle).expanduser())
+    candidates.extend(
+        [
+            Path("/opt/homebrew/opt/dictare/libexec/bundle/Dictare.app"),
+            Path("/usr/local/opt/dictare/libexec/bundle/Dictare.app"),
+        ]
+    )
+    return candidates
 
 def get_app_path() -> Path:
     """Return the .app bundle path (~/Applications)."""
@@ -329,19 +357,14 @@ def ensure_python_path(executable: str) -> None:
 
     Resolution priority:
 
-    1. **Homebrew wins, always.** If dictare is installed via Homebrew, the
-       stored path is reset to the brew venv's python regardless of which
-       interpreter is currently running. This protects against the
-       classic failure mode where a stray `python -m dictare …` from an
-       editable install in pyenv (or a dev venv) overwrites the brew path
-       and demotes STT/TTS to CPU because that interpreter lacks `mlx-whisper`.
+    1. **Runtime store wins.** The product-owned runtime under
+       ``~/.local/share/dictare/current`` is authoritative for current installs.
 
-       The user can still develop against a non-brew interpreter — they
-       just need to *uninstall* the brew package (or pass the dev python
-       to `dictare service install`) rather than rely on accidental
-       self-healing.
+    2. **Legacy Homebrew fallback.** If no runtime store exists, older
+       Homebrew-owned installs can still pin the launcher to the brew venv's
+       python instead of a stray pyenv or development interpreter.
 
-    2. **Otherwise, accept the currently running interpreter** (dev mode):
+    3. **Otherwise, accept the currently running interpreter** (dev mode):
        this matches the pre-existing behavior — useful for handling brew
        upgrades (Cellar version bumps) and dev workflows where there is
        no brew install at all.
@@ -363,7 +386,7 @@ def ensure_python_path(executable: str) -> None:
     except Exception:
         pass
 
-    # Step 1: brew installation wins.
+    # Step 2: legacy brew installation fallback.
     service_python = resolve_service_python_path(executable)
     if service_python != executable:
         if stored == service_python:
@@ -375,7 +398,7 @@ def ensure_python_path(executable: str) -> None:
         _write_external_python_path(service_python)
         return
 
-    # Step 2: no brew → preserve existing self-healing behavior.
+    # Step 3: no brew → preserve existing self-healing behavior.
     resolved, changed = resolve_python_path(executable, stored)
     if changed:
         logger.info("Updating python_path: %s → %s", stored, resolved)
@@ -386,8 +409,14 @@ def _find_cellar_bundle() -> Path | None:
 
     When installed via `brew install`, the formula puts the bundle at
     libexec/bundle/Dictare.app.  We find it by resolving the `dictare`
-    binary symlink back to the Cellar.
+    binary symlink back to the Cellar.  Runtime-store installs may put the
+    user shim earlier in PATH, so explicit Homebrew bundle hints are checked
+    first.
     """
+    for candidate in _candidate_homebrew_bundle_paths():
+        if _is_valid_bundle(candidate):
+            return candidate
+
     try:
         dictare_bin = shutil.which("dictare")
         if not dictare_bin:
@@ -396,11 +425,17 @@ def _find_cellar_bundle() -> Path | None:
         real_bin = Path(dictare_bin).resolve()
         libexec = real_bin.parent.parent
         candidate = libexec / "bundle" / f"{APP_NAME}.app"
-        if candidate.is_dir() and (candidate / "Contents" / "MacOS" / APP_NAME).exists():
+        if _is_valid_bundle(candidate):
             return candidate
     except Exception:
         pass
     return None
+
+def _is_valid_bundle(candidate: Path) -> bool:
+    return (
+        candidate.is_dir()
+        and (candidate / "Contents" / "MacOS" / APP_NAME).exists()
+    )
 
 def _install_cellar_bundle(src_bundle: Path, dest_bundle: Path) -> None:
     """Copy a complete signed .app bundle from the Cellar to ~/Applications."""

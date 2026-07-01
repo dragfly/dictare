@@ -10,12 +10,52 @@ import typer
 
 from dictare.cli.service import (
     _get_backend,
+    _wait_for_engine_ready,
     service_restart,
     service_start,
     service_status,
     service_stop,
     service_uninstall,
 )
+
+# ---------------------------------------------------------------------------
+# _wait_for_engine_ready
+# ---------------------------------------------------------------------------
+
+
+class TestWaitForEngineReady:
+    def test_ready_when_loading_inactive(self) -> None:
+        mock_client = MagicMock()
+        mock_client.get_status.return_value = SimpleNamespace(
+            platform={"loading": {"active": False}}
+        )
+
+        with patch("dictare.config.load_config") as mock_load, \
+             patch("openvip.Client", return_value=mock_client):
+            mock_load.return_value = SimpleNamespace(
+                server=SimpleNamespace(host="127.0.0.1", port=9999)
+            )
+
+            assert _wait_for_engine_ready(timeout=0.1) is True
+
+    def test_waits_past_http_before_ready(self) -> None:
+        mock_client = MagicMock()
+        mock_client.get_status.side_effect = [
+            SimpleNamespace(platform={"loading": {"active": True}}),
+            SimpleNamespace(platform={"loading": {"active": False}}),
+        ]
+
+        with patch("dictare.config.load_config") as mock_load, \
+             patch("openvip.Client", return_value=mock_client), \
+             patch("dictare.cli.service.time.sleep") as sleep:
+            mock_load.return_value = SimpleNamespace(
+                server=SimpleNamespace(host="127.0.0.1", port=9999)
+            )
+
+            assert _wait_for_engine_ready(timeout=1) is True
+
+        sleep.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # _get_backend
@@ -61,6 +101,7 @@ class TestServiceInstallViaCli:
         with patch("dictare.cli.service._get_backend", return_value=mock_backend), \
              patch("dictare.cli.service.sys") as mock_sys, \
              patch("dictare.config.get_config_path", return_value=mock_config_path), \
+             patch("dictare.cli.service._wait_for_engine_ready", return_value=True), \
              patch("dictare.cli.service.console"):
             mock_sys.platform = "darwin"
             runner.invoke(app, ["install"])
@@ -134,10 +175,12 @@ class TestServiceStart:
         mock_backend.is_installed.return_value = True
 
         with patch("dictare.cli.service._get_backend", return_value=mock_backend), \
-             patch("dictare.cli.service.console"):
+             patch("dictare.cli.service.console"), \
+             patch("dictare.cli.service._wait_for_engine_ready") as wait:
             service_start()
 
         mock_backend.start.assert_called_once()
+        wait.assert_called_once()
 
     def test_start_when_not_installed(self) -> None:
         mock_backend = MagicMock()
@@ -197,10 +240,12 @@ class TestServiceRestart:
         mock_backend.start.side_effect = lambda: call_order.append("start")
 
         with patch("dictare.cli.service._get_backend", return_value=mock_backend), \
-             patch("dictare.cli.service.console"):
+             patch("dictare.cli.service.console"), \
+             patch("dictare.cli.service._wait_for_engine_ready") as wait:
             service_restart()
 
         assert call_order == ["stop", "start"]
+        wait.assert_called_once()
 
     def test_restart_when_not_installed(self) -> None:
         mock_backend = MagicMock()

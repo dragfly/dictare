@@ -17,6 +17,7 @@ from __future__ import annotations
 import ctypes
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -111,9 +112,28 @@ def _find_launcher() -> str | None:
         return str(sys_path)
 
     # 3. Brew Cellar fallback (different TCC identity — may return false negatives)
-    brew_path = Path("/opt/homebrew/opt/dictare/Dictare.app/Contents/MacOS/Dictare")
-    if brew_path.exists():
-        return str(brew_path)
+    brew_candidates: list[Path] = []
+    env_bundle = os.environ.get("DICTARE_HOMEBREW_BUNDLE")
+    if env_bundle:
+        brew_candidates.append(Path(env_bundle) / "Contents" / "MacOS" / "Dictare")
+    hint_file = Path.home() / ".dictare" / "homebrew_bundle_path"
+    try:
+        hinted_bundle = hint_file.read_text().strip()
+    except OSError:
+        hinted_bundle = ""
+    if hinted_bundle:
+        brew_candidates.append(Path(hinted_bundle) / "Contents" / "MacOS" / "Dictare")
+    brew_candidates.extend(
+        [
+            Path("/opt/homebrew/opt/dictare/libexec/bundle/Dictare.app/Contents/MacOS/Dictare"),
+            Path("/usr/local/opt/dictare/libexec/bundle/Dictare.app/Contents/MacOS/Dictare"),
+            Path("/opt/homebrew/opt/dictare/Dictare.app/Contents/MacOS/Dictare"),
+            Path("/usr/local/opt/dictare/Dictare.app/Contents/MacOS/Dictare"),
+        ]
+    )
+    for brew_path in brew_candidates:
+        if brew_path.exists():
+            return str(brew_path)
 
     return None
 

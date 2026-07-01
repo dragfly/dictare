@@ -67,3 +67,5 @@ def register(app: typer.Typer) -> None:
         console.print()
         console.print("  Launch an agent:  [cyan]dictare agent my-first-session[/]")
         console.print("  Start tray icon:  [cyan]dictare tray start[/]")
+        console.print()
+        console.print("[dim]Runtime lifecycle:[/] dictare upgrade | dictare rollback | dictare repair")
