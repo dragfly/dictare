@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed a race in the PTY output loop where `dictare agent` could crash with
+  `ChildProcessError` (and lose the wrapped agent's exit code) when the child
+  process exit was observed by the non-blocking poll before the PTY EOF.
 - `dictare upgrade` no longer fails with a cryptic "no version of dictare==X"
   error right after a release: the installer now refreshes uv's cached index
   metadata for the `dictare` package on every install (cached dependency

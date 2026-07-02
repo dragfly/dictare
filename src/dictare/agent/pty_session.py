@@ -139,10 +139,14 @@ class PTYSession:
         pid = self._pid
         assert pid is not None
 
+        status: int | None = None
         try:
             while True:
-                result = os.waitpid(pid, os.WNOHANG)
-                if result[0] != 0:
+                reaped, reap_status = os.waitpid(pid, os.WNOHANG)
+                if reaped != 0:
+                    # The child is reaped here: remember its status, because a
+                    # second waitpid on the same pid raises ChildProcessError.
+                    status = reap_status
                     break
 
                 r, _, _ = select.select([master_fd], [], [], 0.1)
@@ -159,8 +163,10 @@ class PTYSession:
         except KeyboardInterrupt:
             os.kill(pid, signal.SIGTERM)
 
-        # Wait for child and get exit status
-        _, status = os.waitpid(pid, 0)
+        # Wait for child and get exit status (unless the WNOHANG poll
+        # already reaped it above)
+        if status is None:
+            _, status = os.waitpid(pid, 0)
         if os.WIFEXITED(status):
             return os.WEXITSTATUS(status)
         return 1
