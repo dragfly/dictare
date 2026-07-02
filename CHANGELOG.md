@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Release workflow: the Homebrew tap update job now loads `TAP_GITHUB_TOKEN`
+  from Infisical again (it referenced a non-existent GitHub secret, which made
+  the tap update fail in the 0.6.0 release).
+
 ## [0.6.0] - 2026-07-02
 
 Stable release of the Homebrew bootstrap flow introduced in `0.6.0rc1`.

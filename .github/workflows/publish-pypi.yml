@@ -96,6 +96,22 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Load tap token from Infisical
+        env:
+          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+        run: |
+          curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash
+          sudo apt-get install -y infisical
+          # Least privilege: fetch only the single secret this job needs.
+          TOKEN=$(infisical secrets get TAP_GITHUB_TOKEN \
+            --domain "https://eu.infisical.com" \
+            --projectId "7d6c2573-e67b-4243-9911-0a9ddaed58b8" \
+            --path "/work/dictare/app/ci" \
+            --env prod \
+            --plain)
+          echo "::add-mask::$TOKEN"
+          echo "TAP_GITHUB_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Wait for PyPI to index the package
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
@@ -135,7 +151,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: dragfly/homebrew-tap
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          token: ${{ env.TAP_GITHUB_TOKEN }}
           path: homebrew-tap
 
       - name: Write formula from bootstrap template
