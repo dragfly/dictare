@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   error right after a release: the installer now refreshes uv's cached index
   metadata for the `dictare` package on every install (cached dependency
   wheels are untouched, so upgrades stay fast).
+- Speech lost to an STT lock timeout is no longer silent: the engine plays a
+  busy beep, logs at error level with the dropped audio duration, and records
+  the error in the session log.
+- Audio queue overflow (utterances buffered during transcription or agent
+  reconnect) is now counted and logged at warning level instead of being
+  dropped silently.
+- Failed audio reconnect rounds now back off exponentially (3s doubling to a
+  30s cap, reset on success) instead of retrying every 3s, which burned the
+  circuit breaker budget before a slow-returning device (USB re-enumeration,
+  sleep/wake) came back.
 
 ## [0.6.1] - 2026-07-02
 

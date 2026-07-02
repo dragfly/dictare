@@ -94,6 +94,11 @@ class DictareEngine:
     # Maximum time to wait for STT lock (prevents thread pile-up if STT hangs)
     STT_LOCK_TIMEOUT = 30.0
 
+    # Wait between failed audio reconnect rounds: starts at the base delay and
+    # doubles up to the cap while the failure persists (reset on success)
+    RECONNECT_RETRY_DELAY_S = 3.0
+    RECONNECT_RETRY_DELAY_MAX_S = 30.0
+
     # Double-tap detection threshold in seconds
     DOUBLE_TAP_THRESHOLD = 0.4
 
@@ -693,7 +698,22 @@ class DictareEngine:
                 transcribe_start = time.time()
                 task = "translate" if self.config.stt.translate else "transcribe"
                 if not self._stt_lock.acquire(timeout=self.STT_LOCK_TIMEOUT):
-                    logger.warning("STT lock timeout — previous transcription may be stuck")
+                    # The user's utterance is lost: make the failure audible
+                    # instead of dropping it silently.
+                    audio_seconds = len(audio_data) / self.config.audio.advanced.sample_rate
+                    logger.error(
+                        "STT lock timeout — dropping %.1fs of audio "
+                        "(previous transcription may be stuck)",
+                        audio_seconds,
+                    )
+                    if self._logger:
+                        self._logger.log_error(
+                            f"STT lock timeout — dropped {audio_seconds:.1f}s of audio",
+                            context="transcribe_and_process",
+                        )
+                    from dictare.audio.beep import play_beep_busy
+
+                    play_beep_busy()
                     return
                 try:
                     stt_result = self._stt.transcribe(
@@ -1434,6 +1454,12 @@ class DictareEngine:
         handles audio device reconnection (callback errors, dead streams,
         zombie streams).
         """
+        # Exponential backoff between failed reconnect rounds: a device that
+        # vanished (USB re-enumeration, sleep/wake) can take tens of seconds
+        # to return, and retrying every 3s burns the circuit breaker budget
+        # (5 calls / 60s) before it does. The wait loop stays interruptible
+        # so shutdown is never delayed by the backoff.
+        retry_delay = self.RECONNECT_RETRY_DELAY_S
         try:
             while self.running:
                 time.sleep(0.1)
@@ -1448,11 +1474,16 @@ class DictareEngine:
                     try:
                         if self.audio_manager.reconnect(self.audio_manager.on_audio_chunk):
                             logger.info("Audio reconnect succeeded")
+                            retry_delay = self.RECONNECT_RETRY_DELAY_S
                         else:
-                            logger.error("Audio reconnect failed — waiting 3s before retry")
-                            _deadline = time.monotonic() + 3.0
+                            logger.error(
+                                "Audio reconnect failed — waiting %.0fs before retry",
+                                retry_delay,
+                            )
+                            _deadline = time.monotonic() + retry_delay
                             while self.running and time.monotonic() < _deadline:
                                 time.sleep(0.5)
+                            retry_delay = min(retry_delay * 2, self.RECONNECT_RETRY_DELAY_MAX_S)
                     finally:
                         self._reconnecting.release()
         except KeyboardInterrupt:

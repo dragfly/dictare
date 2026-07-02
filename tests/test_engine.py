@@ -1746,3 +1746,31 @@ class TestResendLast:
 
         assert result is False
         mock_inject.assert_not_called()
+
+
+class TestSttLockTimeout:
+    """STT lock timeout must be audible and still complete the FSM cycle."""
+
+    def test_lock_timeout_beeps_and_sends_completion(self) -> None:
+        from dictare.core.fsm import TranscriptionCompleted
+
+        config = MockConfig()
+        engine = DictareEngine(config=config)
+        engine._stt = MagicMock()
+        engine._controller = MagicMock()
+        engine.STT_LOCK_TIMEOUT = 0.01
+        engine._stt_lock.acquire()  # simulate a stuck transcription
+
+        audio = np.zeros(16000, dtype=np.float32)
+        with patch("dictare.audio.beep.play_beep_busy") as mock_beep:
+            engine.transcribe_and_process(audio)
+            for _ in range(200):
+                if engine._controller.send.called:
+                    break
+                time.sleep(0.01)
+
+        mock_beep.assert_called_once()
+        engine._stt.transcribe.assert_not_called()
+        (event,) = engine._controller.send.call_args.args
+        assert isinstance(event, TranscriptionCompleted)
+        assert event.text == ""
