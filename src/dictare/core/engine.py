@@ -693,7 +693,22 @@ class DictareEngine:
                 transcribe_start = time.time()
                 task = "translate" if self.config.stt.translate else "transcribe"
                 if not self._stt_lock.acquire(timeout=self.STT_LOCK_TIMEOUT):
-                    logger.warning("STT lock timeout — previous transcription may be stuck")
+                    # The user's utterance is lost: make the failure audible
+                    # instead of dropping it silently.
+                    audio_seconds = len(audio_data) / self.config.audio.advanced.sample_rate
+                    logger.error(
+                        "STT lock timeout — dropping %.1fs of audio "
+                        "(previous transcription may be stuck)",
+                        audio_seconds,
+                    )
+                    if self._logger:
+                        self._logger.log_error(
+                            f"STT lock timeout — dropped {audio_seconds:.1f}s of audio",
+                            context="transcribe_and_process",
+                        )
+                    from dictare.audio.beep import play_beep_busy
+
+                    play_beep_busy()
                     return
                 try:
                     stt_result = self._stt.transcribe(
