@@ -1,9 +1,15 @@
 name: "auto: test macOS"
 
 on:
+  pull_request:
+    branches: [main]
   schedule:
-    - cron: "0 4 * * *"  # daily at 04:00 UTC
+    - cron: "0 4 * * *"  # daily at 04:00 UTC (catches environment drift)
   workflow_dispatch:       # allow manual trigger from GitHub UI
+
+concurrency:
+  group: ci-macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test-macos:
@@ -21,5 +27,5 @@ jobs:
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
           .venv/bin/pip install -e ".[dev]"
 
-      - name: Run CoreAudio tests
-        run: pytest tests/ -v -m macos
+      - name: Run full test suite on macOS (incl. CoreAudio, excl. mlx/gpu extras)
+        run: pytest tests/ -v -m 'not mlx and not gpu'
