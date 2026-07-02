@@ -198,6 +198,9 @@ def register(app: typer.Typer) -> None:
         if live_dangerously:
             if resolved_profile is not None and resolved_profile.live_dangerously_args:
                 command = [command[0]] + resolved_profile.live_dangerously_args + command[1:]
+                console.print(
+                    f"[yellow]⚠ live-dangerously: {' '.join(resolved_profile.live_dangerously_args)}[/]"
+                )
             elif resolved_profile is not None:
                 console.print("[yellow]Warning: --live-dangerously given but agent profile has no live_dangerously_args configured[/]")
             # With command override (--), --live-dangerously is silently ignored

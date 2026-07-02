@@ -414,7 +414,9 @@ class TestGetCommentedSection:
 
         profiles = parsed["agent_profiles"]
         assert profiles["default"] == "codex"
-        assert profiles["live_dangerously"] is True
+        # Safety first: bypassing agent permission prompts must be an explicit
+        # user choice, never the shipped default.
+        assert profiles["live_dangerously"] is False
         assert profiles["claude"]["command"] == ["claude", "--max-turns", "10000"]
         assert profiles["codex"]["continue_args"] == ["resume", "--last"]
         assert profiles["gemini"]["live_dangerously_args"] == ["--yolo"]
