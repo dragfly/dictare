@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-02
+
+### Fixed
+- **Safety first: `live_dangerously` now defaults to `false`.** The default
+  config shipped in 0.6.0 enabled `live_dangerously = true` globally, which
+  silently launched agents with their permission prompts bypassed
+  (`--dangerously-skip-permissions` for Claude Code,
+  `--dangerously-bypass-approvals-and-sandbox` for Codex, `--yolo` for Gemini).
+  Bypassing agent safety confirmations must be an explicit user choice — via
+  `--live-dangerously` or a deliberate config change — never a silent default.
+- When live-dangerously mode is active, `dictare agent` now prints a visible
+  warning line with the injected arguments before launching the agent, so the
+  mode is never silent even when enabled from config.
+
 ## [0.6.0] - 2026-07-02
 
 Stable release of the Homebrew bootstrap flow introduced in `0.6.0rc1`.

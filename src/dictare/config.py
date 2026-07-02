@@ -1063,7 +1063,10 @@ enabled = true
 
 [agent_profiles]
 default = "codex"
-live_dangerously = true
+# Safety first: agents run with their normal permission prompts by default.
+# Set to true (or pass --live-dangerously) to always apply each profile's
+# live_dangerously_args (e.g. --dangerously-skip-permissions for Claude Code).
+live_dangerously = false
 
 [agent_profiles.claude]
 command = ["claude", "--max-turns", "10000"]
