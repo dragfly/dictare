@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-02
+
+Stable release of the Homebrew bootstrap flow introduced in `0.6.0rc1`.
+
+### Added
+- Reintroduced Homebrew as a macOS bootstrap entry point: Homebrew installs the
+  CLI wrapper, macOS dependencies, and signed launcher source while Dictare keeps
+  ownership of runtime install, upgrade, rollback, and repair.
+- Added `dictare uninstall` for clean reinstall flows that move runtime/service
+  state aside while preserving user data by default.
+- Added default agent profiles for Codex, Claude, Gemini, Aider, and Pi.
+
+### Changed
+- Stable release publishing now updates the Homebrew tap with the bootstrap
+  formula instead of a Homebrew-owned Python runtime formula.
+
+### Fixed
+- Global hotkey sequences configured for Dictare are now filtered from the
+  terminal input stream, so they no longer leak keystrokes to the agent.
+- Output-device changes no longer reset the audio input stream; only input
+  device changes trigger a reconnect.
+
 ## [0.6.0rc1] - 2026-07-01
 
 ### Added
