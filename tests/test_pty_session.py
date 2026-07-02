@@ -293,20 +293,17 @@ class TestRunOutputLoop:
         finally:
             session.cleanup()
 
-    def test_wnohang_reap_path_raises_childprocesserror(
-        self, sigwinch_guard
-    ) -> None:
-        """KNOWN BUG (pinned): if the WNOHANG poll observes the child's exit
-        first, the loop breaks and the final blocking waitpid raises
-        ChildProcessError because the child was already reaped.
+    def test_wnohang_reap_path_returns_exit_code(self, sigwinch_guard) -> None:
+        """Regression: if the WNOHANG poll observes the child's exit first, it
+        reaps the child; the loop must use that status instead of calling
+        waitpid again (which raised ChildProcessError and lost the exit code).
 
         In production this is a real race: probing 50 runs of a short-lived
         child hit it once.  Here the race is made deterministic by having the
         WNOHANG poll block until the child exits (reaping it), exactly what
-        happens when the poll wins the race.  Do not "fix" this test without
-        fixing run_output_loop's double waitpid.
+        happens when the poll wins the race.
         """
-        session = PTYSession(["sh", "-c", "exit 0"])
+        session = PTYSession(["sh", "-c", "exit 7"])
         session.start()
         try:
             real_waitpid = os.waitpid
@@ -321,7 +318,6 @@ class TestRunOutputLoop:
                 "dictare.agent.pty_session.os.waitpid",
                 side_effect=wnohang_wins,
             ):
-                with pytest.raises(ChildProcessError):
-                    session.run_output_loop()
+                assert session.run_output_loop() == 7
         finally:
             session.cleanup()
