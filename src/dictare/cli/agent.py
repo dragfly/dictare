@@ -79,7 +79,11 @@ def register(app: typer.Typer) -> None:
 
         # agent_id (session name) is required
         if agent_id is None:
+            import os as _os
+
             import click
+
+            from dictare.agent import session_registry
 
             click.echo(ctx.get_help())
             if config.agent_profiles:
@@ -88,6 +92,15 @@ def register(app: typer.Typer) -> None:
                 for name, at in config.agent_profiles.items():
                     desc = f"  {at.description}" if at.description else ""
                     console.print(f"[dim]  {name}{desc}[/]")
+            recent = session_registry.list_entries(_os.getcwd())
+            if recent:
+                console.print()
+                console.print("[dim]Sessions in this folder:[/]")
+                for name, entry in recent:
+                    profile = entry.get("profile", "?")
+                    last = str(entry.get("last_used", ""))[:10]
+                    console.print(f"[dim]  {name} ({profile}, last used {last})[/]")
+                console.print("[dim]Resume one:  dictare agent <name> --continue[/]")
             raise typer.Exit(1)
 
         # Parse extra args: extract own flags and command override
@@ -130,6 +143,39 @@ def register(app: typer.Typer) -> None:
                 console.print("[dim]dictare agent options: --profile/-t <profile>, --continue/-C, --live-dangerously, --server/-s <url>, --verbose[/]")
                 console.print("[dim]To pass flags to the agent command:  dictare agent <name> -- <command> [flags][/]")
                 raise typer.Exit(1)
+
+        # Named session continuity: best-effort per-folder memory of which
+        # profile this session name was launched with. The registry is a
+        # pointer — the agent's own session store stays the source of truth.
+        import os as _os
+        import sys as _sys
+
+        from dictare.agent import session_registry
+
+        cwd = _os.getcwd()
+        registry_entry = (
+            None if command_override else session_registry.lookup(cwd, agent_id)
+        )
+        if registry_entry:
+            remembered = str(registry_entry.get("profile") or "")
+            if continue_session and agent_profile_name is None and remembered:
+                agent_profile_name = remembered
+                console.print(
+                    f"[dim]Resuming '{agent_id}' with remembered profile: {remembered}[/]"
+                )
+            elif (
+                not continue_session
+                and remembered
+                and agent_profile_name in (None, remembered)
+                and _sys.stdin.isatty()
+            ):
+                if typer.confirm(
+                    f"A previous {remembered} session '{agent_id}' exists in "
+                    "this folder — continue it?",
+                    default=False,
+                ):
+                    continue_session = True
+                    agent_profile_name = remembered
 
         # Resolve command: explicit override > --type > default_agent_type > error
         resolved_profile = None
@@ -218,6 +264,10 @@ def register(app: typer.Typer) -> None:
                 if _check_engine(server):
                     break
             # run_agent() will do a final check and error out if still unreachable
+
+        # Remember (folder, name) → profile for future --continue launches
+        if not command_override and type_key:
+            session_registry.record_launch(cwd, agent_id, type_key)
 
         exit_code = run_agent(
             agent_id, command, verbose=verbose,
