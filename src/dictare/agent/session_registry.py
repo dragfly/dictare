@@ -52,32 +52,66 @@ def lookup(cwd: str, name: str) -> dict[str, Any] | None:
     return load_registry(cwd).get(name)
 
 
-def record_launch(cwd: str, name: str, profile: str) -> None:
+def _write_registry(cwd: str, registry: dict[str, dict[str, Any]]) -> None:
+    REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
+    path = _registry_path(cwd)
+    # Atomic write: a crash mid-write must not corrupt the registry.
+    fd, tmp = tempfile.mkstemp(dir=str(REGISTRY_DIR), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(registry, f, indent=2, sort_keys=True)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def record_launch(
+    cwd: str, name: str, profile: str, extra: dict[str, str] | None = None
+) -> None:
     """Record that session *name* was launched with *profile* in *cwd*.
 
+    Existing binding fields (session_id/session_path) are preserved unless the
+    profile changed — a rebind to another agent type invalidates them.
     Best-effort: failures are logged at debug level and never raised.
     """
     try:
         registry = load_registry(cwd)
-        entry = registry.get(name, {})
-        registry[name] = {
-            "profile": profile,
-            "last_used": datetime.now(UTC).isoformat(timespec="seconds"),
-            "launches": int(entry.get("launches", 0)) + 1,
-        }
-        REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
-        path = _registry_path(cwd)
-        # Atomic write: a crash mid-write must not corrupt the registry.
-        fd, tmp = tempfile.mkstemp(dir=str(REGISTRY_DIR), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(registry, f, indent=2, sort_keys=True)
-            os.replace(tmp, path)
-        finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
+        entry = dict(registry.get(name, {}))
+        if entry.get("profile") != profile:
+            entry.pop("session_id", None)
+            entry.pop("session_path", None)
+        entry.update(
+            {
+                "profile": profile,
+                "last_used": datetime.now(UTC).isoformat(timespec="seconds"),
+                "launches": int(entry.get("launches", 0)) + 1,
+            }
+        )
+        if extra:
+            entry.update(extra)
+        registry[name] = entry
+        _write_registry(cwd, registry)
     except Exception:
         logger.debug("Could not record session launch", exc_info=True)
+
+
+def update_entry(cwd: str, name: str, fields: dict[str, str]) -> None:
+    """Merge *fields* into an existing entry (no-op if the entry is missing).
+
+    Best-effort: failures are logged at debug level and never raised.
+    """
+    if not fields:
+        return
+    try:
+        registry = load_registry(cwd)
+        entry = registry.get(name)
+        if entry is None:
+            return
+        entry.update(fields)
+        _write_registry(cwd, registry)
+    except Exception:
+        logger.debug("Could not update session entry", exc_info=True)
 
 
 def list_entries(cwd: str) -> list[tuple[str, dict[str, Any]]]:

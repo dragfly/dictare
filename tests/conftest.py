@@ -148,3 +148,17 @@ def live_url(request):
         assert srv.wait_started(timeout=5.0), "Server did not start"
         yield f"http://127.0.0.1:{srv.port}"
         srv.stop()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_session_registry(tmp_path_factory, monkeypatch):
+    """Keep the session-name registry out of the user's real ~/.dictare.
+
+    Every test writes to a throwaway directory; tests that need a specific
+    registry state re-patch REGISTRY_DIR themselves.
+    """
+    from dictare.agent import session_adapters, session_registry
+
+    isolated = tmp_path_factory.mktemp("session-registry")
+    monkeypatch.setattr(session_registry, "REGISTRY_DIR", isolated)
+    monkeypatch.setattr(session_adapters, "REGISTRY_DIR", isolated)
