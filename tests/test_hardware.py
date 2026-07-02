@@ -28,8 +28,14 @@ class TestAutoDetectAcceleration:
         assert config.stt.advanced.device == "cpu"
         assert config.stt.advanced.compute_type == "int8"
 
-    def test_skips_detection_when_device_not_auto(self) -> None:
-        """Does nothing when device is already set (not 'auto')."""
+    @patch("dictare.utils.hardware.is_virtualized_macos", return_value=False)
+    def test_skips_detection_when_device_not_auto(self, _mock_vm) -> None:
+        """Does nothing when device is already set (not 'auto').
+
+        is_virtualized_macos is mocked: on virtualized macOS (e.g. CI
+        runners) the VM override legitimately forces cpu before the
+        device != "auto" early return.
+        """
         config = self._make_config(device="cuda")
         auto_detect_acceleration(config)
         assert config.stt.advanced.device == "cuda"
