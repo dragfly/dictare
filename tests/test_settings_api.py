@@ -269,9 +269,11 @@ class TestTomlSectionGet:
         content = r.json()["content"]
         # Template includes pre-filled presets
         assert "[agent_profiles]" in content
-        assert "sonnet" in content
-        assert "opus" in content
-        assert "chatgpt" in content
+        assert 'default = "codex"' in content
+        assert "[agent_profiles.claude]" in content
+        assert "[agent_profiles.codex]" in content
+        assert "[agent_profiles.gemini]" in content
+        assert "[agent_profiles.aider]" in content
 
     def test_shortcuts_returns_content(self, client):
         r = client.get("/api/settings/toml-section/keyboard.shortcuts")

@@ -227,15 +227,14 @@ class AudioManager:
         Must be fast and safe for any thread.
 
         Policy:
-        1. Always reinit PortAudio (refreshes sd.query_devices() / sd.default.device)
-        2. Always check if fixed devices disappeared (regardless of reason —
-           CoreAudio may fire REASON_DEFAULT_OUTPUT before REASON_DEVICES)
-        3. Reason-specific: reset default output if using system default
-        4. Always restart input stream (reinit kills active streams)
-        5. Always notify UI via _on_devices_updated
+        1. Output-default changes only reset beep output and notify the UI.
+           They must not restart input capture/VAD.
+        2. Input/default list/wake changes reinit PortAudio, because they can
+           invalidate cached device data and active input streams.
+        3. Device-list changes check if fixed devices disappeared or returned.
+        4. Input-affecting changes restart the input stream after reinit.
+        5. Always notify UI via _on_devices_updated.
         """
-        import sounddevice as sd
-
         from dictare.audio.device_monitor import (
             REASON_DEFAULT_OUTPUT,
         )
@@ -244,6 +243,19 @@ class AudioManager:
 
         configured_input = self._config.input_device or ""
         configured_output = self._config.output_device or ""
+
+        # Output-only default switches should be seamless. Reinitializing
+        # PortAudio here kills the active input stream and resets VAD, which
+        # feels like an engine restart even though no restart command was sent.
+        if reason == REASON_DEFAULT_OUTPUT:
+            if not configured_output:
+                logger.info("Default output changed, resetting audio output")
+                self.reset_audio_output("")
+            if self.on_devices_updated:
+                self.on_devices_updated()
+            return
+
+        import sounddevice as sd
 
         # Reinit PortAudio to refresh cached device lists and defaults.
         # sd.query_devices() and sd.default.device return stale data without this.
@@ -255,9 +267,6 @@ class AudioManager:
 
         # --- Check fixed devices: disappearance + auto-reconnect ---
         # Config is the user's PREFERENCE — never modified by system.
-        # CoreAudio may fire REASON_DEFAULT_OUTPUT before REASON_DEVICES,
-        # so checking only on REASON_DEVICES misses the window.
-        output_handled = False
         if configured_input or configured_output:
             device_names = {d["name"] for d in AudioCapture.list_devices()}
             output_names = {d["name"] for d in AudioCapture.list_output_devices()}
@@ -286,7 +295,6 @@ class AudioManager:
                     )
                     self._output_device_missing = True
                     self.reset_audio_output("")  # fall back to default
-                    output_handled = True
                 elif not gone and self._output_device_missing:
                     logger.info(
                         "Preferred output %r is back — reconnecting",
@@ -294,13 +302,6 @@ class AudioManager:
                     )
                     self._output_device_missing = False
                     self.reset_audio_output(configured_output)
-                    output_handled = True
-
-        # --- Reason-specific logic ---
-        if reason == REASON_DEFAULT_OUTPUT and not output_handled:
-            if not configured_output:
-                logger.info("Default output changed, resetting audio output")
-                self.reset_audio_output("")
 
         # Restart input stream (always needed after PortAudio reinit)
         # _restart_input_stream reads config.input_device — AudioCapture falls

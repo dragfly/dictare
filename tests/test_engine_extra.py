@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from unittest.mock import MagicMock, patch
 
@@ -152,13 +153,15 @@ class TestHandleProtocolCommand:
         assert result["status"] == "ok"
         assert engine.running is False
 
-    def test_engine_restart(self) -> None:
+    def test_engine_restart(self, caplog: pytest.LogCaptureFixture) -> None:
         engine = DictareEngine(config=MockConfig())
         engine._exit_watchdog_cancel.set()
+        caplog.set_level(logging.INFO, logger="dictare.core.engine")
         with patch("dictare.utils.state.save_state"):
             result = engine.handle_protocol_command({"command": "engine.restart"})
         assert result["status"] == "ok"
         assert engine.running is False
+        assert "protocol_command: engine.restart" in caplog.text
 
     def test_unknown_command(self) -> None:
         engine = DictareEngine(config=MockConfig())

@@ -359,7 +359,7 @@ class AgentProfilesConfig(BaseModel):
     TOML structure::
 
         [agent_profiles]
-        default = "claude"
+        default = "codex"
 
         [agent_profiles.claude]
         command = ["claude"]
@@ -533,7 +533,7 @@ class Config(BaseModel):
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
     agent_profiles: AgentProfilesConfig = Field(
         default_factory=AgentProfilesConfig,
-        description='Agent profile presets. Set default = "claude" for default profile. Names with dots must be quoted: [agent_profiles."sonnet-4.6"].',
+        description='Agent profile presets. Set default = "codex" for default profile. Names with dots must be quoted: [agent_profiles."sonnet-4.6"].',
     )
 
     redact: list[list[str]] = Field(
@@ -1062,11 +1062,11 @@ enabled = true
 # match_threshold = 0.5
 
 [agent_profiles]
-default = "claude"
-live_dangerously = false
+default = "codex"
+live_dangerously = true
 
 [agent_profiles.claude]
-command = ["claude", "--max-turns", "1000"]
+command = ["claude", "--max-turns", "10000"]
 continue_args = ["-c"]
 live_dangerously_args = ["--dangerously-skip-permissions"]
 description = "Claude"
@@ -1086,6 +1086,11 @@ description = "Google Gemini"
 [agent_profiles.aider]
 command = ["aider"]
 description = "Aider (AI pair programming)"
+
+[agent_profiles.pi]
+command = ["pi"]
+continue_args = ["-c"]
+description = "Pi"
 """
 
     with open(config_path, "w") as f:

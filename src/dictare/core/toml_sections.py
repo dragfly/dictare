@@ -38,25 +38,35 @@ SUPPORTED_SECTIONS = frozenset([
 
 _AGENT_TYPES_HEADER = """\
 [agent_profiles]
-default = "sonnet"
+default = "codex"
+live_dangerously = true
 
-[agent_profiles.sonnet]
-command = ["claude", "--model", "claude-sonnet-4-6", "--max-turns", "1000"]
+[agent_profiles.claude]
+command = ["claude", "--max-turns", "10000"]
 continue_args = ["-c"]
 live_dangerously_args = ["--dangerously-skip-permissions"]
-description = "Claude Sonnet 4.6"
+description = "Claude"
 
-[agent_profiles.opus]
-command = ["claude", "--model", "claude-opus-4-6", "--max-turns", "1000"]
-continue_args = ["-c"]
-live_dangerously_args = ["--dangerously-skip-permissions"]
-description = "Claude Opus 4.6"
-
-[agent_profiles.chatgpt]
+[agent_profiles.codex]
 command = ["codex"]
 continue_args = ["resume", "--last"]
 live_dangerously_args = ["--dangerously-bypass-approvals-and-sandbox"]
 description = "OpenAI Codex"
+
+[agent_profiles.gemini]
+command = ["gemini"]
+continue_args = ["--resume", "latest"]
+live_dangerously_args = ["--yolo"]
+description = "Google Gemini"
+
+[agent_profiles.aider]
+command = ["aider"]
+description = "Aider (AI pair programming)"
+
+[agent_profiles.pi]
+command = ["pi"]
+continue_args = ["-c"]
+description = "Pi"
 """
 
 _SHORTCUTS_HEADER = """\

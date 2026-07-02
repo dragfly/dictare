@@ -86,3 +86,93 @@ jobs:
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
             --notes-file /tmp/release-notes.md
+
+  # ── Homebrew tap: stable only ──
+  update-tap:
+    name: Update Homebrew tap
+    needs: [prepare, publish]
+    if: needs.prepare.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Wait for PyPI to index the package
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          for i in $(seq 1 30); do
+            if curl -sf "https://pypi.org/pypi/dictare/${VERSION}/json" > /dev/null 2>&1; then
+              echo "Package available on PyPI"
+              exit 0
+            fi
+            echo "Waiting for PyPI to index ${VERSION}... (attempt $i/30)"
+            sleep 10
+          done
+          echo "::error::Package ${VERSION} was not indexed on PyPI in time"
+          exit 1
+
+      - name: Get PyPI source URL and SHA256
+        id: pypi
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          JSON=$(curl -sf "https://pypi.org/pypi/dictare/${VERSION}/json")
+          URL=$(echo "$JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); s=[u for u in d['urls'] if u.get('packagetype') == 'sdist']; print(s[0]['url'])")
+          SHA=$(echo "$JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); s=[u for u in d['urls'] if u.get('packagetype') == 'sdist']; print(s[0]['digests']['sha256'])")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Get launcher SHA256
+        id: launcher
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "launcher" \
+            --pattern "Dictare-launcher-universal.zip" \
+            --output /tmp/Dictare-launcher-universal.zip
+          SHA=$(sha256sum /tmp/Dictare-launcher-universal.zip | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v7
+        with:
+          repository: dragfly/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Write formula from bootstrap template
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          template = Path("packaging/homebrew/dictare.rb").read_text()
+          replacements = {
+              "PLACEHOLDER_VERSION": os.environ["VERSION"],
+              "PLACEHOLDER_PYPI_URL": os.environ["PYPI_URL"],
+              "PLACEHOLDER_PYPI_SHA256": os.environ["PYPI_SHA256"],
+              "PLACEHOLDER_LAUNCHER_SHA256": os.environ["LAUNCHER_SHA256"],
+          }
+          for old, new in replacements.items():
+              template = template.replace(old, new)
+          Path("homebrew-tap/Formula/dictare.rb").write_text(template)
+          PY
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PYPI_URL: ${{ steps.pypi.outputs.url }}
+          PYPI_SHA256: ${{ steps.pypi.outputs.sha256 }}
+          LAUNCHER_SHA256: ${{ steps.launcher.outputs.sha256 }}
+
+      - name: Validate formula syntax
+        run: ruby -c homebrew-tap/Formula/dictare.rb
+
+      - name: Push tap update
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/dictare.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date"
+            exit 0
+          fi
+          git commit -m "chore: bump dictare to ${{ needs.prepare.outputs.version }}"
+          git push

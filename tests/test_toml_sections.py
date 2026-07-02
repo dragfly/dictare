@@ -401,3 +401,22 @@ class TestGetCommentedSection:
             "agent_announce",
         ):
             assert f"# [audio.sounds.{event}]" in content, event
+
+    def test_default_config_agent_profiles_are_current_defaults(self, tmp_path: Path) -> None:
+        """create_default_config() writes the shipped agent profiles."""
+        import tomllib
+
+        from dictare import config as cfg
+
+        cfg.get_config_dir = lambda: tmp_path  # type: ignore[assignment]
+        path = cfg.create_default_config()
+        parsed = tomllib.loads(path.read_text())
+
+        profiles = parsed["agent_profiles"]
+        assert profiles["default"] == "codex"
+        assert profiles["live_dangerously"] is True
+        assert profiles["claude"]["command"] == ["claude", "--max-turns", "10000"]
+        assert profiles["codex"]["continue_args"] == ["resume", "--last"]
+        assert profiles["gemini"]["live_dangerously_args"] == ["--yolo"]
+        assert profiles["aider"]["command"] == ["aider"]
+        assert profiles["pi"]["continue_args"] == ["-c"]

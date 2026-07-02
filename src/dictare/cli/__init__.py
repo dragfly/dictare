@@ -27,6 +27,7 @@ from dictare.cli import (
     status,
     transcribe,
     tray,
+    uninstall,
     upgrade,
 )
 from dictare.cli._helpers import console
@@ -58,6 +59,7 @@ logs.register(app)
 serve.register(app)
 repair.register(app)
 upgrade.register(app)
+uninstall.register(app)
 
 def version_callback(value: bool) -> None:
     """Print version and exit."""

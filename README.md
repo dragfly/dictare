@@ -44,20 +44,39 @@ of window focus**. Your coding agent can be behind 3 other windows — it still 
 
 ## Install
 
-**macOS + Linux** — [full guide](https://dictare.io/docs/installation/)
+**macOS, recommended** — [full guide](https://dictare.io/docs/installation/)
+
+```bash
+brew tap dragfly/tap
+brew install dictare
+dictare setup
+```
+
+Homebrew installs the Dictare entry point and macOS dependencies. Dictare owns
+the runtime in `~/.local/share/dictare/versions/`; Homebrew also provides the
+signed launcher source used by `dictare setup`.
+
+**Linux or direct install**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
 ```
 
-Dictare installs into `~/.local/share/dictare/versions/` and exposes a stable
-`~/.local/bin/dictare` shim. Upgrades and rollback are managed by Dictare, not
-by Homebrew.
-
-Upgrade an existing runtime:
+Upgrades and rollback are managed by Dictare, not by Homebrew:
 
 ```bash
 dictare upgrade
+dictare rollback
+dictare repair
+```
+
+Clean reinstall on macOS:
+
+```bash
+dictare uninstall
+brew uninstall dictare
+brew install dictare
+dictare setup
 ```
 
 ### Permissions
@@ -76,7 +95,7 @@ dictare upgrade
 ## Quick Start
 
 ```bash
-dictare agent freddie       # starts the default profile (Claude Code)
+dictare agent freddie       # starts the default profile (OpenAI Codex)
 ```
 
 That's it. The service starts automatically. Speak — your agent receives the transcription.
@@ -116,27 +135,42 @@ Profiles are predefined in `~/.config/dictare/config.toml`:
 
 ```toml
 [agent_profiles]
-default = "claude"
+default = "codex"
+live_dangerously = true
 
 [agent_profiles.claude]
-command = ["claude"]
-description = "Claude Code"
+command = ["claude", "--max-turns", "10000"]
+continue_args = ["-c"]
+live_dangerously_args = ["--dangerously-skip-permissions"]
+description = "Claude"
 
 [agent_profiles.codex]
 command = ["codex"]
+continue_args = ["resume", "--last"]
+live_dangerously_args = ["--dangerously-bypass-approvals-and-sandbox"]
 description = "OpenAI Codex"
 
+[agent_profiles.gemini]
+command = ["gemini"]
+continue_args = ["--resume", "latest"]
+live_dangerously_args = ["--yolo"]
+description = "Google Gemini"
+
+[agent_profiles.aider]
+command = ["aider"]
+description = "Aider (AI pair programming)"
+
 [agent_profiles.pi]
-command = ["pi", "--provider", "ollama", "--model", "qwen3:8b"]
+command = ["pi"]
 continue_args = ["-c"]
-description = "Pi + Ollama local, agentic with tools"
+description = "Pi"
 ```
 
 Then connect:
 
 ```bash
-dictare agent freddie                      # default profile (claude)
-dictare agent ozzy --profile codex         # use codex profile
+dictare agent freddie                      # default profile (codex)
+dictare agent ozzy --profile claude        # use claude profile
 dictare agent -- claude --model opus       # explicit command override
 ```
 
@@ -167,10 +201,11 @@ Default hotkey: **Right ⌘** (macOS) / **Scroll Lock** (Linux).
 dictare upgrade             # Install latest runtime and switch atomically
 dictare rollback            # Switch back to the previous runtime
 dictare repair              # Repair runtime/service/launcher integration
+dictare uninstall           # Move runtime/service state aside for clean reinstall
 dictare service install     # Install + enable (auto-starts at login)
 dictare service start       # Start the service
 dictare service stop        # Stop the service
-dictare service restart     # Restart the service
+dictare service restart     # Restart the service and wait for engine readiness
 dictare service status      # Show service and engine status
 dictare service logs        # View recent logs
 dictare service uninstall   # Remove the service
@@ -242,22 +277,33 @@ dictare is the reference implementation of [OpenVIP](https://openvip.dev) — an
 voice input to AI agents. Any tool can implement the SSE endpoint and receive
 voice transcriptions from dictare.
 
-## Legacy Homebrew installs
+## Legacy Homebrew Installs
 
-If you installed Dictare with Homebrew, remove the legacy install first:
+If you installed Dictare before `0.5.0` with the old Homebrew-owned runtime,
+clean that install first:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/scripts/uninstall.sh | bash
 ```
 
-Then reinstall with the new installer:
+Then install with either supported entry point.
+
+Homebrew-guided macOS install:
+
+```bash
+brew tap dragfly/tap
+brew install dictare
+dictare setup
+```
+
+Direct installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dragfly/dictare/main/install.sh | bash
 ```
 
-Your config and models are preserved in `~/.config/dictare/` and
-`~/.local/share/dictare/`.
+Both paths end in the same Dictare-owned runtime store. Your config and models
+are preserved in `~/.config/dictare/` and `~/.local/share/dictare/`.
 
 ## License
 
