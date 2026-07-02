@@ -195,11 +195,13 @@ def register(app: typer.Typer) -> None:
             # With command override (--), --continue is silently ignored — user controls the full command
 
         # Apply --live-dangerously: insert live_dangerously_args after argv[0]
+        applied_danger_args: list[str] | None = None
         if live_dangerously:
             if resolved_profile is not None and resolved_profile.live_dangerously_args:
-                command = [command[0]] + resolved_profile.live_dangerously_args + command[1:]
+                applied_danger_args = resolved_profile.live_dangerously_args
+                command = [command[0]] + applied_danger_args + command[1:]
                 console.print(
-                    f"[yellow]⚠ live-dangerously: {' '.join(resolved_profile.live_dangerously_args)}[/]"
+                    f"[yellow]⚠ live-dangerously: {' '.join(applied_danger_args)}[/]"
                 )
             elif resolved_profile is not None:
                 console.print("[yellow]Warning: --live-dangerously given but agent profile has no live_dangerously_args configured[/]")
@@ -224,5 +226,6 @@ def register(app: typer.Typer) -> None:
             claim_key=config.client.claim_key,
             info_key=config.client.info_key,
             global_hotkey_key=config.hotkey.key,
+            live_dangerously_args=applied_danger_args,
         )
         raise typer.Exit(exit_code)
