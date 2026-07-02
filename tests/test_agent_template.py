@@ -17,6 +17,9 @@ _runner = CliRunner()
 # AgentProfileConfig parsing
 # ---------------------------------------------------------------------------
 
+from tests.test_cli import _strip_session_args  # noqa: E402  (app import order)
+
+
 class TestAgentProfileConfig:
     def test_config_with_agent_profiles(self):
         toml_content = """
@@ -282,7 +285,8 @@ description = "Claude Opus"
             result = _runner.invoke(app, ["agent", "Pippo", "--type", "claude-opus"], catch_exceptions=False)
 
         assert result.exit_code == 0
-        assert launched[0] == ("Pippo", ["claude", "--model", "claude-opus-4-6"])
+        cmd = _strip_session_args(launched[0][1])
+        assert (launched[0][0], cmd) == ("Pippo", ["claude", "--model", "claude-opus-4-6"])
 
     def test_agent_id_without_type_uses_default(self):
         """dictare agent Pippo (no --type) → uses agent_profiles.default command."""
@@ -302,7 +306,8 @@ description = "Claude Opus"
             result = _runner.invoke(app, ["agent", "Pippo"], catch_exceptions=False)
 
         assert result.exit_code == 0
-        assert launched[0] == ("Pippo", ["claude", "--model", "claude-sonnet-4-6"])
+        cmd = _strip_session_args(launched[0][1])
+        assert (launched[0][0], cmd) == ("Pippo", ["claude", "--model", "claude-sonnet-4-6"])
 
     def test_agent_id_unknown_type_exits_nonzero(self):
         """--type pointing to non-existent key → exit 1."""
