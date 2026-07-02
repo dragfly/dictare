@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When live-dangerously mode is active, `dictare agent` now prints a visible
   warning line with the injected arguments before launching the agent, so the
   mode is never silent even when enabled from config.
+- Release workflow: the Homebrew tap update job now loads `TAP_GITHUB_TOKEN`
+  from Infisical again (it referenced a non-existent GitHub secret, which made
+  the tap update fail in the 0.6.0 release).
 
 ## [0.6.0] - 2026-07-02
 
