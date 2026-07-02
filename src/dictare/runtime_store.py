@@ -175,6 +175,12 @@ def install_runtime(
         "--python",
         str(runtime_python(target)),
         "--prerelease=allow",
+        # Revalidate the cached index for dictare itself: right after a release,
+        # a stale uv cache makes the new version unresolvable ("no version of
+        # dictare==X"). Only this package is refreshed; cached dependency
+        # wheels stay untouched.
+        "--refresh-package",
+        "dictare",
     ]
     if reinstall:
         cmd.append("--reinstall")

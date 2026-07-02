@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `dictare upgrade` no longer fails with a cryptic "no version of dictare==X"
+  error right after a release: the installer now refreshes uv's cached index
+  metadata for the `dictare` package on every install (cached dependency
+  wheels are untouched, so upgrades stay fast).
+
 ## [0.6.1] - 2026-07-02
 
 ### Fixed
