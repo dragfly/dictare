@@ -62,6 +62,7 @@ class AudioManager:
         # Audio queue for buffered speech during transcription (thread-safe)
         # Bounded to prevent memory exhaustion if events come faster than processing
         self._audio_queue: Queue = Queue(maxsize=10)
+        self._queue_drops = 0
 
         # VAD callbacks
         self._on_speech_start: Callable[[], None] | None = None
@@ -596,6 +597,11 @@ class AudioManager:
             self._audio_queue.put_nowait(audio_data)
         except Full:
             # Queue full - discard oldest and add new
+            self._queue_drops += 1
+            logger.warning(
+                "Audio queue full — dropping oldest utterance (%d dropped total)",
+                self._queue_drops,
+            )
             try:
                 self._audio_queue.get_nowait()
             except Empty:
@@ -603,7 +609,13 @@ class AudioManager:
             try:
                 self._audio_queue.put_nowait(audio_data)
             except Full:
-                pass  # Still full, drop this audio
+                # Still full, drop this audio
+                self._queue_drops += 1
+                logger.warning(
+                    "Audio queue still full — dropping incoming utterance "
+                    "(%d dropped total)",
+                    self._queue_drops,
+                )
 
     def pop_queued_audio(self) -> Any | None:
         """Pop first audio from queue.
