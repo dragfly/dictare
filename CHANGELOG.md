@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The `ctrl+]` info notification now includes a `⚠ live-dangerously` line with
+  the injected arguments when the session runs in live-dangerously mode: TUI
+  agents clear the terminal at startup, so the start-time warning alone was
+  not enough to keep the mode visible.
+
 ### Fixed
 - Fixed a race in the PTY output loop where `dictare agent` could crash with
   `ChildProcessError` (and lose the wrapped agent's exit code) when the child

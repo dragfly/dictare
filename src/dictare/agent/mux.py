@@ -544,8 +544,16 @@ def _abbreviate_home(path: str) -> str:
     return path
 
 
-def _format_agent_info(agent_id: str, platform_status: dict, cwd: str | None = None) -> str:
-    """Build the notification body: agent name, voice state, current target, cwd."""
+def _format_agent_info(
+    agent_id: str,
+    platform_status: dict,
+    cwd: str | None = None,
+    danger_args: list[str] | None = None,
+) -> str:
+    """Build the notification body: agent name, voice state, current target,
+    cwd, and a live-dangerously marker when permission-bypass args were
+    injected (the start-time terminal warning is wiped by TUI agents, so the
+    on-demand notification is where the mode stays visible)."""
     from dictare.status import resolve_display_state
 
     state, _style = resolve_display_state(platform_status, agent_id)
@@ -556,9 +564,12 @@ def _format_agent_info(agent_id: str, platform_status: dict, cwd: str | None = N
         header = f"{agent_id} — {state} (current: {current})"
     else:
         header = f"{agent_id} — {state} (no voice target)"
+    lines = [header]
     if cwd:
-        return f"{header}\n{_abbreviate_home(cwd)}"
-    return header
+        lines.append(_abbreviate_home(cwd))
+    if danger_args:
+        lines.append(f"⚠ live-dangerously: {' '.join(danger_args)}")
+    return "\n".join(lines)
 
 def _notify(title: str, message: str) -> None:
     """Show a system notification (best-effort, never raises)."""
@@ -575,7 +586,9 @@ def _notify(title: str, message: str) -> None:
     except Exception:
         pass
 
-def _show_agent_info(agent_id: str, base_url: str) -> None:
+def _show_agent_info(
+    agent_id: str, base_url: str, danger_args: list[str] | None = None
+) -> None:
     """Fetch engine status and show it as a system notification (fire-and-forget)."""
     cwd = os.getcwd()
 
@@ -584,7 +597,9 @@ def _show_agent_info(agent_id: str, base_url: str) -> None:
             from openvip import Client
 
             status = Client(base_url, timeout=3).get_status()
-            body = _format_agent_info(agent_id, status.platform or {}, cwd=cwd)
+            body = _format_agent_info(
+                agent_id, status.platform or {}, cwd=cwd, danger_args=danger_args
+            )
         except Exception:
             body = f"{agent_id} — engine unreachable\n{_abbreviate_home(cwd)}"
         _notify("Dictare", body)
@@ -964,6 +979,7 @@ def run_agent(
     claim_key: str = "ctrl+\\",
     info_key: str = "ctrl+]",
     global_hotkey_key: str | None = None,
+    live_dangerously_args: list[str] | None = None,
 ) -> int:
     """Run a command with multiplexed input from stdin and dictare SSE.
 
@@ -981,6 +997,8 @@ def run_agent(
             (empty string disables it).
         global_hotkey_key: Evdev-style global hotkey key name to consume from
             terminal stdin when the terminal also reports the physical key.
+        live_dangerously_args: Permission-bypass args that were injected into
+            the command, shown in the info notification when set.
 
     Returns:
         Exit code of the process.
@@ -1106,7 +1124,9 @@ def run_agent(
                 "global_hotkey_key": global_hotkey_key,
                 "global_hotkey_seqs": global_hotkey_seqs,
                 "on_info": (
-                    (lambda: _show_agent_info(agent_id, base_url)) if info_raw else None
+                    (lambda: _show_agent_info(agent_id, base_url, live_dangerously_args))
+                    if info_raw
+                    else None
                 ),
             },
             daemon=True,

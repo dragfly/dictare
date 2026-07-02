@@ -259,6 +259,28 @@ class TestFormatAgentInfo:
         body = _format_agent_info("frontend", platform, cwd="/tmp/work")
         assert body == "frontend — listening\n/tmp/work"
 
+    def test_live_dangerously_marker_appended(self) -> None:
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "listening", "output": {"current_agent": "frontend"}}
+        body = _format_agent_info(
+            "frontend",
+            platform,
+            cwd="/tmp/work",
+            danger_args=["--dangerously-skip-permissions"],
+        )
+        assert body == (
+            "frontend — listening\n/tmp/work"
+            "\n⚠ live-dangerously: --dangerously-skip-permissions"
+        )
+
+    def test_no_marker_without_danger_args(self) -> None:
+        from dictare.agent.mux import _format_agent_info
+
+        platform = {"state": "listening", "output": {"current_agent": "frontend"}}
+        body = _format_agent_info("frontend", platform, danger_args=None)
+        assert "live-dangerously" not in body
+
 
 class TestAbbreviateHome:
     """Test ~ abbreviation of home-prefixed paths."""
