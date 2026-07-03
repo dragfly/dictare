@@ -449,7 +449,10 @@ class TestDaemonPidWrite:
             controller.stop.assert_called_once()
 
     def test_pid_cleaned_on_start_failure(self, tmp_path):
-        from click.exceptions import Exit
+        # typer.Exit, NOT click.exceptions.Exit: typer >= 0.26 vendors click
+        # (typer._click), so the click-package class no longer matches what
+        # serve.py raises. typer.Exit is correct on every typer version.
+        from typer import Exit
 
         from dictare.cli.serve import _run_serve as _run_daemon
 
