@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 import time
 from collections.abc import Callable
@@ -91,8 +92,9 @@ class DictareEngine:
     # Minimum recording duration in seconds
     MIN_RECORDING_DURATION = 0.3
 
-    # Maximum time to wait for STT lock (prevents thread pile-up if STT hangs)
-    STT_LOCK_TIMEOUT = 30.0
+    # A transcription running longer than this means the STT engine hung in
+    # native code: abandon the worker, reload STT, resume service
+    STT_HANG_RECOVERY_S = 60.0
 
     # Wait between failed audio reconnect rounds: starts at the base delay and
     # doubles up to the cap while the failure persists (reset on success)
@@ -145,8 +147,16 @@ class DictareEngine:
         from dictare.utils.stats import get_today_baseline
         self._today_baseline: dict = get_today_baseline()
 
-        # Lock for STT engine (MLX is not thread-safe)
-        self._stt_lock = threading.Lock()
+        # Dedicated STT worker: ONE persistent thread serializes all
+        # transcriptions. The mic is one — there is no parallelism to gain —
+        # and native STT stacks (MLX, onnxruntime) misbehave when invoked
+        # from ever-changing threads. The generation counter lets hang
+        # recovery abandon a stuck worker and ignore its zombie results.
+        self._stt_jobs: queue.Queue[tuple[Any, Agent | None] | None] = queue.Queue()
+        self._stt_worker: threading.Thread | None = None
+        self._stt_generation = 0
+        self._stt_job_started: float | None = None
+        self._stt_state_lock = threading.Lock()
 
         # Read settings from config
         self.vad_silence_ms = config.audio.silence_ms
@@ -673,7 +683,7 @@ class DictareEngine:
     # -------------------------------------------------------------------------
 
     def transcribe_and_process(self, audio_data: Any, agent: Agent | None = None) -> None:
-        """Transcribe audio and send to agent.
+        """Queue audio for transcription on the dedicated STT worker.
 
         Called by StateController when SpeechEnded is processed.
 
@@ -683,87 +693,170 @@ class DictareEngine:
                    This allows capturing the agent at speech-end time, ensuring audio
                    goes to the correct agent even if agent switches during transcription.
         """
-        # For realtime mode: clear partial text
         # Use provided agent (captured at speech-end time)
         captured_agent = agent if agent is not None else self._get_current_agent()
+        self._recover_stt_if_hung()
+        with self._stt_state_lock:
+            if self._stt_worker is None or not self._stt_worker.is_alive():
+                self._start_stt_worker(reload_model=False)
+            jobs = self._stt_jobs
+        jobs.put((audio_data, captured_agent))
 
-        def do_transcribe() -> None:
-            transcribed_text = ""
-            detected_language: str | None = None
+    def _start_stt_worker(self, *, reload_model: bool) -> None:
+        """Spawn the STT worker for the current generation/queue.
+
+        Caller must hold ``_stt_state_lock``.
+        """
+        self._stt_worker = threading.Thread(
+            target=self._stt_worker_loop,
+            args=(self._stt_generation, self._stt_jobs, reload_model),
+            daemon=True,
+            name=f"stt-worker-{self._stt_generation}",
+        )
+        self._stt_worker.start()
+
+    def _recover_stt_if_hung(self) -> None:
+        """Self-heal from an STT engine hung in native code.
+
+        A stuck native call cannot be killed: abandon the worker thread (it
+        leaks, by design), start a fresh generation with a new queue, and
+        reload the STT engine — the old one may be poisoned. Zombie results
+        from the abandoned worker are discarded via the generation check.
+        """
+        with self._stt_state_lock:
+            started = self._stt_job_started
+            if started is None or time.monotonic() - started < self.STT_HANG_RECOVERY_S:
+                return
+            dropped = self._stt_jobs.qsize()
+            self._stt_generation += 1
+            self._stt_jobs = queue.Queue()
+            self._stt_job_started = None
+            self._start_stt_worker(reload_model=True)
+        logger.error(
+            "STT engine hung for >%ds — abandoned stuck worker, reloading STT "
+            "(%d queued utterances dropped)",
+            int(self.STT_HANG_RECOVERY_S),
+            dropped,
+        )
+        if self._logger:
+            self._logger.log_error(
+                f"STT engine hung — worker abandoned, STT reloaded "
+                f"({dropped} queued utterances dropped)",
+                context="stt_hang_recovery",
+            )
+        from dictare.audio.beep import play_beep_busy
+
+        play_beep_busy()
+
+    def _stt_worker_loop(
+        self,
+        generation: int,
+        jobs: queue.Queue,
+        reload_model: bool,
+    ) -> None:
+        """Consume transcription jobs until the sentinel (None) arrives."""
+        if reload_model:
             try:
-                if not self._stt:
-                    return
+                from dictare.stt.factory import create_stt_engine
 
-                # Track transcription time
-                transcribe_start = time.time()
-                task = "translate" if self.config.stt.translate else "transcribe"
-                if not self._stt_lock.acquire(timeout=self.STT_LOCK_TIMEOUT):
-                    # The user's utterance is lost: make the failure audible
-                    # instead of dropping it silently.
-                    audio_seconds = len(audio_data) / self.config.audio.advanced.sample_rate
-                    logger.error(
-                        "STT lock timeout — dropping %.1fs of audio "
-                        "(previous transcription may be stuck)",
-                        audio_seconds,
-                    )
-                    if self._logger:
-                        self._logger.log_error(
-                            f"STT lock timeout — dropped {audio_seconds:.1f}s of audio",
-                            context="transcribe_and_process",
-                        )
-                    from dictare.audio.beep import play_beep_busy
-
-                    play_beep_busy()
-                    return
-                try:
-                    stt_result = self._stt.transcribe(
-                        audio_data,
-                        language=self.config.stt.language,
-                        hotwords=self._get_hotwords(),
-                        beam_size=self.config.stt.advanced.beam_size,
-                        max_repetitions=self.config.stt.advanced.max_repetitions,
-                        task=task,
-                    )
-                finally:
-                    self._stt_lock.release()
-                transcribe_time = time.time() - transcribe_start
-
-                text = stt_result.text
-                detected_language = stt_result.language
-
-                if text:
-                    transcribed_text = text
-                    self._last_text = text
-
-                    # Update session stats
-                    audio_duration = len(audio_data) / self.config.audio.advanced.sample_rate
-                    self._stats.count += 1
-                    self._stats.chars += len(text)
-                    self._stats.words += len(text.split())
-                    self._stats.audio_seconds += audio_duration
-                    self._stats.transcription_seconds += transcribe_time
-
-                    # Log transcription
-                    if self._logger:
-                        duration_ms = audio_duration * 1000
-                        stt_ms = transcribe_time * 1000
-                        self._logger.log_transcription(
-                            text=text,
-                            duration_ms=duration_ms,
-                            language=self.config.stt.language,
-                            stt_ms=stt_ms,
-                        )
-
-                    # Check if user has turned off listening
-                    if self.is_off:
-                        return
-
-            except Exception as e:
-                logger.exception("STT transcription failed")
-                if self._logger:
-                    self._logger.log_error(str(e), context="transcribe_and_process")
+                self._stt = create_stt_engine(self.config, headless=True)
+                logger.info("STT engine reloaded after hang recovery")
+            except Exception:
+                logger.exception("STT engine reload failed after hang recovery")
+                self._stt = None
+        while True:
+            job = jobs.get()
+            if job is None:
+                return
+            audio_data, captured_agent = job
+            with self._stt_state_lock:
+                self._stt_job_started = time.monotonic()
+            try:
+                self._transcribe_job(audio_data, captured_agent, generation)
             finally:
-                # Send completion event to controller (it handles state transition)
+                with self._stt_state_lock:
+                    if self._stt_generation == generation:
+                        self._stt_job_started = None
+
+    def _stt_generation_current(self, generation: int) -> bool:
+        with self._stt_state_lock:
+            return self._stt_generation == generation
+
+    def _transcribe_job(
+        self, audio_data: Any, captured_agent: Agent | None, generation: int
+    ) -> None:
+        """Run one transcription and dispatch its result.
+
+        Runs on the STT worker thread. All side effects are guarded by the
+        generation check so an abandoned (hung, later unstuck) worker can
+        never inject stale text or corrupt state.
+        """
+        transcribed_text = ""
+        detected_language: str | None = None
+        try:
+            if not self._stt:
+                return
+
+            # Track transcription time
+            transcribe_start = time.time()
+            task = "translate" if self.config.stt.translate else "transcribe"
+            stt_result = self._stt.transcribe(
+                audio_data,
+                language=self.config.stt.language,
+                hotwords=self._get_hotwords(),
+                beam_size=self.config.stt.advanced.beam_size,
+                max_repetitions=self.config.stt.advanced.max_repetitions,
+                task=task,
+            )
+            transcribe_time = time.time() - transcribe_start
+
+            if not self._stt_generation_current(generation):
+                logger.warning(
+                    "Discarding transcription from abandoned STT worker "
+                    "(generation %d)",
+                    generation,
+                )
+                return
+
+            text = stt_result.text
+            detected_language = stt_result.language
+
+            if text:
+                transcribed_text = text
+                self._last_text = text
+
+                # Update session stats
+                audio_duration = len(audio_data) / self.config.audio.advanced.sample_rate
+                self._stats.count += 1
+                self._stats.chars += len(text)
+                self._stats.words += len(text.split())
+                self._stats.audio_seconds += audio_duration
+                self._stats.transcription_seconds += transcribe_time
+
+                # Log transcription
+                if self._logger:
+                    duration_ms = audio_duration * 1000
+                    stt_ms = transcribe_time * 1000
+                    self._logger.log_transcription(
+                        text=text,
+                        duration_ms=duration_ms,
+                        language=self.config.stt.language,
+                        stt_ms=stt_ms,
+                    )
+
+                # Check if user has turned off listening
+                if self.is_off:
+                    return
+
+        except Exception as e:
+            logger.exception("STT transcription failed")
+            if self._logger:
+                self._logger.log_error(str(e), context="transcribe_and_process")
+        finally:
+            # Send completion event to controller (it handles state
+            # transition) — unless this worker was abandoned: the watchdog
+            # already recovered the FSM, a stale completion would fight it.
+            if self._stt_generation_current(generation):
                 self._controller.send(
                     TranscriptionCompleted(
                         text=transcribed_text,
@@ -772,9 +865,6 @@ class DictareEngine:
                         source="stt",
                     )
                 )
-
-        thread = threading.Thread(target=do_transcribe, daemon=True)
-        thread.start()
 
     def process_queued_audio(self) -> None:
         """Process any queued audio from speech that occurred during transcription.
@@ -1507,6 +1597,11 @@ class DictareEngine:
     def stop(self) -> None:
         """Stop the engine."""
         self.running = False
+
+        # Ask the STT worker to exit after the current job (daemon thread —
+        # best effort, never blocks shutdown)
+        with self._stt_state_lock:
+            self._stt_jobs.put(None)
 
         # Stop the state controller first
         self._controller.stop()
