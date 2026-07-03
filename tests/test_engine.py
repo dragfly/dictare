@@ -1748,29 +1748,88 @@ class TestResendLast:
         mock_inject.assert_not_called()
 
 
-class TestSttLockTimeout:
-    """STT lock timeout must be audible and still complete the FSM cycle."""
+class TestSttWorker:
+    """Dedicated STT worker thread + hang self-healing."""
 
-    def test_lock_timeout_beeps_and_sends_completion(self) -> None:
-        from dictare.core.fsm import TranscriptionCompleted
-
-        config = MockConfig()
-        engine = DictareEngine(config=config)
+    def _make_engine(self) -> DictareEngine:
+        engine = DictareEngine(config=MockConfig())
         engine._stt = MagicMock()
         engine._controller = MagicMock()
-        engine.STT_LOCK_TIMEOUT = 0.01
-        engine._stt_lock.acquire()  # simulate a stuck transcription
+        return engine
 
+    def _wait_for(self, predicate, timeout_s: float = 2.0) -> None:
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            if predicate():
+                return
+            time.sleep(0.01)
+        raise AssertionError("condition not met in time")
+
+    def test_transcriptions_run_on_single_persistent_worker(self) -> None:
+        from dictare.core.fsm import TranscriptionCompleted
+
+        engine = self._make_engine()
+        seen_threads: set[str] = set()
+
+        def fake_transcribe(audio, **kwargs):
+            seen_threads.add(threading.current_thread().name)
+            result = MagicMock()
+            result.text, result.language = "ciao", "it"
+            return result
+
+        engine._stt.transcribe.side_effect = fake_transcribe
         audio = np.zeros(16000, dtype=np.float32)
-        with patch("dictare.audio.beep.play_beep_busy") as mock_beep:
+        engine.transcribe_and_process(audio)
+        engine.transcribe_and_process(audio)
+        self._wait_for(lambda: engine._controller.send.call_count >= 2)
+
+        assert seen_threads == {"stt-worker-0"}
+        event = engine._controller.send.call_args.args[0]
+        assert isinstance(event, TranscriptionCompleted)
+        assert event.text == "ciao"
+
+    def test_hung_stt_recovers_with_new_worker_and_reload(self) -> None:
+        engine = self._make_engine()
+        engine.STT_HANG_RECOVERY_S = 0.05
+        release_hang = threading.Event()
+        stale_result = MagicMock()
+        stale_result.text, stale_result.language = "zombie text", "it"
+
+        def hanging_transcribe(audio, **kwargs):
+            release_hang.wait(timeout=5.0)  # simulate native hang
+            return stale_result
+
+        engine._stt.transcribe.side_effect = hanging_transcribe
+        audio = np.zeros(16000, dtype=np.float32)
+        engine.transcribe_and_process(audio)  # job hangs on worker gen 0
+        self._wait_for(lambda: engine._stt_job_started is not None)
+        time.sleep(0.1)  # exceed STT_HANG_RECOVERY_S
+
+        fresh_engine = MagicMock()
+        fresh_result = MagicMock()
+        fresh_result.text, fresh_result.language = "fresh", "it"
+        fresh_engine.transcribe.return_value = fresh_result
+        with (
+            patch("dictare.audio.beep.play_beep_busy") as mock_beep,
+            patch(
+                "dictare.stt.factory.create_stt_engine",
+                return_value=fresh_engine,
+            ) as mock_create,
+        ):
+            # Next utterance triggers recovery and is served by the new worker
             engine.transcribe_and_process(audio)
-            for _ in range(200):
-                if engine._controller.send.called:
-                    break
-                time.sleep(0.01)
+            self._wait_for(lambda: engine._controller.send.called)
 
         mock_beep.assert_called_once()
-        engine._stt.transcribe.assert_not_called()
-        (event,) = engine._controller.send.call_args.args
-        assert isinstance(event, TranscriptionCompleted)
-        assert event.text == ""
+        mock_create.assert_called_once()
+        assert engine._stt_generation == 1
+        event = engine._controller.send.call_args.args[0]
+        assert event.text == "fresh"
+
+        # The zombie worker unsticks later: its result must be discarded
+        engine._controller.send.reset_mock()
+        release_hang.set()
+        time.sleep(0.2)
+        for call in engine._controller.send.call_args_list:
+            assert call.args[0].text != "zombie text"
+        assert engine._last_text != "zombie text"

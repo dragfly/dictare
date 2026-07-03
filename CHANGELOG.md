@@ -21,9 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   error right after a release: the installer now refreshes uv's cached index
   metadata for the `dictare` package on every install (cached dependency
   wheels are untouched, so upgrades stay fast).
-- Speech lost to an STT lock timeout is no longer silent: the engine plays a
-  busy beep, logs at error level with the dropped audio duration, and records
-  the error in the session log.
+- The engine now self-heals from an STT engine hung in native code (observed
+  with Parakeet/onnxruntime): transcriptions run on a single dedicated worker
+  thread, and if a transcription hangs for over 60s the engine abandons the
+  stuck worker, reloads the STT engine, and resumes — with a busy beep and an
+  error log instead of staying wedged until a service restart. Results from
+  an abandoned worker are discarded, so stale text can never be injected.
+  Running every transcription on one persistent thread also removes the
+  suspected trigger (native STT stacks invoked from a new thread per
+  utterance).
 - Audio queue overflow (utterances buffered during transcription or agent
   reconnect) is now counted and logged at warning level instead of being
   dropped silently.
