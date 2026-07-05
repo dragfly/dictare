@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Named session continuity (phase 1): dictare now remembers which agent
+  profile each session name was launched with in each folder
+  (`~/.dictare/projects/`). `dictare agent <name> --continue` reuses the
+  remembered profile, reusing an existing name offers to continue it, and
+  `dictare agent` with no name lists this folder's sessions. The registry is
+  a best-effort pointer — each agent's own session store stays canonical.
+- Named session continuity (phase 2): per-agent session adapters bind each
+  named session to the exact underlying agent session, so `--continue`
+  resumes precisely the conversation that name refers to. Claude and Gemini
+  sessions get their UUID assigned at launch (Claude sessions also carry the
+  dictare name in Claude's own resume picker); Codex and Pi sessions are
+  discovered from their session stores after the run (cwd-verified, safe
+  with parallel sessions); Aider gets dictare-managed named history files —
+  multiple named sessions per folder, which aider lacks natively. Unbound
+  entries fall back to the profile's plain `continue_args`.
+
 ### Changed
 - The `ctrl+]` info notification now includes a `⚠ live-dangerously` line with
   the injected arguments when the session runs in live-dangerously mode: TUI
