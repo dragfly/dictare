@@ -136,7 +136,7 @@ Profiles are predefined in `~/.config/dictare/config.toml`:
 ```toml
 [agent_profiles]
 default = "codex"
-live_dangerously = true
+live_dangerously = false
 
 [agent_profiles.claude]
 command = ["claude", "--max-turns", "10000"]

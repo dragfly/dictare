@@ -34,6 +34,7 @@
 		display: none;
 	}
 	:global(.hide-spinners) {
+		appearance: textfield;
 		-moz-appearance: textfield;
 	}
 </style>

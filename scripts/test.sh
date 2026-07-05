@@ -9,6 +9,7 @@ ARGS=(-x --tb=short -q)
 
 if [[ "${1:-}" == "--full" ]]; then
     echo "==> Running all tests (fast + slow)..."
+    ARGS+=(-m "")
 else
     echo "==> Running fast tests..."
     ARGS+=(-m "not slow")

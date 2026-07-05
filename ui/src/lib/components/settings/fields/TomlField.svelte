@@ -23,11 +23,11 @@
 
 	let { section, label, noAccordion = false }: Props = $props();
 
-	let editorEl: HTMLDivElement;
+	let editorEl = $state<HTMLDivElement | undefined>(undefined);
 	let view: EditorView | null = null;
 	let currentContent = $state("");
 	let isOpen = $state(false);
-	let loaded = false;
+	let loaded = $state(false);
 
 	/** The original content from the store (not dirty). */
 	function originalContent(): string {
@@ -112,6 +112,8 @@
 	}
 
 	function initEditor() {
+		if (!editorEl) return;
+
 		const content = settingsStore.getTomlSection(section);
 		currentContent = content;
 		if (view) {

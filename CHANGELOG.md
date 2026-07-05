@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-07-05
+
 ### Changed
 - The `ctrl+]` info notification now includes a `⚠ live-dangerously` line with
   the injected arguments when the session runs in live-dangerously mode: TUI
   agents clear the terminal at startup, so the start-time warning alone was
   not enough to keep the mode visible.
+- Development checks now run cleanly for the settings UI: `svelte-check` has
+  no errors or warnings, and the packaged UI bundle was regenerated.
 
 ### Fixed
 - Fixed a race in the PTY output loop where `dictare agent` could crash with
@@ -37,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   30s cap, reset on success) instead of retrying every 3s, which burned the
   circuit breaker budget before a slow-returning device (USB re-enumeration,
   sleep/wake) came back.
+- The README's default agent profile example now matches the `0.6.1` safety
+  fix and shows `live_dangerously = false`.
+- `scripts/test.sh --full` now really runs the full pytest suite, including
+  tests marked `slow`, instead of inheriting the default `not slow` marker.
 
 ## [0.6.1] - 2026-07-02
 
