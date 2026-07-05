@@ -1,4 +1,4 @@
-import type { Component } from "svelte";
+import type { ComponentType } from "svelte";
 
 export interface FieldMeta {
 	key: string;
@@ -52,7 +52,7 @@ export interface NavChild {
 export interface TabDef {
 	id: string;
 	label: string;
-	icon: Component;
+	icon: ComponentType;
 	sections: string[];
 	desc: string;
 	/** If present, this tab is expandable in the nav and shows children instead of flat content. */
