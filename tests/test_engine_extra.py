@@ -152,6 +152,7 @@ class TestHandleProtocolCommand:
             result = engine.handle_protocol_command({"command": "engine.shutdown"})
         assert result["status"] == "ok"
         assert engine.running is False
+        assert engine.requested_exit_code == 0
 
     def test_engine_restart(self, caplog: pytest.LogCaptureFixture) -> None:
         engine = DictareEngine(config=MockConfig())
@@ -161,6 +162,7 @@ class TestHandleProtocolCommand:
             result = engine.handle_protocol_command({"command": "engine.restart"})
         assert result["status"] == "ok"
         assert engine.running is False
+        assert engine.requested_exit_code == 75
         assert "protocol_command: engine.restart" in caplog.text
 
     def test_unknown_command(self) -> None:
@@ -168,6 +170,26 @@ class TestHandleProtocolCommand:
         result = engine.handle_protocol_command({"command": "nonexistent"})
         assert result["status"] == "error"
         assert "Unknown" in result["error"]
+
+    def test_audio_poison_requests_process_replacement(self) -> None:
+        engine = DictareEngine(config=MockConfig())
+        engine._exit_watchdog_cancel.set()
+        with patch("dictare.utils.state.save_state"):
+            engine._on_audio_control_poisoned("open_input timed out")
+
+        assert engine.running is False
+        assert engine.requested_exit_code == 70
+        assert engine.requested_exit_reason == "audio_poisoned"
+
+    def test_audio_poison_during_clean_shutdown_does_not_restart(self) -> None:
+        engine = DictareEngine(config=MockConfig())
+        engine._exit_watchdog_cancel.set()
+        with patch("dictare.utils.state.save_state"):
+            engine.handle_protocol_command({"command": "engine.shutdown"})
+            engine._on_audio_control_poisoned("close_audio timed out")
+
+        assert engine.requested_exit_code == 0
+        assert engine.requested_exit_reason == "protocol_shutdown"
 
     def test_hotkey_capture_no_listener(self) -> None:
         engine = DictareEngine(config=MockConfig())

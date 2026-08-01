@@ -153,7 +153,14 @@ func resolveModeSwitchModifier() -> CGEventFlags? {
 // App Delegate — manages CGEventTap and child process
 // ---------------------------------------------------------------------------
 class LauncherDelegate: NSObject, NSApplicationDelegate {
+    let controlledRestartExitCode: Int32 = 75
+    let restartWindowSeconds: TimeInterval = 60.0
+    let restartBurstLimit = 5
+
     var childProcess: Process?
+    var restartWorkItem: DispatchWorkItem?
+    var unexpectedExitTimes: [Date] = []
+    var launcherIsTerminating = false
     var sigTermSource: DispatchSourceSignal?
     var sigIntSource: DispatchSourceSignal?
     var eventTap: CFMachPort?  // Stored for recreation after system disable
@@ -212,6 +219,9 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        launcherIsTerminating = true
+        restartWorkItem?.cancel()
+        restartWorkItem = nil
         terminateChild()
         return .terminateNow
     }
@@ -253,6 +263,8 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
 
     // --- Python engine ---
     func spawnPythonEngine() {
+        guard !launcherIsTerminating, childProcess == nil else { return }
+
         // python_path lookup order:
         // 1. ~/.dictare/python_path  (external — survives signed bundle updates)
         // 2. Contents/MacOS/python_path  (legacy — inside bundle, breaks signature)
@@ -281,13 +293,9 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
         process.arguments = ["-m", "dictare", "serve"]
         process.environment = ProcessInfo.processInfo.environment
 
-        // When child exits unexpectedly, terminate the launcher too
-        process.terminationHandler = { proc in
-            let status = proc.terminationStatus
-            let reason = proc.terminationReason
-            fputs("Engine exited: status=\(status) reason=\(reason.rawValue)\n", stderr)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NSApplication.shared.terminate(nil)
+        process.terminationHandler = { [weak self] proc in
+            DispatchQueue.main.async {
+                self?.handleEngineExit(proc)
             }
         }
 
@@ -297,8 +305,69 @@ class LauncherDelegate: NSObject, NSApplicationDelegate {
             fputs("Engine started (PID \(process.processIdentifier))\n", stderr)
         } catch {
             fputs("Error starting engine: \(error)\n", stderr)
-            NSApplication.shared.terminate(nil)
+            childProcess = nil
+            scheduleEngineRestart(controlled: false)
         }
+    }
+
+    func handleEngineExit(_ process: Process) {
+        let status = process.terminationStatus
+        let reason = process.terminationReason
+        fputs("Engine exited: status=\(status) reason=\(reason.rawValue)\n", stderr)
+
+        if childProcess === process {
+            childProcess = nil
+        }
+        guard !launcherIsTerminating else { return }
+
+        if reason == .exit && status == 0 {
+            fputs("Engine requested shutdown — terminating launcher\n", stderr)
+            launcherIsTerminating = true
+            NSApplication.shared.terminate(nil)
+            return
+        }
+
+        let controlled = reason == .exit && status == controlledRestartExitCode
+        scheduleEngineRestart(controlled: controlled)
+    }
+
+    func scheduleEngineRestart(controlled: Bool) {
+        guard !launcherIsTerminating, restartWorkItem == nil else { return }
+
+        var delay: TimeInterval = 0.1
+        if controlled {
+            fputs("Engine requested controlled restart\n", stderr)
+        } else {
+            let now = Date()
+            unexpectedExitTimes = unexpectedExitTimes.filter {
+                now.timeIntervalSince($0) < restartWindowSeconds
+            }
+            unexpectedExitTimes.append(now)
+
+            let count = unexpectedExitTimes.count
+            if count > restartBurstLimit {
+                delay = restartWindowSeconds
+                unexpectedExitTimes.removeAll()
+                fputs(
+                    "Engine restart budget exhausted — cooling down for \(Int(delay))s\n",
+                    stderr
+                )
+            } else {
+                delay = min(0.5 * pow(2.0, Double(count - 1)), 15.0)
+                fputs(
+                    "Engine crashed — restart \(count)/\(restartBurstLimit) in \(delay)s\n",
+                    stderr
+                )
+            }
+        }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, !self.launcherIsTerminating else { return }
+            self.restartWorkItem = nil
+            self.spawnPythonEngine()
+        }
+        restartWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     // --- CGEventTap (global hotkey) ---

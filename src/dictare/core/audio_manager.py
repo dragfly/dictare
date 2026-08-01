@@ -9,7 +9,12 @@ from collections.abc import Callable
 from queue import Empty, Full, Queue
 from typing import TYPE_CHECKING, Any
 
-from dictare.audio.capture import AudioCapture
+from dictare.audio.capture import AudioCapture, PortAudioCallTimeoutError, _run_with_timeout
+from dictare.audio.supervisor import (
+    AudioControl,
+    AudioControlClosedError,
+    AudioControlPoisonedError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,7 @@ class AudioManager:
         self,
         config: AudioConfig,
         verbose: bool = False,
+        on_poisoned: Callable[[str], None] | None = None,
     ) -> None:
         """Initialize audio manager.
 
@@ -49,6 +55,10 @@ class AudioManager:
         """
         self._config = config
         self._verbose = verbose
+        self._control = AudioControl(on_poisoned=on_poisoned)
+        self._device_change_lock = threading.Lock()
+        self._device_change_reasons: set[str] = set()
+        self._sleeping = False
 
         # Audio components
         self._audio: AudioCapture | None = None
@@ -209,17 +219,57 @@ class AudioManager:
         """
         self._should_process_check = should_process
         self._is_running_check = is_running
-        if self._audio:
-            self._audio.start_streaming(self.on_audio_chunk)
+        from dictare.audio.beep import set_audio_control_executor
+
+        set_audio_control_executor(self._execute_audio_lifecycle)
+        self._control.execute("start_input", self._start_streaming_owned)
         if self._device_monitor:
             self._device_monitor.start()
 
+    def _start_streaming_owned(self) -> None:
+        """Open the input stream on the audio control owner thread."""
+        if self._audio:
+            self._audio.start_streaming(self.on_audio_chunk)
+            if not self._audio.wait_for_audio(timeout_s=2.0):
+                logger.error("Initial input stream opened but delivered no audio callbacks")
+                self._audio.stop_streaming()
+                self._audio = None
+                raise RuntimeError("Initial input stream delivered no audio callbacks")
+
+    def _execute_audio_lifecycle(self, label: str, action: Callable[[], Any]) -> Any:
+        """Route feedback playback through the owner and suppress it while asleep."""
+        return self._control.execute(
+            label,
+            lambda: None if self._sleeping and label == "play_output" else action(),
+        )
+
+    @staticmethod
+    def _stop_audio_output_owned() -> None:
+        """Stop feedback output, poisoning only when the native call times out."""
+        from dictare.audio.beep import stop_portaudio_output
+
+        try:
+            stop_portaudio_output()
+        except PortAudioCallTimeoutError:
+            raise
+        except Exception:
+            logger.warning("Failed to stop feedback output before audio recovery", exc_info=True)
+
     def stop_streaming(self) -> None:
         """Stop audio streaming."""
+        self._control.execute("stop_input", self._stop_streaming_owned)
+
+    def _stop_streaming_owned(self) -> None:
+        """Stop the input stream on the audio control owner thread."""
         if self._audio:
             if self._audio.is_recording():
                 self._audio.stop_recording()
             self._audio.stop_streaming()
+
+    def _close_audio_owned(self) -> None:
+        """Close output and input lifecycle resources on the owner thread."""
+        self._stop_audio_output_owned()
+        self._stop_streaming_owned()
 
     def _on_device_change(self, reason: str) -> None:
         """Handle OS-level device change notification.
@@ -236,22 +286,76 @@ class AudioManager:
         4. Input-affecting changes restart the input stream after reinit.
         5. Always notify UI via _on_devices_updated.
         """
+        logger.info("Device change queued: reason=%s", reason)
+        with self._device_change_lock:
+            self._device_change_reasons.add(reason)
+        try:
+            queued = self._control.request(
+                "device_change",
+                self._process_device_changes_owned,
+                coalesce_key="device_change",
+            )
+            if not queued:
+                logger.debug("Device change coalesced: reason=%s", reason)
+        except (AudioControlClosedError, AudioControlPoisonedError):
+            logger.debug("Device change ignored after audio control stopped")
+
+    def _process_device_changes_owned(self) -> None:
+        """Drain and recover coalesced device events on the owner thread."""
+        with self._device_change_lock:
+            reasons = set(self._device_change_reasons)
+            self._device_change_reasons.clear()
+        if not reasons:
+            return
+
+        self._handle_device_changes_owned(reasons)
+
+    def _handle_device_changes_owned(self, reasons: set[str]) -> None:
+        """Apply one recovery transaction for a coalesced device-change burst."""
         from dictare.audio.device_monitor import (
             REASON_DEFAULT_OUTPUT,
+            REASON_SLEEP,
+            REASON_WAKE,
         )
 
-        logger.info("Device change: reason=%s", reason)
+        logger.info("Device change recovery: reasons=%s", sorted(reasons))
 
         configured_input = self._config.input_device or ""
         configured_output = self._config.output_device or ""
 
+        # Quiesce before the laptop sleeps. Do not terminate/reinitialize
+        # PortAudio while the hardware graph is being suspended; wake owns the
+        # subsequent full recovery transaction.
+        if REASON_SLEEP in reasons:
+            self._sleeping = True
+        if self._sleeping and REASON_WAKE not in reasons:
+            if REASON_DEFAULT_OUTPUT in reasons and not configured_output:
+                self.reset_audio_output("")
+            self._stop_audio_output_owned()
+            if self._audio:
+                self._audio.emergency_abort()
+                self._audio = None
+            logger.info("Audio quiesced for system sleep")
+            if self.on_devices_updated:
+                self.on_devices_updated()
+            return
+
+        # If sleep and wake collapsed into the same burst, wake wins and the
+        # regular input-affecting recovery below rebuilds the complete graph.
+        reasons.discard(REASON_SLEEP)
+        if REASON_WAKE in reasons:
+            self._sleeping = False
+            logger.info("Audio recovery requested after system wake")
+
         # Output-only default switches should be seamless. Reinitializing
         # PortAudio here kills the active input stream and resets VAD, which
         # feels like an engine restart even though no restart command was sent.
-        if reason == REASON_DEFAULT_OUTPUT:
-            if not configured_output:
-                logger.info("Default output changed, resetting audio output")
-                self.reset_audio_output("")
+        if REASON_DEFAULT_OUTPUT in reasons and not configured_output:
+            logger.info("Default output changed, resetting audio output")
+            self.reset_audio_output("")
+
+        input_affecting = reasons - {REASON_DEFAULT_OUTPUT}
+        if not input_affecting:
             if self.on_devices_updated:
                 self.on_devices_updated()
             return
@@ -262,8 +366,10 @@ class AudioManager:
         # sd.query_devices() and sd.default.device return stale data without this.
         # Reinit kills any active input stream, so we restart it below.
         # _audio may be None after a failed reconnect (e.g. wake from sleep).
+        self._stop_audio_output_owned()
         if self._audio:
             self._audio.emergency_abort()
+            self._audio = None
         self._reinit_portaudio(sd, timeout_s=3.0)
 
         # --- Check fixed devices: disappearance + auto-reconnect ---
@@ -319,16 +425,19 @@ class AudioManager:
         Lighter than reconnect() — no circuit breaker, no retries, single attempt.
         Stops stream → reinit PortAudio → new AudioCapture → start stream → reset VAD.
         """
-        import sounddevice as sd
+        self._control.execute("reset_input", self._reset_audio_input_owned)
 
-        if not self._audio:
-            return
+    def _reset_audio_input_owned(self) -> None:
+        """Reset input from the audio control owner thread."""
+        import sounddevice as sd
 
         logger.info("Resetting audio input")
 
         # Stop old stream
-        self._audio.emergency_abort()
-        self.stop_streaming()
+        self._stop_audio_output_owned()
+        if self._audio:
+            self._audio.emergency_abort()
+            self._audio = None
 
         # Reinit PortAudio to pick up new device list
         self._reinit_portaudio(sd, timeout_s=3.0)
@@ -350,8 +459,19 @@ class AudioManager:
                 device=device,
             )
             self._audio.start_streaming(self.on_audio_chunk)
+            if not self._audio.wait_for_audio(timeout_s=2.0):
+                logger.warning("Restarted input stream delivered no audio callbacks")
+                self._audio.stop_streaming()
+                self._audio = None
+                return
             self.reset_vad()
-            logger.info("Input stream restarted, device=%r", device or "(default)")
+            logger.info(
+                "Input stream recovery verified by audio callback, device=%r",
+                device or "(default)",
+            )
+        except PortAudioCallTimeoutError:
+            self._audio = None
+            raise
         except Exception:
             logger.exception("Failed to restart input stream")
             self._audio = None
@@ -411,9 +531,24 @@ class AudioManager:
         if self._device_monitor:
             self._device_monitor.stop()
             self._device_monitor = None
+        self._sleeping = True
 
-        # Stop the audio stream first to prevent new callbacks
-        self.stop_streaming()
+        # A native timeout poisons the process. Never issue another PortAudio
+        # call from cleanup; the outer launcher will replace the process.
+        if not self._control.poisoned:
+            try:
+                self._control.execute("close_audio", self._close_audio_owned)
+            except Exception:
+                logger.exception("Failed to stop audio during close")
+        else:
+            logger.warning(
+                "Skipping PortAudio cleanup in poisoned process: %s",
+                self._control.poisoned_reason,
+            )
+        self._control.shutdown()
+        from dictare.audio.beep import set_audio_control_executor
+
+        set_audio_control_executor(None)
 
         # Acquire lock to ensure no callback is currently using VAD
         # This synchronizes with on_audio_chunk() which also holds this lock
@@ -459,6 +594,15 @@ class AudioManager:
         Returns:
             True if reconnection succeeded, False if failed or circuit breaker tripped
         """
+        return bool(
+            self._control.execute(
+                "reconnect_input",
+                lambda: self._reconnect_owned(on_chunk_callback),
+            )
+        )
+
+    def _reconnect_owned(self, on_chunk_callback: Callable[[Any], None]) -> bool:
+        """Perform a full reconnect transaction on the owner thread."""
         import sounddevice as sd
 
         # Circuit breaker: too many reconnects in window?
@@ -505,6 +649,7 @@ class AudioManager:
                 # Skip Pa_Terminate on first attempt — avoids deadlock when
                 # CoreAudio is still processing the device change
                 if attempt > 0:
+                    self._stop_audio_output_owned()
                     self._reinit_portaudio(sd, timeout_s=3.0)
 
                 self._audio = AudioCapture(
@@ -538,6 +683,9 @@ class AudioManager:
                 # Cooldown: let the stream stabilize before returning
                 time.sleep(self._RECONNECT_COOLDOWN_S)
                 return True
+            except PortAudioCallTimeoutError:
+                self._audio = None
+                raise
             except Exception as exc:
                 logger.warning("Reconnect attempt %d/5 failed: %s", attempt + 1, exc)
                 self._audio = None
@@ -548,28 +696,26 @@ class AudioManager:
     def _reinit_portaudio(sd: Any, timeout_s: float = 3.0) -> None:
         """Reinitialize PortAudio with a timeout.
 
-        Pa_Terminate() can deadlock when CoreAudio is in a corrupted state
-        (e.g. error -50 after device change). Run it in a thread so we
-        can skip it if it hangs and still attempt to open a new stream.
+        Pa_Terminate() can deadlock when CoreAudio is in a corrupted state.
+        A timeout poisons the process; callers must not continue with another
+        PortAudio lifecycle call in the same address space.
         """
-        done = threading.Event()
-
         def _do_reinit() -> None:
             try:
                 sd._terminate()
-                sd._initialize()
-            except Exception:
-                pass
             finally:
-                done.set()
+                sd._initialize()
 
-        t = threading.Thread(target=_do_reinit, daemon=True)
-        t.start()
-        if not done.wait(timeout=timeout_s):
-            logger.warning(
-                "PortAudio reinit timed out after %.1fs — proceeding anyway",
-                timeout_s,
-            )
+        _run_with_timeout(_do_reinit, timeout_s=timeout_s, label="reinit")
+
+    @property
+    def audio_control_poisoned(self) -> bool:
+        """Whether native audio timed out in this process."""
+        return self._control.poisoned
+
+    def wait_for_audio_control(self) -> None:
+        """Wait for already queued audio-control work (primarily for tests)."""
+        self._control.barrier()
 
     def flush_vad(self) -> None:
         """Flush VAD state (send buffered audio as speech_end)."""

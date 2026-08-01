@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from enum import IntEnum
 from pathlib import Path
@@ -18,6 +19,8 @@ class LogLevel(IntEnum):
 
 # Default log directory
 DEFAULT_LOG_DIR = Path.home() / ".local" / "share" / "dictare" / "logs"
+LOG_MAX_BYTES = 10 * 1024 * 1024
+LOG_BACKUP_COUNT = 5
 
 def get_default_log_path(name: str = "listen") -> Path:
     """Get default log file path.
@@ -100,10 +103,37 @@ class JSONLLogger:
         }
 
         try:
-            self._file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            line = json.dumps(entry, ensure_ascii=False) + "\n"
+            self._rotate_if_needed(len(line.encode("utf-8")))
+            self._file.write(line)
             self._file.flush()  # Ensure immediate write
         except Exception:
             pass  # Don't crash on logging errors
+
+    def _rotate_if_needed(self, incoming_bytes: int) -> None:
+        """Bound a single-writer JSONL log before appending another entry."""
+        if not self._file:
+            return
+        try:
+            current_size = self.log_path.stat().st_size
+        except OSError:
+            current_size = 0
+        if current_size + incoming_bytes <= LOG_MAX_BYTES:
+            return
+
+        self._file.close()
+        try:
+            oldest = self.log_path.with_name(f"{self.log_path.name}.{LOG_BACKUP_COUNT}")
+            oldest.unlink(missing_ok=True)
+            for index in range(LOG_BACKUP_COUNT - 1, 0, -1):
+                source = self.log_path.with_name(f"{self.log_path.name}.{index}")
+                target = self.log_path.with_name(f"{self.log_path.name}.{index + 1}")
+                if source.exists():
+                    os.replace(source, target)
+            if self.log_path.exists():
+                os.replace(self.log_path, self.log_path.with_name(f"{self.log_path.name}.1"))
+        finally:
+            self._file = open(self.log_path, "a", encoding="utf-8")
 
     def log(self, event: str, **data: Any) -> None:
         """Log an event at INFO level.

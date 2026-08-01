@@ -11,7 +11,11 @@ import time
 
 import pytest
 
-from dictare.audio.capture import _abort_close_stream, _run_with_timeout
+from dictare.audio.capture import (
+    PortAudioCallTimeoutError,
+    _abort_close_stream,
+    _run_with_timeout,
+)
 
 
 def test_returns_result_when_call_is_fast() -> None:
@@ -35,31 +39,26 @@ def test_raises_timeout_instead_of_hanging() -> None:
         time.sleep(5.0)  # simulate a stuck Pa_OpenStream
         return "too late"
 
-    with pytest.raises(TimeoutError):
+    with pytest.raises(PortAudioCallTimeoutError):
         _run_with_timeout(_wedge, timeout_s=0.1, label="wedge")
 
     # We returned promptly, nowhere near the 5s block.
     assert time.monotonic() - started < 1.0
 
 
-def test_on_late_cleans_up_abandoned_result() -> None:
-    """When an abandoned call eventually returns, on_late reaps its result."""
-    reaped = threading.Event()
-    captured: list[object] = []
+def test_timeout_does_not_run_late_cleanup() -> None:
+    """A late native result is left untouched because the process is poisoned."""
+    returned = threading.Event()
 
     def _slow() -> str:
         time.sleep(0.2)
+        returned.set()
         return "stream-object"
 
-    def _on_late(result: object) -> None:
-        captured.append(result)
-        reaped.set()
+    with pytest.raises(PortAudioCallTimeoutError):
+        _run_with_timeout(_slow, timeout_s=0.05, label="slow")
 
-    with pytest.raises(TimeoutError):
-        _run_with_timeout(_slow, timeout_s=0.05, label="slow", on_late=_on_late)
-
-    assert reaped.wait(timeout=2.0), "on_late was never invoked for the late result"
-    assert captured == ["stream-object"]
+    assert returned.wait(timeout=2.0)
 
 
 def test_abort_close_stream_swallows_errors() -> None:

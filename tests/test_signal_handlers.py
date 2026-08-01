@@ -72,7 +72,11 @@ class TestRequestShutdown:
         controller.request_shutdown()
 
         engine.save_session_before_shutdown.assert_called_once_with()
-        assert engine.running is False
+        engine.request_process_exit.assert_called_once_with(
+            0,
+            "signal_shutdown",
+            watchdog=False,
+        )
         assert controller.wait_for_shutdown(timeout=0) is True
 
     def test_without_engine_still_signals_shutdown(

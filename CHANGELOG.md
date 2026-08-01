@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0rc2] - 2026-08-01
+
+### Changed
+- All in-process PortAudio lifecycle operations now pass through one audio
+  control owner. CoreAudio, focus, health, settings, feedback playback, and
+  sleep/wake paths publish serialized work instead of opening, closing, or
+  reinitializing streams from competing threads.
+- macOS laptop sleep now quiesces audio explicitly, while wake performs one
+  coalesced recovery transaction and only reports success after a real input
+  callback. Device-change bursts are similarly coalesced.
+- Engine exits now distinguish clean shutdown, controlled restart, and a
+  poisoned native-audio process. The macOS launcher supervises engine crashes
+  with bounded backoff, and launchd/systemd no longer restart clean exits.
+- Operational, tray, and structured-event logs now use separate rotating files.
+  `dictare logs` tails files from the end (including rotations) instead of
+  loading an entire large log into memory.
+
+### Fixed
+- A timed-out PortAudio call now poisons the process immediately. No later
+  PortAudio cleanup or recovery call is attempted in that address space; the
+  outer supervisor replaces the engine instead of layering more native calls
+  over an abandoned one.
+- Settings-triggered engine restarts no longer leave the tray disconnected and
+  red when Dictare was launched through Spotlight.
+- Session state writes are atomic, so interruption during a write cannot leave
+  an empty or partially written JSON file.
+- The scoped TTS worker token is passed through the environment and is no
+  longer exposed in engine logs or process arguments.
+- App-bundle metadata now follows the runtime release-candidate version.
+
 ## [0.6.2] - 2026-07-05
 
 ### Changed

@@ -59,7 +59,10 @@ class TestAppBundleCreate:
         assert (app_path / "Contents" / "Resources").exists()
 
     def test_info_plist_contents(self, tmp_path, monkeypatch):
+        from dictare import __version__
+
         monkeypatch.setattr("dictare.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
+        monkeypatch.setattr("dictare.daemon.app_bundle._find_cellar_bundle", lambda: None)
         app_path = create_app_bundle("/usr/bin/python3")
         with open(app_path / "Contents" / "Info.plist", "rb") as f:
             plist = plistlib.load(f)
@@ -67,6 +70,8 @@ class TestAppBundleCreate:
         assert plist["CFBundleName"] == APP_NAME
         assert plist["LSUIElement"] is True
         assert plist["CFBundleIconFile"] == APP_NAME
+        assert plist["CFBundleShortVersionString"] == __version__
+        assert plist["CFBundleVersion"] == __version__
 
     def test_launcher_is_executable(self, tmp_path, monkeypatch):
         monkeypatch.setattr("dictare.daemon.app_bundle.get_app_path", lambda: tmp_path / "Test.app")
@@ -152,12 +157,12 @@ class TestLaunchdGeneratePlist:
     def test_keep_alive(self):
         xml = generate_plist("/usr/bin/python3")
         parsed = plistlib.loads(xml.encode())
-        assert parsed["KeepAlive"] is True
+        assert parsed["KeepAlive"] == {"SuccessfulExit": False}
 
     def test_log_paths(self):
         xml = generate_plist("/usr/bin/python3")
         parsed = plistlib.loads(xml.encode())
-        assert "stdout.log" in parsed["StandardOutPath"]
+        assert parsed["StandardOutPath"] == "/dev/null"
         assert "stderr.log" in parsed["StandardErrorPath"]
 
     def test_no_env_vars(self):
@@ -351,6 +356,7 @@ class TestSystemdGenerateUnit:
 
     def test_contains_service_section(self):
         unit = generate_unit("/usr/bin/python3")
+        assert unit.startswith("[Unit]\n")
         assert "[Service]" in unit
         assert "[Unit]" in unit
         assert "[Install]" in unit
@@ -363,9 +369,9 @@ class TestSystemdGenerateUnit:
         unit = generate_unit("/usr/bin/python3")
         assert "WantedBy=default.target" in unit
 
-    def test_restart_always(self):
+    def test_restart_on_failure(self):
         unit = generate_unit("/usr/bin/python3")
-        assert "Restart=always" in unit
+        assert "Restart=on-failure" in unit
 
     def test_restart_burst_limit(self):
         unit = generate_unit("/usr/bin/python3")
@@ -447,6 +453,7 @@ class TestDaemonPidWrite:
             assert not pid_file.exists()
             controller.start.assert_called_once()
             controller.stop.assert_called_once()
+            mock_os._exit.assert_called_once_with(0)
 
     def test_pid_cleaned_on_start_failure(self, tmp_path):
         # typer.Exit, NOT click.exceptions.Exit: typer >= 0.26 vendors click
@@ -477,3 +484,29 @@ class TestDaemonPidWrite:
 
             # PID file should be cleaned up on failure
             assert not pid_file.exists()
+            mock_os._exit.assert_called_once_with(1)
+
+    def test_exit_code_requested_during_stop_is_preserved(self, tmp_path):
+        from dictare.cli.serve import _run_serve as _run_daemon
+
+        pid_file = tmp_path / "engine.pid"
+        log_file = tmp_path / "engine.jsonl"
+
+        with patch("dictare.utils.paths.get_pid_path", return_value=pid_file), \
+             patch("dictare.logging.setup.get_default_log_path", return_value=log_file):
+            controller = MagicMock()
+            controller.exit_code = 0
+            controller.run.side_effect = KeyboardInterrupt
+            controller.stop.side_effect = lambda: setattr(controller, "exit_code", 70)
+            config = SimpleNamespace(
+                server=SimpleNamespace(host="127.0.0.1", port=9999),
+                log_level="info",
+            )
+            mock_os = MagicMock()
+            mock_os.getpid.return_value = 12345
+            mock_os._exit.side_effect = SystemExit(70)
+
+            with pytest.raises(SystemExit):
+                _run_daemon(controller, config, mock_os)
+
+            mock_os._exit.assert_called_once_with(70)

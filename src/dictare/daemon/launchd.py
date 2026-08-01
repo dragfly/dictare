@@ -39,7 +39,7 @@ def generate_plist(python_path: str) -> str:
             "-n",
             "-W",
             "--stdout",
-            str(LOG_DIR / "stdout.log"),
+            "/dev/null",
             "--stderr",
             str(LOG_DIR / "stderr.log"),
             str(app_path),
@@ -52,8 +52,12 @@ def generate_plist(python_path: str) -> str:
         "Label": LABEL,
         "ProgramArguments": program_args,
         "RunAtLoad": True,
-        "KeepAlive": True,
-        "StandardOutPath": str(LOG_DIR / "stdout.log"),
+        # The native launcher supervises engine restarts. launchd only replaces
+        # the launcher itself after an unsuccessful exit; a clean exit is final.
+        "KeepAlive": {"SuccessfulExit": False},
+        # Operational output is already captured in rotating engine.jsonl.
+        # Discard this duplicate stream so launchd cannot grow it without bound.
+        "StandardOutPath": "/dev/null",
         "StandardErrorPath": str(LOG_DIR / "stderr.log"),
     }
     return plistlib.dumps(plist).decode()

@@ -153,6 +153,7 @@ class AppController:
         self._logger: Any = None  # JSONLLogger
         self._running = False
         self._shutdown_event = threading.Event()
+        self._exit_code = 0
 
     # =========================================================================
     # Single-instance enforcement
@@ -240,7 +241,9 @@ class AppController:
 
         _jsonl_level_map = {"debug": LogLevel.DEBUG, "info": LogLevel.INFO, "warning": LogLevel.INFO, "error": LogLevel.ERROR}
         log_level = _jsonl_level_map.get(self._config.log_level, LogLevel.INFO)
-        log_path = get_default_log_path("engine")
+        # Explicit structured events have their own single-writer rotating log.
+        # Operational Python logs are written to engine.jsonl by serve.py.
+        log_path = get_default_log_path("events")
         self._logger = JSONLLogger(
             log_path,
             __version__,
@@ -356,7 +359,9 @@ class AppController:
 
         # Stop engine
         if self._engine:
-            self._engine.stop()
+            engine = self._engine
+            engine.stop()
+            self._exit_code = engine.requested_exit_code
             self._engine = None
 
         # Close logger
@@ -378,8 +383,17 @@ class AppController:
         """Request graceful shutdown.  Saves session state before stopping."""
         if self._engine:
             self._engine.save_session_before_shutdown()
-            self._engine.running = False
+            from dictare.process_exit import EXIT_OK
+
+            self._engine.request_process_exit(EXIT_OK, "signal_shutdown", watchdog=False)
         self._shutdown_event.set()
+
+    @property
+    def exit_code(self) -> int:
+        """Return the outcome the outer process supervisor must observe."""
+        if self._engine:
+            return self._engine.requested_exit_code
+        return self._exit_code
 
     def wait_for_shutdown(self, timeout: float | None = None) -> bool:
         """Wait for shutdown signal.

@@ -143,7 +143,7 @@ def _run_serve(
 
     # Stdout logging — plain text, human-readable (like `ollama serve`)
     root_logger = logging.getLogger("dictare")
-    _stdout_handler = logging.StreamHandler()
+    _stdout_handler = logging.StreamHandler(sys.stdout)
     _stdout_handler.setLevel(log_level)
     _stdout_handler.setFormatter(
         logging.Formatter(
@@ -170,6 +170,7 @@ def _run_serve(
     from dictare.utils.paths import get_pid_path
 
     hotkey_ipc = None
+    process_exit_code = 0
 
     try:
         # Install signal handlers BEFORE controller.start() — model loading
@@ -216,6 +217,7 @@ def _run_serve(
             )
         except Exception as e:
             _logger.error("Failed to start engine: %s", e, exc_info=True)
+            process_exit_code = 1
             raise typer.Exit(1) from e
 
         _logger.info("Engine ready")
@@ -226,13 +228,19 @@ def _run_serve(
         except KeyboardInterrupt:
             pass
     finally:
+        requested_exit_code = getattr(controller, "exit_code", 0)
+        if isinstance(requested_exit_code, int) and requested_exit_code != 0:
+            process_exit_code = requested_exit_code
         if hotkey_ipc is not None:
             hotkey_ipc.stop()
         get_pid_path().unlink(missing_ok=True)
         controller.stop()
+        requested_exit_code = getattr(controller, "exit_code", 0)
+        if isinstance(requested_exit_code, int) and requested_exit_code != 0:
+            process_exit_code = requested_exit_code
         _logger.info("Engine stopped")
         _kill_resource_tracker(os)
-        os._exit(0)
+        os._exit(process_exit_code)
 
 def _kill_resource_tracker(os: Any) -> None:
     """Kill resource_tracker subprocess to prevent leaked semaphore warnings."""

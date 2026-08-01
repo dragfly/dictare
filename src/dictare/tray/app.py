@@ -821,8 +821,8 @@ def main() -> None:
     host = config.server.host
     port = config.server.port
 
-    # Set up logging — same JSONL file as engine, tagged with source="tray"
-    log_path = get_default_log_path("engine")
+    # Keep a separate rotating file: standard rotating handlers are process-local.
+    log_path = get_default_log_path("tray")
     setup_logging(
         log_path=log_path,
         level=logging.INFO,

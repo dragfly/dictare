@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from dictare.logging.setup import (
@@ -88,6 +89,7 @@ class TestSetupLogging:
 
             assert handler is not None
             assert isinstance(handler, logging.FileHandler)
+            assert isinstance(handler, RotatingFileHandler)
 
             # Cleanup
             handler.close()
