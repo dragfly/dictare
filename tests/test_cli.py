@@ -192,6 +192,23 @@ class TestAgentContinue:
         assert at.continue_args == []
 
 
+
+def _strip_session_args(command: list[str]) -> list[str]:
+    """Remove session-binding args injected by the session adapters,
+    so tests can assert the profile/flag composition in isolation."""
+    out: list[str] = []
+    i = 0
+    while i < len(command):
+        if command[i] in ("--session-id", "--name", "--chat-history-file") and i + 1 < len(command):
+            i += 2
+        elif command[i] == "--restore-chat-history":
+            i += 1
+        else:
+            out.append(command[i])
+            i += 1
+    return out
+
+
 class TestAgentLiveDangerously:
     """Tests for --live-dangerously flag and config defaults on 'dictare agent'."""
 
@@ -248,7 +265,7 @@ class TestAgentLiveDangerously:
             ["myproject", "--type", "sonnet", "--live-dangerously"], cfg,
         )
         assert result.exit_code == 0
-        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+        assert [_strip_session_args(c) for c in captured] == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
 
     def test_cli_flag_without_args_warns(self) -> None:
         """--live-dangerously with no live_dangerously_args shows a warning."""
@@ -258,7 +275,7 @@ class TestAgentLiveDangerously:
         )
         assert result.exit_code == 0
         assert "Warning" in result.output
-        assert captured == [["claude", "--model", "claude-sonnet-4-6"]]
+        assert [_strip_session_args(c) for c in captured] == [["claude", "--model", "claude-sonnet-4-6"]]
 
     def test_cli_flag_with_command_override_ignored(self) -> None:
         """--live-dangerously is silently ignored with explicit command override."""
@@ -267,7 +284,7 @@ class TestAgentLiveDangerously:
             ["myproject", "--live-dangerously", "--", "aider", "--model", "gpt-4"], cfg,
         )
         assert result.exit_code == 0
-        assert captured == [["aider", "--model", "gpt-4"]]
+        assert [_strip_session_args(c) for c in captured] == [["aider", "--model", "gpt-4"]]
 
     # --- Global default ---
 
@@ -279,7 +296,7 @@ class TestAgentLiveDangerously:
         )
         result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
         assert result.exit_code == 0
-        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+        assert [_strip_session_args(c) for c in captured] == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
 
     def test_global_default_false_does_not_apply(self) -> None:
         """agent_profiles.live_dangerously = false (default) does nothing."""
@@ -289,7 +306,7 @@ class TestAgentLiveDangerously:
         )
         result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
         assert result.exit_code == 0
-        assert captured == [["claude", "--model", "claude-sonnet-4-6"]]
+        assert [_strip_session_args(c) for c in captured] == [["claude", "--model", "claude-sonnet-4-6"]]
 
     # --- Per-profile override ---
 
@@ -302,7 +319,7 @@ class TestAgentLiveDangerously:
         )
         result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
         assert result.exit_code == 0
-        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+        assert [_strip_session_args(c) for c in captured] == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
 
     def test_profile_override_false_over_global_true(self) -> None:
         """Profile live_dangerously=false overrides global true."""
@@ -313,7 +330,7 @@ class TestAgentLiveDangerously:
         )
         result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
         assert result.exit_code == 0
-        assert captured == [["claude", "--model", "claude-sonnet-4-6"]]
+        assert [_strip_session_args(c) for c in captured] == [["claude", "--model", "claude-sonnet-4-6"]]
 
     def test_profile_none_falls_through_to_global(self) -> None:
         """Profile live_dangerously=None (unset) falls through to global."""
@@ -324,7 +341,7 @@ class TestAgentLiveDangerously:
         )
         result, captured = self._invoke_agent(["myproject", "--type", "sonnet"], cfg)
         assert result.exit_code == 0
-        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+        assert [_strip_session_args(c) for c in captured] == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
 
     # --- CLI flag always wins ---
 
@@ -338,7 +355,7 @@ class TestAgentLiveDangerously:
             ["myproject", "--type", "sonnet", "--live-dangerously"], cfg,
         )
         assert result.exit_code == 0
-        assert captured == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
+        assert [_strip_session_args(c) for c in captured] == [["claude", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]]
 
     # --- Config model ---
 
@@ -411,3 +428,92 @@ live_dangerously = true
             assert profile.live_dangerously is True
         finally:
             temp_path.unlink()
+
+
+class TestAgentSessionBinding:
+    """CLI wiring of the per-agent session adapters (phase 2)."""
+
+    def _make_config(self) -> object:
+        from dictare.config import (
+            AgentProfileConfig,
+            AgentProfilesConfig,
+            ClientConfig,
+            Config,
+        )
+
+        at = AgentProfileConfig(
+            command=["claude", "--model", "claude-sonnet-4-6"],
+            continue_args=["-c"],
+        )
+        cfg = Config()
+        return cfg.model_copy(update={
+            "agent_profiles": AgentProfilesConfig(default="sonnet", sonnet=at),
+            "client": ClientConfig(url="http://127.0.0.1:8770"),
+        })
+
+    def _invoke_agent(self, args: list[str], cfg: object) -> tuple[object, list]:
+        from unittest.mock import patch
+
+        captured: list[list[str]] = []
+
+        def fake_run_agent(agent_id: str, command: list[str], **kwargs: object) -> int:
+            captured.append(command)
+            return 0
+
+        with (
+            patch("dictare.cli.agent._check_engine", return_value=True),
+            patch("dictare.config.load_config", return_value=cfg),
+            patch("dictare.agent.run_agent", side_effect=fake_run_agent),
+            patch("dictare.cli.agent.shutil.which", return_value="/usr/bin/claude"),
+        ):
+            result = runner.invoke(app, ["agent"] + args)
+
+        return result, captured
+
+    def test_new_session_injects_session_id_and_name(self) -> None:
+        import os
+        import uuid
+
+        from dictare.agent import session_registry
+
+        result, captured = self._invoke_agent(["mywork", "-t", "sonnet"], self._make_config())
+        assert result.exit_code == 0
+        (command,) = captured
+        sid = command[command.index("--session-id") + 1]
+        assert str(uuid.UUID(sid))
+        assert command[command.index("--name") + 1] == "mywork"
+
+        # The binding was persisted alongside the profile
+        entry = session_registry.lookup(os.getcwd(), "mywork")
+        assert entry is not None
+        assert entry["profile"] == "sonnet"
+        assert entry["session_id"] == sid
+
+    def test_continue_bound_entry_resumes_exact_session(self) -> None:
+        import os
+
+        from dictare.agent import session_registry
+
+        cfg = self._make_config()
+        session_registry.record_launch(
+            os.getcwd(), "mywork", "sonnet", extra={"session_id": "uuid-1"}
+        )
+
+        result, captured = self._invoke_agent(["mywork", "--continue"], cfg)
+        assert result.exit_code == 0
+        (command,) = captured
+        assert command[:3] == ["claude", "--resume", "uuid-1"]
+        assert "--session-id" not in command
+
+    def test_continue_unbound_entry_falls_back_to_continue_args(self) -> None:
+        import os
+
+        from dictare.agent import session_registry
+
+        cfg = self._make_config()
+        session_registry.record_launch(os.getcwd(), "mywork", "sonnet")
+
+        result, captured = self._invoke_agent(["mywork", "--continue"], cfg)
+        assert result.exit_code == 0
+        (command,) = captured
+        assert command[:2] == ["claude", "-c"]

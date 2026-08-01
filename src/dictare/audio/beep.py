@@ -4,11 +4,9 @@ Provides bundled sound file paths and in-process audio playback.
 Playback via sounddevice + soundfile (no external processes).
 Bundled sounds are pre-loaded into memory at import time for zero-latency playback.
 
-Thread safety: all sounddevice output calls are serialized through a single
-worker thread via a queue.  PortAudio's global session is NOT thread-safe,
-so concurrent sd.play() from multiple threads causes heap corruption.
-The queue is for serialization only — sounds are fire-and-forget; one play
-does NOT block the next unless an on_complete callback requires sd.wait().
+Thread safety: a queue preserves output ordering. While the engine is active,
+sounddevice lifecycle calls are also routed through AudioManager's single
+PortAudio owner, together with input open/close/reinit operations.
 
 Key function:
     play_audio(source, pause_mic, controller) - shared entry point for all playback.
@@ -102,6 +100,35 @@ _preload_sounds()
 _play_queue: queue.Queue[tuple[str, float, Callable[[], None] | None] | None] = queue.Queue()
 _worker_started = False
 _worker_lock = threading.Lock()
+_audio_control_execute: Callable[[str, Callable[[], Any]], Any] | None = None
+
+
+def set_audio_control_executor(
+    executor: Callable[[str, Callable[[], Any]], Any] | None,
+) -> None:
+    """Route sounddevice lifecycle calls through the process audio owner."""
+    global _audio_control_execute
+    _audio_control_execute = executor
+
+
+def _execute_audio_control(label: str, action: Callable[[], Any]) -> Any:
+    """Execute an output lifecycle call through the configured owner."""
+    executor = _audio_control_execute
+    if executor is None:
+        return action()
+    return executor(label, action)
+
+
+def stop_portaudio_output() -> None:
+    """Stop active feedback playback before a global PortAudio reinit."""
+    import sounddevice as sd
+
+    from dictare.audio.capture import _run_with_timeout
+
+    _execute_audio_control(
+        "stop_output",
+        lambda: _run_with_timeout(sd.stop, timeout_s=3.0, label="output_stop"),
+    )
 
 def _ensure_worker() -> None:
     """Start the audio playback worker if not already running."""
@@ -144,7 +171,20 @@ def _audio_worker() -> None:
 
             import sounddevice as sd
 
-            sd.play(data * volume if volume != 1.0 else data, sr, device=_output_device)
+            from dictare.audio.capture import _run_with_timeout
+
+            _execute_audio_control(
+                "play_output",
+                lambda: _run_with_timeout(
+                    lambda: sd.play(
+                        data * volume if volume != 1.0 else data,
+                        sr,
+                        device=_output_device,
+                    ),
+                    timeout_s=3.0,
+                    label="output_open",
+                ),
+            )
             if on_complete:
                 # sd.wait() can hang indefinitely on Linux (ALSA/PulseAudio).
                 # Poll with timeout to prevent FSM getting stuck in PLAYING.
@@ -158,7 +198,7 @@ def _audio_worker() -> None:
                             _PLAYBACK_DEADLINE_S,
                         )
                         try:
-                            sd.stop()
+                            stop_portaudio_output()
                         except Exception:
                             pass
                         break

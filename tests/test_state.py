@@ -45,6 +45,18 @@ class TestSaveLoad:
         raw = json.loads((state_dir / "session-state.json").read_text())
         assert "output_mode" not in raw
 
+    def test_failed_atomic_replace_preserves_previous_state(self, state_dir: Path) -> None:
+        save_state(active_agent="before", listening=True)
+
+        with patch("dictare.utils.state.os.replace", side_effect=OSError("disk error")):
+            save_state(active_agent="after", listening=False)
+
+        loaded = load_state()
+        assert loaded is not None
+        assert loaded["active_agent"] == "before"
+        assert loaded["listening"] is True
+        assert list(state_dir.glob(".session-state.json.*.tmp")) == []
+
     def test_load_missing_file_returns_none(self, state_dir: Path) -> None:
         assert load_state() is None
 

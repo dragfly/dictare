@@ -198,6 +198,9 @@ def test_spawn_worker_uses_venv_python():
         assert env is not None
         assert env["PYTHONPATH"] == fake_src_path
         assert env["COQUI_TOS_AGREED"] == "1"
+        assert env["DICTARE_TTS_TOKEN"] == mgr.auth_token
+        assert "--token" not in cmd
+        assert mgr.auth_token not in " ".join(cmd)
 
 def test_spawn_worker_uses_sys_executable_without_venv():
     """_spawn_worker falls back to sys.executable when no venv exists."""
@@ -235,6 +238,8 @@ def test_spawn_worker_uses_sys_executable_without_venv():
         env = popen_call[1].get("env")
         assert env is not None
         assert env["COQUI_TOS_AGREED"] == "1"
+        assert env["DICTARE_TTS_TOKEN"] == mgr.auth_token
+        assert "--token" not in cmd
         assert "PYTHONPATH" not in env
 
 # ---------------------------------------------------------------------------

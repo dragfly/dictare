@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Annotated
 
@@ -89,14 +90,53 @@ def _print_line(line: str, use_rich: bool) -> None:
     else:
         console.print(line, highlight=False)
 
+
+def _iter_lines_reverse(path: Path, chunk_size: int = 64 * 1024) -> Iterator[str]:
+    """Yield lines newest-first without loading the whole file into memory."""
+    with path.open("rb") as file:
+        position = file.seek(0, 2)
+        remainder = b""
+        while position > 0:
+            read_size = min(chunk_size, position)
+            position -= read_size
+            file.seek(position)
+            parts = (file.read(read_size) + remainder).split(b"\n")
+            if position > 0:
+                remainder = parts.pop(0)
+            else:
+                remainder = b""
+            for raw_line in reversed(parts):
+                if raw_line:
+                    yield raw_line.decode("utf-8", errors="replace")
+
+
+def _tail_log_lines(
+    log_path: Path,
+    last: int,
+    predicate: Callable[[str], bool] | None = None,
+) -> list[str]:
+    """Return the newest matching lines across a log and its rotations."""
+    if last <= 0:
+        return []
+    newest_first: list[str] = []
+    candidates = [log_path, *(log_path.with_name(f"{log_path.name}.{i}") for i in range(1, 6))]
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        for line in _iter_lines_reverse(candidate):
+            if predicate is None or predicate(line):
+                newest_first.append(line)
+                if len(newest_first) >= last:
+                    return list(reversed(newest_first))
+    return list(reversed(newest_first))
+
 def _show_plain_log(log_path: Path, follow: bool, last: int) -> None:
     """Show a plain-text log file (not JSONL)."""
     if not log_path.exists():
         typer.echo(f"No log file found: {log_path}", err=True)
         raise typer.Exit(1)
 
-    lines = log_path.read_text().splitlines()
-    for line in lines[-last:]:
+    for line in _tail_log_lines(log_path, last):
         print(line)
 
     if follow:
@@ -140,7 +180,10 @@ def register(app: typer.Typer) -> None:
             _show_plain_log(DEFAULT_LOG_DIR / "tts-worker.log", follow, last)
             return
 
-        log_path = DEFAULT_LOG_DIR / f"{name}.jsonl"
+        if name == "engine" and source == "tray":
+            log_path = DEFAULT_LOG_DIR / "tray.jsonl"
+        else:
+            log_path = DEFAULT_LOG_DIR / f"{name}.jsonl"
 
         if not log_path.exists():
             typer.echo(f"No log file found: {log_path}", err=True)
@@ -151,21 +194,11 @@ def register(app: typer.Typer) -> None:
 
         if raw:
             # Raw mode: just output JSONL lines, pipe-friendly
-            lines = log_path.read_text().splitlines()
-            shown = 0
-            for line in reversed(lines):
-                if shown >= last:
-                    break
+            def _raw_matches(line: str) -> bool:
                 entry = _parse_line(line)
-                if entry and _matches_source(entry, source):
-                    shown += 1
-            # Now print them in order
-            matching = []
-            for line in lines:
-                entry = _parse_line(line)
-                if entry and _matches_source(entry, source):
-                    matching.append(line)
-            for line in matching[-last:]:
+                return bool(entry and _matches_source(entry, source))
+
+            for line in _tail_log_lines(log_path, last, _raw_matches):
                 print(line)
             if follow:
                 with open(log_path) as f:
@@ -182,14 +215,14 @@ def register(app: typer.Typer) -> None:
             return
 
         # Human-readable mode
-        lines = log_path.read_text().splitlines()
-        matching = []
-        for raw_line in lines:
+        def _human_matches(raw_line: str) -> bool:
+            entry = _parse_line(raw_line)
+            return bool(entry and _matches_source(entry, source))
+
+        for raw_line in _tail_log_lines(log_path, last, _human_matches):
             formatted = _format_line(raw_line, source)
             if formatted:
-                matching.append(formatted)
-        for formatted in matching[-last:]:
-            _print_line(formatted, use_rich)
+                _print_line(formatted, use_rich)
 
         if follow:
             with open(log_path) as f:

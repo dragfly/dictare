@@ -39,7 +39,7 @@ def generate_unit(python_path: str) -> str:
         [Service]
         Type=simple
         ExecStart={python_path} -m dictare serve
-        Restart=always
+        Restart=on-failure
         RestartSec=5
         TimeoutStopSec=10
         KillMode=control-group

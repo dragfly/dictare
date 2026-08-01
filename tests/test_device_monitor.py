@@ -310,7 +310,8 @@ class TestEmergencyAbort:
         capture.emergency_abort()
         capture.emergency_abort()
         assert capture._needs_reconnect
-        assert mock_stream.abort.call_count == 2
+        assert mock_stream.abort.call_count == 1
+        assert capture._stream is None
 
 # =============================================================================
 # AudioManager integration
@@ -345,6 +346,8 @@ class TestAudioManagerDeviceMonitor:
         mock_restart = patcher_restart.start()
 
         def cleanup():
+            manager.wait_for_audio_control()
+            manager._control.shutdown()
             patcher_reinit.stop()
             patcher_restart.stop()
 
@@ -357,9 +360,45 @@ class TestAudioManagerDeviceMonitor:
             updated = []
             manager.on_devices_updated = lambda: updated.append(1)
             manager._on_device_change("default_input_changed")
+            manager.wait_for_audio_control()
             mock_reinit.assert_called_once()
             mock_restart.assert_called_once()
             assert len(updated) == 1
+        finally:
+            cleanup()
+
+    def test_sleep_quiesces_and_wake_rebuilds_audio(self) -> None:
+        """Laptop sleep stops audio; wake performs one complete recovery."""
+        manager, mock_reinit, mock_restart, cleanup = self._make_manager()
+        try:
+            old_audio = manager._audio
+            manager._on_device_change("system_sleep")
+            manager.wait_for_audio_control()
+
+            old_audio.emergency_abort.assert_called_once()
+            assert manager._audio is None
+            mock_reinit.assert_not_called()
+            mock_restart.assert_not_called()
+
+            manager._on_device_change("system_wake")
+            manager.wait_for_audio_control()
+
+            mock_reinit.assert_called_once()
+            mock_restart.assert_called_once()
+        finally:
+            cleanup()
+
+    def test_device_events_during_sleep_do_not_reopen_audio(self) -> None:
+        manager, mock_reinit, mock_restart, cleanup = self._make_manager()
+        try:
+            manager._on_device_change("system_sleep")
+            manager.wait_for_audio_control()
+            manager._on_device_change("devices_changed")
+            manager.wait_for_audio_control()
+
+            mock_reinit.assert_not_called()
+            mock_restart.assert_not_called()
+            assert manager._audio is None
         finally:
             cleanup()
 
@@ -375,6 +414,7 @@ class TestAudioManagerDeviceMonitor:
                 patch.object(manager, "reset_audio_output") as mock_output,
             ):
                 manager._on_device_change("default_input_changed")
+                manager.wait_for_audio_control()
                 mock_output.assert_not_called()
             mock_reinit.assert_called_once()
             mock_restart.assert_called_once()
@@ -389,6 +429,7 @@ class TestAudioManagerDeviceMonitor:
             manager.on_devices_updated = lambda: updated.append(1)
             with patch.object(manager, "reset_audio_output") as mock_reset:
                 manager._on_device_change("default_output_changed")
+                manager.wait_for_audio_control()
                 mock_reset.assert_called_once_with("")
             mock_reinit.assert_not_called()
             mock_restart.assert_not_called()
@@ -402,6 +443,7 @@ class TestAudioManagerDeviceMonitor:
         try:
             with patch.object(manager, "reset_audio_output") as mock_reset:
                 manager._on_device_change("default_output_changed")
+                manager.wait_for_audio_control()
                 mock_reset.assert_not_called()
             mock_reinit.assert_not_called()
             mock_restart.assert_not_called()
@@ -427,6 +469,7 @@ class TestAudioManagerDeviceMonitor:
                 patch.object(manager, "reset_audio_output") as mock_reset,
             ):
                 manager._on_device_change("devices_changed")
+                manager.wait_for_audio_control()
                 mock_reset.assert_called_once_with("")  # fall back to default
 
             assert manager._output_device_missing
@@ -448,6 +491,7 @@ class TestAudioManagerDeviceMonitor:
                 ]),
             ):
                 manager._on_device_change("devices_changed")
+                manager.wait_for_audio_control()
 
             assert manager._input_device_missing
         finally:
@@ -470,6 +514,7 @@ class TestAudioManagerDeviceMonitor:
                 patch.object(manager, "reset_audio_output") as mock_reset,
             ):
                 manager._on_device_change("devices_changed")
+                manager.wait_for_audio_control()
                 mock_reset.assert_called_once_with("Jabra Link 380")
 
             assert not manager._output_device_missing
@@ -492,6 +537,7 @@ class TestAudioManagerDeviceMonitor:
                 ]),
             ):
                 manager._on_device_change("devices_changed")
+                manager.wait_for_audio_control()
 
             assert not manager._input_device_missing
         finally:
@@ -511,6 +557,7 @@ class TestAudioManagerDeviceMonitor:
                 patch.object(manager, "reset_audio_output") as mock_reset,
             ):
                 manager._on_device_change("devices_changed")
+                manager.wait_for_audio_control()
                 mock_reset.assert_not_called()  # no redundant fallback
 
             assert manager._output_device_missing  # still missing
@@ -535,6 +582,7 @@ class TestAudioManagerDeviceMonitor:
                 patch.object(manager, "reset_audio_output") as mock_output,
             ):
                 manager._on_device_change("devices_changed")
+                manager.wait_for_audio_control()
                 mock_output.assert_not_called()
         finally:
             cleanup()
@@ -558,6 +606,7 @@ class TestAudioManagerDeviceMonitor:
             ):
                 for reason in ("default_input_changed", "default_output_changed", "devices_changed"):
                     manager._on_device_change(reason)
+                    manager.wait_for_audio_control()
 
             assert len(updated) == 3
         finally:
@@ -570,11 +619,13 @@ class TestAudioManagerDeviceMonitor:
             with patch.object(manager, "reset_audio_output") as mock_reset:
                 for reason in ("default_input_changed", "devices_changed"):
                     manager._on_device_change(reason)
+                    manager.wait_for_audio_control()
 
                 assert mock_reinit.call_count == 2
                 assert mock_restart.call_count == 2
 
                 manager._on_device_change("default_output_changed")
+                manager.wait_for_audio_control()
                 mock_reset.assert_called_once_with("")
 
             assert mock_reinit.call_count == 2
@@ -588,6 +639,7 @@ class TestAudioManagerDeviceMonitor:
         try:
             manager._audio = None
             manager._on_device_change("default_input_changed")  # Should not raise
+            manager.wait_for_audio_control()
         finally:
             cleanup()
 

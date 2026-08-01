@@ -215,7 +215,6 @@ class TTSManager:
 
         self.kill_orphaned_workers()
 
-        token = self._auth_token
         port = http_server.port
         engine_name = self._config.tts.engine
 
@@ -226,7 +225,6 @@ class TTSManager:
         cmd = [
             python, "-m", "dictare.tts.worker",
             "--url", f"http://127.0.0.1:{port}",
-            "--token", token,
             "--engine", engine_name,
             "--language", self._config.tts.language,
             "--speed", str(self._config.tts.speed),
@@ -236,6 +234,8 @@ class TTSManager:
 
         # Build env for worker subprocess
         env = {**os.environ, "COQUI_TOS_AGREED": "1"}
+        # Keep the scoped bearer token out of logs and the process list.
+        env["DICTARE_TTS_TOKEN"] = self._auth_token
         if venv_python:
             # When using venv python, inject PYTHONPATH so worker can import
             # dictare + openvip (may be in different source trees for dev installs)

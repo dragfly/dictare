@@ -8,11 +8,13 @@ Runs as a long-lived process that:
 
 Usage::
 
-    python -m dictare.tts.worker \\
+    DICTARE_TTS_TOKEN=<bearer-token> python -m dictare.tts.worker \\
         --url http://localhost:8770 \\
-        --token <bearer-token> \\
         --engine outetts \\
         --language en
+
+The environment keeps the scoped bearer token out of logs and command-line
+arguments. ``--token`` remains as a compatibility fallback for manual use.
 """
 
 from __future__ import annotations
@@ -20,10 +22,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import signal
 import sys
 import urllib.error
 import urllib.request
+from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger(__name__)
 
@@ -71,12 +75,15 @@ def main(argv: list[str] | None = None) -> None:
     """Entry point for the TTS worker subprocess."""
     parser = argparse.ArgumentParser(description="Dictare TTS worker")
     parser.add_argument("--url", default="http://localhost:8770", help="Dictare engine base URL")
-    parser.add_argument("--token", required=True, help="Bearer token")
+    parser.add_argument("--token", default="", help=argparse.SUPPRESS)
     parser.add_argument("--engine", required=True, help="TTS engine name")
     parser.add_argument("--language", default="en", help="Language code")
     parser.add_argument("--voice", default="", help="Voice name")
     parser.add_argument("--speed", type=int, default=175, help="Speed")
     args = parser.parse_args(argv)
+    token = os.environ.get("DICTARE_TTS_TOKEN") or args.token
+    if not token:
+        parser.error("DICTARE_TTS_TOKEN is required")
 
     from pathlib import Path
 
@@ -88,7 +95,12 @@ def main(argv: list[str] | None = None) -> None:
         level=logging.INFO,
         format="%(asctime)s [tts-worker] %(levelname)s %(message)s",
         handlers=[
-            logging.FileHandler(log_file),
+            RotatingFileHandler(
+                log_file,
+                maxBytes=5 * 1024 * 1024,
+                backupCount=3,
+                encoding="utf-8",
+            ),
             logging.StreamHandler(),
         ],
     )
@@ -126,7 +138,7 @@ def main(argv: list[str] | None = None) -> None:
 
     from dictare import OPENVIP_BASE_PATH
     openvip_url = args.url.rstrip("/") + OPENVIP_BASE_PATH
-    client = Client(openvip_url, token=args.token)
+    client = Client(openvip_url, token=token)
 
     logger.info("Subscribing as %s at %s", TTS_AGENT_ID, openvip_url)
 
@@ -195,7 +207,7 @@ def main(argv: list[str] | None = None) -> None:
             logger.info("Cache hit — parallel play: %s", cached_path.name[:12])
             threading.Thread(
                 target=_play_cached_thread,
-                args=(str(cached_path), message_id, args.url, args.token),
+                args=(str(cached_path), message_id, args.url, token),
                 daemon=True,
             ).start()
             continue
@@ -217,7 +229,7 @@ def main(argv: list[str] | None = None) -> None:
         _stop_requested = False
 
         if message_id:
-            _post_completion(args.url, args.token, message_id, ok, duration_ms)
+            _post_completion(args.url, token, message_id, ok, duration_ms)
 
 if __name__ == "__main__":
     try:

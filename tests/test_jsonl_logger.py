@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from dictare.logging.jsonl import JSONLLogger, LogLevel, get_default_log_path
 
@@ -99,6 +100,16 @@ class TestJSONLLoggerBasics:
         logger = JSONLLogger(log_path, version="1.0.0")
         logger.close()
         logger.close()  # Should not raise
+
+    def test_rotates_when_size_limit_is_reached(self, tmp_path: Path) -> None:
+        log_path = tmp_path / "test.jsonl"
+        with patch("dictare.logging.jsonl.LOG_MAX_BYTES", 200):
+            with JSONLLogger(log_path, version="1.0.0") as logger:
+                for index in range(20):
+                    logger.log("event", payload=f"{index}-" + "x" * 40)
+
+        assert log_path.exists()
+        assert (tmp_path / "test.jsonl.1").exists()
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ from dictare.cli.logs import (
     _format_line,
     _matches_source,
     _parse_line,
+    _tail_log_lines,
 )
 
 # ---------------------------------------------------------------------------
@@ -38,6 +39,37 @@ class TestParseLine:
         result = _parse_line(line)
         assert result is not None
         assert result["event"] == "test"
+
+
+class TestTailLogLines:
+    def test_reads_last_lines_across_rotations(self, tmp_path) -> None:
+        current = tmp_path / "engine.jsonl"
+        current.write_text("current-1\ncurrent-2\n")
+        (tmp_path / "engine.jsonl.1").write_text("older-1\nolder-2\n")
+
+        assert _tail_log_lines(current, 3) == ["older-2", "current-1", "current-2"]
+
+    def test_filters_while_reading_backwards(self, tmp_path) -> None:
+        path = tmp_path / "engine.jsonl"
+        path.write_text("skip\nkeep-1\nskip\nkeep-2\n")
+
+        lines = _tail_log_lines(path, 2, lambda line: line.startswith("keep"))
+        assert lines == ["keep-1", "keep-2"]
+
+    def test_handles_chunk_boundaries(self, tmp_path) -> None:
+        from dictare.cli.logs import _iter_lines_reverse
+
+        path = tmp_path / "engine.jsonl"
+        path.write_text("alpha\nbeta-is-long\ngamma\n")
+
+        assert list(_iter_lines_reverse(path, chunk_size=4)) == [
+            "gamma",
+            "beta-is-long",
+            "alpha",
+        ]
+
+    def test_zero_lines_does_not_open_file(self, tmp_path) -> None:
+        assert _tail_log_lines(tmp_path / "missing.jsonl", 0) == []
 
 
 # ---------------------------------------------------------------------------

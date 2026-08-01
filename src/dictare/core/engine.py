@@ -187,6 +187,8 @@ class DictareEngine:
         self._controller.set_engine(self)
 
         self.running = False
+        self.requested_exit_code = 0
+        self.requested_exit_reason = "normal"
         self._injection_lock = threading.Lock()  # Lock for text injection
         self._logger = logger
 
@@ -595,6 +597,7 @@ class DictareEngine:
             self.audio_manager = AudioManager(
                 config=self.config.audio,
                 verbose=self.config.log_level == "debug",
+                on_poisoned=self._on_audio_control_poisoned,
             )
             self.audio_manager.initialize(
                 on_speech_start=self._on_vad_speech_start,
@@ -1415,6 +1418,48 @@ class DictareEngine:
 
         threading.Thread(target=_watchdog, daemon=True, name="shutdown-watchdog").start()
 
+    def request_process_exit(
+        self,
+        exit_code: int,
+        reason: str,
+        *,
+        watchdog: bool = True,
+    ) -> None:
+        """Stop the runtime and publish an exit outcome to the process supervisor.
+
+        A non-zero outcome is never downgraded to a normal shutdown. This matters
+        when a signal or settings request races with a poisoned native audio call.
+        """
+        from dictare.process_exit import EXIT_AUDIO_POISONED
+
+        shutdown_already_requested = self.requested_exit_reason in {
+            "protocol_shutdown",
+            "signal_shutdown",
+        }
+        if self.requested_exit_code == 0 and not shutdown_already_requested:
+            self.requested_exit_code = exit_code
+            self.requested_exit_reason = reason
+        elif exit_code == EXIT_AUDIO_POISONED and not shutdown_already_requested:
+            self.requested_exit_code = exit_code
+            self.requested_exit_reason = reason
+        self.running = False
+        if watchdog:
+            self._start_exit_watchdog(exit_code=self.requested_exit_code)
+
+    def _on_audio_control_poisoned(self, detail: str) -> None:
+        """Fail fast when a timed-out native call makes PortAudio unsafe."""
+        from dictare.process_exit import EXIT_AUDIO_POISONED
+
+        logger.critical("Native audio timed out; requesting process replacement: %s", detail)
+        try:
+            self.save_session_before_shutdown()
+        except Exception:
+            logger.exception("Failed to save session after native audio timeout")
+        self.request_process_exit(
+            EXIT_AUDIO_POISONED,
+            "audio_poisoned",
+        )
+
     def handle_protocol_command(self, body: dict) -> dict:
         """Handle an OpenVIP protocol command.
 
@@ -1438,19 +1483,21 @@ class DictareEngine:
             self.toggle_listening()
             return {"openvip": "1.0", "status": "ok"}
         elif command == "engine.shutdown":
+            from dictare.process_exit import EXIT_OK
+
             logger.info("protocol_command: engine.shutdown")
             self.save_session_before_shutdown()
-            self.running = False
-            # Watchdog: force-exit if graceful stop() hangs (e.g. audio deadlock).
-            # Exit code 1 so both Restart=always and Restart=on-failure trigger a restart.
-            self._start_exit_watchdog(exit_code=1)
+            self.request_process_exit(EXIT_OK, "protocol_shutdown")
             return {"openvip": "1.0", "status": "ok"}
         elif command == "engine.restart":
-            # Persist state, then exit — the service manager (Restart=always) restarts us.
+            from dictare.process_exit import EXIT_RESTART_REQUESTED
+
             logger.info("protocol_command: engine.restart")
             self.save_session_before_shutdown()
-            self.running = False
-            self._start_exit_watchdog(exit_code=0)
+            self.request_process_exit(
+                EXIT_RESTART_REQUESTED,
+                "protocol_restart",
+            )
             return {"openvip": "1.0", "status": "ok"}
         elif command == "ping":
             return {"openvip": "1.0", "status": "ok", "pong": True}

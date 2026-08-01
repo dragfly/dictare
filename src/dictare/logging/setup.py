@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,8 @@ from pythonjsonlogger.json import JsonFormatter
 
 # Default log directory
 DEFAULT_LOG_DIR = Path.home() / ".local" / "share" / "dictare" / "logs"
+LOG_MAX_BYTES = 10 * 1024 * 1024
+LOG_BACKUP_COUNT = 5
 
 def get_default_log_path(name: str = "listen") -> Path:
     """Get default log file path.
@@ -106,6 +109,8 @@ def setup_logging(
     root_logger.setLevel(level)
 
     # Remove existing handlers to avoid duplicates
+    for existing_handler in root_logger.handlers[:]:
+        existing_handler.close()
     root_logger.handlers.clear()
 
     handler: logging.Handler | None = None
@@ -115,7 +120,13 @@ def setup_logging(
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
         # File handler with JSON formatter
-        handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+        handler = RotatingFileHandler(
+            log_path,
+            mode="a",
+            maxBytes=LOG_MAX_BYTES,
+            backupCount=LOG_BACKUP_COUNT,
+            encoding="utf-8",
+        )
         handler.setLevel(level)
         handler.setFormatter(DictareJsonFormatter(source=source))
         root_logger.addHandler(handler)
